@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+
+
+def run(command: list[str]) -> None:
+    print("exec:", " ".join(command))
+    result = subprocess.run(command, cwd=ROOT, check=False)
+    if result.returncode != 0:
+        print(f"[ez] command failed with exit code {result.returncode}")
+        sys.exit(result.returncode)
+
+
+def configure(name: str, build_type: str, backend: str, tests: bool) -> Path:
+    build_dir = ROOT / "build" / f"{build_type.lower()}-{name}"
+    command = [
+        "cmake", "-S", str(ROOT), "-B", str(build_dir), "-G", "Ninja",
+        f"-DCMAKE_BUILD_TYPE={build_type}",
+        f"-DIMGUI_UI_BUILD_TESTS={'ON' if tests else 'OFF'}",
+        f"-DIMGUI_UI_BUILD_EXAMPLES={'OFF' if tests or backend == 'core' else 'ON'}",
+        f"-DIMGUI_UI_BUILD_SDL={'ON' if backend in ('sdl', 'all') else 'OFF'}",
+        f"-DIMGUI_UI_BUILD_RAYLIB={'ON' if backend in ('raylib', 'all') else 'OFF'}",
+    ]
+    run(command)
+    return build_dir
+
+
+def build(build_type: str, backend: str, tests: bool = False) -> Path:
+    name = "tests" if tests else backend
+    build_dir = configure(name, build_type, backend, tests)
+    run(["cmake", "--build", str(build_dir), "--parallel"])
+    return build_dir
+
+
+def format_code() -> None:
+    files = [
+        str(path)
+        for directory in ("ui", "tests", "examples")
+        for path in (ROOT / directory).rglob("*")
+        if path.suffix in {".cpp", ".hpp"}
+    ]
+    run(["clang-format", "-i", *files])
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="ez")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    build_parser = subparsers.add_parser("build")
+    build_parser.add_argument("--backend", choices=("core", "sdl", "raylib", "all"), default="core")
+    build_parser.add_argument("--type", choices=("debug", "release"), default="debug")
+
+    tests_parser = subparsers.add_parser("tests")
+    tests_parser.add_argument("--type", choices=("debug", "release"), default="debug")
+
+    subparsers.add_parser("format")
+
+    run_parser = subparsers.add_parser("run")
+    run_parser.add_argument("backend", choices=("sdl", "raylib"))
+    run_parser.add_argument("--type", choices=("debug", "release"), default="debug")
+
+    args = parser.parse_args()
+    if args.command == "format":
+        format_code()
+        return
+
+    build_type = args.type.capitalize()
+
+    if args.command == "build":
+        build(build_type, args.backend)
+    elif args.command == "tests":
+        build_dir = build(build_type, "core", tests=True)
+        run(["ctest", "--test-dir", str(build_dir), "--output-on-failure"])
+    else:
+        build_dir = build(build_type, args.backend)
+        run([str(build_dir / "examples" / f"imgui-ui-example-{args.backend}")])
+
+
+if __name__ == "__main__":
+    main()

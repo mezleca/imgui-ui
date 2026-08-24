@@ -1,0 +1,13 @@
+if(IMGUI_UI_BUILD_SDL)
+    add_executable(imgui-ui-example-sdl sdl/main.cpp demo.cpp demo.hpp)
+    target_link_libraries(imgui-ui-example-sdl PRIVATE imgui-ui::sdl)
+    target_compile_features(imgui-ui-example-sdl PRIVATE cxx_std_20)
+    target_compile_definitions(imgui-ui-example-sdl PRIVATE IMGUI_UI_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+endif()
+
+if(IMGUI_UI_BUILD_RAYLIB)
+    add_executable(imgui-ui-example-raylib raylib/main.cpp demo.cpp demo.hpp)
+    target_link_libraries(imgui-ui-example-raylib PRIVATE imgui-ui::raylib)
+    target_compile_features(imgui-ui-example-raylib PRIVATE cxx_std_20)
+    target_compile_definitions(imgui-ui-example-raylib PRIVATE IMGUI_UI_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+endif()

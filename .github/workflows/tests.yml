@@ -1,0 +1,29 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: install tools
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          ninja-build libgl1-mesa-dev libx11-dev libxrandr-dev
+          libxinerama-dev libxcursor-dev libxi-dev libxss-dev
+          libxtst-dev libxkbcommon-dev libasound2-dev
+      - name: run tests
+        run: ./ez tests
+      - name: build examples
+        run: ./ez build --backend all
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: run tests
+        run: python ez tests --type release
