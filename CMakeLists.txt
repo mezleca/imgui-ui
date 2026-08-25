@@ -10,10 +10,23 @@ option(IMGUI_UI_BUILD_RAYLIB "build the raylib backend" OFF)
 option(IMGUI_UI_BUILD_TESTS "build the framework tests" ${PROJECT_IS_TOP_LEVEL})
 option(IMGUI_UI_BUILD_EXAMPLES "build the selected backend examples" OFF)
 
+if(MSVC)
+    foreach(config DEBUG RELWITHDEBINFO)
+        string(REPLACE "/ZI" "/Zi" CMAKE_CXX_FLAGS_${config} "${CMAKE_CXX_FLAGS_${config}}")
+        string(REGEX REPLACE "/RTC[1su]+" "" CMAKE_CXX_FLAGS_${config} "${CMAKE_CXX_FLAGS_${config}}")
+    endforeach()
+endif()
+
 function(imgui_ui_enable_sanitizers target)
     if(MSVC)
         target_compile_options(${target} PUBLIC "$<$<CONFIG:Debug>:/fsanitize=address>")
-        target_link_options(${target} PUBLIC "$<$<CONFIG:Debug>:/fsanitize=address>")
+        # keep msvc's stl annotation mode consistent with unsanitized dependencies.
+        target_compile_definitions(${target} PUBLIC
+            "$<$<CONFIG:Debug>:_DISABLE_STRING_ANNOTATION>"
+            "$<$<CONFIG:Debug>:_DISABLE_VECTOR_ANNOTATION>"
+            "$<$<CONFIG:Debug>:_DISABLE_OPTIONAL_ANNOTATION>"
+        )
+        target_link_options(${target} PUBLIC "$<$<CONFIG:Debug>:/INCREMENTAL:NO>")
     else()
         target_compile_options(${target} PUBLIC
             "$<$<CONFIG:Debug>:-fsanitize=address,undefined>"
