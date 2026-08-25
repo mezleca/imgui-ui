@@ -8,7 +8,6 @@ namespace ui {
         RIGHT,
     };
 
-    /// draws late in the current surface window without covering content hit-tests.
     class OverlayNode : public Node {
     public:
         explicit OverlayNode(std::string id) : Node(std::move(id)) {}

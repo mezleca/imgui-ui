@@ -4,6 +4,7 @@ project(imgui-ui LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(IMGUI_UI_BUILD_SDL "build the SDL3/OpenGL backend" OFF)
 option(IMGUI_UI_BUILD_RAYLIB "build the raylib backend" OFF)

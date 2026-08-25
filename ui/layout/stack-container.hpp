@@ -7,16 +7,20 @@ namespace ui {
     public:
         explicit StackContainer(std::string id, StackDirection direction = StackDirection::Vertical);
 
+        /// changes the main axis used to arrange visible children.
         void set_direction(StackDirection direction);
         StackDirection direction() const;
+        /// sets the gap between visible children; negative values become zero.
         void set_spacing(float spacing);
         float spacing() const;
+        /// sizes the container to its measured children instead of available space.
         StackContainer& fit_content(bool enabled = true);
 
     protected:
         bool on_draw() override;
         void on_measure() override;
         void on_layout() override;
+        /// resolves each visible child's size and top-left placement on the main axis.
         void arrange_children(ImVec2 container_size);
 
     private:

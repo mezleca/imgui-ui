@@ -316,6 +316,16 @@ TEST_CASE("blocking modal layer prevents content input") {
     REQUIRE(events == std::vector<std::string>{"modal"});
 }
 
+TEST_CASE("blocking pointer policy consumes empty regions") {
+    ui::InputRouter router;
+    router.set_layer_policy(ui::InputLayer::Overlay, ui::InputPolicy::BlockPointer);
+    router.begin_frame();
+
+    ui::UiEvent move = event_of(ui::EventType::PointerMove, {100.0F, 100.0F});
+    REQUIRE(router.dispatch(move));
+    REQUIRE(move.handled);
+}
+
 TEST_CASE("hidden modal panels release the modal input policy") {
     ui::Runtime runtime;
     ui::Config config;
@@ -367,6 +377,18 @@ TEST_CASE("input router resolves the topmost node at a position") {
     REQUIRE(router.node_at({50.0F, 50.0F}) == &top);
     REQUIRE(router.node_at({10.0F, 10.0F}) == &bottom);
     REQUIRE(router.node_at({150.0F, 150.0F}) == nullptr);
+}
+
+TEST_CASE("input router uses registration order for overlapping unrelated nodes") {
+    ui::InputRouter router;
+    ui::Node first("first");
+    ui::Node second("second");
+
+    router.begin_frame();
+    router.register_region(first, {{0.0F, 0.0F}, {20.0F, 20.0F}});
+    router.register_region(second, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+
+    REQUIRE(router.node_at({10.0F, 10.0F}) == &second);
 }
 
 TEST_CASE("input router ignores disabled and stale regions") {

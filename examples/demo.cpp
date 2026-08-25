@@ -51,6 +51,9 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
 
 void DemoScreen::setup_dynamic_nodes(ui::Node& parent) {
     auto& dynamic_section = parent.add_child<ui::StackContainer>("dynamic-section", ui::StackDirection::Horizontal);
+    // the section is visually positioned with the overlay but must remain below
+    // a blocking overlay in the input hierarchy.
+    dynamic_section.set_input_layer(ui::InputLayer::Content);
     dynamic_section.set_size({460.0F, 220.0F});
     dynamic_section.set_placement(ui::Anchor::TopRight, ui::Origin::TopRight, {-20.0F, 72.0F});
     dynamic_section.set_spacing(8.0F);
@@ -176,5 +179,46 @@ void setup_demo(UI& surface, std::string backend) {
 
         panel.set_visible(!panel.visible());
         overlay_button.try_set_content(panel.visible() ? "hide overlay" : "show overlay");
+    };
+
+    auto& input_blocker = surface.root().add_child<ui::OverlayNode>("##input-blocker");
+    input_blocker.set_input_layer(ui::InputLayer::Overlay);
+    input_blocker.set_visible(false);
+
+    auto& blocker_panel = input_blocker.add_child<ui::StackContainer>("input-blocker-panel", ui::StackDirection::Vertical);
+    blocker_panel.set_size({320.0F, 150.0F});
+    blocker_panel.set_placement(ui::Anchor::Center, ui::Origin::Center);
+    blocker_panel.set_spacing(10.0F);
+    blocker_panel.configure_all_styles([&surface](ui::Style& style) {
+        style.padding({18.0F, 18.0F})
+            .background_color(surface.theme().background_secondary_color)
+            .border_color(surface.theme().accent_color)
+            .border(ui::BORDER_ALL);
+    });
+    blocker_panel.add_child<ui::TextWidget>("pointer input is blocked below this panel");
+
+    auto& block_button = demo.add_child<ui::ButtonWidget>(surface, "block pointer input", ImVec2{220.0F, 40.0F});
+    auto& unblock_button = blocker_panel.add_child<ui::ButtonWidget>(surface, "disable pointer block", ImVec2{284.0F, 40.0F});
+
+    UI* surface_ptr = &surface;
+    ui::OverlayNode* blocker_ptr = &input_blocker;
+    ui::ButtonWidget* block_button_ptr = &block_button;
+    block_button.on_event = [surface_ptr, blocker_ptr, block_button_ptr](ui::UiEvent& event) {
+        if (event.type != ui::EventType::Click) {
+            return;
+        }
+
+        blocker_ptr->set_visible(true);
+        surface_ptr->input_router().set_layer_policy(ui::InputLayer::Overlay, ui::InputPolicy::BlockPointer);
+        block_button_ptr->try_set_content("pointer input blocked");
+    };
+    unblock_button.on_event = [surface_ptr, blocker_ptr, block_button_ptr](ui::UiEvent& event) {
+        if (event.type != ui::EventType::Click) {
+            return;
+        }
+
+        blocker_ptr->set_visible(false);
+        surface_ptr->input_router().set_layer_policy(ui::InputLayer::Overlay, ui::InputPolicy::PassThrough);
+        block_button_ptr->try_set_content("block pointer input");
     };
 }

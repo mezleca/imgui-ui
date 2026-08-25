@@ -38,37 +38,6 @@ namespace ui {
         Down,
     };
 
-    inline std::string event_type_to_string(EventType type) {
-        switch (type) {
-            case EventType::PointerMove:
-                return "PointerMove";
-            case EventType::PointerDown:
-                return "PointerDown";
-            case EventType::PointerUp:
-                return "PointerUp";
-            case EventType::Click:
-                return "Click";
-            case EventType::ContextClick:
-                return "ContextClick";
-            case EventType::Scroll:
-                return "Scroll";
-            case EventType::KeyDown:
-                return "KeyDown";
-            case EventType::KeyUp:
-                return "KeyUp";
-            case EventType::TextInput:
-                return "TextInput";
-            case EventType::FocusGained:
-                return "FocusGained";
-            case EventType::FocusLost:
-                return "FocusLost";
-            case EventType::Cancel:
-                return "Cancel";
-        }
-
-        return "Unknown";
-    }
-
     struct UiEvent {
         EventType type;
         ImVec2 position{};
@@ -76,8 +45,13 @@ namespace ui {
         PointerButton button = PointerButton::None;
         Key key = Key::Unknown;
         std::string text;
+        /// the target or one of its ancestors consumed the event.
         bool handled = false;
+
+        /// parent nodes no longer receive the event.
         bool propagation_stopped = false;
+
+        /// pointer release will not synthesize a click from this press.
         bool default_prevented = false;
 
         static UiEvent make(EventType type) {
@@ -94,15 +68,18 @@ namespace ui {
             };
         }
 
+        /// consumes the event without stopping its parent traversal.
         void mark_handled() {
             handled = true;
         }
 
+        /// consumes the event and stops dispatching it to parent nodes.
         void stop_propagation() {
             handled = true;
             propagation_stopped = true;
         }
 
+        /// prevents the router's default action for this event.
         void prevent_default() {
             default_prevented = true;
         }

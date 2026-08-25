@@ -178,11 +178,11 @@ namespace ui {
         };
     }
 
-    static void dispatch_pointer(UI& surface, EventType type, ImVec2 position, PointerButton button = PointerButton::None) {
+    static bool dispatch_pointer(UI& surface, EventType type, ImVec2 position, PointerButton button = PointerButton::None) {
         UiEvent event = UiEvent::make(type);
         event.position = position;
         event.button = button;
-        surface.dispatch(event);
+        return surface.dispatch(event);
     }
 
     RaylibBackend::RaylibBackend(Config config) : m_config(std::move(config)) {}
@@ -298,7 +298,11 @@ namespace ui {
         ImGuiIO& io = ImGui::GetIO();
         const Vector2 mouse = GetMousePosition();
         const ImVec2 mouse_position = {mouse.x, mouse.y};
-        io.AddMousePosEvent(mouse.x, mouse.y);
+
+        const bool pointer_handled = dispatch_pointer(surface, EventType::PointerMove, mouse_position);
+        if (!pointer_handled) {
+            io.AddMousePosEvent(mouse.x, mouse.y);
+        }
 
         constexpr std::array mouse_buttons = {
             std::pair{MOUSE_BUTTON_LEFT, PointerButton::Left},
@@ -309,20 +313,23 @@ namespace ui {
         bool handled = false;
         for (std::size_t index = 0; index < mouse_buttons.size(); ++index) {
             const auto [raylib_button, core_button] = mouse_buttons[index];
-            io.AddMouseButtonEvent(static_cast<int>(index), IsMouseButtonDown(raylib_button));
+            bool button_handled = false;
             if (IsMouseButtonPressed(raylib_button)) {
-                dispatch_pointer(surface, EventType::PointerDown, mouse_position, core_button);
+                button_handled = dispatch_pointer(surface, EventType::PointerDown, mouse_position, core_button);
                 handled = true;
             }
             if (IsMouseButtonReleased(raylib_button)) {
-                dispatch_pointer(surface, EventType::PointerUp, mouse_position, core_button);
+                button_handled = dispatch_pointer(surface, EventType::PointerUp, mouse_position, core_button) || button_handled;
                 handled = true;
+            }
+
+            if (!pointer_handled && !button_handled) {
+                io.AddMouseButtonEvent(static_cast<int>(index), IsMouseButtonDown(raylib_button));
             }
         }
 
         if (!m_has_mouse_position || mouse_position.x != m_previous_mouse_position.x ||
             mouse_position.y != m_previous_mouse_position.y) {
-            dispatch_pointer(surface, EventType::PointerMove, mouse_position);
             m_previous_mouse_position = mouse_position;
             m_has_mouse_position = true;
             handled = true;
@@ -330,11 +337,12 @@ namespace ui {
 
         const Vector2 wheel = GetMouseWheelMoveV();
         if (wheel.x != 0.0F || wheel.y != 0.0F) {
-            io.AddMouseWheelEvent(wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE);
             UiEvent event = UiEvent::make(EventType::Scroll);
             event.position = mouse_position;
             event.scroll = {wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE};
-            surface.dispatch(event);
+            if (!surface.dispatch(event)) {
+                io.AddMouseWheelEvent(wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE);
+            }
             handled = true;
         }
 

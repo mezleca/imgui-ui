@@ -18,10 +18,6 @@ namespace ui {
     class InputRouter;
     class Profiler;
 
-    /// a node exclusively owns its children. the normal lifecycle performs
-    /// update, measure, placement, drawing, profiling and input registration.
-    /// override lifecycle callbacks instead of draw() unless a type deliberately
-    /// lives outside that lifecycle.
     class Node {
     public:
         explicit Node(std::string id = {});
@@ -63,10 +59,19 @@ namespace ui {
         /// destroys every child after clearing input targets into their subtrees.
         void clear();
 
+        /// attaches the surface input router to this node and its descendants.
         void set_input_router(InputRouter* router);
+
+        /// attaches the profiler to this node and its descendants.
         void set_profiler(Profiler* profiler);
+
+        /// returns the first node with the requested id in this subtree.
         Node* find(std::string_view id);
+
+        /// const overload of find().
         const Node* find(std::string_view id) const;
+
+        /// returns true when this node is the same as or contains the target.
         bool contains(const Node* node) const;
 
         const std::string& id() const {
@@ -98,6 +103,7 @@ namespace ui {
             return m_children;
         }
 
+        /// returns the inherited layer used by the input router, or Count when unassigned.
         InputLayer input_layer() const {
             return m_input_layer;
         }
@@ -139,15 +145,18 @@ namespace ui {
             return m_accepts_focus;
         }
 
+        /// allows pointer activation to assign keyboard focus to this node.
         Node& set_accepts_focus(bool accepts_focus) {
             m_accepts_focus = accepts_focus;
             return *this;
         }
 
+        /// returns the geometry resolved by the most recent draw pass.
         const NodeLayout& layout() const {
             return m_layout;
         }
 
+        /// sets the requested outer size; non-positive axes are resolved by containers.
         Node& set_size(ImVec2 size) {
             if (m_layout.m_has_size_request && m_layout.requested_size().x == size.x && m_layout.requested_size().y == size.y) {
                 return *this;
@@ -161,36 +170,43 @@ namespace ui {
         /// propagates measurement invalidation to ancestors.
         void invalidate_measure();
 
+        /// places the node by aligning its top-left origin to the anchor point.
         Node& set_anchor(Anchor anchor) {
             m_layout.set_anchor(anchor);
             return *this;
         }
 
+        /// places the node using a custom normalized parent anchor.
         Node& set_anchor_position(ImVec2 position) {
             m_layout.set_anchor_position(position);
             return *this;
         }
 
+        /// chooses which normalized point of the node aligns with its anchor.
         Node& set_origin(Origin origin) {
             m_layout.set_origin(origin);
             return *this;
         }
 
+        /// chooses a custom normalized point of the node for alignment.
         Node& set_origin_position(ImVec2 position) {
             m_layout.set_origin_position(position);
             return *this;
         }
 
+        /// adds a local translation after anchor and origin alignment.
         Node& set_offset(ImVec2 offset) {
             m_layout.set_offset(offset);
             return *this;
         }
 
+        /// sets anchor, origin and offset in one explicit placement operation.
         Node& set_placement(Anchor anchor, Origin origin, ImVec2 offset = {}) {
             m_layout.set_placement(anchor, origin, offset);
             return *this;
         }
 
+        /// returns placement to the current ImGui flow cursor.
         Node& set_flow() {
             m_layout.clear_explicit_position();
             return *this;
@@ -208,15 +224,30 @@ namespace ui {
         /// dispatches the node's internal event behavior. widgets extend this with their public callback.
         virtual void dispatch_event(UiEvent& event);
 
-        void position_in_parent();
+        /// resolves flow or explicit placement and records local and screen bounds.
+        void resolve_position();
         void assign_input_layer(InputLayer layer);
+        /// reports whether set_size() supplied a requested size.
         bool has_size_request() const;
+
+        /// reports whether a container resolved this node's size during layout.
         bool size_was_resolved() const;
+
+        /// returns the size requested by the node before container resolution.
         ImVec2 requested_size() const;
+
+        /// returns a child's requested size without changing its layout state.
         ImVec2 requested_size_of(const Node& child) const;
         void resolve_size(ImVec2 size);
+
+        /// overrides this node's screen bounds for custom drawing.
         void set_screen_rect(Rect rect);
+
+        /// assigns a resolved size and explicit placement for a child before draw.
+        /// The child computes its screen bounds when its own draw pass starts.
         void arrange_child(Node& child, ImVec2 size, Anchor anchor, Origin origin, ImVec2 offset = {});
+
+        /// overrides a child node's screen bounds when its drawing happens elsewhere.
         void set_child_screen_rect(Node& child, Rect rect);
         void invalidate_measure_subtree();
 

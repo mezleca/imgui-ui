@@ -34,8 +34,10 @@ namespace ui {
     bool ChildContainer::on_draw() {
         const Style& current_style = style();
         const bool has_full_border = (current_style.border() & BORDER_ALL) != 0;
+
         ImGuiChildFlags child_flags = ImGuiChildFlags_AlwaysUseWindowPadding;
         ImGuiWindowFlags window_flags = constants::WIDGET_WINDOW_FLAGS;
+
         if (m_scrollable) {
             window_flags &= ~(ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         }
@@ -51,15 +53,15 @@ namespace ui {
         }
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
 
-        // beginchild copies window padding, border and background into the child;
+        // beginchild copies window padding, border and background into the child
         // window padding can be restored while the child scope stays open.
         if (id().empty()) {
             ImGui::BeginChild(ImGui::GetID(this), layout().size(), child_flags, window_flags);
         } else {
             ImGui::BeginChild(id().c_str(), layout().size(), child_flags, window_flags);
         }
-        ImGui::PopStyleVar();
 
+        ImGui::PopStyleVar();
         return true;
     }
 

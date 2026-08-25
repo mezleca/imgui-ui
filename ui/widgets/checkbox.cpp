@@ -75,7 +75,7 @@ namespace ui {
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar();
 
-        const ItemInputState input = m_ui.input().observe(*this);
+        const ItemInputState input = m_ui.input().observe_item(*this);
         ImGui::PopID();
 
         apply_input_state(input);

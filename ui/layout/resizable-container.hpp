@@ -7,6 +7,7 @@ namespace ui {
     public:
         explicit ResizableContainer(std::string id);
 
+        /// enables resizing along the selected axes from the bottom-right handle.
         void set_resize(ResizeAxes resize);
         ResizeAxes resize_axes() const;
 

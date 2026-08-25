@@ -1,13 +1,16 @@
 #include <ui/style/state.hpp>
 #include <ui/runtime.hpp>
 #include <ui/layout/child-container.hpp>
+#include <ui/layout/overlay-container.hpp>
 #include <ui/layout/resizable-container.hpp>
 #include <ui/layout/stack-container.hpp>
 #include <ui/ui.hpp>
+#include <ui/widgets/button.hpp>
 #include <ui/widgets/dropdown.hpp>
 #include <ui/widgets/text.hpp>
 #include <ui/widgets/text-input.hpp>
 #include <ui/widgets/widget.hpp>
+#include "../examples/demo.hpp"
 #include "imgui-context.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -28,10 +31,7 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
     auto& input = parent.add_child<ui::TextInputWidget>(surface, value, "input");
 
     ImGui::SetCurrentContext(surface.imgui_context());
-    unsigned char* font_pixels = nullptr;
-    int font_width = 0;
-    int font_height = 0;
-    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&font_pixels, &font_width, &font_height);
+    ui_test::ImGuiContext::build_fonts();
 
     const auto draw_frame = [&surface, &parent] {
         ImGui::GetIO().DisplaySize = {400.0F, 180.0F};
@@ -57,6 +57,93 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
     REQUIRE(input.layout().size().x < initial_width);
 }
 
+TEST_CASE("blocking overlay prevents hover state on content behind it", "[ButtonWidget][input][regression]") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.size = {240.0F, 120.0F}});
+
+    auto& content_button = surface.root().add_child<ui::ButtonWidget>(surface, "content", ImVec2{120.0F, 40.0F});
+    content_button.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {20.0F, 20.0F});
+
+    auto& overlay = surface.root().add_child<ui::OverlayNode>("overlay");
+    overlay.set_input_layer(ui::InputLayer::Overlay);
+    auto& overlay_button = overlay.add_child<ui::ButtonWidget>(surface, "overlay", ImVec2{120.0F, 40.0F});
+    overlay_button.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {20.0F, 20.0F});
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {240.0F, 120.0F};
+    ImGui::GetIO().MousePos = {80.0F, 40.0F};
+    ui_test::ImGuiContext::build_fonts();
+    surface.input_router().set_layer_policy(ui::InputLayer::Overlay, ui::InputPolicy::BlockPointer);
+    surface.begin_input_frame();
+    surface.begin_frame();
+    ImGui::SetNextWindowPos({0.0F, 0.0F});
+    ImGui::SetNextWindowSize({240.0F, 120.0F});
+    ImGui::Begin("overlay-hover-test");
+    surface.root().update(ImGui::GetIO().DeltaTime);
+    surface.root().draw();
+    ImGui::End();
+    surface.end_frame();
+
+    REQUIRE(overlay_button.style_type() == ui::StyleType::HOVER);
+    REQUIRE(content_button.style_type() != ui::StyleType::HOVER);
+}
+
+TEST_CASE("blocking overlay prevents input in the demo dynamic controls", "[demo][input][regression]") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.size = {900.0F, 600.0F}});
+    setup_demo(surface, "test");
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {900.0F, 600.0F};
+    ui_test::ImGuiContext::build_fonts();
+
+    const auto draw_frame = [&surface](ImVec2 mouse_position) {
+        ImGui::SetCurrentContext(surface.imgui_context());
+        ImGui::GetIO().MousePos = mouse_position;
+        surface.begin_input_frame();
+        surface.begin_frame();
+        ImGui::SetNextWindowPos({0.0F, 0.0F});
+        ImGui::SetNextWindowSize({900.0F, 600.0F});
+        ImGui::Begin("demo-input-test");
+        surface.root().update(ImGui::GetIO().DeltaTime);
+        surface.root().draw();
+        ImGui::End();
+        surface.end_frame();
+    };
+
+    draw_frame({0.0F, 0.0F});
+
+    auto* blocker = surface.root().find("##input-blocker");
+    auto* controls = surface.root().find("dynamic-node-controls");
+    auto* dynamic_nodes = surface.root().find("dynamic-nodes");
+    REQUIRE(blocker != nullptr);
+    REQUIRE(controls != nullptr);
+    REQUIRE(dynamic_nodes != nullptr);
+    REQUIRE_FALSE(controls->children().empty());
+
+    blocker->set_visible(true);
+    surface.input_router().set_layer_policy(ui::InputLayer::Overlay, ui::InputPolicy::BlockPointer);
+    draw_frame({0.0F, 0.0F});
+
+    const ui::Rect add_button_rect = controls->children().front()->layout().screen_rect();
+    const ImVec2 add_button_center = {
+        (add_button_rect.min.x + add_button_rect.max.x) * 0.5F,
+        (add_button_rect.min.y + add_button_rect.max.y) * 0.5F,
+    };
+
+    ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
+    down.position = add_button_center;
+    down.button = ui::PointerButton::Left;
+    surface.dispatch(down);
+
+    ui::UiEvent up = ui::UiEvent::make(ui::EventType::PointerUp);
+    up.position = add_button_center;
+    up.button = ui::PointerButton::Left;
+    surface.dispatch(up);
+
+    REQUIRE(dynamic_nodes->children().empty());
+}
+
 TEST_CASE("dropdown opens after fading out and fades after selection", "[DropdownWidget][regression]") {
     ui::Runtime runtime;
     UI surface(runtime, {.size = {320.0F, 220.0F}});
@@ -72,10 +159,7 @@ TEST_CASE("dropdown opens after fading out and fades after selection", "[Dropdow
     auto& status = stack.add_child<ui::TextWidget>("no clicks yet");
 
     ImGui::SetCurrentContext(surface.imgui_context());
-    unsigned char* font_pixels = nullptr;
-    int font_width = 0;
-    int font_height = 0;
-    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&font_pixels, &font_width, &font_height);
+    ui_test::ImGuiContext::build_fonts();
 
     const auto draw_frame = [&surface, &stack](ImVec2 mouse_position, bool mouse_down) {
         ImGui::SetCurrentContext(surface.imgui_context());
@@ -336,7 +420,7 @@ TEST_CASE("styled nodes apply their effective font during draw", "[Widget][style
     ImFontConfig font_config;
     font_config.SizePixels = 24.0F;
     ImFont* large_font = ImGui::GetIO().Fonts->AddFontDefault(&font_config);
-    context.build_fonts();
+    ui_test::ImGuiContext::build_fonts();
 
     FontProbeWidget widget;
     widget.set_font(large_font);

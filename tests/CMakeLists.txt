@@ -1,5 +1,6 @@
 add_executable(imgui-ui-tests
     core.cpp
+    ../examples/demo.cpp
     diagnostics.cpp
     input.cpp
     layout.cpp

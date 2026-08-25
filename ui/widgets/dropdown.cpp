@@ -95,11 +95,6 @@ namespace ui {
         return *this;
     }
 
-    DropdownWidget& DropdownWidget::set_size(ImVec2 size) {
-        Node::set_size(size);
-        return *this;
-    }
-
     bool DropdownWidget::changed() const {
         return m_changed;
     }
@@ -219,7 +214,7 @@ namespace ui {
         const ImVec2 trigger_max = ImGui::GetItemRectMax();
         m_trigger_rect = {trigger_min, trigger_max};
 
-        const ItemInputState input = m_ui.input().observe(trigger);
+        const ItemInputState input = m_ui.input().observe_item(trigger);
         bool open = m_open && !m_closing;
 
         if (ImGui::IsItemClicked()) {

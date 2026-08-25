@@ -426,7 +426,7 @@ TEST_CASE("text measurement uses the font inherited from its parent", "[layout][
     ImFontConfig large_font_config;
     large_font_config.SizePixels = 28.0F;
     ImFont* large_font = ImGui::GetIO().Fonts->AddFontDefault(&large_font_config);
-    context.build_fonts();
+    ui_test::ImGuiContext::build_fonts();
 
     ui::ChildContainer parent("font-parent");
     parent.set_size({460.0F, 100.0F});

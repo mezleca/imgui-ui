@@ -261,18 +261,20 @@ namespace ui {
 
         const ImGuiContextScope scope(surface.imgui_context());
 
+        const std::optional<UiEvent> translated = event_from_sdl(event);
+        if (translated.has_value()) {
+            UiEvent dispatched = *translated;
+            if (surface.dispatch(dispatched)) {
+                return true;
+            }
+        }
+
         SDL_Event imgui_event = event;
         if (imgui_event.type == SDL_EVENT_MOUSE_WHEEL) {
             imgui_event.wheel.x *= constants::SCROLL_WHEEL_SCALE;
             imgui_event.wheel.y *= constants::SCROLL_WHEEL_SCALE;
         }
         ImGui_ImplSDL3_ProcessEvent(&imgui_event);
-
-        const std::optional<UiEvent> translated = event_from_sdl(event);
-        if (translated.has_value()) {
-            UiEvent dispatched = *translated;
-            return surface.dispatch(dispatched);
-        }
 
         return false;
     }

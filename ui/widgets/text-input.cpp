@@ -39,7 +39,7 @@ namespace ui {
     TextInputWidget::TextInputWidget(UI& ui, std::string& value) : TextInputWidget(ui, value, {}) {}
 
     TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
-        : ChildContainer(label, "TextInput"), m_ui(ui), m_value(&value), m_label(std::move(label)) {
+        : ChildContainer(std::move(label), "TextInput"), m_ui(ui), m_value(&value) {
         const Theme& theme = m_ui.theme();
 
         set_accepts_focus(true);
@@ -133,7 +133,7 @@ namespace ui {
 
         m_field_node->draw();
         // the field supplies item geometry; the outer container owns interaction and focus.
-        m_input_state = m_ui.input().observe(*this);
+        m_input_state = m_ui.input().observe_item(*this);
         m_input_state.hovered = m_input_state.hovered || ImGui::IsWindowHovered();
 
         if (!has_icon) {

@@ -12,6 +12,7 @@ namespace ui {
     public:
         explicit ChildContainer(std::string id, std::string_view type_name = "ChildContainer");
 
+        /// enables scrolling while preserving the container's outer bounds.
         ChildContainer& set_scrollable(bool scrollable);
         /// replaces vertical style padding so one text line is centered in fixed height.
         ChildContainer& set_center_content_vertically(bool enabled);

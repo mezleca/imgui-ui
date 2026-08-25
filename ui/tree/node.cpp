@@ -18,25 +18,20 @@ namespace ui {
         }
     }
 
-    void Node::position_in_parent() {
+    void Node::resolve_position() {
         if (ImGui::GetCurrentContext() == nullptr) {
             m_layout.set_arranged_rect(Rect::from_position_size(m_layout.offset(), m_layout.size()));
             m_layout.set_screen_rect(m_layout.arranged_rect());
             return;
         }
 
-        const ImVec2 content_min = ImGui::GetWindowContentRegionMin();
-        const ImVec2 content_max = ImGui::GetWindowContentRegionMax();
-        const ImVec2 content_size = {content_max.x - content_min.x, content_max.y - content_min.y};
+        const Rect parent_content = {ImGui::GetWindowContentRegionMin(), ImGui::GetWindowContentRegionMax()};
+        m_layout.set_parent_content_rect(parent_content);
 
-        m_layout.set_parent_content_rect(Rect::from_position_size(content_min, content_size));
-
-        // flow uses imgui's current cursor; explicit placement resolves against
-        // the window content rectangle before converting the result to screen space.
         ImVec2 window_position = ImGui::GetCursorPos();
         if (m_layout.has_explicit_position()) {
             const Rect arranged_rect = resolve_layout_rect(
-                {content_min, content_max}, m_layout.size(), m_layout.anchor_factor(), m_layout.origin_factor(), m_layout.offset()
+                parent_content, m_layout.size(), m_layout.anchor_factor(), m_layout.origin_factor(), m_layout.offset()
             );
             window_position = arranged_rect.min;
             ImGui::SetCursorPos(window_position);
@@ -279,7 +274,7 @@ namespace ui {
         // placement then establishes both local and screen coordinate rectangles.
         on_layout();
         m_layout.clear_size_resolution();
-        position_in_parent();
+        resolve_position();
 
         const ImGuiID previous_item_id = ImGui::GetCurrentContext() == nullptr ? 0 : ImGui::GetItemID();
         const Rect previous_item_rect =

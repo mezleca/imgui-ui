@@ -1,8 +1,5 @@
 #include "router.hpp"
-
 #include "../tree/node.hpp"
-
-#include <algorithm>
 
 namespace ui {
     static bool is_pointer_event(EventType type) {
@@ -19,7 +16,7 @@ namespace ui {
         return static_cast<std::size_t>(layer);
     }
 
-    static InputLayer layer_of(const Node& node) {
+    static InputLayer effective_layer(const Node& node) {
         const InputLayer layer = node.input_layer();
         return layer == InputLayer::Count ? InputLayer::Content : layer;
     }
@@ -53,7 +50,7 @@ namespace ui {
         return std::nullopt;
     }
 
-    static bool is_same_or_descendant(const Node* ancestor, const Node* node) {
+    static bool is_ancestor_or_same(const Node* ancestor, const Node* node) {
         for (const Node* current = node; current != nullptr; current = current->parent()) {
             if (current == ancestor) {
                 return true;
@@ -61,6 +58,10 @@ namespace ui {
         }
 
         return false;
+    }
+
+    static bool is_input_target(const Node* node) {
+        return node != nullptr && node->visible() && node->accepts_input();
     }
 
     void InputRouter::begin_frame() {
@@ -92,8 +93,13 @@ namespace ui {
         m_policies[layer_index(layer)] = policy;
     }
 
+    bool InputRouter::pointer_blocked_for(InputLayer layer) const {
+        const std::optional<InputLayer> blocking_layer = highest_blocking_layer(EventType::PointerMove);
+        return blocking_layer.has_value() && layer_index(layer) < layer_index(*blocking_layer);
+    }
+
     void InputRouter::set_keyboard_target(Node& node) {
-        m_keyboard_targets[layer_index(layer_of(node))] = &node;
+        m_keyboard_targets[layer_index(effective_layer(node))] = &node;
     }
 
     void InputRouter::clear_keyboard_target(InputLayer layer) {
@@ -111,7 +117,7 @@ namespace ui {
     }
 
     void InputRouter::register_region(Node& node, Rect rect) {
-        register_region_in_layer(node, rect, layer_of(node));
+        register_region_in_layer(node, rect, effective_layer(node));
     }
 
     void InputRouter::register_region_in_layer(Node& node, Rect rect, InputLayer layer) {
@@ -119,7 +125,7 @@ namespace ui {
     }
 
     bool InputRouter::capture_pointer(Node& node) {
-        if (!node.visible() || !node.accepts_input()) {
+        if (!is_input_target(&node)) {
             return false;
         }
 
@@ -145,13 +151,13 @@ namespace ui {
     }
 
     bool InputRouter::set_focus(Node& node) {
-        return set_focus_in_layer(node, layer_of(node));
+        return set_focus_in_layer(node, effective_layer(node));
     }
 
     bool InputRouter::set_focus_in_layer(Node& node, InputLayer layer) {
         clear_inactive_targets();
 
-        if (!node.visible() || !node.accepts_input()) {
+        if (!is_input_target(&node)) {
             return false;
         }
 
@@ -236,13 +242,24 @@ namespace ui {
         }
 
         if (event.type == EventType::PointerMove) {
-            // move events only make sense while dragging; without an active capture there is
-            // no target to flow them through.
-            if (m_pointer_capture == nullptr) {
+            // captured moves follow the drag target; a blocking layer also consumes moves
+            // that do not land on an interactive node.
+            if (m_pointer_capture != nullptr) {
+                return dispatch(*m_pointer_capture, event);
+            }
+
+            const std::optional<InputLayer> blocking_layer = highest_blocking_layer(event.type);
+            if (!blocking_layer.has_value()) {
                 return false;
             }
 
-            return dispatch(*m_pointer_capture, event);
+            Node* target = target_at(event.position, *blocking_layer, false);
+            if (target != nullptr) {
+                return dispatch(*target, event);
+            }
+
+            event.mark_handled();
+            return true;
         }
 
         if (event.type == EventType::PointerUp) {
@@ -265,15 +282,17 @@ namespace ui {
             const bool default_prevented = m_pressed_default_prevented[*button_index] || event.default_prevented;
             m_pressed_targets[*button_index] = nullptr;
             m_pressed_default_prevented[*button_index] = false;
+            const std::optional<InputLayer> blocking_layer = highest_blocking_layer(event.type);
 
-            if (pressed == nullptr || default_prevented || !pressed->visible() || !pressed->accepts_input()) {
-                return handled;
+            if (default_prevented || !is_input_target(pressed)) {
+                if (blocking_layer.has_value()) event.mark_handled();
+                return handled || event.handled;
             }
 
-            const std::optional<InputLayer> blocking_layer = highest_blocking_layer(event.type);
             Node* released = target_at(event.position, blocking_layer.value_or(InputLayer::Content), false);
             if (released != pressed) {
-                return handled;
+                if (blocking_layer.has_value()) event.mark_handled();
+                return handled || event.handled;
             }
 
             const std::optional<EventType> click_type = click_event_type(event.button);
@@ -335,25 +354,23 @@ namespace ui {
     }
 
     void InputRouter::clear_inactive_targets() {
-        const auto is_active = [](const Node* node) { return node != nullptr && node->visible() && node->accepts_input(); };
-
-        if (!is_active(m_focused_node)) {
+        if (!is_input_target(m_focused_node)) {
             m_focused_node = nullptr;
             m_focused_layer = InputLayer::Content;
         }
 
-        if (!is_active(m_pointer_capture)) {
+        if (!is_input_target(m_pointer_capture)) {
             m_pointer_capture = nullptr;
         }
 
         for (Node*& target : m_keyboard_targets) {
-            if (!is_active(target)) {
+            if (!is_input_target(target)) {
                 target = nullptr;
             }
         }
 
         for (std::size_t index = 0; index < m_pressed_targets.size(); ++index) {
-            if (!is_active(m_pressed_targets[index])) {
+            if (!is_input_target(m_pressed_targets[index])) {
                 m_pressed_targets[index] = nullptr;
                 m_pressed_default_prevented[index] = false;
             }
@@ -364,38 +381,25 @@ namespace ui {
         const auto minimum = layer_index(minimum_layer);
 
         Node* target = nullptr;
-        Rect target_rect{};
 
         for (auto it = m_regions.rbegin(); it != m_regions.rend(); ++it) {
-            if (layer_index(it->layer) < minimum || !it->rect.contains(position) || it->node == nullptr || !it->node->visible() ||
-                (!include_non_input && !it->node->accepts_input())) {
+            if (layer_index(it->layer) < minimum || !it->rect.contains(position) || it->node == nullptr) {
+                continue;
+            }
+
+            if (!it->node->visible() || (!include_non_input && !it->node->accepts_input())) {
                 continue;
             }
 
             if (target == nullptr) {
                 target = it->node;
-                target_rect = it->rect;
                 continue;
             }
 
-            if (is_same_or_descendant(target, it->node)) {
+            // Node::draw registers parents after children, so a child must win
+            // even when its region was registered earlier.
+            if (is_ancestor_or_same(target, it->node)) {
                 target = it->node;
-                target_rect = it->rect;
-                continue;
-            }
-
-            if (is_same_or_descendant(it->node, target)) {
-                continue;
-            }
-
-            const ImVec2 target_size = target_rect.size();
-            const ImVec2 candidate_size = it->rect.size();
-            const float target_area = target_size.x * target_size.y;
-            const float candidate_area = candidate_size.x * candidate_size.y;
-
-            if (candidate_area < target_area) {
-                target = it->node;
-                target_rect = it->rect;
             }
         }
 

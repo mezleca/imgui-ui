@@ -34,7 +34,6 @@ namespace ui {
         DropdownWidget& set_placeholder(std::string placeholder);
         /// leaves the bound value unchanged when options are replaced.
         DropdownWidget& set_options(std::vector<DropdownOption> options);
-        DropdownWidget& set_size(ImVec2 size);
 
         bool changed() const;
         bool is_open() const;

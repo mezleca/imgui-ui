@@ -33,7 +33,6 @@ namespace ui {
 
         UI& m_ui;
         std::string* m_value;
-        std::string m_label;
         ImageWidget* m_icon_node = nullptr;
         FieldNode* m_field_node = nullptr;
         ItemInputState m_input_state;
