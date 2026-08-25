@@ -42,7 +42,7 @@ namespace ui {
         const bool pressed = ImGui::Button(m_text.c_str(), layout().size());
 
         const ItemInputState input = m_ui.input().observe_item(*this);
-        apply_input_state(input, pressed);
+        apply_input_state(input, pressed && !input.blocked);
 
         draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, style);
         return true;

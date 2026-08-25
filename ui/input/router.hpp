@@ -57,6 +57,12 @@ namespace ui {
         /// reports whether pointer state for a layer is blocked by a higher layer.
         bool pointer_blocked_for(InputLayer layer) const;
 
+        /// reports whether a node at a position is behind a pointer-blocking ancestor.
+        bool pointer_blocked_at(ImVec2 position, const Node& node) const;
+
+        /// reports whether native pointer input is blocked at a screen position.
+        bool pointer_blocked_at(ImVec2 position) const;
+
         /// assigns the fallback keyboard target for the node's layer.
         void set_keyboard_target(Node& node);
 
@@ -122,13 +128,16 @@ namespace ui {
     private:
         friend class Node;
 
+        void set_pointer_blocker(Node& node, bool enabled);
         void clear_regions(Node& subtree);
         void clear_inactive_targets();
         Node* target_at(ImVec2 position, InputLayer minimum_layer, bool include_non_input) const;
+        Node* pointer_blocker_at(ImVec2 position) const;
         Node* topmost_keyboard_target_from(std::size_t minimum_index) const;
         std::optional<InputLayer> highest_blocking_layer(EventType type) const;
 
         std::vector<Region> m_regions;
+        std::vector<Node*> m_pointer_blockers;
         std::array<InputPolicy, LAYER_COUNT> m_policies{};
         Node* m_focused_node = nullptr;
         InputLayer m_focused_layer = InputLayer::Content;

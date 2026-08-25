@@ -10,6 +10,7 @@
 #include <imgui_impl_sdl3.h>
 #include <SDL3/SDL_log.h>
 
+#include <cfloat>
 #include <optional>
 #include <utility>
 
@@ -48,6 +49,21 @@ namespace ui {
             default:
                 return PointerButton::None;
         }
+    }
+
+    static std::optional<int> imgui_mouse_button(PointerButton button) {
+        switch (button) {
+            case PointerButton::Left:
+                return ImGuiMouseButton_Left;
+            case PointerButton::Right:
+                return ImGuiMouseButton_Right;
+            case PointerButton::Middle:
+                return ImGuiMouseButton_Middle;
+            case PointerButton::None:
+                return std::nullopt;
+        }
+
+        return std::nullopt;
     }
 
     static Key key_from_sdl(SDL_Keycode key) {
@@ -262,13 +278,35 @@ namespace ui {
         const ImGuiContextScope scope(surface.imgui_context());
 
         const std::optional<UiEvent> translated = event_from_sdl(event);
+        bool handled = false;
         if (translated.has_value()) {
             UiEvent dispatched = *translated;
-            if (surface.dispatch(dispatched)) {
+            handled = surface.dispatch(dispatched);
+        }
+
+        if (translated.has_value() && handled) {
+            const UiEvent& event = *translated;
+            const bool pointer_blocked = (event.type == EventType::PointerMove || event.type == EventType::PointerDown ||
+                                          event.type == EventType::PointerUp || event.type == EventType::Scroll) &&
+                                         surface.input_router().pointer_blocked_at(event.position);
+            if (event.type == EventType::PointerMove && pointer_blocked) {
+                ImGui::GetIO().AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+                return true;
+            }
+
+            if ((event.type == EventType::PointerDown && handled) || event.type == EventType::PointerUp || pointer_blocked) {
+                if (const std::optional<int> button = imgui_mouse_button(event.button); button.has_value()) {
+                    ImGui::GetIO().AddMouseButtonEvent(*button, false);
+                }
+                return true;
+            }
+
+            if (event.type == EventType::Scroll) {
                 return true;
             }
         }
 
+        // imgui must receive state-changing events that the framework did not consume.
         SDL_Event imgui_event = event;
         if (imgui_event.type == SDL_EVENT_MOUSE_WHEEL) {
             imgui_event.wheel.x *= constants::SCROLL_WHEEL_SCALE;
@@ -276,7 +314,7 @@ namespace ui {
         }
         ImGui_ImplSDL3_ProcessEvent(&imgui_event);
 
-        return false;
+        return handled;
     }
 
     std::unique_ptr<Backend> create_sdl_backend(const Config& config) {

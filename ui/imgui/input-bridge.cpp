@@ -18,7 +18,9 @@ namespace ui {
         }
 
         const InputLayer node_layer = node.input_layer() == InputLayer::Count ? InputLayer::Content : node.input_layer();
-        const bool pointer_blocked = m_router.pointer_blocked_for(node_layer);
+        const bool pointer_blocked =
+            m_router.pointer_blocked_for(node_layer) || m_router.pointer_blocked_at(ImGui::GetIO().MousePos, node);
+        state.blocked = pointer_blocked;
         const bool popup_open = ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup);
         state.hovered = !pointer_blocked && (ImGui::IsItemHovered() ||
                                              (!popup_open && has_item_rect && ImGui::IsMouseHoveringRect(item_min, item_max)));

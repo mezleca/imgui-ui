@@ -44,9 +44,30 @@ namespace ui {
     }
 
     void Node::set_input_router(InputRouter* router) {
+        if (m_input_router != nullptr && m_input_router != router) {
+            m_input_router->set_pointer_blocker(*this, false);
+        }
+
         m_input_router = router;
+        update_pointer_blocker_registration();
         for (const auto& child : m_children) {
             child->set_input_router(router);
+        }
+    }
+
+    void Node::set_visible(bool visible) {
+        if (m_visible == visible) {
+            return;
+        }
+
+        m_visible = visible;
+        update_pointer_blocker_registration();
+        invalidate_measure();
+    }
+
+    void Node::update_pointer_blocker_registration() {
+        if (m_input_router != nullptr) {
+            m_input_router->set_pointer_blocker(*this, blocks_pointer_input());
         }
     }
 

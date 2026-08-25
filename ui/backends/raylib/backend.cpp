@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cfloat>
 #include <cmath>
 #include <string>
 #include <utility>
@@ -299,8 +300,11 @@ namespace ui {
         const Vector2 mouse = GetMousePosition();
         const ImVec2 mouse_position = {mouse.x, mouse.y};
 
-        const bool pointer_handled = dispatch_pointer(surface, EventType::PointerMove, mouse_position);
-        if (!pointer_handled) {
+        dispatch_pointer(surface, EventType::PointerMove, mouse_position);
+        const bool pointer_blocked = surface.input_router().pointer_blocked_at(mouse_position);
+        if (pointer_blocked) {
+            io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+        } else {
             io.AddMousePosEvent(mouse.x, mouse.y);
         }
 
@@ -323,9 +327,9 @@ namespace ui {
                 handled = true;
             }
 
-            if (!pointer_handled && !button_handled) {
-                io.AddMouseButtonEvent(static_cast<int>(index), IsMouseButtonDown(raylib_button));
-            }
+            // imgui must receive transitions that the framework did not consume.
+            const bool button_down = !pointer_blocked && !button_handled && IsMouseButtonDown(raylib_button);
+            io.AddMouseButtonEvent(static_cast<int>(index), button_down);
         }
 
         if (!m_has_mouse_position || mouse_position.x != m_previous_mouse_position.x ||

@@ -1,6 +1,8 @@
 #include "router.hpp"
 #include "../tree/node.hpp"
 
+#include <algorithm>
+
 namespace ui {
     static bool is_pointer_event(EventType type) {
         return type == EventType::PointerMove || type == EventType::PointerDown || type == EventType::PointerUp ||
@@ -98,6 +100,40 @@ namespace ui {
         return blocking_layer.has_value() && layer_index(layer) < layer_index(*blocking_layer);
     }
 
+    void InputRouter::set_pointer_blocker(Node& node, bool enabled) {
+        const auto it = std::find(m_pointer_blockers.begin(), m_pointer_blockers.end(), &node);
+        if (enabled) {
+            if (it == m_pointer_blockers.end()) {
+                m_pointer_blockers.push_back(&node);
+            }
+            return;
+        }
+
+        if (it != m_pointer_blockers.end()) {
+            m_pointer_blockers.erase(it);
+        }
+    }
+
+    bool InputRouter::pointer_blocked_at(ImVec2 position, const Node& node) const {
+        const Node* blocker = pointer_blocker_at(position);
+        return blocker != nullptr && !is_ancestor_or_same(blocker, &node);
+    }
+
+    bool InputRouter::pointer_blocked_at(ImVec2 position) const {
+        const Node* blocker = pointer_blocker_at(position);
+        const Node* target = target_at(position, InputLayer::Content, false);
+        if (blocker != nullptr && !is_ancestor_or_same(blocker, target)) {
+            return true;
+        }
+
+        const std::optional<InputLayer> blocking_layer = highest_blocking_layer(EventType::PointerMove);
+        if (!blocking_layer.has_value()) {
+            return false;
+        }
+
+        return target_at(position, *blocking_layer, false) == nullptr;
+    }
+
     void InputRouter::set_keyboard_target(Node& node) {
         m_keyboard_targets[layer_index(effective_layer(node))] = &node;
     }
@@ -114,6 +150,7 @@ namespace ui {
 
     void InputRouter::clear_regions(Node& subtree) {
         std::erase_if(m_regions, [&subtree](const Region& region) { return subtree.contains(region.node); });
+        std::erase_if(m_pointer_blockers, [&subtree](const Node* node) { return subtree.contains(node); });
     }
 
     void InputRouter::register_region(Node& node, Rect rect) {
@@ -249,17 +286,17 @@ namespace ui {
             }
 
             const std::optional<InputLayer> blocking_layer = highest_blocking_layer(event.type);
-            if (!blocking_layer.has_value()) {
-                return false;
-            }
-
-            Node* target = target_at(event.position, *blocking_layer, false);
+            Node* target = target_at(event.position, blocking_layer.value_or(InputLayer::Content), false);
             if (target != nullptr) {
                 return dispatch(*target, event);
             }
 
-            event.mark_handled();
-            return true;
+            if (blocking_layer.has_value()) {
+                event.mark_handled();
+                return true;
+            }
+
+            return false;
         }
 
         if (event.type == EventType::PointerUp) {
@@ -339,6 +376,10 @@ namespace ui {
             Node* next = current->parent();
             current->dispatch_event(event);
 
+            if (current == &target && current->blocks_pointer_input() && is_pointer_event(event.type)) {
+                event.mark_handled();
+            }
+
             current = next;
         }
 
@@ -403,7 +444,23 @@ namespace ui {
             }
         }
 
+        if (Node* blocker = pointer_blocker_at(position); blocker != nullptr && !is_ancestor_or_same(blocker, target)) {
+            return blocker;
+        }
+
         return target;
+    }
+
+    Node* InputRouter::pointer_blocker_at(ImVec2 position) const {
+        for (auto it = m_pointer_blockers.rbegin(); it != m_pointer_blockers.rend(); ++it) {
+            Node* blocker = *it;
+            if (blocker != nullptr && blocker->visible() && blocker->enabled() && blocker->blocks_pointer_input() &&
+                blocker->pointer_blocking_rect().contains(position)) {
+                return blocker;
+            }
+        }
+
+        return nullptr;
     }
 
     Node* InputRouter::topmost_keyboard_target_from(std::size_t minimum_index) const {

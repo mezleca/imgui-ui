@@ -10,6 +10,9 @@ namespace ui {
         /// ImGui reports the item as pressed or held.
         bool active = false;
 
+        /// a layer policy or pointer blocker prevents the item from receiving pointer state.
+        bool blocked = false;
+
         /// the router currently assigns keyboard focus to the node.
         bool focused = false;
     };

@@ -65,7 +65,7 @@ TEST_CASE("blocking overlay prevents hover state on content behind it", "[Button
     content_button.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {20.0F, 20.0F});
 
     auto& overlay = surface.root().add_child<ui::OverlayNode>("overlay");
-    overlay.set_input_layer(ui::InputLayer::Overlay);
+    overlay.set_blocks_pointer_input(true);
     auto& overlay_button = overlay.add_child<ui::ButtonWidget>(surface, "overlay", ImVec2{120.0F, 40.0F});
     overlay_button.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {20.0F, 20.0F});
 
@@ -73,7 +73,6 @@ TEST_CASE("blocking overlay prevents hover state on content behind it", "[Button
     ImGui::GetIO().DisplaySize = {240.0F, 120.0F};
     ImGui::GetIO().MousePos = {80.0F, 40.0F};
     ui_test::ImGuiContext::build_fonts();
-    surface.input_router().set_layer_policy(ui::InputLayer::Overlay, ui::InputPolicy::BlockPointer);
     surface.begin_input_frame();
     surface.begin_frame();
     ImGui::SetNextWindowPos({0.0F, 0.0F});
@@ -88,7 +87,7 @@ TEST_CASE("blocking overlay prevents hover state on content behind it", "[Button
     REQUIRE(content_button.style_type() != ui::StyleType::HOVER);
 }
 
-TEST_CASE("blocking overlay prevents input in the demo dynamic controls", "[demo][input][regression]") {
+TEST_CASE("pointer block prevents hover and clicks on content controls", "[input][regression]") {
     ui::Runtime runtime;
     UI surface(runtime, {.size = {900.0F, 600.0F}});
     setup_demo(surface, "test");
@@ -97,9 +96,10 @@ TEST_CASE("blocking overlay prevents input in the demo dynamic controls", "[demo
     ImGui::GetIO().DisplaySize = {900.0F, 600.0F};
     ui_test::ImGuiContext::build_fonts();
 
-    const auto draw_frame = [&surface](ImVec2 mouse_position) {
+    const auto draw_frame = [&surface](ImVec2 mouse_position, bool mouse_down = false) {
         ImGui::SetCurrentContext(surface.imgui_context());
         ImGui::GetIO().MousePos = mouse_position;
+        ImGui::GetIO().MouseDown[ImGuiMouseButton_Left] = mouse_down;
         surface.begin_input_frame();
         surface.begin_frame();
         ImGui::SetNextWindowPos({0.0F, 0.0F});
@@ -116,20 +116,28 @@ TEST_CASE("blocking overlay prevents input in the demo dynamic controls", "[demo
     auto* blocker = surface.root().find("##input-blocker");
     auto* controls = surface.root().find("dynamic-node-controls");
     auto* dynamic_nodes = surface.root().find("dynamic-nodes");
+    auto* blocker_overlay = dynamic_cast<ui::OverlayNode*>(blocker);
     REQUIRE(blocker != nullptr);
+    REQUIRE(blocker_overlay != nullptr);
     REQUIRE(controls != nullptr);
     REQUIRE(dynamic_nodes != nullptr);
     REQUIRE_FALSE(controls->children().empty());
 
-    blocker->set_visible(true);
-    surface.input_router().set_layer_policy(ui::InputLayer::Overlay, ui::InputPolicy::BlockPointer);
+    blocker_overlay->set_visible(true);
+    blocker_overlay->set_blocks_pointer_input(true);
     draw_frame({0.0F, 0.0F});
 
-    const ui::Rect add_button_rect = controls->children().front()->layout().screen_rect();
+    auto* add_button = dynamic_cast<ui::ButtonWidget*>(controls->children().front().get());
+    REQUIRE(add_button != nullptr);
+    const ui::Rect add_button_rect = add_button->layout().screen_rect();
     const ImVec2 add_button_center = {
         (add_button_rect.min.x + add_button_rect.max.x) * 0.5F,
         (add_button_rect.min.y + add_button_rect.max.y) * 0.5F,
     };
+
+    draw_frame(add_button_center, true);
+    draw_frame(add_button_center, false);
+    REQUIRE(add_button->style_type() == ui::StyleType::DEFAULT);
 
     ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
     down.position = add_button_center;
@@ -142,6 +150,68 @@ TEST_CASE("blocking overlay prevents input in the demo dynamic controls", "[demo
     surface.dispatch(up);
 
     REQUIRE(dynamic_nodes->children().empty());
+}
+
+TEST_CASE("pointer block rejects clicks on another overlay control", "[input][regression]") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.size = {900.0F, 600.0F}});
+    setup_demo(surface, "test");
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {900.0F, 600.0F};
+    ui_test::ImGuiContext::build_fonts();
+
+    const auto draw_frame = [&surface](ImVec2 mouse_position) {
+        ImGui::SetCurrentContext(surface.imgui_context());
+        ImGui::GetIO().MousePos = mouse_position;
+        surface.begin_input_frame();
+        surface.begin_frame();
+        ImGui::SetNextWindowPos({0.0F, 0.0F});
+        ImGui::SetNextWindowSize({900.0F, 600.0F});
+        ImGui::Begin("demo-overlay-input-test");
+        surface.root().update(ImGui::GetIO().DeltaTime);
+        surface.root().draw();
+        ImGui::End();
+        surface.end_frame();
+    };
+
+    draw_frame({0.0F, 0.0F});
+
+    auto* overlay = surface.root().find("##demo-overlay");
+    auto* blocker = surface.root().find("##input-blocker");
+    auto* blocker_overlay = dynamic_cast<ui::OverlayNode*>(blocker);
+    REQUIRE(overlay != nullptr);
+    REQUIRE(blocker != nullptr);
+    REQUIRE(blocker_overlay != nullptr);
+    REQUIRE(overlay->children().size() >= 2);
+
+    auto* panel = overlay->children().front().get();
+    auto* show_button = dynamic_cast<ui::ButtonWidget*>(overlay->children().back().get());
+    REQUIRE(panel != nullptr);
+    REQUIRE(show_button != nullptr);
+    REQUIRE_FALSE(panel->visible());
+
+    blocker_overlay->set_visible(true);
+    blocker_overlay->set_blocks_pointer_input(true);
+    draw_frame({0.0F, 0.0F});
+
+    const ui::Rect button_rect = show_button->layout().screen_rect();
+    const ImVec2 button_center = {
+        (button_rect.min.x + button_rect.max.x) * 0.5F,
+        (button_rect.min.y + button_rect.max.y) * 0.5F,
+    };
+
+    ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
+    down.position = button_center;
+    down.button = ui::PointerButton::Left;
+    surface.dispatch(down);
+
+    ui::UiEvent up = ui::UiEvent::make(ui::EventType::PointerUp);
+    up.position = button_center;
+    up.button = ui::PointerButton::Left;
+    surface.dispatch(up);
+
+    REQUIRE_FALSE(panel->visible());
 }
 
 TEST_CASE("dropdown opens after fading out and fades after selection", "[DropdownWidget][regression]") {

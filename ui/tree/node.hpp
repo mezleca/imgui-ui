@@ -119,14 +119,7 @@ namespace ui {
         }
 
         /// controls update and drawing independently from enabled input state.
-        void set_visible(bool visible) {
-            if (m_visible == visible) {
-                return;
-            }
-
-            m_visible = visible;
-            invalidate_measure();
-        }
+        void set_visible(bool visible);
 
         bool enabled() const {
             return m_enabled;
@@ -139,6 +132,16 @@ namespace ui {
 
         virtual bool accepts_input() const {
             return m_visible && m_enabled;
+        }
+
+        /// returns whether this node consumes pointer input outside its descendants.
+        virtual bool blocks_pointer_input() const {
+            return false;
+        }
+
+        /// returns the screen-space bounds where this node blocks pointer input.
+        virtual Rect pointer_blocking_rect() const {
+            return m_layout.screen_rect();
         }
 
         bool accepts_focus() const {
@@ -227,6 +230,7 @@ namespace ui {
         /// resolves flow or explicit placement and records local and screen bounds.
         void resolve_position();
         void assign_input_layer(InputLayer layer);
+        void update_pointer_blocker_registration();
         /// reports whether set_size() supplied a requested size.
         bool has_size_request() const;
 
@@ -243,8 +247,8 @@ namespace ui {
         /// overrides this node's screen bounds for custom drawing.
         void set_screen_rect(Rect rect);
 
-        /// assigns a resolved size and explicit placement for a child before draw.
-        /// The child computes its screen bounds when its own draw pass starts.
+        /// assigns a resolved size and explicit placement before the child draws.
+        /// the child computes its screen bounds when its own draw pass starts.
         void arrange_child(Node& child, ImVec2 size, Anchor anchor, Origin origin, ImVec2 offset = {});
 
         /// overrides a child node's screen bounds when its drawing happens elsewhere.
