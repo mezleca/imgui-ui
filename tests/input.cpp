@@ -246,6 +246,7 @@ TEST_CASE("input router clears targets when a node is detached") {
     parent.set_input_router(&router);
     REQUIRE(router.set_focus(*child_ptr));
     REQUIRE(router.capture_pointer(*child_ptr));
+    router.register_region(*child_ptr, {{0.0F, 0.0F}, {10.0F, 10.0F}});
     events.clear();
 
     auto detached = parent.remove(*child_ptr);
@@ -255,6 +256,7 @@ TEST_CASE("input router clears targets when a node is detached") {
     auto key = event_of(ui::EventType::KeyDown);
     REQUIRE_FALSE(router.dispatch(key));
     REQUIRE(router.focused_node() == nullptr);
+    REQUIRE(router.node_at({5.0F, 5.0F}) == nullptr);
     REQUIRE(events.empty());
 
     auto move = event_of(ui::EventType::PointerMove, {100.0F, 100.0F});

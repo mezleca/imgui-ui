@@ -136,6 +136,104 @@ TEST_CASE("fit content stack includes children spacing and padding") {
     REQUIRE(stack.layout().size().y == Catch::Approx(44.0F));
 }
 
+TEST_CASE("fit content stack remeasures after direction and spacing changes") {
+    class FixedNode final : public ui::Node {
+    public:
+        explicit FixedNode(ImVec2 size) {
+            set_size(size);
+        }
+
+    private:
+        bool on_draw() override {
+            ImGui::Dummy(layout().size());
+            return true;
+        }
+    };
+
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+
+    ui::StackContainer stack("fit-content-remeasure");
+    stack.fit_content();
+    stack.set_spacing(4.0F);
+    stack.style().padding({0.0F, 0.0F});
+    stack.add_child<FixedNode>(ImVec2{30.0F, 10.0F});
+    stack.add_child<FixedNode>(ImVec2{50.0F, 20.0F});
+
+    const auto draw_frame = [&stack] {
+        ImGui::NewFrame();
+        ImGui::Begin("fit-content-remeasure-test");
+        stack.draw();
+        ImGui::End();
+        ImGui::EndFrame();
+    };
+
+    draw_frame();
+    REQUIRE(stack.layout().size().x == Catch::Approx(50.0F));
+    REQUIRE(stack.layout().size().y == Catch::Approx(34.0F));
+
+    stack.set_spacing(10.0F);
+    draw_frame();
+    REQUIRE(stack.layout().size().x == Catch::Approx(50.0F));
+    REQUIRE(stack.layout().size().y == Catch::Approx(40.0F));
+
+    stack.set_direction(ui::StackDirection::Horizontal);
+    draw_frame();
+    REQUIRE(stack.layout().size().x == Catch::Approx(90.0F));
+    REQUIRE(stack.layout().size().y == Catch::Approx(20.0F));
+}
+
+TEST_CASE("visibility changes in an anchored overlay do not move its fixed sibling") {
+    class FixedNode final : public ui::Node {
+    public:
+        explicit FixedNode(ImVec2 size) {
+            set_size(size);
+        }
+
+    private:
+        bool on_draw() override {
+            ImGui::Dummy(layout().size());
+            return true;
+        }
+    };
+
+    ui_test::ImGuiContext context({640.0F, 360.0F});
+
+    ui::StackContainer overlay("overlay", ui::StackDirection::Horizontal);
+    overlay.fit_content();
+    overlay.set_placement(ui::Anchor::TopRight, ui::Origin::TopRight, {-20.0F, 20.0F});
+    overlay.style().padding({});
+
+    auto& optional_panel = overlay.add_child<FixedNode>(ImVec2{120.0F, 80.0F});
+    optional_panel.set_visible(false);
+    auto& dynamic_panel = overlay.add_child<FixedNode>(ImVec2{240.0F, 160.0F});
+
+    const auto draw_frame = [&overlay] {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos({0.0F, 0.0F});
+        ImGui::SetNextWindowSize({640.0F, 360.0F});
+        ImGui::Begin("overlay-visibility-test");
+        overlay.draw();
+        ImGui::End();
+        ImGui::EndFrame();
+    };
+
+    draw_frame();
+    const float initial_x = dynamic_panel.layout().screen_rect().min.x;
+
+    optional_panel.set_visible(true);
+    draw_frame();
+    const float shown_x = dynamic_panel.layout().screen_rect().min.x;
+    const float shown_panel_right = optional_panel.layout().screen_rect().max.x;
+
+    optional_panel.set_visible(false);
+    draw_frame();
+    const float hidden_x = dynamic_panel.layout().screen_rect().min.x;
+
+    REQUIRE(shown_x == Catch::Approx(initial_x));
+    REQUIRE(shown_panel_right <= shown_x);
+    REQUIRE(hidden_x == Catch::Approx(initial_x));
+}
+
 TEST_CASE("horizontal stack places a fixed item after auto-sized text") {
     class FixedItemNode final : public ui::Node {
     public:

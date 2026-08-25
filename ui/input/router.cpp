@@ -2,6 +2,8 @@
 
 #include "../tree/node.hpp"
 
+#include <algorithm>
+
 namespace ui {
     static bool is_pointer_event(EventType type) {
         return type == EventType::PointerMove || type == EventType::PointerDown || type == EventType::PointerUp ||
@@ -102,6 +104,10 @@ namespace ui {
         for (Node*& target : m_keyboard_targets) {
             if (subtree.contains(target)) target = nullptr;
         }
+    }
+
+    void InputRouter::clear_regions(Node& subtree) {
+        std::erase_if(m_regions, [&subtree](const Region& region) { return subtree.contains(region.node); });
     }
 
     void InputRouter::register_region(Node& node, Rect rect) {

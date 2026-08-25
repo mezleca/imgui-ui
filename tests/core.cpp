@@ -90,6 +90,37 @@ TEST_CASE("node measurement only reruns after invalidation") {
     REQUIRE(child_measurements == 2);
 }
 
+TEST_CASE("clearing children destroys the subtree and clears input targets") {
+    int destructions = 0;
+
+    class LifetimeNode final : public ui::Node {
+    public:
+        explicit LifetimeNode(int& destructions) : m_destructions(destructions) {}
+        ~LifetimeNode() override {
+            ++m_destructions;
+        }
+
+    private:
+        int& m_destructions;
+    };
+
+    ui::Node parent("parent");
+    auto& child = parent.add_child<LifetimeNode>(destructions);
+    child.add_child<LifetimeNode>(destructions);
+
+    ui::InputRouter router;
+    parent.set_input_router(&router);
+    REQUIRE(router.set_focus(child));
+    REQUIRE(router.capture_pointer(child));
+
+    parent.clear();
+
+    REQUIRE(parent.children().empty());
+    REQUIRE(destructions == 2);
+    REQUIRE(router.focused_node() == nullptr);
+    router.release_pointer();
+}
+
 TEST_CASE("leaf nodes do not capture an imgui item produced before their draw") {
     class NoItemNode final : public ui::Node {
     public:

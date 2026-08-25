@@ -10,6 +10,19 @@ option(IMGUI_UI_BUILD_RAYLIB "build the raylib backend" OFF)
 option(IMGUI_UI_BUILD_TESTS "build the framework tests" ${PROJECT_IS_TOP_LEVEL})
 option(IMGUI_UI_BUILD_EXAMPLES "build the selected backend examples" OFF)
 
+function(imgui_ui_enable_sanitizers target)
+    if(MSVC)
+        target_compile_options(${target} PUBLIC "$<$<CONFIG:Debug>:/fsanitize=address>")
+        target_link_options(${target} PUBLIC "$<$<CONFIG:Debug>:/fsanitize=address>")
+    else()
+        target_compile_options(${target} PUBLIC
+            "$<$<CONFIG:Debug>:-fsanitize=address,undefined>"
+            "$<$<CONFIG:Debug>:-fno-omit-frame-pointer>"
+        )
+        target_link_options(${target} PUBLIC "$<$<CONFIG:Debug>:-fsanitize=address,undefined>")
+    endif()
+endfunction()
+
 include(FetchContent)
 
 if(NOT TARGET imgui)

@@ -26,4 +26,4 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ilammy/msvc-dev-cmd@v1
       - name: run tests
-        run: python ez tests --type release
+        run: python ez tests

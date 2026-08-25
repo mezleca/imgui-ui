@@ -7,7 +7,14 @@ namespace ui {
         : ChildContainer(std::move(id), "StackContainer"), m_direction(direction) {}
 
     void StackContainer::set_direction(StackDirection direction) {
+        if (m_direction == direction) {
+            return;
+        }
+
         m_direction = direction;
+        if (m_fits_content) {
+            invalidate_measure();
+        }
     }
 
     StackDirection StackContainer::direction() const {
@@ -15,7 +22,15 @@ namespace ui {
     }
 
     void StackContainer::set_spacing(float spacing) {
-        m_spacing = std::max(0.0F, spacing);
+        const float resolved_spacing = std::max(0.0F, spacing);
+        if (m_spacing == resolved_spacing) {
+            return;
+        }
+
+        m_spacing = resolved_spacing;
+        if (m_fits_content) {
+            invalidate_measure();
+        }
     }
 
     float StackContainer::spacing() const {

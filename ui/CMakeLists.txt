@@ -3,6 +3,7 @@ list(FILTER IMGUI_UI_CORE_SOURCES EXCLUDE REGEX "/backends/")
 
 add_library(imgui-ui-core STATIC ${IMGUI_UI_CORE_SOURCES})
 add_library(imgui-ui::core ALIAS imgui-ui-core)
+imgui_ui_enable_sanitizers(imgui-ui-core)
 
 target_compile_features(imgui-ui-core PUBLIC cxx_std_20)
 target_include_directories(imgui-ui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
@@ -26,6 +27,7 @@ if(IMGUI_UI_BUILD_SDL)
 
     add_library(imgui-ui-sdl STATIC ${IMGUI_UI_SDL_SOURCES})
     add_library(imgui-ui::sdl ALIAS imgui-ui-sdl)
+    imgui_ui_enable_sanitizers(imgui-ui-sdl)
 
     target_compile_features(imgui-ui-sdl PUBLIC cxx_std_20)
     target_include_directories(imgui-ui-sdl PRIVATE "${IMGUI_UI_IMGUI_BACKENDS_DIR}")
@@ -43,6 +45,7 @@ if(IMGUI_UI_BUILD_RAYLIB)
 
     add_library(imgui-ui-raylib STATIC ${IMGUI_UI_RAYLIB_SOURCES})
     add_library(imgui-ui::raylib ALIAS imgui-ui-raylib)
+    imgui_ui_enable_sanitizers(imgui-ui-raylib)
 
     target_compile_features(imgui-ui-raylib PUBLIC cxx_std_20)
     target_include_directories(imgui-ui-raylib PRIVATE "${IMGUI_UI_IMGUI_BACKENDS_DIR}")

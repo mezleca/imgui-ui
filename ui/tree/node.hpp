@@ -60,6 +60,9 @@ namespace ui {
         /// detaches a direct child; input targets into its subtree are cleared.
         std::unique_ptr<Node> remove(Node& child);
 
+        /// destroys every child after clearing input targets into their subtrees.
+        void clear();
+
         void set_input_router(InputRouter* router);
         void set_profiler(Profiler* profiler);
         Node* find(std::string_view id);
@@ -116,9 +119,7 @@ namespace ui {
             }
 
             m_visible = visible;
-            if (visible) {
-                invalidate_measure();
-            }
+            invalidate_measure();
         }
 
         bool enabled() const {

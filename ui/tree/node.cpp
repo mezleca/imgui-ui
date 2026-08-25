@@ -135,6 +135,7 @@ namespace ui {
             m_input_router->clear_focus(child);
             m_input_router->release_pointer(child);
             m_input_router->clear_keyboard_target(child);
+            m_input_router->clear_regions(child);
         }
 
         std::unique_ptr<Node> result = std::move(*it);
@@ -145,6 +146,12 @@ namespace ui {
         result->set_profiler(nullptr);
         invalidate_measure();
         return result;
+    }
+
+    void Node::clear() {
+        while (!m_children.empty()) {
+            remove(*m_children.back());
+        }
     }
 
     Node* Node::find(std::string_view searched_id) {

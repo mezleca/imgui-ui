@@ -73,6 +73,9 @@ namespace ui {
         Node* debug_node_at(ImVec2 position) const;
 
     private:
+        friend class Node;
+
+        void clear_regions(Node& subtree);
         void clear_inactive_targets();
         Node* target_at(ImVec2 position, InputLayer minimum_layer, bool include_non_input) const;
         Node* topmost_keyboard_target_from(std::size_t minimum_index) const;
