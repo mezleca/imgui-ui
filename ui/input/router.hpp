@@ -122,7 +122,7 @@ namespace ui {
         /// returns the normal input node at a screen position.
         Node* node_at(ImVec2 position) const;
 
-        /// returns a visible node at a position, including non-interactive nodes.
+        /// returns an input node at a position, or a visible non-interactive node when none exists.
         Node* debug_node_at(ImVec2 position) const;
 
     private:

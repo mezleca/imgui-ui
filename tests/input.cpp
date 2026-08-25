@@ -422,6 +422,18 @@ TEST_CASE("debug input target includes visible non-interactive nodes") {
     REQUIRE(router.debug_node_at({50.0F, 50.0F}) == nullptr);
 }
 
+TEST_CASE("debug input target prefers an input node over an overlapping invisible region") {
+    ui::InputRouter router;
+    ui::Node behind("behind");
+    ui::Node overlay("overlay");
+    overlay.set_enabled(false);
+
+    router.register_region(behind, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_region(overlay, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+
+    REQUIRE(router.debug_node_at({50.0F, 50.0F}) == &behind);
+}
+
 TEST_CASE("input router prefers an overlapping child over its parent") {
     ui::InputRouter router;
     ui::Node parent("parent");

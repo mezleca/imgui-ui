@@ -4,8 +4,17 @@
 #include <ui/widgets/text.hpp>
 
 #include <string>
+#include <vector>
 
 class UI;
+
+class DemoTextListWidget final : public ui::StackContainer {
+public:
+    explicit DemoTextListWidget(std::vector<std::string> items);
+
+    /// replaces the rendered text items.
+    DemoTextListWidget& set_items(std::vector<std::string> items);
+};
 
 class DemoScreen final : public ui::StackContainer {
 public:
@@ -21,6 +30,8 @@ private:
     ui::Node* m_pending_remove = nullptr;
     bool m_enabled = true;
     int m_clicks = 0;
+    DemoTextListWidget* m_text_list = nullptr;
+    bool m_text_list_horizontal = false;
     int m_dynamic_count = 0;
     int m_next_dynamic_id = 0;
     std::string m_name = "imgui-ui";

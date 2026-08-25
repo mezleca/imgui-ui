@@ -391,6 +391,11 @@ namespace ui {
     }
 
     Node* InputRouter::debug_node_at(ImVec2 position) const {
+        // a transparent non-interactive overlay must not hide an input node behind it.
+        if (Node* input_target = target_at(position, InputLayer::Content, false); input_target != nullptr) {
+            return input_target;
+        }
+
         return target_at(position, InputLayer::Content, true);
     }
 

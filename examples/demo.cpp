@@ -13,6 +13,20 @@
 #include <utility>
 #include <vector>
 
+DemoTextListWidget::DemoTextListWidget(std::vector<std::string> items) : ui::StackContainer("demo-text-list") {
+    set_spacing(8.0F);
+    fit_content();
+    set_items(std::move(items));
+}
+
+DemoTextListWidget& DemoTextListWidget::set_items(std::vector<std::string> items) {
+    clear();
+    for (std::string& item : items) {
+        add_child<ui::TextWidget>(std::move(item));
+    }
+    return *this;
+}
+
 DemoScreen::DemoScreen(UI& surface, std::string backend)
     : ui::StackContainer("demo", ui::StackDirection::Vertical), m_surface(surface) {
     set_size({0.0F, 0.0F});
@@ -41,6 +55,27 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
 
     auto& status = add_child<ui::TextWidget>("no clicks yet");
     auto& button = add_child<ui::ButtonWidget>(surface, "click me", ImVec2{140.0F, 44.0F});
+
+    m_text_list = &add_child<DemoTextListWidget>(std::vector<std::string>{"first item", "second item", "third item"});
+    m_text_list->configure_all_styles([&surface](ui::Style& style) {
+        style.padding({8.0F, 8.0F})
+            .background_color(surface.theme().background_secondary_color)
+            .border_color(surface.theme().accent_color)
+            .border(ui::BORDER_ALL);
+    });
+
+    auto& text_list_orientation = add_child<ui::ButtonWidget>(surface, "list orientation: vertical", ImVec2{240.0F, 36.0F});
+    text_list_orientation.on_event = [this, &text_list_orientation](ui::UiEvent& event) {
+        if (event.type != ui::EventType::Click) {
+            return;
+        }
+
+        m_text_list_horizontal = !m_text_list_horizontal;
+        m_text_list->set_direction(m_text_list_horizontal ? ui::StackDirection::Horizontal : ui::StackDirection::Vertical);
+        text_list_orientation.try_set_content(
+            m_text_list_horizontal ? "list orientation: horizontal" : "list orientation: vertical"
+        );
+    };
 
     button.on_event = [this, &status](ui::UiEvent& event) {
         if (event.type != ui::EventType::Click) return;
