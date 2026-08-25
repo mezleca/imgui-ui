@@ -5,6 +5,7 @@
 #include "tree/node.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace ui {
     class SurfaceRootNode final : public Node {
@@ -31,8 +32,10 @@ namespace ui {
     };
 } // namespace ui
 
-UI::UI(ui::Runtime& runtime, const ui::Config& config)
-    : m_runtime(runtime), m_backend(ui::create_backend(config)), m_imgui_input(input_router()),
+UI::UI(ui::Runtime& runtime, const ui::Config& config) : UI(runtime, ui::create_backend(config)) {}
+
+UI::UI(ui::Runtime& runtime, std::unique_ptr<ui::Backend> backend)
+    : m_runtime(runtime), m_backend(std::move(backend)), m_imgui_input(input_router()),
       m_profiler(runtime.performance_directory()) {
     initialize();
 }

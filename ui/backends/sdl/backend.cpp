@@ -118,7 +118,14 @@ namespace ui {
 
     SdlBackend::SdlBackend(Config config) : m_config(std::move(config)) {}
 
+    SdlBackend::SdlBackend(SDL_Window* window, SDL_GLContext context)
+        : m_window(std::make_unique<Window>(window, context)), m_attached(true) {}
+
     bool SdlBackend::initialize() {
+        if (m_attached) {
+            return m_window != nullptr && m_window->valid();
+        }
+
         Window* shared_window = nullptr;
         if (m_config.shared_with != nullptr) {
             auto* shared_backend = dynamic_cast<SdlBackend*>(m_config.shared_with);
@@ -173,16 +180,21 @@ namespace ui {
 
     void SdlBackend::begin_frame(ImVec4 clear_color) {
         const ImVec2 size = display_size();
-        glViewport(0, 0, static_cast<int>(size.x), static_cast<int>(size.y));
-        glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
-        glClear(GL_COLOR_BUFFER_BIT);
+        if (!m_attached) {
+            glViewport(0, 0, static_cast<int>(size.x), static_cast<int>(size.y));
+            glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+            glClear(GL_COLOR_BUFFER_BIT);
+        }
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
     }
 
     void SdlBackend::render(ImDrawData* draw_data) {
         ImGui_ImplOpenGL3_RenderDrawData(draw_data);
-        m_window->swap();
+        if (!m_attached) {
+            m_window->swap();
+        }
     }
 
     float SdlBackend::content_scale() const {
@@ -202,6 +214,10 @@ namespace ui {
     }
 
     void SdlBackend::position_next_to(const Backend& target, float gap) {
+        if (m_attached) {
+            return;
+        }
+
         const auto* target_backend = dynamic_cast<const SdlBackend*>(&target);
         if (m_window == nullptr || target_backend == nullptr || target_backend->m_window == nullptr) {
             return;
@@ -216,15 +232,15 @@ namespace ui {
     }
 
     void SdlBackend::show() {
-        if (m_window != nullptr) m_window->show();
+        if (!m_attached && m_window != nullptr) m_window->show();
     }
 
     void SdlBackend::hide() {
-        if (m_window != nullptr) m_window->hide();
+        if (!m_attached && m_window != nullptr) m_window->hide();
     }
 
     void SdlBackend::raise() {
-        if (m_window != nullptr) m_window->raise();
+        if (!m_attached && m_window != nullptr) m_window->raise();
     }
 
     bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
@@ -263,6 +279,10 @@ namespace ui {
 
     std::unique_ptr<Backend> create_sdl_backend(const Config& config) {
         return std::make_unique<SdlBackend>(config);
+    }
+
+    std::unique_ptr<Backend> attach_sdl_backend(SDL_Window* window, SDL_GLContext context) {
+        return std::make_unique<SdlBackend>(window, context);
     }
 
     bool process_sdl_event(UI& surface, const SDL_Event& event) {

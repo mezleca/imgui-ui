@@ -2,6 +2,7 @@
 
 #include "../../backend.hpp"
 #include <SDL3/SDL_events.h>
+#include <SDL3/SDL_video.h>
 #include <memory>
 
 class UI;
@@ -12,6 +13,7 @@ namespace ui {
     class SdlBackend final : public Backend {
     public:
         explicit SdlBackend(Config config);
+        SdlBackend(SDL_Window* window, SDL_GLContext context);
 
         bool initialize() override;
         bool initialize_imgui() override;
@@ -33,9 +35,11 @@ namespace ui {
     private:
         Config m_config;
         std::unique_ptr<Window> m_window;
+        bool m_attached = false;
         bool m_imgui_initialized = false;
     };
 
     std::unique_ptr<Backend> create_sdl_backend(const Config& config);
+    std::unique_ptr<Backend> attach_sdl_backend(SDL_Window* window, SDL_GLContext context);
     bool process_sdl_event(UI& surface, const SDL_Event& event);
 } // namespace ui

@@ -57,9 +57,15 @@ namespace ui {
     }
 
     Window::~Window() {
+        if (!m_owned) {
+            return;
+        }
+
         if (m_context != nullptr) SDL_GL_DestroyContext(m_context);
         if (m_window != nullptr) SDL_DestroyWindow(m_window);
     }
+
+    Window::Window(SDL_Window* window, SDL_GLContext context) : m_window(window), m_context(context), m_owned(false) {}
 
     bool Window::valid() const {
         return m_window != nullptr && m_context != nullptr;

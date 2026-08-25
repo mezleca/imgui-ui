@@ -21,6 +21,7 @@ namespace ui {
 class UI {
 public:
     UI(ui::Runtime& runtime, const ui::Config& config);
+    UI(ui::Runtime& runtime, std::unique_ptr<ui::Backend> backend);
     ~UI();
 
     UI(const UI&) = delete;

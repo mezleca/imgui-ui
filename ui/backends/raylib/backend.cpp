@@ -187,11 +187,17 @@ namespace ui {
 
     RaylibBackend::RaylibBackend(Config config) : m_config(std::move(config)) {}
 
+    RaylibBackend::RaylibBackend(bool attach_to_current_window) : m_attached(attach_to_current_window) {}
+
     RaylibBackend::~RaylibBackend() {
         if (m_owns_window && IsWindowReady()) CloseWindow();
     }
 
     bool RaylibBackend::initialize() {
+        if (m_attached) {
+            return IsWindowReady();
+        }
+
         if (m_config.shared_with != nullptr) {
             TraceLog(LOG_ERROR, "ui: raylib does not support shared secondary windows");
             return false;
@@ -225,8 +231,10 @@ namespace ui {
     void RaylibBackend::make_current() {}
 
     void RaylibBackend::begin_frame(ImVec4 clear_color) {
-        BeginDrawing();
-        ClearBackground(raylib_color(clear_color));
+        if (!m_attached) {
+            BeginDrawing();
+            ClearBackground(raylib_color(clear_color));
+        }
 
         ImGuiIO& io = ImGui::GetIO();
         io.DisplaySize = display_size();
@@ -239,7 +247,9 @@ namespace ui {
     void RaylibBackend::render(ImDrawData* draw_data) {
         rlDrawRenderBatchActive();
         ImGui_ImplOpenGL3_RenderDrawData(draw_data);
-        EndDrawing();
+        if (!m_attached) {
+            EndDrawing();
+        }
     }
 
     float RaylibBackend::content_scale() const {
@@ -259,21 +269,21 @@ namespace ui {
     }
 
     void RaylibBackend::position_next_to(const Backend& target, float gap) {
-        if (dynamic_cast<const RaylibBackend*>(&target) == nullptr || !IsWindowReady()) return;
+        if (m_attached || dynamic_cast<const RaylibBackend*>(&target) == nullptr || !IsWindowReady()) return;
         const Vector2 position = GetWindowPosition();
         SetWindowPosition(static_cast<int>(position.x + target.display_size().x + gap), static_cast<int>(position.y));
     }
 
     void RaylibBackend::show() {
-        if (IsWindowReady()) ClearWindowState(FLAG_WINDOW_HIDDEN);
+        if (!m_attached && IsWindowReady()) ClearWindowState(FLAG_WINDOW_HIDDEN);
     }
 
     void RaylibBackend::hide() {
-        if (IsWindowReady()) SetWindowState(FLAG_WINDOW_HIDDEN);
+        if (!m_attached && IsWindowReady()) SetWindowState(FLAG_WINDOW_HIDDEN);
     }
 
     void RaylibBackend::raise() {
-        if (!IsWindowReady()) return;
+        if (m_attached || !IsWindowReady()) return;
         ClearWindowState(FLAG_WINDOW_MINIMIZED);
         SetWindowFocused();
     }
@@ -356,6 +366,10 @@ namespace ui {
 
     std::unique_ptr<Backend> create_raylib_backend(const Config& config) {
         return std::make_unique<RaylibBackend>(config);
+    }
+
+    std::unique_ptr<Backend> attach_raylib_backend() {
+        return std::make_unique<RaylibBackend>(true);
     }
 
     bool process_raylib_events(UI& surface) {

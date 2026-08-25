@@ -9,6 +9,7 @@ namespace ui {
     class Window {
     public:
         Window(std::string title, ImVec2 size, SDL_WindowFlags flags, Window* shared_with = nullptr);
+        Window(SDL_Window* window, SDL_GLContext context);
         Window(const Window&) = delete;
         ~Window();
 
@@ -30,5 +31,6 @@ namespace ui {
     private:
         SDL_Window* m_window = nullptr;
         SDL_GLContext m_context = nullptr;
+        bool m_owned = true;
     };
 } // namespace ui
