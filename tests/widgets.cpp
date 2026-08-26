@@ -55,6 +55,7 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
 
     REQUIRE(expanded_width > initial_width);
     REQUIRE(input.layout().size().x < initial_width);
+    REQUIRE(input.layout().size().y < parent.layout().size().y);
 }
 
 TEST_CASE("blocking overlay prevents hover state on content behind it", "[ButtonWidget][input][regression]") {

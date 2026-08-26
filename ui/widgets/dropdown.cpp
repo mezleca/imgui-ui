@@ -5,7 +5,6 @@
 #include "text.hpp"
 
 #include <imgui.h>
-
 #include <algorithm>
 
 namespace ui {
@@ -126,20 +125,23 @@ namespace ui {
 
     void DropdownWidget::on_layout() {
         const float label_height = has_label() && m_label_placement == DropdownLabelPlacement::Above
-                                       ? m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y
-                                       : 0.0F;
+                                             ? m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y
+                                             : 0.0F;
         const ImVec2 outer_size = layout().size();
         const ImVec2 trigger_size = {
             outer_size.x,
             std::max(0.0F, outer_size.y - label_height),
         };
+
         m_trigger->set_size(trigger_size);
     }
 
     void DropdownWidget::draw_children() {
         const float content_x = ImGui::GetCursorPosX();
+
         if (has_label()) {
             m_label_node->draw();
+
             if (m_label_placement == DropdownLabelPlacement::Inline) {
                 ImGui::SameLine();
             } else {
@@ -325,9 +327,9 @@ namespace ui {
             const ImVec2 popup_min = ImGui::GetWindowPos();
             const ImVec2 popup_size = ImGui::GetWindowSize();
 
-            m_body_rect = {popup_min, {popup_min.x + popup_size.x, popup_min.y + popup_size.y}};
-            set_child_screen_rect(body, m_body_rect);
-            m_ui.input_router().register_region_in_layer(body, m_body_rect, InputLayer::Overlay);
+            const Rect body_rect = {popup_min, {popup_min.x + popup_size.x, popup_min.y + popup_size.y}};
+            set_child_screen_rect(body, body_rect);
+            m_ui.input_router().register_region_in_layer(body, body_rect, InputLayer::Overlay);
 
             ImGui::EndPopup();
         }

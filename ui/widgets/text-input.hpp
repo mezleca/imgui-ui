@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../layout/child-container.hpp"
+#include "../layout/stack-container.hpp"
 
 #include <optional>
 #include <string>
@@ -11,8 +11,7 @@ class UI;
 namespace ui {
     class ImageWidget;
 
-    /// the editable field and optional icon are child nodes named `text` and `icon`.
-    class TextInputWidget final : public ChildContainer {
+    class TextInputWidget final : public StackContainer {
     public:
         TextInputWidget(UI& ui, std::string& value);
         TextInputWidget(UI& ui, std::string& value, std::string label);
@@ -28,7 +27,6 @@ namespace ui {
 
         bool draw_field();
         void on_layout() override;
-        void draw_children() override;
         void on_draw_end() override;
 
         UI& m_ui;

@@ -67,7 +67,6 @@ namespace ui {
         std::string m_placeholder = "select an option";
         DropdownLabelPlacement m_label_placement = DropdownLabelPlacement::Above;
         Rect m_trigger_rect{};
-        Rect m_body_rect{};
         bool m_open_requested = false;
         bool m_open = false;
         bool m_closing = false;

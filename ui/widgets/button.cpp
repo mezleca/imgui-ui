@@ -20,7 +20,6 @@ namespace ui {
         });
 
         configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color, 0.2F); });
-
         configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.border_color); });
     }
 
@@ -47,7 +46,10 @@ namespace ui {
         const ItemInputState input = m_ui.input().observe_item(*this);
         apply_input_state(input, pressed && !input.blocked);
 
-        draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, style);
+        if ((style.border() & BORDER_ALL) == 0) {
+            draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, style);
+        }
+
         return true;
     }
 

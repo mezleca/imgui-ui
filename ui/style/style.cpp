@@ -7,7 +7,7 @@ namespace ui {
         const bool push_font = effective_font != nullptr && effective_font != ImGui::GetFont();
         if (push_font) ImGui::PushFont(effective_font);
 
-        const float border_size = m_border == BORDER_NONE ? 0.0F : m_border_thickness;
+        const float border_size = (m_border & BORDER_ALL) != 0 ? m_border_thickness : 0.0F;
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, m_padding);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, m_border_radius);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, border_size);

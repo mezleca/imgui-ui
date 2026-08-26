@@ -39,9 +39,11 @@ namespace ui {
     TextInputWidget::TextInputWidget(UI& ui, std::string& value) : TextInputWidget(ui, value, {}) {}
 
     TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
-        : ChildContainer(std::move(label), "TextInput"), m_ui(ui), m_value(&value) {
+        : StackContainer(std::move(label), StackDirection::Horizontal), m_ui(ui), m_value(&value) {
         const Theme& theme = m_ui.theme();
 
+        set_type_name("TextInput");
+        set_spacing(INPUT_ICON_SPACING);
         set_accepts_focus(true);
         set_center_content_vertically(true);
         set_font(ui.get_primary_font(18));
@@ -54,11 +56,18 @@ namespace ui {
                 .border_radius(theme.box_rounding);
         });
 
+        m_icon_node = &add_child<ImageWidget>();
+        m_icon_node->set_id("icon");
+        m_icon_node->set_size(INPUT_ICON_SIZE);
+        m_icon_node->set_enabled(false);
+        m_icon_node->set_visible(false);
+
         configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color); });
         configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
         configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_color); });
 
         m_field_node = &add_child<FieldNode>(*this);
+        m_field_node->set_size({0.0F, INPUT_ICON_SIZE.y});
         m_field_node->configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BORDER_NONE);
         });
@@ -78,36 +87,23 @@ namespace ui {
     }
 
     TextInputWidget& TextInputWidget::set_icon(IconTexture* icon) {
-        if (icon == nullptr) {
-            if (m_icon_node != nullptr) {
-                remove(*m_icon_node);
-                m_icon_node = nullptr;
-            }
-            return *this;
-        }
-
-        if (m_icon_node == nullptr) {
-            m_icon_node = &add_child<ImageWidget>();
-            m_icon_node->set_id("icon");
-            m_icon_node->set_size(INPUT_ICON_SIZE);
-            m_icon_node->set_enabled(false);
-        }
-
         m_icon_node->set_texture(icon);
+        m_icon_node->set_visible(icon != nullptr);
         return *this;
     }
 
     void TextInputWidget::on_layout() {
-        if (size_was_resolved()) {
-            return;
+        if (!size_was_resolved()) {
+            ImVec2 size = requested_size();
+            const ImVec2 available = ImGui::GetContentRegionAvail();
+
+            if (size.x <= 0.0F) size.x = std::max(0.0F, available.x);
+            if (size.y <= 0.0F) size.y = ImGui::GetFontSize() + style().padding().y * 2.0F;
+
+            resolve_size(size);
         }
 
-        ImVec2 size = requested_size();
-        if (size.x <= 0.0F) {
-            size.x = std::max(0.0F, ImGui::GetContentRegionAvail().x);
-        }
-
-        resolve_size(size);
+        StackContainer::on_layout();
     }
 
     bool TextInputWidget::draw_field() {
@@ -116,40 +112,27 @@ namespace ui {
             m_focus_requested = false;
         }
 
+        ImGui::PushID(this);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputText("##text-input", m_value);
+        ImGui::InputText("##value", m_value);
+        ImGui::PopID();
         return true;
     }
 
-    void TextInputWidget::draw_children() {
-        const bool has_icon = m_icon_node != nullptr;
-        const float icon_width = has_icon ? INPUT_ICON_SIZE.x + INPUT_ICON_SPACING : 0.0F;
-        const ImVec2 input_position = ImGui::GetCursorPos();
-        const float input_height = ImGui::GetTextLineHeight();
-        const float input_width = std::max(0.0F, ImGui::GetContentRegionAvail().x - icon_width);
-
-        ImGui::SetCursorPosX(input_position.x + icon_width);
-        m_field_node->set_size({input_width, input_height});
-
+    void TextInputWidget::on_draw_end() {
         m_field_node->draw();
-        // the field supplies item geometry; the outer container owns interaction and focus.
+
+        // the field supplies item geometry
+        // the outer container owns interaction and focus.
         m_input_state = m_ui.input().observe_item(*this);
         m_input_state.hovered = m_input_state.hovered || ImGui::IsWindowHovered();
 
-        if (!has_icon) {
-            return;
+        if (m_icon_node->visible()) {
+            const ImVec4 icon_color =
+                m_input_state.hovered || m_input_state.active ? m_ui.theme().text_color : m_ui.theme().text_secondary_color;
+            m_icon_node->style().color().set(ImColor(icon_color));
         }
 
-        const ImVec4 icon_color =
-            m_input_state.hovered || m_input_state.active ? m_ui.theme().text_color : m_ui.theme().text_secondary_color;
-        m_icon_node->style().color().set(ImColor(icon_color));
-        m_icon_node->set_placement(
-            Anchor::TopLeft, Origin::TopLeft, {0.0F, std::max(0.0F, (input_height - INPUT_ICON_SIZE.y) * 0.5F)}
-        );
-        m_icon_node->draw();
-    }
-
-    void TextInputWidget::on_draw_end() {
         apply_input_state(m_input_state);
         ChildContainer::on_draw_end();
     }
