@@ -73,6 +73,7 @@ namespace ui {
         bool m_enabled = false;
         bool m_inspect_mode = false;
         bool m_target_was_flow_position = false;
+        bool m_highlight_selected = false;
         bool m_select_properties = false;
         bool m_scroll_to_target = false;
     };

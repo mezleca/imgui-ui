@@ -76,22 +76,25 @@ namespace ui {
 
         const ImVec2 text_position = {value_min.x + style.FramePadding.x, text_y};
         draw_list->PushClipRect(value_min, value_max, true);
-        draw_text(text_position, ImGui::GetColorU32(ImGuiCol_Text), value);
+        draw_text(text_position, ImGui::GetColorU32(ImGuiCol_CheckMark), value);
         draw_list->PopClipRect();
 
         ImGui::Dummy({label_width + value_width, height});
     }
 
-    static void draw_rect_properties(std::string_view label, Rect rect) {
-        const std::string id{label};
-        if (!ImGui::TreeNodeEx(id.c_str())) {
-            return;
-        }
+    static void draw_property_section(std::string_view label) {
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_CheckMark]);
+        ImGui::TextUnformatted(label.data(), label.data() + label.size());
+        ImGui::PopStyleColor();
+        ImGui::Separator();
+    }
 
+    static void draw_rect_properties(std::string_view label, Rect rect) {
+        draw_property_section(label);
         const ImVec2 size = rect.size();
         draw_property_value("position", "x %.1f   y %.1f", rect.min.x, rect.min.y);
         draw_property_value("size", "w %.1f   h %.1f", size.x, size.y);
-        ImGui::TreePop();
     }
 
     template <typename DrawInput>
@@ -107,10 +110,12 @@ namespace ui {
         ImGui::TextUnformatted(label.data(), label.data() + label.size());
         ImGui::SameLine(input_x);
         ImGui::SetNextItemWidth(input_width);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_CheckMark]);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, INPUT_PADDING);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0F);
         const bool changed = draw_input();
         ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor();
         ImGui::PopID();
         return changed;
     }
@@ -238,6 +243,10 @@ namespace ui {
     }
 
     void Debugger::set_target(Node* target) {
+        if (target != m_node_target) {
+            m_highlight_selected = false;
+        }
+
         m_node_target = target;
         m_profiling_target = target;
         m_target_identity = target == nullptr ? 0 : target->identity();
@@ -413,7 +422,7 @@ namespace ui {
     }
 
     void Debugger::refresh_highlight() {
-        Node* target = m_inspect_mode ? m_hover_target : nullptr;
+        Node* target = m_inspect_mode ? m_hover_target : (m_highlight_selected ? m_node_target : nullptr);
         if (!m_target.root().contains(target) || !target->visible()) {
             m_highlight_valid = false;
             return;
@@ -504,8 +513,12 @@ namespace ui {
         ImGui::PopID();
 
         if (clicked) {
+            const bool selected_again = selected_target == &node;
             selected_target = &node;
             if (update_target) {
+                if (selected_again) {
+                    m_highlight_selected = true;
+                }
                 set_target(&node);
                 m_scroll_to_target = true;
             }
@@ -529,45 +542,44 @@ namespace ui {
     }
 
     void Debugger::render_node_properties() {
-        if (ImGui::TreeNodeEx("node", ImGuiTreeNodeFlags_DefaultOpen)) {
-            bool visible = m_node_target->visible();
-            if (ImGui::Checkbox("visible", &visible)) m_node_target->set_visible(visible);
+        draw_property_section("node");
 
-            ImGui::SameLine();
-            bool enabled = m_node_target->enabled();
-            if (ImGui::Checkbox("input enabled", &enabled)) m_node_target->set_enabled(enabled);
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Controls input only; use visible to stop update and drawing");
-            }
-
-            draw_property_value("id", "%s", m_node_target->id().empty() ? "unnamed" : m_node_target->id().c_str());
-            const std::string_view type = m_node_target->type_name();
-            draw_property_value("type", "%.*s", static_cast<int>(type.size()), type.data());
-
-            if (const std::optional<std::string> content = m_node_target->content(); content.has_value()) {
-                std::string editable_content = *content;
-                if (draw_text_input("content", editable_content)) {
-                    m_node_target->try_set_content(std::move(editable_content));
-                }
-            }
-
-            if (ImGui::TreeNodeEx("diagnostics")) {
-                draw_property_value("identity", "%llu", static_cast<unsigned long long>(m_node_target->identity()));
-                draw_property_value("children", "%zu", m_node_target->children().size());
-                if (const auto* styled = dynamic_cast<const StyledNode*>(m_node_target); styled != nullptr) {
-                    draw_property_value("opacity", "%.3f", styled->opacity());
-                    draw_property_value("style state", "%s", STYLE_NAMES[static_cast<int>(styled->style_type())]);
-                }
-
-                draw_property_value("input layer", "%s", input_layer_name(m_node_target->input_layer()));
-                draw_property_value("accepts input", "%s", m_node_target->accepts_input() ? "yes" : "no");
-                draw_property_value("accepts focus", "%s", m_node_target->accepts_focus() ? "yes" : "no");
-                draw_property_value("focused", "%s", m_target.input_router().focused_node() == m_node_target ? "yes" : "no");
-                ImGui::TreePop();
-            }
-
-            ImGui::TreePop();
+        bool visible = m_node_target->visible();
+        if (draw_labeled_input("visible", [&visible] { return ImGui::Checkbox("##value", &visible); })) {
+            m_node_target->set_visible(visible);
         }
+
+        bool enabled = m_node_target->enabled();
+        if (draw_labeled_input("input enabled", [&enabled] { return ImGui::Checkbox("##value", &enabled); })) {
+            m_node_target->set_enabled(enabled);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("controls input only; use visible to stop update and drawing");
+        }
+
+        draw_property_value("id", "%s", m_node_target->id().empty() ? "unnamed" : m_node_target->id().c_str());
+        const std::string_view type = m_node_target->type_name();
+        draw_property_value("type", "%.*s", static_cast<int>(type.size()), type.data());
+
+        if (const std::optional<std::string> content = m_node_target->content(); content.has_value()) {
+            std::string editable_content = *content;
+            if (draw_text_input("content", editable_content)) {
+                m_node_target->try_set_content(std::move(editable_content));
+            }
+        }
+
+        draw_property_section("diagnostics");
+        draw_property_value("identity", "%llu", static_cast<unsigned long long>(m_node_target->identity()));
+        draw_property_value("children", "%zu", m_node_target->children().size());
+        if (const auto* styled = dynamic_cast<const StyledNode*>(m_node_target); styled != nullptr) {
+            draw_property_value("opacity", "%.3f", styled->opacity());
+            draw_property_value("style state", "%s", STYLE_NAMES[static_cast<int>(styled->style_type())]);
+        }
+
+        draw_property_value("input layer", "%s", input_layer_name(m_node_target->input_layer()));
+        draw_property_value("accepts input", "%s", m_node_target->accepts_input() ? "yes" : "no");
+        draw_property_value("accepts focus", "%s", m_node_target->accepts_focus() ? "yes" : "no");
+        draw_property_value("focused", "%s", m_target.input_router().focused_node() == m_node_target ? "yes" : "no");
     }
 
     void Debugger::render_profiling() {
@@ -586,9 +598,7 @@ namespace ui {
     }
 
     void Debugger::render_layout_properties() {
-        if (!ImGui::TreeNodeEx("layout")) {
-            return;
-        }
+        draw_property_section("layout");
 
         const NodeLayout& layout = m_node_target->layout();
         draw_property_value("placement", "%s", layout.has_explicit_position() ? "explicit" : "flow");
@@ -633,14 +643,10 @@ namespace ui {
             }
         }
 
-        if (ImGui::TreeNodeEx("resolved geometry")) {
-            draw_rect_properties("arranged in parent", layout.arranged_rect());
-            draw_rect_properties("screen bounds", layout.screen_rect());
-            draw_rect_properties("parent content", layout.parent_content_rect());
-            ImGui::TreePop();
-        }
-
-        ImGui::TreePop();
+        draw_property_section("resolved geometry");
+        draw_rect_properties("arranged in parent", layout.arranged_rect());
+        draw_rect_properties("screen bounds", layout.screen_rect());
+        draw_rect_properties("parent content", layout.parent_content_rect());
     }
 
     void Debugger::render_style_variables(Style& style) {
@@ -653,10 +659,11 @@ namespace ui {
         });
         std::sort(m_variable_names.begin(), m_variable_names.end());
 
-        if (m_variable_names.empty() || !ImGui::TreeNodeEx("variables", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (m_variable_names.empty()) {
             return;
         }
 
+        draw_property_section("variables");
         for (const std::string& name : m_variable_names) {
             GenericValue* variable = variables.find(name);
             if (variable == nullptr) {
@@ -683,16 +690,16 @@ namespace ui {
                 *variable
             );
         }
-
-        ImGui::TreePop();
     }
 
     void Debugger::render_style_properties() {
         auto* styled = dynamic_cast<StyledNode*>(m_node_target);
 
-        if (styled == nullptr || !ImGui::TreeNodeEx("style")) {
+        if (styled == nullptr) {
             return;
         }
+
+        draw_property_section("style");
 
         const bool app_focused = m_target.backend().focused();
         if (app_focused) {
@@ -773,8 +780,6 @@ namespace ui {
         }
 
         render_style_variables(*style);
-
-        ImGui::TreePop();
     }
 
     void Debugger::render_properties() {
