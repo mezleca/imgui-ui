@@ -251,6 +251,9 @@ namespace ui {
         /// the child computes its screen bounds when its own draw pass starts.
         void arrange_child(Node& child, ImVec2 size, Anchor anchor, Origin origin, ImVec2 offset = {});
 
+        /// places a child by its top-left corner in screen coordinates.
+        void arrange_child_at_screen(Node& child, ImVec2 size, ImVec2 screen_position);
+
         /// overrides a child node's screen bounds when its drawing happens elsewhere.
         void set_child_screen_rect(Node& child, Rect rect);
         void invalidate_measure_subtree();

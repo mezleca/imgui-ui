@@ -198,6 +198,33 @@ bool UI::dispatch(ui::UiEvent& event) {
     return m_ready && input_router().dispatch(event);
 }
 
+ImVec2 UI::mouse_position() const {
+    if (m_context == nullptr) {
+        return {};
+    }
+
+    const ui::ImGuiContextScope scope(m_context);
+    return ImGui::GetMousePos();
+}
+
+ui::Rect UI::work_area() const {
+    if (m_context == nullptr) {
+        return {};
+    }
+
+    const ui::ImGuiContextScope scope(m_context);
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2 position = viewport->WorkPos;
+    ImVec2 size = viewport->WorkSize;
+
+    if (size.x <= 0.0F || size.y <= 0.0F) {
+        position = {};
+        size = ImGui::GetIO().DisplaySize;
+    }
+
+    return ui::Rect::from_position_size(position, size);
+}
+
 void UI::begin_frame() {
     if (!m_ready) {
         return;

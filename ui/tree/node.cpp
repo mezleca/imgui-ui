@@ -129,7 +129,22 @@ namespace ui {
 
     void Node::arrange_child(Node& child, ImVec2 size, Anchor anchor, Origin origin, ImVec2 offset) {
         child.m_layout.set_resolved_size(size);
-        child.m_layout.set_placement(anchor, origin, offset);
+        child.m_layout.set_arranged_placement(anchor, origin, offset);
+    }
+
+    void Node::arrange_child_at_screen(Node& child, ImVec2 size, ImVec2 screen_position) {
+        if (ImGui::GetCurrentContext() == nullptr) {
+            arrange_child(child, size, Anchor::TopLeft, Origin::TopLeft, screen_position);
+            return;
+        }
+
+        const ImVec2 window_position = ImGui::GetWindowPos();
+        const ImVec2 content_offset = ImGui::GetWindowContentRegionMin();
+        const ImVec2 content_position = {window_position.x + content_offset.x, window_position.y + content_offset.y};
+        arrange_child(
+            child, size, Anchor::TopLeft, Origin::TopLeft,
+            {screen_position.x - content_position.x, screen_position.y - content_position.y}
+        );
     }
 
     void Node::set_child_screen_rect(Node& child, Rect rect) {

@@ -17,10 +17,16 @@ namespace ui {
             return *this;
         }
 
+        ImageWidget& set_rotation(float radians) {
+            m_rotation = radians;
+            return *this;
+        }
+
         bool on_draw() override;
 
     private:
         IconTexture* m_texture = nullptr;
+        float m_rotation = 0.0F;
     };
 
 } // namespace ui

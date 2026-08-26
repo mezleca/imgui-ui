@@ -60,7 +60,7 @@ namespace ui {
         ImVec2 content_size{};
         size_t visible_count = 0;
         for (const auto& child : children()) {
-            if (!child->visible()) {
+            if (!child->visible() || !child->layout().in_flow()) {
                 continue;
             }
 
@@ -114,7 +114,7 @@ namespace ui {
         size_t flexible_count = 0;
 
         for (const auto& child : children()) {
-            if (!child->visible()) {
+            if (!child->visible() || !child->layout().in_flow()) {
                 continue;
             }
 
@@ -138,7 +138,7 @@ namespace ui {
         m_content_size = content_size;
 
         for (const auto& child : children()) {
-            if (!child->visible()) {
+            if (!child->visible() || !child->layout().in_flow()) {
                 continue;
             }
 

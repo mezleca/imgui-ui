@@ -103,6 +103,42 @@ TEST_CASE("stack layout places auto-sized children after their measured height")
     REQUIRE(second.min.y >= first.max.y + 4.0F);
 }
 
+TEST_CASE("stack layout excludes explicitly positioned children from its flow") {
+    class FixedNode final : public ui::Node {
+    public:
+        explicit FixedNode(ImVec2 size) {
+            set_size(size);
+        }
+
+    private:
+        bool on_draw() override {
+            ImGui::Dummy(layout().size());
+            return true;
+        }
+    };
+
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+
+    ui::StackContainer stack("positioned-child-stack");
+    stack.set_size({200.0F, 100.0F});
+    stack.set_spacing(4.0F);
+    stack.style().padding({});
+    auto& first = stack.add_child<FixedNode>(ImVec2{30.0F, 10.0F});
+    auto& positioned = stack.add_child<FixedNode>(ImVec2{80.0F, 40.0F});
+    positioned.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {100.0F, 20.0F});
+    auto& second = stack.add_child<FixedNode>(ImVec2{30.0F, 10.0F});
+
+    ImGui::NewFrame();
+    ImGui::Begin("positioned-child-stack-test");
+    stack.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    REQUIRE(second.layout().arranged_position().y == Catch::Approx(first.layout().arranged_position().y + 14.0F));
+    REQUIRE(positioned.layout().arranged_position().x == Catch::Approx(100.0F));
+    REQUIRE(positioned.layout().arranged_position().y == Catch::Approx(20.0F));
+}
+
 TEST_CASE("fit content stack includes children spacing and padding") {
     class FixedNode final : public ui::Node {
     public:

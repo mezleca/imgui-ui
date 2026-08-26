@@ -39,7 +39,10 @@ namespace ui {
 
     bool ButtonWidget::on_draw() {
         const Style& style = this->style();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, m_text_alignment);
         const bool pressed = ImGui::Button(m_text.c_str(), layout().size());
+        ImGui::PopStyleVar();
 
         const ItemInputState input = m_ui.input().observe_item(*this);
         apply_input_state(input, pressed && !input.blocked);

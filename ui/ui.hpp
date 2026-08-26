@@ -5,6 +5,7 @@
 #include "diagnostics/profiler.hpp"
 #include "runtime.hpp"
 #include "imgui/input-bridge.hpp"
+#include "layout/geometry.hpp"
 #include "resources/assets.hpp"
 
 #include <imgui.h>
@@ -123,6 +124,9 @@ public:
     ImGuiContext* imgui_context() {
         return m_context;
     }
+
+    ImVec2 mouse_position() const;
+    ui::Rect work_area() const;
 
     IconTexture* get_texture(std::string_view id);
 

@@ -112,6 +112,13 @@ namespace ui {
         return Rect::from_position_size({parent.min.x + position.x, parent.min.y + position.y}, child_size);
     }
 
+    inline ImVec2 clamp_position(Rect bounds, ImVec2 size, ImVec2 position) {
+        return {
+            std::clamp(position.x, bounds.min.x, std::max(bounds.min.x, bounds.max.x - size.x)),
+            std::clamp(position.y, bounds.min.y, std::max(bounds.min.y, bounds.max.y - size.y)),
+        };
+    }
+
     /// non-positive requested dimensions consume the corresponding available dimension.
     inline ImVec2 resolve_layout_size(ImVec2 requested_size, ImVec2 available_size) {
         return {
@@ -135,6 +142,11 @@ namespace ui {
         /// whether placement overrides the current ImGui flow cursor.
         bool has_explicit_position() const {
             return m_has_explicit_position;
+        }
+
+        /// whether a parent layout should assign this node's position.
+        bool in_flow() const {
+            return m_in_flow;
         }
 
         /// parent reference point used by explicit placement.
@@ -199,31 +211,44 @@ namespace ui {
         void set_anchor(Anchor anchor) {
             m_anchor = anchor;
             m_has_explicit_position = true;
+            m_in_flow = false;
         }
 
         void set_anchor_position(ImVec2 position) {
             m_anchor = Anchor::Custom;
             m_anchor_position = position;
             m_has_explicit_position = true;
+            m_in_flow = false;
         }
 
         void set_origin(Origin origin) {
             m_origin = origin;
             m_has_explicit_position = true;
+            m_in_flow = false;
         }
 
         void set_origin_position(ImVec2 position) {
             m_origin = Origin::Custom;
             m_origin_position = position;
             m_has_explicit_position = true;
+            m_in_flow = false;
         }
 
         void set_offset(ImVec2 offset) {
             m_offset = offset;
             m_has_explicit_position = true;
+            m_in_flow = false;
         }
 
         void set_placement(Anchor anchor, Origin origin, ImVec2 offset) {
+            m_anchor = anchor;
+            m_origin = origin;
+            m_offset = offset;
+            m_has_explicit_position = true;
+            m_in_flow = false;
+        }
+
+        void set_arranged_placement(Anchor anchor, Origin origin, ImVec2 offset) {
             m_anchor = anchor;
             m_origin = origin;
             m_offset = offset;
@@ -232,6 +257,7 @@ namespace ui {
 
         void clear_explicit_position() {
             m_has_explicit_position = false;
+            m_in_flow = true;
         }
 
         void set_arranged_rect(Rect rect) {
@@ -272,6 +298,7 @@ namespace ui {
         bool m_has_size_request = false;
         bool m_size_resolved = false;
         bool m_has_explicit_position = false;
+        bool m_in_flow = true;
     };
 
 } // namespace ui
