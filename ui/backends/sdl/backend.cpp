@@ -276,6 +276,9 @@ namespace ui {
         }
 
         const ImGuiContextScope scope(surface.imgui_context());
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+            ImGui::GetIO().AddMousePosEvent(event.button.x, event.button.y);
+        }
 
         const std::optional<UiEvent> translated = event_from_sdl(event);
         bool handled = false;

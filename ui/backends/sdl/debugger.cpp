@@ -28,10 +28,11 @@ namespace ui {
     static constexpr ImVec2 ICON_SIZE = {16.0F, 16.0F};
     static constexpr float WINDOW_PADDING = 8.0F;
     static constexpr float ITEM_SPACING = 6.0F;
-    static constexpr float PROPERTY_LABEL_WIDTH = 104.0F;
-    static constexpr float PROPERTY_VALUE_MAX_WIDTH = 160.0F;
     static constexpr float INPUT_MAX_WIDTH = 180.0F;
-    static constexpr ImVec2 INPUT_PADDING = {6.0F, 2.0F};
+    static constexpr ImVec2 INPUT_PADDING = {0.0F, 0.0F};
+    static constexpr ImVec2 SECTION_PADDING = {10.0F, 6.0F};
+    static bool property_section_open = false;
+    static bool property_section_indented = false;
 
     static const char* input_layer_name(InputLayer layer) {
         switch (layer) {
@@ -57,65 +58,89 @@ namespace ui {
         std::vsnprintf(value, sizeof(value), format, args);
         va_end(args);
 
-        const ImGuiStyle& style = ImGui::GetStyle();
-        const float available_width = ImGui::GetContentRegionAvail().x;
-        const float height = ImGui::GetTextLineHeight() + 4.0F;
-        const float label_width = std::min(PROPERTY_LABEL_WIDTH, available_width * 0.45F);
-        const float text_width = ImGui::CalcTextSize(value).x + style.FramePadding.x * 2.0F;
-        const float value_width =
-            std::min(std::max(0.0F, available_width - label_width), std::clamp(text_width, 64.0F, PROPERTY_VALUE_MAX_WIDTH));
-        const ImVec2 row_min = ImGui::GetCursorScreenPos();
-        const ImVec2 value_min = {row_min.x + label_width, row_min.y};
-        const ImVec2 value_max = {value_min.x + value_width, row_min.y + height};
-        const float text_y = row_min.y + (height - ImGui::GetFontSize()) * 0.5F;
+        ImGui::Text("%.*s:", static_cast<int>(label.size()), label.data());
+        ImGui::SameLine(0.0F, ITEM_SPACING);
+        ImGui::TextDisabled("%s", value);
+    }
 
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        draw_text({row_min.x, text_y}, ImGui::GetColorU32(ImGuiCol_TextDisabled), label);
-        draw_list->AddRectFilled(value_min, value_max, ImGui::GetColorU32(ImGuiCol_FrameBg), style.FrameRounding);
-        draw_list->AddRect(value_min, value_max, ImGui::GetColorU32(ImGuiCol_Border), style.FrameRounding);
+    static void end_property_section() {
+        if (!property_section_open) {
+            return;
+        }
 
-        const ImVec2 text_position = {value_min.x + style.FramePadding.x, text_y};
-        draw_list->PushClipRect(value_min, value_max, true);
-        draw_text(text_position, ImGui::GetColorU32(ImGuiCol_CheckMark), value);
-        draw_list->PopClipRect();
+        if (property_section_indented) {
+            ImGui::Unindent(SECTION_PADDING.x);
+            ImGui::Dummy({0.0F, SECTION_PADDING.y});
+            property_section_indented = false;
+        }
 
-        ImGui::Dummy({label_width + value_width, height});
+        ImGui::EndChild();
+        property_section_open = false;
     }
 
     static void draw_property_section(std::string_view label) {
+        end_property_section();
+
         ImGui::Spacing();
+
+        const std::string id{label};
+        const ImVec4 section_color = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0.0F, 0.0F});
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, section_color);
+        ImGui::BeginChild(
+            id.c_str(), {0.0F, 0.0F}, ImGuiChildFlags_AutoResizeY,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
+        );
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+        property_section_open = true;
+
+        const ImVec2 item_spacing = ImGui::GetStyle().ItemSpacing;
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {item_spacing.x, 2.0F});
+        ImGui::Indent(SECTION_PADDING.x);
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_CheckMark]);
         ImGui::TextUnformatted(label.data(), label.data() + label.size());
         ImGui::PopStyleColor();
+        ImGui::Unindent(SECTION_PADDING.x);
         ImGui::Separator();
+        ImGui::PopStyleVar();
+        ImGui::Indent(SECTION_PADDING.x);
+        property_section_indented = true;
     }
 
     static void draw_rect_properties(std::string_view label, Rect rect) {
-        draw_property_section(label);
         const ImVec2 size = rect.size();
-        draw_property_value("position", "x %.1f   y %.1f", rect.min.x, rect.min.y);
-        draw_property_value("size", "w %.1f   h %.1f", size.x, size.y);
+        draw_property_value(label, "position x %.1f, y %.1f; size w %.1f, h %.1f", rect.min.x, rect.min.y, size.x, size.y);
     }
 
     template <typename DrawInput>
-    static bool draw_labeled_input(std::string_view label, DrawInput draw_input) {
-        const float available_width = ImGui::GetContentRegionAvail().x;
-        const float label_width = std::min(PROPERTY_LABEL_WIDTH, available_width * 0.45F);
-        const float input_width = std::min(INPUT_MAX_WIDTH, std::max(0.0F, available_width - label_width));
-        const float input_x = ImGui::GetCursorPosX() + label_width;
+    static bool draw_labeled_input(std::string_view label, DrawInput draw_input, ImVec4 frame_background = {}) {
+        if (frame_background.w == 0.0F) {
+            frame_background = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
+            frame_background.x *= 0.72F;
+            frame_background.y *= 0.72F;
+            frame_background.z *= 0.72F;
+        }
+
         const std::string id{label};
 
         ImGui::PushID(id.c_str());
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(label.data(), label.data() + label.size());
-        ImGui::SameLine(input_x);
-        ImGui::SetNextItemWidth(input_width);
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_CheckMark]);
+        const ImVec4 transparent = {0.0F, 0.0F, 0.0F, 0.0F};
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, frame_background);
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, frame_background);
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, frame_background);
+        ImGui::PushStyleColor(ImGuiCol_Border, transparent);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, INPUT_PADDING);
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0F);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0F);
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("%.*s:", static_cast<int>(label.size()), label.data());
+        ImGui::SameLine(0.0F, ITEM_SPACING);
+        const float input_width = std::min(INPUT_MAX_WIDTH, std::max(0.0F, ImGui::GetContentRegionAvail().x));
+        ImGui::SetNextItemWidth(input_width);
         const bool changed = draw_input();
         ImGui::PopStyleVar(2);
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(5);
         ImGui::PopID();
         return changed;
     }
@@ -132,7 +157,27 @@ namespace ui {
 
     static bool draw_inline_combo(std::string_view label, int* selected, const char* const items[], int item_count) {
         return draw_labeled_input(label, [selected, items, item_count] {
-            return ImGui::Combo("##value", selected, items, item_count);
+            const bool valid_selection = selected != nullptr && *selected >= 0 && *selected < item_count;
+            const char* preview = valid_selection ? items[*selected] : "select";
+            bool changed = false;
+
+            if (ImGui::BeginCombo("##value", preview, ImGuiComboFlags_NoArrowButton)) {
+                for (int index = 0; index < item_count; ++index) {
+                    const bool is_selected = selected != nullptr && *selected == index;
+                    if (ImGui::Selectable(items[index], is_selected)) {
+                        *selected = index;
+                        changed = true;
+                    }
+
+                    if (is_selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+
+                ImGui::EndCombo();
+            }
+
+            return changed;
         });
     }
 
@@ -160,6 +205,36 @@ namespace ui {
         std::string_view label, ImGuiDataType type, void* values, int components, float speed, const void* minimum,
         const void* maximum, const char* format
     ) {
+        if (components == 2) {
+            return draw_labeled_input(label, [=] {
+                const float total_width = std::min(INPUT_MAX_WIDTH, ImGui::GetContentRegionAvail().x);
+                const float component_width = std::max(0.0F, (total_width - ITEM_SPACING - 20.0F) * 0.5F);
+                const size_t value_size = type == ImGuiDataType_S32 ? sizeof(int) : sizeof(float);
+                auto* raw_values = static_cast<unsigned char*>(values);
+                bool changed = false;
+
+                for (int index = 0; index < 2; ++index) {
+                    if (index != 0) {
+                        ImGui::SameLine(0.0F, ITEM_SPACING);
+                    }
+
+                    ImGui::PushID(index);
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextDisabled(index == 0 ? "x" : "y");
+                    ImGui::SameLine(0.0F, 2.0F);
+                    ImGui::SetNextItemWidth(component_width);
+                    void* component = raw_values + value_size * static_cast<size_t>(index);
+                    changed = (minimum != nullptr && maximum != nullptr
+                                   ? ImGui::DragScalar("##component", type, component, speed, minimum, maximum, format)
+                                   : ImGui::DragScalar("##component", type, component, speed, nullptr, nullptr, format)) ||
+                              changed;
+                    ImGui::PopID();
+                }
+
+                return changed;
+            });
+        }
+
         return draw_labeled_input(label, [=] {
             return minimum != nullptr && maximum != nullptr
                        ? ImGui::SliderScalarN("##value", type, values, components, minimum, maximum, format)
@@ -788,10 +863,12 @@ namespace ui {
             return;
         }
 
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {ITEM_SPACING, 8.0F});
         render_node_properties();
         render_layout_properties();
-
         render_style_properties();
+        ImGui::PopStyleVar();
+        end_property_section();
 
         if (ImGui::Button("clear selection")) {
             set_target(nullptr);
