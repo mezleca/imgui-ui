@@ -120,8 +120,6 @@ namespace ui {
     }
 
     void TextInputWidget::on_draw_end() {
-        m_field_node->draw();
-
         // the field supplies item geometry
         // the outer container owns interaction and focus.
         m_input_state = m_ui.input().observe_item(*this);
