@@ -23,7 +23,7 @@ namespace ui {
         CheckboxWidget& set_box_size(float size);
         CheckboxWidget& set_mark_color(ImColor color);
 
-        bool changed() const;
+        bool changed() const override;
         bool on_draw() override;
         std::optional<std::string> content() const override;
         bool try_set_content(std::string content) override;

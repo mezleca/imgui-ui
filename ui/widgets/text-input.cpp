@@ -114,7 +114,7 @@ namespace ui {
 
         ImGui::PushID(this);
         ImGui::SetNextItemWidth(-FLT_MIN);
-        ImGui::InputText("##value", m_value);
+        m_changed = ImGui::InputText("##value", m_value);
         ImGui::PopID();
         return true;
     }
@@ -137,6 +137,10 @@ namespace ui {
 
     const ItemInputState& TextInputWidget::input_state() const {
         return m_input_state;
+    }
+
+    bool TextInputWidget::changed() const {
+        return m_changed;
     }
 
     std::optional<std::string> TextInputWidget::content() const {

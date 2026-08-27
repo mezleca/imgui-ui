@@ -18,6 +18,7 @@ namespace ui {
 
         TextInputWidget& set_icon(IconTexture* icon);
 
+        bool changed() const override;
         const ItemInputState& input_state() const;
         std::optional<std::string> content() const override;
         bool try_set_content(std::string content) override;
@@ -35,5 +36,6 @@ namespace ui {
         FieldNode* m_field_node = nullptr;
         ItemInputState m_input_state;
         bool m_focus_requested = false;
+        bool m_changed = false;
     };
 } // namespace ui

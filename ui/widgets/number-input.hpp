@@ -26,7 +26,7 @@ namespace ui {
         NumberInputWidget& set_thumb_size(float size);
         NumberInputWidget& set_thumb_color(ImColor color);
 
-        bool changed() const;
+        bool changed() const override;
         bool on_draw() override;
         std::optional<std::string> content() const override;
         bool try_set_content(std::string content) override;

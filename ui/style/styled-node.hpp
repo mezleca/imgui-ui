@@ -21,6 +21,10 @@ namespace ui {
             return m_type_name;
         }
 
+        virtual bool changed() const {
+            return false;
+        }
+
         /// effective values for the current transition.
         Style& style() {
             return m_state.style();

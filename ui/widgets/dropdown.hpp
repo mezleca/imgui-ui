@@ -35,7 +35,7 @@ namespace ui {
         /// leaves the bound value unchanged when options are replaced.
         DropdownWidget& set_options(std::vector<DropdownOption> options);
 
-        bool changed() const;
+        bool changed() const override;
         bool is_open() const;
         TextWidget& label();
         Widget& trigger();
