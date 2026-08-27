@@ -26,7 +26,6 @@ namespace ui {
     private:
         class FieldNode;
 
-        bool draw_field();
         void on_layout() override;
         void on_draw_end() override;
 
@@ -36,6 +35,5 @@ namespace ui {
         FieldNode* m_field_node = nullptr;
         ItemInputState m_input_state;
         bool m_focus_requested = false;
-        bool m_changed = false;
     };
 } // namespace ui

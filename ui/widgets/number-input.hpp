@@ -1,18 +1,31 @@
 #pragma once
 
 #include "widget.hpp"
+#include "text-value.hpp"
 
+#include <concepts>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 
 class UI;
 
 namespace ui {
     class NumberInputWidget final : public Widget {
+        // imgui edits the original scalar through a typed pointer, while GenericValue mirrors it for text apis and metrics.
+        using NumberValue = std::variant<
+            char*, signed char*, unsigned char*, short*, unsigned short*, int*, unsigned int*, long*, unsigned long*, long long*,
+            unsigned long long*, float*, double*>;
+
     public:
-        NumberInputWidget(UI& ui, float& value, std::string id = {});
-        NumberInputWidget(UI& ui, int& value, std::string id = {});
+        template <typename T>
+            requires std::constructible_from<NumberValue, T*>
+        NumberInputWidget(UI& ui, T& value, std::string id = {})
+            : Widget(std::move(id), "NumberInput"), m_ui(ui), m_value(value), m_number(&value),
+              m_format(std::floating_point<T> ? "%.3f" : ""), m_speed(std::floating_point<T> ? 0.1F : 1.0F) {
+            configure_default_styles();
+        }
 
         NumberInputWidget& set_label(std::string label);
         NumberInputWidget& set_minimum(double minimum);
@@ -35,11 +48,15 @@ namespace ui {
         template <typename T>
         bool draw_value(T& value);
 
+        // keep the generic mirror current without making the imgui control operate on a converted copy.
+        void sync_value() const;
         void configure_default_styles();
+        void on_measure() override;
 
         UI& m_ui;
-        std::variant<float*, int*> m_value;
-        std::string m_label;
+        mutable GenericValue m_value;
+        NumberValue m_number;
+        GenericValue m_label;
         std::string m_format;
         std::optional<double> m_minimum;
         std::optional<double> m_maximum;

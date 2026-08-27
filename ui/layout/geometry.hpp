@@ -51,6 +51,11 @@ namespace ui {
             return {max.x - min.x, max.y - min.y};
         }
 
+        /// returns bounds inset by the same amount on each side.
+        Rect inset(ImVec2 padding) const {
+            return {{min.x + padding.x, min.y + padding.y}, {max.x - padding.x, max.y - padding.y}};
+        }
+
         /// tests a point against the inclusive bounds.
         bool contains(ImVec2 point) const {
             return point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y;

@@ -729,7 +729,7 @@ namespace ui {
         StyleVariableStore& variables = style.variables();
 
         m_variable_names.clear();
-        variables.for_each([&](const std::string& name, const GenericValue&) {
+        variables.for_each([&](const std::string& name, const StyleValue&) {
             m_variable_names.push_back(name);
             return true;
         });
@@ -741,7 +741,7 @@ namespace ui {
 
         draw_property_section("variables");
         for (const std::string& name : m_variable_names) {
-            GenericValue* variable = variables.find(name);
+            StyleValue* variable = variables.find(name);
             if (variable == nullptr) {
                 continue;
             }

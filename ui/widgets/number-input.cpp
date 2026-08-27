@@ -7,179 +7,212 @@
 
 #include <algorithm>
 #include <charconv>
-#include <type_traits>
 
-namespace ui {
-    NumberInputWidget::NumberInputWidget(UI& ui, float& value, std::string id)
-        : Widget(std::move(id), "NumberInput"), m_ui(ui), m_value(&value), m_format("%.3f"), m_speed(0.1F) {
-        configure_default_styles();
-    }
+using namespace ui;
 
-    NumberInputWidget::NumberInputWidget(UI& ui, int& value, std::string id)
-        : Widget(std::move(id), "NumberInput"), m_ui(ui), m_value(&value), m_format("%d"), m_speed(1.0F) {
-        configure_default_styles();
-    }
+void NumberInputWidget::configure_default_styles() {
+    const Theme& theme = m_ui.theme();
 
-    void NumberInputWidget::configure_default_styles() {
-        const Theme& theme = m_ui.theme();
+    m_thumb_color = theme.control_mark_color;
+    m_thumb_size = theme.control_thumb_size;
 
-        m_thumb_color = theme.control_mark_color;
-        m_thumb_size = theme.control_thumb_size;
+    configure_all_styles([&theme](Style& style) {
+        style.color(theme.text_color)
+            .background_color(theme.control_background_color, 0.15F)
+            .border_color(theme.control_border_color, 0.15F)
+            .padding({10.0F, 6.0F})
+            .border(BORDER_ALL)
+            .border_radius(theme.control_rounding)
+            .border_thickness(theme.control_border_thickness);
+    });
 
-        configure_all_styles([&theme](Style& style) {
-            style.color(theme.text_color)
-                .background_color(theme.control_background_color, 0.15F)
-                .border_color(theme.control_border_color, 0.15F)
-                .padding({10.0F, 6.0F})
-                .border(BORDER_ALL)
-                .border_radius(theme.control_rounding)
-                .border_thickness(theme.control_border_thickness);
-        });
+    configure_style(StyleType::HOVER, [&theme](Style& style) {
+        style.background_color(theme.control_hover_color).border_color(theme.accent_hover_color);
+    });
 
-        configure_style(StyleType::HOVER, [&theme](Style& style) {
-            style.background_color(theme.control_hover_color).border_color(theme.accent_hover_color);
-        });
+    configure_style(StyleType::ACTIVE, [&theme](Style& style) {
+        style.background_color(theme.control_active_color).border_color(theme.accent_color);
+    });
+}
 
-        configure_style(StyleType::ACTIVE, [&theme](Style& style) {
-            style.background_color(theme.control_active_color).border_color(theme.accent_color);
-        });
-    }
-
-    NumberInputWidget& NumberInputWidget::set_label(std::string label) {
-        m_label = std::move(label);
+NumberInputWidget& NumberInputWidget::set_label(std::string label) {
+    if (label == m_label.str()) {
         return *this;
     }
 
-    NumberInputWidget& NumberInputWidget::set_minimum(double minimum) {
-        m_minimum = minimum;
-        return *this;
+    m_label.set(std::move(label));
+    invalidate_measure();
+    return *this;
+}
+
+NumberInputWidget& NumberInputWidget::set_minimum(double minimum) {
+    m_minimum = minimum;
+    return *this;
+}
+
+NumberInputWidget& NumberInputWidget::set_maximum(double maximum) {
+    m_maximum = maximum;
+    return *this;
+}
+
+NumberInputWidget& NumberInputWidget::set_range(double minimum, double maximum) {
+    m_minimum = std::min(minimum, maximum);
+    m_maximum = std::max(minimum, maximum);
+    return *this;
+}
+
+NumberInputWidget& NumberInputWidget::clear_range() {
+    m_minimum.reset();
+    m_maximum.reset();
+    return *this;
+}
+
+NumberInputWidget& NumberInputWidget::set_speed(float speed) {
+    m_speed = std::max(0.0F, speed);
+    return *this;
+}
+
+NumberInputWidget& NumberInputWidget::set_format(std::string format) {
+    m_format = std::move(format);
+    return *this;
+}
+
+NumberInputWidget& NumberInputWidget::set_thumb_visible(bool visible) {
+    m_thumb_visible = visible;
+    return *this;
+}
+
+NumberInputWidget& NumberInputWidget::set_thumb_size(float size) {
+    m_thumb_size = std::max(1.0F, size);
+    return *this;
+}
+
+NumberInputWidget& NumberInputWidget::set_thumb_color(ImColor color) {
+    m_thumb_color = color;
+    return *this;
+}
+
+bool NumberInputWidget::changed() const {
+    return m_changed;
+}
+
+void NumberInputWidget::sync_value() const {
+    std::visit([this](const auto* value) { m_value.set(*value); }, m_number);
+}
+
+void NumberInputWidget::on_measure() {
+    ImVec2 size = requested_size();
+    const ImVec2 padding = style().padding();
+    sync_value();
+    m_value.set_font(font());
+    m_label.set_font(font());
+
+    if (size.y <= 0.0F) {
+        size.y = m_value.line_height() + padding.y * 2.0F;
     }
 
-    NumberInputWidget& NumberInputWidget::set_maximum(double maximum) {
-        m_maximum = maximum;
-        return *this;
+    set_size(size);
+}
+
+template <typename T>
+constexpr ImGuiDataType number_data_type() {
+    // dragscalar and sliderscalar require the imgui data type to match the pointed-to scalar exactly.
+    if constexpr (std::same_as<T, float>) {
+        return ImGuiDataType_Float;
+    } else if constexpr (std::same_as<T, double>) {
+        return ImGuiDataType_Double;
+    } else if constexpr (std::signed_integral<T>) {
+        if constexpr (sizeof(T) == 1) return ImGuiDataType_S8;
+        if constexpr (sizeof(T) == 2) return ImGuiDataType_S16;
+        if constexpr (sizeof(T) == 4) return ImGuiDataType_S32;
+        return ImGuiDataType_S64;
+    } else {
+        if constexpr (sizeof(T) == 1) return ImGuiDataType_U8;
+        if constexpr (sizeof(T) == 2) return ImGuiDataType_U16;
+        if constexpr (sizeof(T) == 4) return ImGuiDataType_U32;
+        return ImGuiDataType_U64;
+    }
+}
+
+template <typename T>
+bool NumberInputWidget::draw_value(T& value) {
+    constexpr ImGuiDataType data_type = number_data_type<T>();
+    const T minimum = static_cast<T>(m_minimum.value_or(0.0));
+    const T maximum = static_cast<T>(m_maximum.value_or(0.0));
+    const void* minimum_ptr = m_minimum.has_value() ? &minimum : nullptr;
+    const void* maximum_ptr = m_maximum.has_value() ? &maximum : nullptr;
+    const char* format = m_format.empty() ? nullptr : m_format.c_str();
+
+    if (m_thumb_visible && m_minimum.has_value() && m_maximum.has_value() && maximum > minimum) {
+        return ImGui::SliderScalar("##value", data_type, &value, &minimum, &maximum, format);
     }
 
-    NumberInputWidget& NumberInputWidget::set_range(double minimum, double maximum) {
-        m_minimum = std::min(minimum, maximum);
-        m_maximum = std::max(minimum, maximum);
-        return *this;
+    return ImGui::DragScalar("##value", data_type, &value, m_speed, minimum_ptr, maximum_ptr, format);
+}
+
+bool NumberInputWidget::on_draw() {
+    const Style& current_style = style();
+    ImVec2 frame_padding = current_style.padding();
+    m_label.set_font(font());
+    const ImVec2 label_size = m_label.text_size();
+
+    if (layout().size().y > 0.0F) {
+        frame_padding.y = std::max(0.0F, (layout().size().y - ImGui::GetTextLineHeight()) * 0.5F);
     }
 
-    NumberInputWidget& NumberInputWidget::clear_range() {
-        m_minimum.reset();
-        m_maximum.reset();
-        return *this;
-    }
+    ImGui::PushID(this);
+    ImGui::BeginGroup();
 
-    NumberInputWidget& NumberInputWidget::set_speed(float speed) {
-        m_speed = std::max(0.0F, speed);
-        return *this;
-    }
-
-    NumberInputWidget& NumberInputWidget::set_format(std::string format) {
-        m_format = std::move(format);
-        return *this;
-    }
-
-    NumberInputWidget& NumberInputWidget::set_thumb_visible(bool visible) {
-        m_thumb_visible = visible;
-        return *this;
-    }
-
-    NumberInputWidget& NumberInputWidget::set_thumb_size(float size) {
-        m_thumb_size = std::max(1.0F, size);
-        return *this;
-    }
-
-    NumberInputWidget& NumberInputWidget::set_thumb_color(ImColor color) {
-        m_thumb_color = color;
-        return *this;
-    }
-
-    bool NumberInputWidget::changed() const {
-        return m_changed;
-    }
-
-    template <typename T>
-    bool NumberInputWidget::draw_value(T& value) {
-        constexpr ImGuiDataType data_type = std::is_same_v<T, float> ? ImGuiDataType_Float : ImGuiDataType_S32;
-        const T minimum = static_cast<T>(m_minimum.value_or(0.0));
-        const T maximum = static_cast<T>(m_maximum.value_or(0.0));
-        const void* minimum_ptr = m_minimum.has_value() ? &minimum : nullptr;
-        const void* maximum_ptr = m_maximum.has_value() ? &maximum : nullptr;
-        const char* format = m_format.empty() ? nullptr : m_format.c_str();
-
-        if (m_thumb_visible && m_minimum.has_value() && m_maximum.has_value() && maximum > minimum) {
-            return ImGui::SliderScalar("##value", data_type, &value, &minimum, &maximum, format);
+    float input_width = layout().size().x;
+    if (label_size.x > 0.0F) {
+        const float label_width = label_size.x + ImGui::GetStyle().ItemInnerSpacing.x;
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(m_label.c_str());
+        ImGui::SameLine();
+        if (input_width > 0.0F) {
+            input_width = std::max(1.0F, input_width - label_width);
         }
-
-        return ImGui::DragScalar("##value", data_type, &value, m_speed, minimum_ptr, maximum_ptr, format);
     }
 
-    bool NumberInputWidget::on_draw() {
-        const Style& current_style = style();
-        ImVec2 frame_padding = current_style.padding();
+    ImGui::SetNextItemWidth(input_width > 0.0F ? input_width : -1.0F);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, m_thumb_size);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, current_style.border_radius());
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, m_thumb_color.Value);
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, m_thumb_color.Value);
 
-        if (layout().size().y > 0.0F) {
-            frame_padding.y = std::max(0.0F, (layout().size().y - ImGui::GetTextLineHeight()) * 0.5F);
-        }
+    m_changed = std::visit([this](auto* value) { return draw_value(*value); }, m_number);
+    if (current_style.border() != BORDER_NONE && (current_style.border() & BORDER_ALL) == 0) {
+        draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style);
+    }
 
-        ImGui::PushID(this);
-        ImGui::BeginGroup();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
+    ImGui::EndGroup();
+    ImGui::PopID();
 
-        float input_width = layout().size().x;
-        if (!m_label.empty()) {
-            const float label_width = ImGui::CalcTextSize(m_label.c_str()).x + ImGui::GetStyle().ItemInnerSpacing.x;
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(m_label.c_str());
-            ImGui::SameLine();
-            if (input_width > 0.0F) {
-                input_width = std::max(1.0F, input_width - label_width);
+    update_input(m_ui.input());
+    return true;
+}
+
+std::optional<std::string> NumberInputWidget::content() const {
+    sync_value();
+    return m_value.str();
+}
+
+bool NumberInputWidget::try_set_content(std::string content) {
+    return std::visit(
+        [&content](auto* value) {
+            using ValueType = std::remove_pointer_t<decltype(value)>;
+            ValueType parsed{};
+            const auto result = std::from_chars(content.data(), content.data() + content.size(), parsed);
+            if (result.ec != std::errc{} || result.ptr != content.data() + content.size() || parsed == *value) {
+                return false;
             }
-        }
 
-        ImGui::SetNextItemWidth(input_width > 0.0F ? input_width : -1.0F);
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
-        ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, m_thumb_size);
-        ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, current_style.border_radius());
-        ImGui::PushStyleColor(ImGuiCol_SliderGrab, m_thumb_color.Value);
-        ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, m_thumb_color.Value);
-
-        m_changed = std::visit([this](auto* value) { return draw_value(*value); }, m_value);
-        const ItemInputState input = m_ui.input().observe_item(*this);
-
-        if (current_style.border() != BORDER_NONE && (current_style.border() & BORDER_ALL) == 0) {
-            draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style);
-        }
-
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(3);
-        ImGui::EndGroup();
-        ImGui::PopID();
-
-        apply_input_state(input);
-        return true;
-    }
-
-    std::optional<std::string> NumberInputWidget::content() const {
-        return std::visit([](const auto* value) { return std::to_string(*value); }, m_value);
-    }
-
-    bool NumberInputWidget::try_set_content(std::string content) {
-        return std::visit(
-            [&content](auto* value) {
-                using ValueType = std::remove_pointer_t<decltype(value)>;
-                ValueType parsed{};
-                const auto result = std::from_chars(content.data(), content.data() + content.size(), parsed);
-                if (result.ec != std::errc{} || result.ptr != content.data() + content.size() || parsed == *value) {
-                    return false;
-                }
-
-                *value = parsed;
-                return true;
-            },
-            m_value
-        );
-    }
-} // namespace ui
+            *value = parsed;
+            return true;
+        },
+        m_number
+    );
+}

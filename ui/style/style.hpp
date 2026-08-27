@@ -172,8 +172,8 @@ namespace ui {
             style.m_border_color.tick(target.m_border_color, dt);
             style.m_background_color.tick(target.m_background_color, dt);
 
-            style.m_vars.for_each([&](const std::string& key, GenericValue& value) {
-                const GenericValue* target_value = target.m_vars.find(key);
+            style.m_vars.for_each([&](const std::string& key, StyleValue& value) {
+                const StyleValue* target_value = target.m_vars.find(key);
 
                 if (target_value == nullptr) {
                     return true;
@@ -204,7 +204,7 @@ namespace ui {
                 m_font = target.m_font;
             }
 
-            target.m_vars.for_each([&](const std::string& key, const GenericValue& target_value) {
+            target.m_vars.for_each([&](const std::string& key, const StyleValue& target_value) {
                 if (m_vars.find(key) == nullptr) m_vars.set(key, target_value);
                 return true;
             });
@@ -227,8 +227,8 @@ namespace ui {
                 return false;
             }
 
-            return m_vars.for_each([&](const std::string& key, const GenericValue& value) {
-                const GenericValue* target_value = target.m_vars.find(key);
+            return m_vars.for_each([&](const std::string& key, const StyleValue& value) {
+                const StyleValue* target_value = target.m_vars.find(key);
                 if (target_value == nullptr) {
                     return true;
                 }

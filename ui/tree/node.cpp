@@ -25,7 +25,15 @@ namespace ui {
             return;
         }
 
-        const Rect parent_content = {ImGui::GetWindowContentRegionMin(), ImGui::GetWindowContentRegionMax()};
+        // imgui exposes these regions with the current scroll applied, while
+        // setcursorpos expects scroll-independent window-local coordinates.
+        const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
+        const ImVec2 content_min = ImGui::GetWindowContentRegionMin();
+        const ImVec2 content_max = ImGui::GetWindowContentRegionMax();
+        const Rect parent_content = {
+            {content_min.x + scroll.x, content_min.y + scroll.y},
+            {content_max.x + scroll.x, content_max.y + scroll.y},
+        };
         m_layout.set_parent_content_rect(parent_content);
 
         ImVec2 window_position = ImGui::GetCursorPos();
@@ -145,6 +153,11 @@ namespace ui {
             child, size, Anchor::TopLeft, Origin::TopLeft,
             {screen_position.x - content_position.x, screen_position.y - content_position.y}
         );
+    }
+
+    void Node::draw_child_at_screen(Node& child, ImVec2 size, ImVec2 screen_position) {
+        arrange_child_at_screen(child, size, screen_position);
+        child.draw();
     }
 
     void Node::set_child_screen_rect(Node& child, Rect rect) {

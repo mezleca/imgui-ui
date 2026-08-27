@@ -180,5 +180,5 @@ namespace ui {
         }
     };
 
-    using GenericValue = std::variant<IntValue, FloatValue, StringValue, BoolValue, ColorValue, Vec2Value>;
+    using StyleValue = std::variant<IntValue, FloatValue, StringValue, BoolValue, ColorValue, Vec2Value>;
 } // namespace ui

@@ -7,6 +7,14 @@ namespace ui {
         ImGui::GetWindowDrawList()->AddLine(start, end, color, thickness);
     }
 
+    void draw_circle(ImVec2 center, float radius, ImColor color) {
+        ImGui::GetWindowDrawList()->AddCircleFilled(center, radius, color);
+    }
+
+    void draw_circle_outline(ImVec2 center, float radius, ImColor color, float thickness) {
+        ImGui::GetWindowDrawList()->AddCircle(center, radius, color, 0, thickness);
+    }
+
     void draw_text(ImVec2 position, ImColor color, std::string_view text) {
         ImGui::GetWindowDrawList()->AddText(position, color, text.data(), text.data() + text.size());
     }

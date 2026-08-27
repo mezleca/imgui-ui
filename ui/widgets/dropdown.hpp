@@ -4,7 +4,6 @@
 
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 class UI;
@@ -36,26 +35,26 @@ namespace ui {
         DropdownWidget& set_options(std::vector<DropdownOption> options);
 
         bool changed() const override;
-        bool is_open() const;
-        TextWidget& label();
-        Widget& trigger();
-        Widget& body();
         bool on_draw() override;
         std::optional<std::string> content() const override;
         bool try_set_content(std::string content) override;
 
-    private:
-        friend class DropdownBodyNode;
-        friend class DropdownTriggerNode;
+        bool is_open() const {
+            return m_open && !m_closing;
+        }
 
+        TextWidget& label() {
+            return *m_label_node;
+        }
+
+        Widget& trigger();
+        Widget& body();
+
+    private:
         void configure_default_styles();
-        bool draw_trigger(DropdownTriggerNode& trigger);
-        bool draw_body(DropdownBodyNode& body);
         void draw_children() override;
         void on_layout() override;
         void on_draw_end() override;
-        void draw_trigger_frame(Rect rect, std::string_view preview, bool open, const Style& style) const;
-        const DropdownOption* selected_option() const;
         bool has_label() const;
 
         UI& m_ui;
@@ -70,6 +69,5 @@ namespace ui {
         bool m_open_requested = false;
         bool m_open = false;
         bool m_closing = false;
-        bool m_changed = false;
     };
 } // namespace ui

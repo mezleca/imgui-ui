@@ -24,7 +24,7 @@ namespace ui {
 
     private:
         UI& m_ui;
-        TextValue m_text;
+        GenericValue m_text;
         ImVec2 m_text_alignment{0.5F, 0.5F};
     };
 

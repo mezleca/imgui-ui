@@ -7,255 +7,134 @@
 #include <imgui.h>
 #include <algorithm>
 
-namespace ui {
-    class DropdownTriggerNode final : public Widget {
-    public:
-        explicit DropdownTriggerNode(DropdownWidget& dropdown) : Widget("trigger", "Dropdown"), m_dropdown(dropdown) {}
+using namespace ui;
 
-    private:
-        bool on_draw() override {
-            return m_dropdown.draw_trigger(*this);
-        }
+class ui::DropdownTriggerNode final : public Widget {
+public:
+    DropdownTriggerNode(
+        UI& ui, std::string& value, std::vector<DropdownOption>& options, std::string& placeholder, bool& open, bool& closing,
+        bool& open_requested, Rect& trigger_rect
+    )
+        : Widget("trigger", "Dropdown"), m_ui(ui), m_value(&value), m_options(&options), m_placeholder(&placeholder),
+          m_open(&open), m_closing(&closing), m_open_requested(&open_requested), m_trigger_rect(&trigger_rect) {}
 
-        DropdownWidget& m_dropdown;
-    };
+private:
+    bool on_draw() override {
+        const Style& current_style = style();
+        ImVec2 button_size = layout().size();
 
-    class DropdownBodyNode final : public Widget {
-    public:
-        explicit DropdownBodyNode(DropdownWidget& dropdown) : Widget("body", "Dropdown"), m_dropdown(dropdown) {}
+        if (button_size.x <= 0.0F) button_size.x = ImGui::GetContentRegionAvail().x;
+        if (button_size.y <= 0.0F) button_size.y = ImGui::GetFrameHeight();
 
-    private:
-        bool on_draw() override {
-            return m_dropdown.draw_body(*this);
-        }
+        ImGui::InvisibleButton("##trigger", button_size);
+        *m_trigger_rect = {ImGui::GetItemRectMin(), ImGui::GetItemRectMax()};
 
-        DropdownWidget& m_dropdown;
-    };
-
-    DropdownWidget::DropdownWidget(UI& ui, std::string& value, std::vector<DropdownOption> options, std::string id)
-        : Widget(std::move(id), "Dropdown"), m_ui(ui), m_value(&value), m_options(std::move(options)) {
-        m_label_node = &add_child<TextWidget>("");
-        m_trigger = &add_child<DropdownTriggerNode>(*this);
-        m_body = &add_child<DropdownBodyNode>(*this);
-        configure_default_styles();
-    }
-
-    void DropdownWidget::configure_default_styles() {
-        const Theme& theme = m_ui.theme();
-
-        const auto configure = [&theme](Widget& widget) {
-            widget.configure_all_styles([&theme](Style& style) {
-                style.color(theme.text_color)
-                    .background_color(theme.control_background_color)
-                    .border_color(theme.control_border_color, 0.15F)
-                    .padding({10.0F, 6.0F})
-                    .border(BORDER_ALL)
-                    .border_radius(theme.control_rounding)
-                    .border_thickness(theme.control_border_thickness);
-            });
-        };
-
-        m_label_node->style().color(theme.text_color);
-
-        configure(*m_trigger);
-        configure(*m_body);
-
-        m_trigger->configure_style(StyleType::HOVER, [&theme](Style& style) {
-            style.background_color(theme.control_hover_color);
-        });
-
-        m_trigger->configure_style(StyleType::ACTIVE, [&theme](Style& style) {
-            style.background_color(theme.control_active_color);
-        });
-    }
-
-    DropdownWidget& DropdownWidget::set_label(std::string label) {
-        m_label_node->try_set_content(std::move(label));
-        return *this;
-    }
-
-    DropdownWidget& DropdownWidget::set_label_placement(DropdownLabelPlacement placement) {
-        if (m_label_placement == placement) {
-            return *this;
-        }
-
-        m_label_placement = placement;
-        invalidate_measure();
-        return *this;
-    }
-
-    DropdownWidget& DropdownWidget::set_placeholder(std::string placeholder) {
-        m_placeholder = std::move(placeholder);
-        return *this;
-    }
-
-    DropdownWidget& DropdownWidget::set_options(std::vector<DropdownOption> options) {
-        m_options = std::move(options);
-        return *this;
-    }
-
-    bool DropdownWidget::changed() const {
-        return m_changed;
-    }
-
-    bool DropdownWidget::is_open() const {
-        return m_open && !m_closing;
-    }
-
-    TextWidget& DropdownWidget::label() {
-        return *m_label_node;
-    }
-
-    Widget& DropdownWidget::trigger() {
-        return *m_trigger;
-    }
-
-    Widget& DropdownWidget::body() {
-        return *m_body;
-    }
-
-    bool DropdownWidget::on_draw() {
-        ImGui::PushID(this);
-        return true;
-    }
-
-    void DropdownWidget::on_draw_end() {
-        ImGui::PopID();
-    }
-
-    void DropdownWidget::on_layout() {
-        const float label_height = has_label() && m_label_placement == DropdownLabelPlacement::Above
-                                       ? m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y
-                                       : 0.0F;
-        const ImVec2 outer_size = layout().size();
-        const ImVec2 trigger_size = {
-            outer_size.x,
-            std::max(0.0F, outer_size.y - label_height),
-        };
-
-        m_trigger->set_size(trigger_size);
-    }
-
-    void DropdownWidget::draw_children() {
-        const float content_x = ImGui::GetCursorPosX();
-
-        if (has_label()) {
-            m_label_node->draw();
-
-            if (m_label_placement == DropdownLabelPlacement::Inline) {
-                ImGui::SameLine();
+        if (ImGui::IsItemClicked()) {
+            if (*m_open) {
+                *m_open = false;
+                *m_closing = true;
             } else {
-                ImGui::SetCursorPosX(content_x);
+                *m_open = true;
+                *m_closing = false;
+                *m_open_requested = true;
             }
         }
 
-        // body remains a child even though imgui renders it in a separate popup
-        // window; this keeps styling, profiling and debugger identity intact.
-        m_trigger->draw();
-        m_body->draw();
-    }
-
-    const DropdownOption* DropdownWidget::selected_option() const {
-        const auto it = std::find_if(m_options.begin(), m_options.end(), [this](const DropdownOption& option) {
+        const auto selected = std::find_if(m_options->begin(), m_options->end(), [this](const DropdownOption& option) {
             return option.value == *m_value;
         });
-        return it == m_options.end() ? nullptr : &*it;
+
+        const std::string_view preview = selected == m_options->end() ? *m_placeholder : selected->label;
+        draw_contents(*m_trigger_rect, preview, *m_open, current_style);
+        update_input(m_ui.input(), *m_open);
+
+        return true;
     }
 
-    bool DropdownWidget::has_label() const {
-        const std::optional<std::string> text = m_label_node->content();
-        return text.has_value() && !text->empty();
-    }
-
-    void DropdownWidget::draw_trigger_frame(Rect rect, std::string_view preview, bool open, const Style& current_style) const {
+    void draw_contents(Rect rect, std::string_view preview, bool open, const Style& current_style) const {
         draw_frame(
             rect, current_style, open ? ImColor(m_ui.theme().control_active_color) : current_style.background_color().value
         );
 
         const ImVec2 text_size = ImGui::CalcTextSize(preview.data(), preview.data() + preview.size());
+
         draw_text(
             {rect.min.x + current_style.padding().x, rect.min.y + (rect.size().y - text_size.y) * 0.5F},
             current_style.color().get_col(), preview
         );
+
         draw_triangle(
             {rect.max.x - current_style.padding().x - 4.0F, rect.min.y + rect.size().y * 0.5F}, {8.0F, 4.0F},
             current_style.color().get_col(), open ? TriangleDirection::Up : TriangleDirection::Down
         );
     }
 
-    bool DropdownWidget::draw_trigger(DropdownTriggerNode& trigger) {
-        m_changed = false;
-        const Style& current_style = trigger.style();
+    UI& m_ui;
+    std::string* m_value;
+    std::vector<DropdownOption>* m_options;
+    std::string* m_placeholder;
+    bool* m_open;
+    bool* m_closing;
+    bool* m_open_requested;
+    Rect* m_trigger_rect;
+};
 
-        ImGui::BeginGroup();
+class ui::DropdownBodyNode final : public Widget {
+public:
+    DropdownBodyNode(
+        UI& ui, std::string& value, std::vector<DropdownOption>& options, Rect& trigger_rect, bool& open, bool& closing,
+        bool& open_requested
+    )
+        : Widget("body", "Dropdown"), m_ui(ui), m_value(&value), m_options(&options), m_trigger_rect(&trigger_rect),
+          m_open(&open), m_closing(&closing), m_open_requested(&open_requested) {}
 
-        float width = trigger.layout().size().x;
-
-        if (has_label() && m_label_placement == DropdownLabelPlacement::Inline && width > 0.0F) {
-            const float label_width = m_label_node->layout().screen_rect().size().x + ImGui::GetStyle().ItemInnerSpacing.x;
-            width = std::max(1.0F, width - label_width);
-        }
-
-        ImGui::InvisibleButton(
-            "##trigger", {width > 0.0F ? width : ImGui::GetContentRegionAvail().x,
-                          trigger.layout().size().y > 0.0F ? trigger.layout().size().y : ImGui::GetFrameHeight()}
-        );
-        m_trigger_rect = {ImGui::GetItemRectMin(), ImGui::GetItemRectMax()};
-
-        const ItemInputState input = m_ui.input().observe_item(trigger);
-
-        if (ImGui::IsItemClicked()) {
-            if (is_open()) {
-                m_body->set_enabled(false);
-                m_body->set_opacity(VISIBILITY_OPACITY_THRESHOLD);
-                m_open = false;
-                m_closing = true;
-            } else {
-                m_body->set_enabled(true);
-                m_body->fade_in();
-                m_open = true;
-                m_closing = false;
-                m_open_requested = true;
-            }
-        }
-
-        const DropdownOption* selected = selected_option();
-        draw_trigger_frame(m_trigger_rect, selected != nullptr ? selected->label : m_placeholder, is_open(), current_style);
-        ImGui::EndGroup();
-
-        trigger.apply_input_state(input, is_open());
-        return true;
+    void draw() override {
+        if (*m_open_requested) fade_in();
+        Widget::draw();
     }
 
-    bool DropdownWidget::draw_body(DropdownBodyNode& body) {
+    bool changed() const override {
+        return m_changed;
+    }
+
+private:
+    bool on_draw() override {
+        m_changed = false;
+        set_enabled(*m_open);
+
+        if (*m_closing) {
+            set_opacity(VISIBILITY_OPACITY_THRESHOLD);
+        }
+
         const Theme& theme = m_ui.theme();
 
-        if (m_open_requested) {
-            body.fade_in();
+        if (*m_open_requested) {
+            set_enabled(true);
+            fade_in();
             ImGui::OpenPopup("##options");
-            m_open_requested = false;
+            *m_open_requested = false;
         }
 
         if (!ImGui::IsPopupOpen("##options")) {
-            body.fade_out();
-            body.set_enabled(false);
-            m_open = false;
-            m_closing = false;
+            fade_out();
+            set_enabled(false);
+            *m_open = false;
+            *m_closing = false;
             return false;
         }
 
-        const Style& current_style = body.style();
-        const ImVec2 default_position = {m_trigger_rect.min.x, m_trigger_rect.max.y + 4.0F};
-        const ImVec2 popup_position = body.layout().has_explicit_position() ? body.layout().screen_rect().min : default_position;
-        const ImVec2 body_size = body.layout().size();
+        const Style& current_style = style();
+        const ImVec2 default_position = {m_trigger_rect->min.x, m_trigger_rect->max.y + 4.0F};
+        const ImVec2 popup_position = layout().has_explicit_position() ? layout().screen_rect().min : default_position;
+        const ImVec2 body_size = layout().size();
 
         const float item_height = ImGui::GetTextLineHeight() + current_style.padding().y * 2.0F;
-        const float popup_width = body_size.x > 0.0F ? body_size.x : m_trigger_rect.size().x;
+        const float popup_width = body_size.x > 0.0F ? body_size.x : m_trigger_rect->size().x;
+        const float popup_border = current_style.border() == BORDER_NONE ? 0.0F : current_style.border_thickness();
 
         ImGui::SetNextWindowPos(popup_position, ImGuiCond_Always);
         ImGui::SetNextWindowSize({popup_width, body_size.y}, ImGuiCond_Always);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, current_style.padding());
-        const float popup_border = current_style.border() == BORDER_NONE ? 0.0F : current_style.border_thickness();
         ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, popup_border);
         ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, current_style.border_radius());
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{});
@@ -268,15 +147,14 @@ namespace ui {
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4{});
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4{});
 
-        bool changed = false;
-        const ImGuiWindowFlags popup_flags = m_closing ? ImGuiWindowFlags_NoInputs : ImGuiWindowFlags_None;
+        const ImGuiWindowFlags popup_flags = *m_closing ? ImGuiWindowFlags_NoInputs : ImGuiWindowFlags_None;
         if (ImGui::BeginPopup("##options", popup_flags)) {
-            if (m_closing && body.opacity() <= VISIBILITY_OPACITY_THRESHOLD) {
+            if (*m_closing && opacity() <= VISIBILITY_OPACITY_THRESHOLD) {
                 ImGui::CloseCurrentPopup();
-                body.fade_out();
-                m_closing = false;
+                fade_out();
+                *m_closing = false;
             } else {
-                for (const DropdownOption& option : m_options) {
+                for (const DropdownOption& option : *m_options) {
                     const ImVec2 item_size = {ImGui::GetContentRegionAvail().x, item_height};
                     const Rect item_rect = Rect::from_position_size(ImGui::GetCursorScreenPos(), item_size);
                     const bool hovered = ImGui::IsMouseHoveringRect(item_rect.min, item_rect.max);
@@ -293,12 +171,12 @@ namespace ui {
                     if (pressed) {
                         if (!is_selected) {
                             *m_value = option.value;
-                            changed = true;
+                            m_changed = true;
                         }
-                        body.set_enabled(false);
-                        body.set_opacity(VISIBILITY_OPACITY_THRESHOLD);
-                        m_open = false;
-                        m_closing = true;
+                        set_enabled(false);
+                        set_opacity(VISIBILITY_OPACITY_THRESHOLD);
+                        *m_open = false;
+                        *m_closing = true;
                         break;
                     }
 
@@ -309,31 +187,158 @@ namespace ui {
             }
 
             const Rect body_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
-            set_child_screen_rect(body, body_rect);
-            m_ui.input_router().register_region_in_layer(body, body_rect, InputLayer::Overlay);
+            set_screen_rect(body_rect);
+            m_ui.input_router().register_region_in_layer(*this, body_rect, InputLayer::Overlay);
 
             ImGui::EndPopup();
         }
 
         ImGui::PopStyleColor(6);
         ImGui::PopStyleVar(6);
-        m_changed = changed;
         return true;
     }
 
-    std::optional<std::string> DropdownWidget::content() const {
-        return m_value == nullptr ? std::nullopt : std::optional<std::string>{*m_value};
+    UI& m_ui;
+    std::string* m_value;
+    std::vector<DropdownOption>* m_options;
+    Rect* m_trigger_rect;
+    bool* m_open;
+    bool* m_closing;
+    bool* m_open_requested;
+    bool m_changed = false;
+};
+
+DropdownWidget::DropdownWidget(UI& ui, std::string& value, std::vector<DropdownOption> options, std::string id)
+    : Widget(std::move(id), "Dropdown"), m_ui(ui), m_value(&value), m_options(std::move(options)) {
+    m_label_node = &add_child<TextWidget>("");
+    m_trigger = &add_child<DropdownTriggerNode>(
+        m_ui, value, m_options, m_placeholder, m_open, m_closing, m_open_requested, m_trigger_rect
+    );
+    m_body = &add_child<DropdownBodyNode>(m_ui, value, m_options, m_trigger_rect, m_open, m_closing, m_open_requested);
+    m_body->set_enabled(false);
+    configure_default_styles();
+}
+
+void DropdownWidget::configure_default_styles() {
+    const Theme& theme = m_ui.theme();
+
+    const auto configure = [&theme](Widget& widget) {
+        widget.configure_all_styles([&theme](Style& style) {
+            style.color(theme.text_color)
+                .background_color(theme.control_background_color)
+                .border_color(theme.control_border_color, 0.15F)
+                .padding({10.0F, 6.0F})
+                .border(BORDER_ALL)
+                .border_radius(theme.control_rounding)
+                .border_thickness(theme.control_border_thickness);
+        });
+    };
+
+    m_label_node->style().color(theme.text_color);
+
+    configure(*m_trigger);
+    configure(*m_body);
+
+    m_trigger->configure_style(StyleType::HOVER, [&theme](Style& style) { style.background_color(theme.control_hover_color); });
+    m_trigger->configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.background_color(theme.control_active_color); });
+}
+
+DropdownWidget& DropdownWidget::set_label(std::string label) {
+    m_label_node->try_set_content(std::move(label));
+    return *this;
+}
+
+DropdownWidget& DropdownWidget::set_label_placement(DropdownLabelPlacement placement) {
+    if (m_label_placement == placement) {
+        return *this;
     }
 
-    bool DropdownWidget::try_set_content(std::string content) {
-        if (m_value == nullptr || *m_value == content ||
-            std::none_of(m_options.begin(), m_options.end(), [&content](const DropdownOption& option) {
-                return option.value == content;
-            })) {
-            return false;
+    m_label_placement = placement;
+    invalidate_measure();
+    return *this;
+}
+
+DropdownWidget& DropdownWidget::set_placeholder(std::string placeholder) {
+    m_placeholder = std::move(placeholder);
+    return *this;
+}
+
+DropdownWidget& DropdownWidget::set_options(std::vector<DropdownOption> options) {
+    m_options = std::move(options);
+    return *this;
+}
+
+bool DropdownWidget::changed() const {
+    return m_body->changed();
+}
+
+Widget& DropdownWidget::trigger() {
+    return *m_trigger;
+}
+
+Widget& DropdownWidget::body() {
+    return *m_body;
+}
+
+bool DropdownWidget::on_draw() {
+    ImGui::PushID(this);
+    return true;
+}
+
+void DropdownWidget::on_draw_end() {
+    ImGui::PopID();
+}
+
+void DropdownWidget::on_layout() {
+    const bool inline_label = has_label() && m_label_placement == DropdownLabelPlacement::Inline;
+    const float label_width = inline_label ? m_label_node->layout().size().x + ImGui::GetStyle().ItemInnerSpacing.x : 0.0F;
+    const float label_height = has_label() && m_label_placement == DropdownLabelPlacement::Above
+                                   ? m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y
+                                   : 0.0F;
+    const ImVec2 outer_size = layout().size();
+    const ImVec2 trigger_size = {
+        std::max(0.0F, outer_size.x - label_width),
+        std::max(0.0F, outer_size.y - label_height),
+    };
+
+    m_trigger->set_size(trigger_size);
+}
+
+void DropdownWidget::draw_children() {
+    const float content_x = ImGui::GetCursorPosX();
+
+    if (has_label()) {
+        m_label_node->draw();
+
+        if (m_label_placement == DropdownLabelPlacement::Inline) {
+            ImGui::SameLine();
+        } else {
+            ImGui::SetCursorPosX(content_x);
         }
-
-        *m_value = std::move(content);
-        return true;
     }
-} // namespace ui
+
+    // body remains a child even though imgui renders it in a separate popup window.
+    m_trigger->draw();
+    m_body->draw();
+}
+
+bool DropdownWidget::has_label() const {
+    const std::optional<std::string> text = m_label_node->content();
+    return text.has_value() && !text->empty();
+}
+
+std::optional<std::string> DropdownWidget::content() const {
+    return m_value == nullptr ? std::nullopt : std::optional<std::string>{*m_value};
+}
+
+bool DropdownWidget::try_set_content(std::string content) {
+    if (m_value == nullptr || *m_value == content ||
+        std::none_of(m_options.begin(), m_options.end(), [&content](const DropdownOption& option) {
+            return option.value == content;
+        })) {
+        return false;
+    }
+
+    *m_value = std::move(content);
+    return true;
+}

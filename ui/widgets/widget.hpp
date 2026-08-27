@@ -29,6 +29,13 @@ namespace ui {
             set_interaction_style(input.hovered, input.active || active, input.focused);
         }
 
+        /// observes the current item and updates this widget's interaction style.
+        ItemInputState update_input(ImGuiInputBridge& bridge, bool active = false) {
+            const ItemInputState input = bridge.observe_item(*this);
+            apply_input_state(input, active && !input.blocked);
+            return input;
+        }
+
     protected:
         void dispatch_event(UiEvent& event) override {
             Node::dispatch_event(event);

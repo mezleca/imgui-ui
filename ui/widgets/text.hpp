@@ -1,7 +1,7 @@
 #pragma once
 
+#include "../style/styled-node.hpp"
 #include "text-value.hpp"
-#include "widget.hpp"
 
 #include <memory>
 #include <optional>
@@ -10,10 +10,9 @@
 #include <utility>
 
 namespace ui {
-    /// intrinsic size uses the font inherited through the node tree.
     class TextWidget : public StyledNode {
     public:
-        explicit TextWidget(std::string text) : StyledNode({}, "Text"), m_text(std::make_unique<TextValue>(std::move(text))) {}
+        explicit TextWidget(std::string text) : StyledNode({}, "Text"), m_text(std::make_unique<GenericValue>(std::move(text))) {}
 
         template <typename... Args>
         TextWidget(std::string format, std::tuple<Args...> values)
@@ -31,7 +30,7 @@ namespace ui {
     private:
         void on_measure() override;
 
-        std::unique_ptr<TextValue> m_text;
+        std::unique_ptr<GenericValue> m_text;
         float m_wrap = -1.0F;
     };
 

@@ -8,6 +8,7 @@
 #include <ui/widgets/button.hpp>
 #include <ui/widgets/checkbox.hpp>
 #include <ui/widgets/dropdown.hpp>
+#include <ui/widgets/number-input.hpp>
 #include <ui/widgets/text.hpp>
 #include <ui/widgets/text-input.hpp>
 #include <ui/widgets/widget.hpp>
@@ -23,6 +24,20 @@
 #include <vector>
 
 using namespace ui;
+
+TEST_CASE("number input supports integer and floating point values", "[NumberInputWidget][content]") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    int integer = 0;
+    double decimal = 0.0;
+    ui::NumberInputWidget integer_input(surface, integer);
+    ui::NumberInputWidget decimal_input(surface, decimal);
+
+    REQUIRE(integer_input.try_set_content("42"));
+    REQUIRE(integer == 42);
+    REQUIRE(decimal_input.try_set_content("1.25"));
+    REQUIRE(decimal == Catch::Approx(1.25));
+}
 
 TEST_CASE("checkbox measurement includes style padding and remeasures after changes", "[CheckboxWidget][layout][style]") {
     ui::Runtime runtime;

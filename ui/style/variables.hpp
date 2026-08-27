@@ -24,7 +24,7 @@ namespace ui {
 
     class StyleVariableStore {
     public:
-        void set(std::string_view key, GenericValue value) {
+        void set(std::string_view key, StyleValue value) {
             auto existing_it = m_vars.find(key);
 
             if (existing_it != m_vars.end()) {
@@ -37,7 +37,7 @@ namespace ui {
 
         template <typename T>
         void set(std::string_view key, T value) {
-            set(key, GenericValue{std::move(value)});
+            set(key, StyleValue{std::move(value)});
         }
 
         template <typename T>
@@ -52,12 +52,12 @@ namespace ui {
             return value_it == m_vars.end() ? nullptr : std::get_if<T>(&value_it->second);
         }
 
-        GenericValue* find(std::string_view key) {
+        StyleValue* find(std::string_view key) {
             auto value_it = m_vars.find(key);
             return value_it == m_vars.end() ? nullptr : &value_it->second;
         }
 
-        const GenericValue* find(std::string_view key) const {
+        const StyleValue* find(std::string_view key) const {
             auto value_it = m_vars.find(key);
             return value_it == m_vars.end() ? nullptr : &value_it->second;
         }
@@ -69,7 +69,7 @@ namespace ui {
         template <typename Func>
         bool for_each(Func&& func) {
             static_assert(
-                std::is_invocable_r_v<bool, Func&, const std::string&, GenericValue&>,
+                std::is_invocable_r_v<bool, Func&, const std::string&, StyleValue&>,
                 "StyleVariableStore::for_each callback must return bool"
             );
 
@@ -85,7 +85,7 @@ namespace ui {
         template <typename Func>
         bool for_each(Func&& func) const {
             static_assert(
-                std::is_invocable_r_v<bool, Func&, const std::string&, const GenericValue&>,
+                std::is_invocable_r_v<bool, Func&, const std::string&, const StyleValue&>,
                 "StyleVariableStore::for_each callback must return bool"
             );
 
@@ -99,7 +99,7 @@ namespace ui {
         }
 
     private:
-        std::unordered_map<std::string, GenericValue, StyleVariableHash, std::equal_to<>> m_vars;
+        std::unordered_map<std::string, StyleValue, StyleVariableHash, std::equal_to<>> m_vars;
     };
 
 } // namespace ui
