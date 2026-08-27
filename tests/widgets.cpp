@@ -6,6 +6,7 @@
 #include <ui/layout/stack-container.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
+#include <ui/widgets/checkbox.hpp>
 #include <ui/widgets/dropdown.hpp>
 #include <ui/widgets/text.hpp>
 #include <ui/widgets/text-input.hpp>
@@ -17,10 +18,74 @@
 #include <catch2/catch_approx.hpp>
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <cfloat>
 #include <string>
 #include <vector>
 
 using namespace ui;
+
+TEST_CASE("checkbox measurement includes style padding and remeasures after changes", "[CheckboxWidget][layout][style]") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    bool value = false;
+    ui::StackContainer stack("checkbox-padding-stack");
+    stack.fit_content();
+    stack.style().padding({});
+    auto& checkbox = stack.add_child<ui::CheckboxWidget>(surface, value, "custom checkbox");
+    checkbox.configure_all_styles([](ui::Style& style) { style.padding({10.0F, 6.0F}); });
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ui_test::ImGuiContext::build_fonts();
+
+    const auto draw_frame = [&surface, &stack] {
+        ImGui::GetIO().DisplaySize = {400.0F, 180.0F};
+        surface.begin_frame();
+        ImGui::SetNextWindowPos({0.0F, 0.0F});
+        ImGui::SetNextWindowSize({400.0F, 180.0F});
+        ImGui::Begin("checkbox-padding-test");
+        stack.draw();
+        ImGui::End();
+        surface.end_frame();
+    };
+
+    draw_frame();
+    const ImVec2 initial_size = checkbox.layout().size();
+
+    checkbox.style().padding({20.0F, 12.0F});
+    draw_frame();
+
+    REQUIRE(checkbox.layout().size().x == Catch::Approx(initial_size.x + 20.0F));
+    REQUIRE(checkbox.layout().size().y == Catch::Approx(initial_size.y + 12.0F));
+    REQUIRE(stack.layout().size().x == Catch::Approx(checkbox.layout().size().x));
+    REQUIRE(stack.layout().size().y == Catch::Approx(checkbox.layout().size().y));
+}
+
+TEST_CASE("text measurement and drawing include style padding", "[TextWidget][layout][style]") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    ui::StackContainer stack("text-padding-stack");
+    stack.fit_content();
+    stack.style().padding({});
+    auto& text = stack.add_child<ui::TextWidget>("padded text");
+    text.configure_all_styles([](ui::Style& style) {
+        style.padding({5.0F, 3.0F}).background_color(ImColor{10, 20, 30, 255}).border(ui::BORDER_ALL);
+    });
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ui_test::ImGuiContext::build_fonts();
+    ImGui::GetIO().DisplaySize = {400.0F, 180.0F};
+
+    surface.begin_frame();
+    ImFont* font = ImGui::GetFont();
+    const ImVec2 raw_size = font->CalcTextSizeA(font->LegacySize, FLT_MAX, 0.0F, "padded text");
+    ImGui::Begin("text-padding-test");
+    stack.draw();
+    ImGui::End();
+    surface.end_frame();
+
+    REQUIRE(text.layout().size().x == Catch::Approx(raw_size.x + 10.0F));
+    REQUIRE(text.layout().size().y == Catch::Approx(raw_size.y + 6.0F));
+}
 
 TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout][regression]") {
     ui::Runtime runtime;

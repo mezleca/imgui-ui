@@ -589,13 +589,14 @@ namespace ui {
 
         if (clicked) {
             const bool selected_again = selected_target == &node;
-            selected_target = &node;
             if (update_target) {
                 if (selected_again) {
                     m_highlight_selected = true;
                 }
                 set_target(&node);
                 m_scroll_to_target = true;
+            } else {
+                selected_target = &node;
             }
         }
 

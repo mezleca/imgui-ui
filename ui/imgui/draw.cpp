@@ -43,18 +43,24 @@ namespace ui {
         ImGui::GetWindowDrawList()->AddTriangleFilled(first, second, third, color);
     }
 
-    void draw_frame(ImVec2 minimum, ImVec2 maximum, ImColor background, ImColor border, float rounding, float border_thickness) {
+    static void draw_full_frame(Rect rect, const Style& style, ImColor background) {
         ImDrawList& draw_list = *ImGui::GetWindowDrawList();
+        const float border_thickness = style.border_thickness();
 
-        draw_list.AddRectFilled(minimum, maximum, background, rounding);
         if (border_thickness <= 0.0F) {
+            draw_list.AddRectFilled(rect.min, rect.max, background, style.border_radius());
             return;
         }
 
         const float inset = border_thickness * 0.5F;
+        draw_list.AddRectFilled(
+            {rect.min.x + border_thickness, rect.min.y + border_thickness},
+            {rect.max.x - border_thickness, rect.max.y - border_thickness}, background,
+            std::max(0.0F, style.border_radius() - border_thickness)
+        );
         draw_list.AddRect(
-            {minimum.x + inset, minimum.y + inset}, {maximum.x - inset, maximum.y - inset}, border, rounding,
-            ImDrawFlags_RoundCornersAll, border_thickness
+            {rect.min.x + inset, rect.min.y + inset}, {rect.max.x - inset, rect.max.y - inset}, style.border_color().get_col(),
+            style.border_radius(), ImDrawFlags_RoundCornersAll, border_thickness
         );
     }
 
@@ -63,14 +69,13 @@ namespace ui {
     }
 
     void draw_frame(Rect rect, const Style& style, ImColor background) {
-        if (style.border() == BORDER_NONE) {
-            ImGui::GetWindowDrawList()->AddRectFilled(rect.min, rect.max, background, style.border_radius());
+        if ((style.border() & BORDER_ALL) != 0) {
+            draw_full_frame(rect, style, background);
             return;
         }
 
-        draw_frame(
-            rect.min, rect.max, background, style.border_color().get_col(), style.border_radius(), style.border_thickness()
-        );
+        ImGui::GetWindowDrawList()->AddRectFilled(rect.min, rect.max, background, style.border_radius());
+        draw_border(rect, style);
     }
 
     void draw_border(Rect rect, const Style& style) {

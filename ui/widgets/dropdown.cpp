@@ -125,8 +125,8 @@ namespace ui {
 
     void DropdownWidget::on_layout() {
         const float label_height = has_label() && m_label_placement == DropdownLabelPlacement::Above
-                                             ? m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y
-                                             : 0.0F;
+                                       ? m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y
+                                       : 0.0F;
         const ImVec2 outer_size = layout().size();
         const ImVec2 trigger_size = {
             outer_size.x,
@@ -167,79 +167,63 @@ namespace ui {
         return text.has_value() && !text->empty();
     }
 
-    void DropdownWidget::draw_trigger_frame(
-        ImVec2 minimum, ImVec2 maximum, std::string_view preview, bool open, const Style& current_style
-    ) const {
-        const Theme& theme = m_ui.theme();
-        const float height = maximum.y - minimum.y;
-        const ImColor background = open ? ImColor(theme.control_active_color) : current_style.background_color().value;
-        const ImU32 text_color = current_style.color().get_col();
-        draw_frame({minimum, maximum}, current_style, background);
+    void DropdownWidget::draw_trigger_frame(Rect rect, std::string_view preview, bool open, const Style& current_style) const {
+        draw_frame(
+            rect, current_style, open ? ImColor(m_ui.theme().control_active_color) : current_style.background_color().value
+        );
 
         const ImVec2 text_size = ImGui::CalcTextSize(preview.data(), preview.data() + preview.size());
-        const ImVec2 text_position = {
-            minimum.x + current_style.padding().x,
-            minimum.y + (height - text_size.y) * 0.5F,
-        };
-
-        draw_text(text_position, text_color, preview);
-
-        const ImVec2 arrow_center = {
-            maximum.x - current_style.padding().x - 4.0F,
-            minimum.y + height * 0.5F,
-        };
-        draw_triangle(arrow_center, {8.0F, 4.0F}, text_color, open ? TriangleDirection::Up : TriangleDirection::Down);
+        draw_text(
+            {rect.min.x + current_style.padding().x, rect.min.y + (rect.size().y - text_size.y) * 0.5F},
+            current_style.color().get_col(), preview
+        );
+        draw_triangle(
+            {rect.max.x - current_style.padding().x - 4.0F, rect.min.y + rect.size().y * 0.5F}, {8.0F, 4.0F},
+            current_style.color().get_col(), open ? TriangleDirection::Up : TriangleDirection::Down
+        );
     }
 
     bool DropdownWidget::draw_trigger(DropdownTriggerNode& trigger) {
         m_changed = false;
         const Style& current_style = trigger.style();
-        const NodeLayout& trigger_layout = trigger.layout();
 
         ImGui::BeginGroup();
 
-        float width = trigger_layout.size().x;
+        float width = trigger.layout().size().x;
 
         if (has_label() && m_label_placement == DropdownLabelPlacement::Inline && width > 0.0F) {
             const float label_width = m_label_node->layout().screen_rect().size().x + ImGui::GetStyle().ItemInnerSpacing.x;
             width = std::max(1.0F, width - label_width);
         }
 
-        const DropdownOption* selected = selected_option();
-        const std::string_view preview = selected != nullptr ? selected->label : m_placeholder;
-        const float trigger_width = width > 0.0F ? width : ImGui::GetContentRegionAvail().x;
-        const float trigger_height = trigger_layout.size().y > 0.0F ? trigger_layout.size().y : ImGui::GetFrameHeight();
-
-        ImGui::InvisibleButton("##trigger", {trigger_width, trigger_height});
-
-        const ImVec2 trigger_min = ImGui::GetItemRectMin();
-        const ImVec2 trigger_max = ImGui::GetItemRectMax();
-        m_trigger_rect = {trigger_min, trigger_max};
+        ImGui::InvisibleButton(
+            "##trigger", {width > 0.0F ? width : ImGui::GetContentRegionAvail().x,
+                          trigger.layout().size().y > 0.0F ? trigger.layout().size().y : ImGui::GetFrameHeight()}
+        );
+        m_trigger_rect = {ImGui::GetItemRectMin(), ImGui::GetItemRectMax()};
 
         const ItemInputState input = m_ui.input().observe_item(trigger);
-        bool open = m_open && !m_closing;
 
         if (ImGui::IsItemClicked()) {
-            if (m_open && !m_closing) {
+            if (is_open()) {
                 m_body->set_enabled(false);
                 m_body->set_opacity(VISIBILITY_OPACITY_THRESHOLD);
                 m_open = false;
                 m_closing = true;
-                open = false;
             } else {
                 m_body->set_enabled(true);
                 m_body->fade_in();
                 m_open = true;
                 m_closing = false;
                 m_open_requested = true;
-                open = true;
             }
         }
 
-        draw_trigger_frame(trigger_min, trigger_max, preview, open, current_style);
+        const DropdownOption* selected = selected_option();
+        draw_trigger_frame(m_trigger_rect, selected != nullptr ? selected->label : m_placeholder, is_open(), current_style);
         ImGui::EndGroup();
 
-        trigger.apply_input_state(input, open);
+        trigger.apply_input_state(input, is_open());
         return true;
     }
 
@@ -270,13 +254,14 @@ namespace ui {
 
         ImGui::SetNextWindowPos(popup_position, ImGuiCond_Always);
         ImGui::SetNextWindowSize({popup_width, body_size.y}, ImGuiCond_Always);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{current_style.padding().x, 8.0F});
-        ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, current_style.border_thickness());
-        ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, current_style.border_radius() + 2.0F);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, current_style.padding());
+        const float popup_border = current_style.border() == BORDER_NONE ? 0.0F : current_style.border_thickness();
+        ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, popup_border);
+        ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, current_style.border_radius());
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{});
         ImGui::PushStyleVar(ImGuiStyleVar_SelectableRounding, current_style.border_radius());
         ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2{0.0F, 0.5F});
-        ImGui::PushStyleColor(ImGuiCol_PopupBg, theme.control_background_color);
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, current_style.background_color().get_col());
         ImGui::PushStyleColor(ImGuiCol_Border, current_style.border_color().get_col());
         ImGui::PushStyleColor(ImGuiCol_Text, current_style.color().get_col());
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4{});
@@ -292,10 +277,9 @@ namespace ui {
                 m_closing = false;
             } else {
                 for (const DropdownOption& option : m_options) {
-                    const ImVec2 item_position = ImGui::GetCursorScreenPos();
                     const ImVec2 item_size = {ImGui::GetContentRegionAvail().x, item_height};
-                    const ImVec2 item_max = {item_position.x + item_size.x, item_position.y + item_size.y};
-                    const bool hovered = ImGui::IsMouseHoveringRect(item_position, item_max);
+                    const Rect item_rect = Rect::from_position_size(ImGui::GetCursorScreenPos(), item_size);
+                    const bool hovered = ImGui::IsMouseHoveringRect(item_rect.min, item_rect.max);
                     const bool is_selected = option.value == *m_value;
                     const ImU32 text_color = hovered       ? ImGui::GetColorU32(theme.accent_hover_color)
                                              : is_selected ? ImGui::GetColorU32(theme.accent_color)
@@ -324,10 +308,7 @@ namespace ui {
                 }
             }
 
-            const ImVec2 popup_min = ImGui::GetWindowPos();
-            const ImVec2 popup_size = ImGui::GetWindowSize();
-
-            const Rect body_rect = {popup_min, {popup_min.x + popup_size.x, popup_min.y + popup_size.y}};
+            const Rect body_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
             set_child_screen_rect(body, body_rect);
             m_ui.input_router().register_region_in_layer(body, body_rect, InputLayer::Overlay);
 

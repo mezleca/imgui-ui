@@ -1,5 +1,7 @@
 #include "text.hpp"
 
+#include "../imgui/draw.hpp"
+
 #include <imgui.h>
 
 namespace ui {
@@ -15,15 +17,23 @@ namespace ui {
 
     void TextWidget::on_measure() {
         m_text->set_font(font());
-        set_size(m_text->text_size());
+        const ImVec2 padding = style().padding();
+        const ImVec2 text_size = m_text->text_size();
+        set_size({text_size.x + padding.x * 2.0F, text_size.y + padding.y * 2.0F});
     }
 
     bool TextWidget::on_draw() {
-        if (m_wrap >= 0.0F) ImGui::PushTextWrapPos(m_wrap);
+        const Style& current_style = style();
+        const ImVec2 padding = current_style.padding();
+        const ImVec2 minimum = ImGui::GetCursorScreenPos();
+        const Rect outer = Rect::from_position_size(minimum, layout().size());
 
-        ImGui::TextUnformatted(m_text->c_str());
-
-        if (m_wrap >= 0.0F) ImGui::PopTextWrapPos();
+        draw_frame(outer, current_style);
+        ImGui::Dummy(layout().size());
+        ImGui::GetWindowDrawList()->AddText(
+            font(), ImGui::GetFontSize(), {minimum.x + padding.x, minimum.y + padding.y}, current_style.color().get_col(),
+            m_text->c_str(), nullptr, m_wrap >= 0.0F ? m_wrap : 0.0F
+        );
 
         return true;
     }

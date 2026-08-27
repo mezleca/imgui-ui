@@ -29,12 +29,14 @@ namespace ui {
         bool try_set_content(std::string content) override;
 
     private:
+        void on_measure() override;
+
         UI& m_ui;
         bool* m_value;
         std::string m_label;
         ImColor m_mark_color;
         CheckboxType m_type = CheckboxType::Standard;
-        float m_box_size = 22.0F;
+        float m_box_size = 20.0F;
         bool m_changed = false;
     };
 } // namespace ui

@@ -20,7 +20,7 @@ namespace ui {
         ImGui::Dummy(outer.size());
 
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddRectFilled(outer.min, outer.max, style.background_color().get_col(), style.border_radius());
+        draw_frame(outer, style);
 
         if (m_texture != nullptr && content.valid()) {
             const ImVec2 image_size = content.size();
@@ -49,8 +49,6 @@ namespace ui {
                 );
             }
         }
-
-        draw_border(outer, style);
         return true;
     }
 

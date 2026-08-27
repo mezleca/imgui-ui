@@ -11,7 +11,9 @@ namespace ui {
     class StyledNode : public Node {
     public:
         explicit StyledNode(std::string id = {}, std::string_view type_name = "StyledNode")
-            : Node(std::move(id)), m_type_name(type_name) {}
+            : Node(std::move(id)), m_type_name(type_name) {
+            m_state.set_change_callback(this, &StyledNode::style_changed);
+        }
         StyledNode(const StyledNode&) = delete;
         StyledNode& operator=(const StyledNode&) = delete;
 
@@ -142,6 +144,10 @@ namespace ui {
         }
 
     private:
+        static void style_changed(void* owner) {
+            static_cast<StyledNode*>(owner)->invalidate_measure();
+        }
+
         static ImFont* resolve_font(ImFont* font) {
             return font != nullptr || ImGui::GetCurrentContext() == nullptr ? font : ImGui::GetFont();
         }

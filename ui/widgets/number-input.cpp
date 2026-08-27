@@ -1,4 +1,5 @@
 #include "number-input.hpp"
+#include "../imgui/draw.hpp"
 #include "../style/theme.hpp"
 #include "../ui.hpp"
 
@@ -147,6 +148,10 @@ namespace ui {
 
         m_changed = std::visit([this](auto* value) { return draw_value(*value); }, m_value);
         const ItemInputState input = m_ui.input().observe_item(*this);
+
+        if (current_style.border() != BORDER_NONE && (current_style.border() & BORDER_ALL) == 0) {
+            draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style);
+        }
 
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(3);

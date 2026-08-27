@@ -54,7 +54,7 @@ namespace ui {
         void draw_children() override;
         void on_layout() override;
         void on_draw_end() override;
-        void draw_trigger_frame(ImVec2 minimum, ImVec2 maximum, std::string_view preview, bool open, const Style& style) const;
+        void draw_trigger_frame(Rect rect, std::string_view preview, bool open, const Style& style) const;
         const DropdownOption* selected_option() const;
         bool has_label() const;
 

@@ -32,6 +32,13 @@ namespace ui {
             snap_to_style(StyleType::DEFAULT);
         }
 
+        void set_change_callback(void* owner, Style::ChangeCallback callback) {
+            for (Style& style : styles) {
+                style.set_change_callback(owner, callback);
+            }
+            current_style.set_change_callback(owner, callback);
+        }
+
         /// selects a slot without running a style transition.
         void snap_to_style(StyleType type) {
             current_style = styles[static_cast<size_t>(type)];

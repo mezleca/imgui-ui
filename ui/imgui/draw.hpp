@@ -19,7 +19,6 @@ namespace ui {
     void draw_text(ImVec2 position, ImColor color, std::string_view text);
     void draw_triangle(ImVec2 center, ImVec2 size, ImColor color, TriangleDirection direction = TriangleDirection::Down);
 
-    void draw_frame(ImVec2 minimum, ImVec2 maximum, ImColor background, ImColor border, float rounding, float border_thickness);
     void draw_frame(Rect rect, const Style& style);
     void draw_frame(Rect rect, const Style& style, ImColor background);
     void draw_border(Rect rect, const Style& style);

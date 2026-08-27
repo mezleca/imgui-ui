@@ -11,6 +11,7 @@
 
 namespace ui {
     class StyledNode;
+    class VisualState;
 
     enum Border : uint8_t {
         BORDER_NONE = 0,
@@ -31,6 +32,8 @@ namespace ui {
 
     class Style {
     public:
+        using ChangeCallback = void (*)(void*);
+
         Style() : m_padding({}) {
             const Theme theme = Theme::defaults();
             m_color.set(theme.text_color);
@@ -43,7 +46,12 @@ namespace ui {
         }
 
         Style& font(ImFont* value) {
+            if (m_font == value) {
+                return *this;
+            }
+
             m_font = value;
+            notify_change();
             return *this;
         }
 
@@ -52,7 +60,13 @@ namespace ui {
         }
 
         Style& padding(ImVec2 value) {
-            m_padding = {std::max(0.0F, value.x), std::max(0.0F, value.y)};
+            const ImVec2 resolved = {std::max(0.0F, value.x), std::max(0.0F, value.y)};
+            if (m_padding.x == resolved.x && m_padding.y == resolved.y) {
+                return *this;
+            }
+
+            m_padding = resolved;
+            notify_change();
             return *this;
         }
 
@@ -145,6 +159,9 @@ namespace ui {
 
         /// advances continuous values in `style` towards `target` by one frame.
         static void lerp(Style& style, const Style& target, float dt) {
+            const ImFont* previous_font = style.m_font;
+            const ImVec2 previous_padding = style.m_padding;
+
             style.m_font = target.m_font;
             style.m_padding = target.m_padding;
             style.m_alpha = target.m_alpha;
@@ -174,9 +191,15 @@ namespace ui {
 
                 return true;
             });
+
+            if (previous_font != style.m_font || previous_padding.x != style.m_padding.x ||
+                previous_padding.y != style.m_padding.y) {
+                style.notify_change();
+            }
         }
 
         void adopt_missing_keys_from(const Style& target) {
+            const ImFont* previous_font = m_font;
             if (m_font == nullptr) {
                 m_font = target.m_font;
             }
@@ -185,6 +208,10 @@ namespace ui {
                 if (m_vars.find(key) == nullptr) m_vars.set(key, target_value);
                 return true;
             });
+
+            if (previous_font != m_font) {
+                notify_change();
+            }
         }
 
         bool is_close_to(const Style& target, float epsilon) const {
@@ -219,6 +246,18 @@ namespace ui {
 
     private:
         friend class StyledNode;
+        friend class VisualState;
+
+        void set_change_callback(void* owner, ChangeCallback callback) {
+            m_change_owner = owner;
+            m_change_callback = callback;
+        }
+
+        void notify_change() const {
+            if (m_change_callback != nullptr) {
+                m_change_callback(m_change_owner);
+            }
+        }
 
         bool push(float opacity, ImFont* effective_font) const;
         static void pop(bool font_pushed);
@@ -233,6 +272,8 @@ namespace ui {
         ColorValue m_background_color;
         uint8_t m_border = BORDER_NONE;
         StyleVariableStore m_vars;
+        void* m_change_owner = nullptr;
+        ChangeCallback m_change_callback = nullptr;
     };
 
 } // namespace ui
