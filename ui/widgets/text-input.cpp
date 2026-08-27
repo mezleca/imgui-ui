@@ -113,6 +113,17 @@ TextInputWidget& TextInputWidget::set_icon(IconTexture* icon) {
     return *this;
 }
 
+void TextInputWidget::on_measure() {
+    ImVec2 size = requested_size();
+    if (size.y <= 0.0F && font() != nullptr && ImGui::GetCurrentContext() != nullptr) {
+        ImGui::PushFont(font());
+        size.y = ImGui::GetTextLineHeight() + style().padding().y * 2.0F;
+        ImGui::PopFont();
+    }
+
+    set_size(size);
+}
+
 void TextInputWidget::on_layout() {
     if (!size_was_resolved()) {
         ImVec2 size = requested_size();

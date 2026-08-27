@@ -13,13 +13,18 @@ namespace ui {
         /// sets the gap between visible children; negative values become zero.
         void set_spacing(float spacing);
         float spacing() const;
-        /// sizes the container to its measured children instead of available space.
+        /// sizes both axes to their measured children instead of available space.
         StackContainer& fit_content(bool enabled = true);
+        /// sizes only the horizontal axis to measured children.
+        StackContainer& fit_content_width(bool enabled = true);
+        /// sizes only the vertical axis to measured children.
+        StackContainer& fit_content_height(bool enabled = true);
 
     protected:
         bool on_draw() override;
         void on_measure() override;
         void on_layout() override;
+        ImVec2 requested_size_for_layout() const override;
         /// resolves each visible child's size and top-left placement on the main axis.
         void arrange_children(ImVec2 container_size);
 
@@ -28,6 +33,7 @@ namespace ui {
         float m_spacing = 0.0F;
         ImVec2 m_content_size{};
         ImVec2 m_fit_size{};
-        bool m_fits_content = false;
+        bool m_fit_width = false;
+        bool m_fit_height = false;
     };
 } // namespace ui

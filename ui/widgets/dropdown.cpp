@@ -268,6 +268,18 @@ DropdownWidget& DropdownWidget::set_options(std::vector<DropdownOption> options)
     return *this;
 }
 
+void DropdownWidget::on_measure() {
+    ImVec2 size = requested_size();
+    if (size.y <= 0.0F) {
+        size.y = ImGui::GetFrameHeight();
+        if (has_label()) {
+            size.y += m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y;
+        }
+    }
+
+    set_size(size);
+}
+
 bool DropdownWidget::changed() const {
     return m_body->changed();
 }

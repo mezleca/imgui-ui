@@ -53,6 +53,7 @@ namespace ui {
     private:
         void configure_default_styles();
         void draw_children() override;
+        void on_measure() override;
         void on_layout() override;
         void on_draw_end() override;
         bool has_label() const;

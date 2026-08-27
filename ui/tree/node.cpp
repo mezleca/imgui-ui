@@ -124,7 +124,7 @@ namespace ui {
     }
 
     ImVec2 Node::requested_size_of(const Node& child) const {
-        return child.m_layout.requested_size();
+        return child.requested_size_for_layout();
     }
 
     void Node::resolve_size(ImVec2 size) {

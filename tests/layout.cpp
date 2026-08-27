@@ -172,6 +172,42 @@ TEST_CASE("fit content stack includes children spacing and padding") {
     REQUIRE(stack.layout().size().y == Catch::Approx(44.0F));
 }
 
+TEST_CASE("fit-height stack fills its available width without stretching children", "[StackContainer][layout]") {
+    class FixedNode final : public ui::Node {
+    public:
+        FixedNode() {
+            set_size({0.0F, 20.0F});
+        }
+
+    private:
+        bool on_draw() override {
+            ImGui::Dummy(layout().size());
+            return true;
+        }
+    };
+
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+
+    ui::StackContainer root("fit-height-root");
+    root.set_size({200.0F, 100.0F});
+    root.style().padding({});
+
+    auto& field = root.add_child<ui::StackContainer>("fit-height-field");
+    field.fit_content_height();
+    field.style().padding({});
+    field.add_child<FixedNode>();
+
+    ImGui::NewFrame();
+    ImGui::Begin("fit-height-stack-test");
+    root.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    REQUIRE(field.layout().size().x == Catch::Approx(200.0F));
+    REQUIRE(field.layout().size().y == Catch::Approx(20.0F));
+    REQUIRE(field.children()[0]->layout().size().x == Catch::Approx(200.0F));
+}
+
 TEST_CASE("fit content stack remeasures after direction and spacing changes") {
     class FixedNode final : public ui::Node {
     public:

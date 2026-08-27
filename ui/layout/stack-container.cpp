@@ -12,7 +12,7 @@ namespace ui {
         }
 
         m_direction = direction;
-        if (m_fits_content) {
+        if (m_fit_width || m_fit_height) {
             invalidate_measure();
         }
     }
@@ -28,7 +28,7 @@ namespace ui {
         }
 
         m_spacing = resolved_spacing;
-        if (m_fits_content) {
+        if (m_fit_width || m_fit_height) {
             invalidate_measure();
         }
     }
@@ -38,11 +38,32 @@ namespace ui {
     }
 
     StackContainer& StackContainer::fit_content(bool enabled) {
-        if (m_fits_content == enabled) {
+        if (m_fit_width == enabled && m_fit_height == enabled) {
             return *this;
         }
 
-        m_fits_content = enabled;
+        m_fit_width = enabled;
+        m_fit_height = enabled;
+        invalidate_measure();
+        return *this;
+    }
+
+    StackContainer& StackContainer::fit_content_width(bool enabled) {
+        if (m_fit_width == enabled) {
+            return *this;
+        }
+
+        m_fit_width = enabled;
+        invalidate_measure();
+        return *this;
+    }
+
+    StackContainer& StackContainer::fit_content_height(bool enabled) {
+        if (m_fit_height == enabled) {
+            return *this;
+        }
+
+        m_fit_height = enabled;
         invalidate_measure();
         return *this;
     }
@@ -53,7 +74,7 @@ namespace ui {
     }
 
     void StackContainer::on_measure() {
-        if (!m_fits_content) {
+        if (!m_fit_width && !m_fit_height) {
             return;
         }
 
@@ -64,7 +85,7 @@ namespace ui {
                 continue;
             }
 
-            const ImVec2 child_size = child->layout().size();
+            const ImVec2 child_size = requested_size_of(*child);
             if (m_direction == StackDirection::Vertical) {
                 content_size.x = std::max(content_size.x, child_size.x);
                 content_size.y += child_size.y;
@@ -86,10 +107,27 @@ namespace ui {
         m_fit_size = {content_size.x + padding.x * 2.0F, content_size.y + padding.y * 2.0F};
     }
 
+    ImVec2 StackContainer::requested_size_for_layout() const {
+        ImVec2 size = requested_size();
+        if (m_fit_width) {
+            size.x = m_fit_size.x;
+        }
+        if (m_fit_height) {
+            size.y = m_fit_size.y;
+        }
+        return size;
+    }
+
     void StackContainer::on_layout() {
-        if (m_fits_content) {
-            resolve_size(m_fit_size);
-            arrange_children(m_fit_size);
+        if (m_fit_width || m_fit_height) {
+            const ImVec2 requested = requested_size();
+            ImVec2 size = {
+                m_fit_width ? m_fit_size.x : requested.x,
+                m_fit_height ? m_fit_size.y : requested.y,
+            };
+            const ImVec2 available = ImGui::GetCurrentContext() == nullptr ? ImVec2{} : ImGui::GetContentRegionAvail();
+            resolve_size(resolve_layout_size(size, available));
+            arrange_children(layout().size());
             return;
         }
 

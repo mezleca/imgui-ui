@@ -244,6 +244,11 @@ namespace ui {
         ImVec2 requested_size_of(const Node& child) const;
         void resolve_size(ImVec2 size);
 
+        /// returns the size a parent should use when arranging this node.
+        virtual ImVec2 requested_size_for_layout() const {
+            return requested_size();
+        }
+
         /// overrides this node's screen bounds for custom drawing.
         void set_screen_rect(Rect rect);
 

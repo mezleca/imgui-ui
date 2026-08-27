@@ -26,6 +26,7 @@ namespace ui {
     private:
         class FieldNode;
 
+        void on_measure() override;
         void on_layout() override;
         void on_draw_end() override;
 
