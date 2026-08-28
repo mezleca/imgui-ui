@@ -102,6 +102,38 @@ TEST_CASE("text measurement and drawing include style padding", "[TextWidget][la
     REQUIRE(text.layout().size().y == Catch::Approx(raw_size.y + 6.0F));
 }
 
+TEST_CASE("value widgets notify changes", "[Widget][change]") {
+    Runtime runtime;
+    UI surface(runtime, Config{});
+    bool checked = false;
+    int number = 1;
+    std::string choice = "one";
+    std::string text = "before";
+    int changes = 0;
+
+    CheckboxWidget checkbox(surface, checked, "checked");
+    NumberInputWidget input(surface, number);
+    DropdownWidget dropdown(surface, choice, {{"one", "one"}, {"two", "two"}});
+    TextInputWidget text_input(surface, text);
+
+    checkbox.on_change = [&changes] { ++changes; };
+    input.on_change = [&changes] { ++changes; };
+    dropdown.on_change = [&changes] { ++changes; };
+    text_input.on_change = [&changes] { ++changes; };
+
+    REQUIRE(checkbox.try_set_content("true"));
+    REQUIRE(input.try_set_content("2"));
+    REQUIRE(dropdown.try_set_content("two"));
+    REQUIRE(text_input.try_set_content("after"));
+    REQUIRE(changes == 4);
+
+    REQUIRE_FALSE(checkbox.try_set_content("true"));
+    REQUIRE_FALSE(input.try_set_content("2"));
+    REQUIRE_FALSE(dropdown.try_set_content("two"));
+    REQUIRE_FALSE(text_input.try_set_content("after"));
+    REQUIRE(changes == 4);
+}
+
 TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout][regression]") {
     ui::Runtime runtime;
     UI surface(runtime, {.size = {400.0F, 180.0F}});
@@ -585,7 +617,7 @@ TEST_CASE("styled nodes apply their effective font during draw", "[Widget][style
     REQUIRE(widget.observed_font == large_font);
 }
 
-TEST_CASE("styled nodes apply and restore their imgui style scope", "[Widget][style][regression]") {
+TEST_CASE("styled nodes keep borders out of imgui style scope", "[Widget][style][regression]") {
     class StyleProbeWidget final : public ui::Widget {
     public:
         StyleProbeWidget() : ui::Widget("style-probe") {}
@@ -636,7 +668,7 @@ TEST_CASE("styled nodes apply and restore their imgui style scope", "[Widget][st
     REQUIRE(widget.observed_padding.x == Catch::Approx(7.0F));
     REQUIRE(widget.observed_padding.y == Catch::Approx(9.0F));
     REQUIRE(widget.observed_rounding == Catch::Approx(6.0F));
-    REQUIRE(widget.observed_border_size == Catch::Approx(3.0F));
+    REQUIRE(widget.observed_border_size == Catch::Approx(0.0F));
     REQUIRE(widget.observed_alpha == Catch::Approx(before.Alpha * 0.5F));
     REQUIRE(widget.observed_text.x == Catch::Approx(0.2F).margin(0.01F));
     REQUIRE(widget.observed_background.y == Catch::Approx(0.3F).margin(0.01F));

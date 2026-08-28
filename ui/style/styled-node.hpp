@@ -4,16 +4,17 @@
 #include "../tree/node.hpp"
 
 #include <imgui.h>
+#include <memory>
 #include <string_view>
 #include <utility>
 
 namespace ui {
+    class Decoration;
+
     class StyledNode : public Node {
     public:
-        explicit StyledNode(std::string id = {}, std::string_view type_name = "StyledNode")
-            : Node(std::move(id)), m_type_name(type_name) {
-            m_state.set_change_callback(this, &StyledNode::style_changed);
-        }
+        explicit StyledNode(std::string id = {}, std::string_view type_name = "StyledNode");
+        ~StyledNode() override;
         StyledNode(const StyledNode&) = delete;
         StyledNode& operator=(const StyledNode&) = delete;
 
@@ -90,6 +91,23 @@ namespace ui {
             return m_state.accepts_input();
         }
 
+        /// creates the decoration rendered behind this node on first access.
+        StyledNode& before();
+
+        bool has_before() const {
+            return m_before != nullptr;
+        }
+
+        /// creates the decoration rendered above this node on first access.
+        StyledNode& after();
+
+        bool has_after() const {
+            return m_after != nullptr;
+        }
+
+        void remove_before();
+        void remove_after();
+
         /// remeasures descendants because they may inherit this font.
         virtual StyledNode& set_font(ImFont* font) {
             ImFont* resolved_font = resolve_font(font);
@@ -143,9 +161,9 @@ namespace ui {
             return 1.0F;
         }
 
-        void advance_frame_state(float dt) final {
-            m_state.update(dt);
-        }
+        void advance_frame_state(float dt) final;
+        void draw_before() override;
+        void draw_after() override;
 
     private:
         static void style_changed(void* owner) {
@@ -158,5 +176,7 @@ namespace ui {
 
         VisualState m_state;
         std::string_view m_type_name;
+        std::unique_ptr<Decoration> m_before;
+        std::unique_ptr<Decoration> m_after;
     };
 } // namespace ui

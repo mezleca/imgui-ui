@@ -1,11 +1,14 @@
 #include "demo.hpp"
 
 #include <ui/layout/overlay-container.hpp>
+#include <ui/layout/modal-container.hpp>
 #include <ui/style/style.hpp>
+#include <ui/style/styled-node.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
 #include <ui/widgets/checkbox.hpp>
 #include <ui/widgets/dropdown.hpp>
+#include <ui/widgets/number-input.hpp>
 #include <ui/widgets/text-input.hpp>
 #include <ui/widgets/text.hpp>
 
@@ -39,7 +42,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
     add_child<ui::TextWidget>("imgui-ui example");
     add_child<ui::TextWidget>(std::format("backend: {}", backend));
 
-    // raylib does not support shared contexts :C
+    // raylib does not support shared contexts.
     if (backend == "sdl") {
         add_child<ui::TextWidget>("debugger: shift + d");
     }
@@ -47,11 +50,27 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
     add_child<ui::TextInputWidget>(surface, m_name, "name").set_size({360.0F, 42.0F});
     add_child<ui::CheckboxWidget>(surface, m_enabled, "checkbox").set_size({360.0F, 32.0F});
 
-    add_child<ui::DropdownWidget>(
+    auto& theme = add_child<ui::DropdownWidget>(
         surface, m_theme, std::vector<ui::DropdownOption>{{"blue", "blue"}, {"high contrast", "contrast"}}, "theme"
-    )
-        .set_label("theme")
-        .set_size({360.0F, 68.0F});
+    );
+    theme.set_label("theme").set_size({360.0F, 68.0F});
+    theme.on_change = [this] {
+        const ImColor background =
+            m_theme == "contrast" ? ImColor{0.0F, 0.0F, 0.0F, 1.0F} : ImColor{m_surface.theme().background_color};
+        configure_all_styles([background](ui::Style& style) { style.background_color(background); });
+    };
+
+    auto& border_style = add_child<ui::DropdownWidget>(
+        surface, m_border_style, std::vector<ui::DropdownOption>{{"solid", "solid"}, {"dashed", "dashed"}, {"dotted", "dotted"}},
+        "border-style"
+    );
+    border_style.set_label("border style").set_size({360.0F, 68.0F});
+    border_style.on_change = [this] {
+        const ui::BorderStyle style = m_border_style == "dashed"   ? ui::BorderStyle::Dashed
+                                      : m_border_style == "dotted" ? ui::BorderStyle::Dotted
+                                                                   : ui::BorderStyle::Solid;
+        apply_border_style(m_surface.root(), style);
+    };
 
     auto& status = add_child<ui::TextWidget>("no clicks yet");
     auto& button = add_child<ui::ButtonWidget>(surface, "click me", ImVec2{140.0F, 44.0F});
@@ -155,6 +174,10 @@ void DemoScreen::setup_dynamic_nodes(ui::Node& parent) {
     };
 }
 
+int& DemoScreen::blur() {
+    return m_blur;
+}
+
 void DemoScreen::on_update(float) {
     // defer destruction until the item's event has finished dispatching.
     if (m_pending_remove != nullptr) {
@@ -166,13 +189,16 @@ void DemoScreen::on_update(float) {
             m_dynamic_status->try_set_content(std::format("dynamic nodes: {}", m_dynamic_count));
         }
     }
+}
 
-    if (m_applied_theme == m_theme) return;
+void DemoScreen::apply_border_style(ui::Node& node, ui::BorderStyle style) {
+    if (auto* styled_node = dynamic_cast<ui::StyledNode*>(&node)) {
+        styled_node->configure_all_styles([style](ui::Style& current_style) { current_style.border_style(style); });
+    }
 
-    m_applied_theme = m_theme;
-    const ImColor background =
-        m_theme == "contrast" ? ImColor{0.0F, 0.0F, 0.0F, 1.0F} : ImColor{m_surface.theme().background_color};
-    configure_all_styles([background](ui::Style& style) { style.background_color(background); });
+    for (const auto& child : node.children()) {
+        apply_border_style(*child, style);
+    }
 }
 
 void setup_demo(UI& surface, std::string backend) {
@@ -249,5 +275,29 @@ void setup_demo(UI& surface, std::string backend) {
         blocker_ptr->set_blocks_pointer_input(false);
         blocker_ptr->set_visible(false);
         block_button_ptr->try_set_content("block pointer input");
+    };
+
+    auto& modals = surface.root().add_child<ui::ModalContainer>(surface);
+    modals.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F}).blur(5); });
+    auto& modal_button = demo.add_child<ui::ButtonWidget>(surface, "open modal", ImVec2{220.0F, 40.0F});
+    modal_button.on_event = [&demo, &modals, &surface](ui::UiEvent& event) {
+        if (event.type != ui::EventType::Click || modals.has_open_modal()) {
+            return;
+        }
+
+        auto& modal = modals.open("demo-modal");
+        modal.add_child<ui::TextWidget>("modal overlay");
+        auto& blur = modal.add_child<ui::NumberInputWidget>(surface, demo.blur(), "modal-blur");
+        blur.set_label("backdrop blur").set_range(0, 32).set_size({180.0F, 48.0F});
+        blur.on_change = [&demo, &modals] {
+            modals.configure_all_styles([&demo](ui::Style& style) { style.blur(demo.blur()); });
+        };
+
+        auto& close_button = modal.add_child<ui::ButtonWidget>(surface, "close modal", ImVec2{180.0F, 40.0F});
+        close_button.on_event = [&modals, modal_ptr = &modal](ui::UiEvent& close_event) {
+            if (close_event.type == ui::EventType::Click) {
+                modals.close(*modal_ptr);
+            }
+        };
     };
 }

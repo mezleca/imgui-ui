@@ -13,8 +13,11 @@ namespace ui {
         return nullptr;
     }
 
-    ModalContainer::ModalContainer(UI& ui) : Node("modal-container"), m_ui(ui), m_input_router(ui.input_router()) {
+    ModalContainer::ModalContainer(UI& ui)
+        : LayerContainer("##modal-container", "ModalContainer"), m_ui(ui), m_input_router(ui.input_router()) {
         set_visible(true);
+        set_input_layer(InputLayer::Modal);
+        configure_all_styles([](Style& style) { style.background_color(ImColor{0.0F, 0.0F, 0.0F, 0.42F}); });
 
         _on_event = [this](UiEvent& event) {
             if (!has_open_modal()) {
@@ -127,23 +130,7 @@ namespace ui {
             return false;
         }
 
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(viewport->WorkPos);
-        ImGui::SetNextWindowSize(viewport->WorkSize);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{0.0F, 0.0F});
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{0.0F, 0.0F, 0.0F, 0.0F});
-
-        ImGui::Begin(
-            "##ui-modal-container", nullptr,
-            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings
-        );
-        m_backdrop_min = ImGui::GetWindowPos();
-        m_backdrop_max = {m_backdrop_min.x + ImGui::GetWindowSize().x, m_backdrop_min.y + ImGui::GetWindowSize().y};
-        m_input_router.register_region_in_layer(*this, Rect{m_backdrop_min, m_backdrop_max}, InputLayer::Modal);
-        ImGui::GetWindowDrawList()->AddRectFilled(m_backdrop_min, m_backdrop_max, ImColor(0.0F, 0.0F, 0.0F, 0.42F));
-        return true;
+        return LayerContainer::on_draw();
     }
 
     void ModalContainer::draw_children() {
@@ -153,11 +140,5 @@ namespace ui {
             m_panel_min = panel.min;
             m_panel_max = panel.max;
         }
-    }
-
-    void ModalContainer::on_draw_end() {
-        ImGui::End();
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar(3);
     }
 } // namespace ui

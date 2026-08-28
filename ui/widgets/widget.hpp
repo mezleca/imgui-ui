@@ -20,6 +20,9 @@ namespace ui {
         /// receives events after the widget's internal behavior has run.
         std::function<void(UiEvent&)> on_event;
 
+        /// runs after this widget changes its bound value.
+        std::function<void()> on_change;
+
         bool accepts_input() const override {
             return Node::accepts_input() && accepts_visual_input();
         }
@@ -37,6 +40,12 @@ namespace ui {
         }
 
     protected:
+        void notify_change() {
+            if (on_change) {
+                on_change();
+            }
+        }
+
         void dispatch_event(UiEvent& event) override {
             Node::dispatch_event(event);
             if (on_event) {

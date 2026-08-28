@@ -22,10 +22,10 @@ namespace ui {
     protected:
         void on_layout() override;
 
-        /// draws partial borders that cannot be represented by imgui child flags.
+        /// draws the container border after its content while the child drawlist is active.
         virtual void draw_borders();
 
-        /// records the outer rectangle and closes the imgui child window.
+        /// records the outer rectangle, draws its border, and closes the imgui child window.
         void on_draw_end() override;
 
     private:

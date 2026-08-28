@@ -172,6 +172,7 @@ private:
                         if (!is_selected) {
                             *m_value = option.value;
                             m_changed = true;
+                            notify_change();
                         }
                         set_enabled(false);
                         set_opacity(VISIBILITY_OPACITY_THRESHOLD);
@@ -332,6 +333,9 @@ void DropdownWidget::draw_children() {
     // body remains a child even though imgui renders it in a separate popup window.
     m_trigger->draw();
     m_body->draw();
+    if (m_body->changed()) {
+        notify_change();
+    }
 }
 
 bool DropdownWidget::has_label() const {
@@ -352,5 +356,6 @@ bool DropdownWidget::try_set_content(std::string content) {
     }
 
     *m_value = std::move(content);
+    notify_change();
     return true;
 }

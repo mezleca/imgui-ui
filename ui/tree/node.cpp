@@ -329,6 +329,7 @@ namespace ui {
         const Rect previous_item_rect =
             ImGui::GetCurrentContext() == nullptr ? Rect{} : Rect{ImGui::GetItemRectMin(), ImGui::GetItemRectMax()};
 
+        draw_before();
         if (!on_draw()) {
             if (m_layout.has_explicit_position() && ImGui::GetCurrentContext() != nullptr) {
                 ImGui::Dummy({});
@@ -339,6 +340,7 @@ namespace ui {
         capture_leaf_rect(previous_item_id, previous_item_rect);
 
         draw_children();
+        draw_after();
         on_draw_end();
 
         const Rect screen_rect = m_layout.screen_rect();
@@ -365,10 +367,12 @@ namespace ui {
         return true;
     }
 
+    void Node::draw_before() {}
     void Node::on_update(float) {}
     void Node::advance_frame_state(float) {}
     void Node::on_measure() {}
     void Node::on_layout() {}
     void Node::on_draw_end() {}
+    void Node::draw_after() {}
 
 } // namespace ui

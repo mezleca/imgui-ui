@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../input/router.hpp"
-#include "../tree/node.hpp"
+#include "layer-container.hpp"
 #include "modal-panel.hpp"
 
 #include <utility>
@@ -10,7 +10,7 @@ class UI;
 
 namespace ui {
     /// the most recently opened visible panel owns modal input policy.
-    class ModalContainer final : public Node {
+    class ModalContainer final : public LayerContainer {
     public:
         explicit ModalContainer(UI& ui);
 
@@ -34,7 +34,6 @@ namespace ui {
         void on_update(float dt) override;
         bool on_draw() override;
         void draw_children() override;
-        void on_draw_end() override;
 
     private:
         void remove_pending_modal();
@@ -42,8 +41,6 @@ namespace ui {
         UI& m_ui;
         InputRouter& m_input_router;
         ModalPanel* m_pending_close = nullptr;
-        ImVec2 m_backdrop_min{};
-        ImVec2 m_backdrop_max{};
         ImVec2 m_panel_min{};
         ImVec2 m_panel_max{};
     };

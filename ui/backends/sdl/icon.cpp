@@ -1,6 +1,6 @@
 #include "icon.hpp"
 
-#include <SDL3/SDL_opengl.h>
+#include <glad/gl.h>
 #include <lunasvg.h>
 
 #include <format>

@@ -24,6 +24,7 @@ private:
 
         const Style& current_style = style();
         const Rect rect = m_fill ? layout().screen_rect().inset(current_style.padding()) : layout().screen_rect();
+
         if (!rect.valid()) {
             return true;
         }
@@ -33,7 +34,6 @@ private:
             const ImVec2 center = {(rect.min.x + rect.max.x) * 0.5F, (rect.min.y + rect.max.y) * 0.5F};
             const float radius = std::min(size.x, size.y) * (m_fill ? 1.0F / 3.0F : 0.5F);
             draw_circle(center, radius, current_style.background_color().get_col());
-
             if (!m_fill && (current_style.border() & BORDER_ALL) != 0 && current_style.border_thickness() > 0.0F) {
                 draw_circle_outline(center, radius, current_style.border_color().get_col(), current_style.border_thickness());
             }
@@ -51,13 +51,14 @@ private:
 
 CheckboxWidget::CheckboxWidget(UI& ui, bool& value, std::string label, std::string id)
     : Widget(std::move(id), "Checkbox"), m_ui(ui), m_value(&value), m_label(std::move(label)) {
+    const Theme& theme = m_ui.theme();
     set_font(ui.get_primary_font(16));
+
     m_frame_node = &add_child<CheckboxVisualNode>("frame", nullptr, false, m_type);
     m_fill_node = &add_child<CheckboxVisualNode>("fill", &value, true, m_type);
     m_frame_node->set_enabled(false);
     m_fill_node->set_enabled(false);
 
-    const Theme& theme = m_ui.theme();
     configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({4.0F, 4.0F}); });
 
     m_frame_node->configure_all_styles([&theme](Style& style) {
@@ -137,12 +138,10 @@ void CheckboxWidget::on_measure() {
         return;
     }
 
-    ImGui::PushFont(current_font);
     const ImVec2 padding = style().padding();
     m_label.set_font(current_font);
     const ImVec2 label_size = m_label.text_size();
     const float label_spacing = label_size.x > 0.0F ? ImGui::GetStyle().ItemInnerSpacing.x : 0.0F;
-    ImGui::PopFont();
 
     set_size({
         m_box_size + label_spacing + label_size.x + padding.x * 2.0F,
@@ -156,15 +155,18 @@ bool CheckboxWidget::changed() const {
 
 bool CheckboxWidget::on_draw() {
     ImGui::PushID(this);
+
     m_changed = ImGui::InvisibleButton("##value", layout().size());
     if (m_changed) {
         *m_value = m_type == CheckboxType::Radio || !*m_value;
+        notify_change();
     }
 
     m_input_state = update_input(m_ui.input());
     m_restore_cursor = ImGui::GetCursorPos();
     m_frame_node->set_interaction_style(m_input_state.hovered, m_input_state.active, m_input_state.focused);
     m_fill_node->set_interaction_style(m_input_state.hovered, m_input_state.active, m_input_state.focused);
+
     return true;
 }
 
@@ -222,5 +224,6 @@ bool CheckboxWidget::try_set_content(std::string content) {
     }
 
     *m_value = value;
+    notify_change();
     return true;
 }

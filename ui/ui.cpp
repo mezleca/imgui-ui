@@ -1,4 +1,6 @@
 #include "ui.hpp"
+
+#include "imgui/blur.hpp"
 #include "constants.hpp"
 #include "imgui/context-scope.hpp"
 #include "style/theme.hpp"
@@ -235,6 +237,8 @@ void UI::begin_frame() {
     if (m_backend != nullptr) m_backend->make_current();
 
     m_profiler.begin_frame();
+
+    ui::begin_blur_frame();
 
     if (m_backend != nullptr) m_backend->begin_frame(m_runtime.theme().background_color);
     ImGui::NewFrame();

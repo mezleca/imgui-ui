@@ -1,10 +1,11 @@
 #include "debugger.hpp"
 #include "backend.hpp"
+#include "icon.hpp"
 #include "../../ui.hpp"
+#include "../../resources/svg.hpp"
 #include "../../style/styled-node.hpp"
 #include "../../style/theme.hpp"
 #include "../../imgui/context-scope.hpp"
-#include "../../imgui/draw.hpp"
 
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_log.h>
@@ -12,8 +13,7 @@
 #include <imgui_stdlib.h>
 
 #include <algorithm>
-#include <cstdarg>
-#include <cstdio>
+#include <format>
 #include <string>
 #include <vector>
 
@@ -24,13 +24,15 @@ namespace ui {
     };
 
     static constexpr const char* STYLE_NAMES[] = {"default", "hover", "active", "focus"};
+    static constexpr const char* BORDER_STYLE_NAMES[] = {"solid", "dashed", "dotted"};
 
     static constexpr ImVec2 ICON_SIZE = {16.0F, 16.0F};
-    static constexpr float WINDOW_PADDING = 8.0F;
-    static constexpr float ITEM_SPACING = 6.0F;
+    static constexpr float WINDOW_PADDING = 10.0F;
+    static constexpr float ITEM_SPACING = 10.0F;
     static constexpr float INPUT_MAX_WIDTH = 180.0F;
     static constexpr ImVec2 INPUT_PADDING = {0.0F, 0.0F};
-    static constexpr ImVec2 SECTION_PADDING = {10.0F, 6.0F};
+    static constexpr ImVec2 SECTION_PADDING = {10.0F, 8.0F};
+
     static bool property_section_open = false;
     static bool property_section_indented = false;
 
@@ -51,16 +53,12 @@ namespace ui {
         return "unknown";
     }
 
-    static void draw_property_value(std::string_view label, const char* format, ...) {
-        char value[256];
-        va_list args;
-        va_start(args, format);
-        std::vsnprintf(value, sizeof(value), format, args);
-        va_end(args);
-
+    template <typename... Args>
+    static void draw_property_value(std::string_view label, std::string_view format, Args&&... args) {
+        const std::string value = std::vformat(format, std::make_format_args(args...));
         ImGui::Text("%.*s:", static_cast<int>(label.size()), label.data());
         ImGui::SameLine(0.0F, ITEM_SPACING);
-        ImGui::TextDisabled("%s", value);
+        ImGui::TextDisabled("%s", value.c_str());
     }
 
     static void end_property_section() {
@@ -106,11 +104,6 @@ namespace ui {
         ImGui::PopStyleVar();
         ImGui::Indent(SECTION_PADDING.x);
         property_section_indented = true;
-    }
-
-    static void draw_rect_properties(std::string_view label, Rect rect) {
-        const ImVec2 size = rect.size();
-        draw_property_value(label, "position x %.1f, y %.1f; size w %.1f, h %.1f", rect.min.x, rect.min.y, size.x, size.y);
     }
 
     template <typename DrawInput>
@@ -175,6 +168,36 @@ namespace ui {
                 }
 
                 ImGui::EndCombo();
+            }
+
+            return changed;
+        });
+    }
+
+    static bool draw_border_flags(std::string_view label, uint8_t* value) {
+        return draw_labeled_input(label, [value] {
+            bool changed = false;
+            const auto draw_flag = [&](const char* name, uint8_t flag) {
+                bool enabled = (*value & flag) != 0;
+                if (ImGui::Checkbox(name, &enabled)) {
+                    *value = enabled ? static_cast<uint8_t>(*value | flag) : static_cast<uint8_t>(*value & ~flag);
+                    changed = true;
+                }
+            };
+
+            draw_flag("left", BORDER_LEFT);
+            ImGui::SameLine(0.0F, 4.0F);
+            draw_flag("top", BORDER_TOP);
+            ImGui::SameLine(0.0F, 4.0F);
+            draw_flag("right", BORDER_RIGHT);
+            ImGui::SameLine(0.0F, 4.0F);
+            draw_flag("bottom", BORDER_BOTTOM);
+            ImGui::SameLine(0.0F, 4.0F);
+
+            bool all = (*value & BORDER_ALL) == BORDER_ALL;
+            if (ImGui::Checkbox("all", &all)) {
+                *value = all ? static_cast<uint8_t>(BORDER_ALL) : BORDER_NONE;
+                changed = true;
             }
 
             return changed;
@@ -276,6 +299,11 @@ namespace ui {
             return;
         }
 
+        if (m_inspect_icon != nullptr) {
+            m_inspect_icon->release_context(m_ui->imgui_context());
+            m_inspect_icon.reset();
+        }
+
         m_ui.reset();
 
         m_target.backend().make_current();
@@ -303,6 +331,8 @@ namespace ui {
 
         const ui::ImGuiContextScope scope(m_ui->imgui_context());
 
+        m_inspect_icon = make_sdl_icon_loader()->load_data(INSPECT_SVG, "debugger-inspect");
+        m_icon.set_texture(m_inspect_icon.get());
         m_icon.set_size(ICON_SIZE);
         m_icon.configure_all_styles([this](Style& style) { style.color(m_ui->theme().text_secondary_color); });
 
@@ -310,7 +340,7 @@ namespace ui {
     }
 
     void Debugger::set_icon(IconTexture* icon) {
-        m_icon.set_texture(icon);
+        m_icon.set_texture(icon != nullptr ? icon : m_inspect_icon.get());
     }
 
     void Debugger::set_hotkey(ImGuiKeyChord hotkey) {
@@ -633,9 +663,9 @@ namespace ui {
             ImGui::SetTooltip("controls input only; use visible to stop update and drawing");
         }
 
-        draw_property_value("id", "%s", m_node_target->id().empty() ? "unnamed" : m_node_target->id().c_str());
+        draw_property_value("id", "{}", m_node_target->id().empty() ? "unnamed" : m_node_target->id().c_str());
         const std::string_view type = m_node_target->type_name();
-        draw_property_value("type", "%.*s", static_cast<int>(type.size()), type.data());
+        draw_property_value("type", "{}", type);
 
         if (const std::optional<std::string> content = m_node_target->content(); content.has_value()) {
             std::string editable_content = *content;
@@ -645,17 +675,17 @@ namespace ui {
         }
 
         draw_property_section("diagnostics");
-        draw_property_value("identity", "%llu", static_cast<unsigned long long>(m_node_target->identity()));
-        draw_property_value("children", "%zu", m_node_target->children().size());
+        draw_property_value("identity", "{}", m_node_target->identity());
+        draw_property_value("children", "{}", m_node_target->children().size());
         if (const auto* styled = dynamic_cast<const StyledNode*>(m_node_target); styled != nullptr) {
-            draw_property_value("opacity", "%.3f", styled->opacity());
-            draw_property_value("style state", "%s", STYLE_NAMES[static_cast<int>(styled->style_type())]);
+            draw_property_value("opacity", "{:.3f}", styled->opacity());
+            draw_property_value("style state", "{}", STYLE_NAMES[static_cast<int>(styled->style_type())]);
         }
 
-        draw_property_value("input layer", "%s", input_layer_name(m_node_target->input_layer()));
-        draw_property_value("accepts input", "%s", m_node_target->accepts_input() ? "yes" : "no");
-        draw_property_value("accepts focus", "%s", m_node_target->accepts_focus() ? "yes" : "no");
-        draw_property_value("focused", "%s", m_target.input_router().focused_node() == m_node_target ? "yes" : "no");
+        draw_property_value("input layer", "{}", input_layer_name(m_node_target->input_layer()));
+        draw_property_value("accepts input", "{}", m_node_target->accepts_input() ? "yes" : "no");
+        draw_property_value("accepts focus", "{}", m_node_target->accepts_focus() ? "yes" : "no");
+        draw_property_value("focused", "{}", m_target.input_router().focused_node() == m_node_target ? "yes" : "no");
     }
 
     void Debugger::render_profiling() {
@@ -677,7 +707,7 @@ namespace ui {
         draw_property_section("layout");
 
         const NodeLayout& layout = m_node_target->layout();
-        draw_property_value("placement", "%s", layout.has_explicit_position() ? "explicit" : "flow");
+        draw_property_value("placement", "{}", layout.has_explicit_position() ? "explicit" : "flow");
 
         ImVec2 size = layout.size();
         if (draw_number_input("size", &size.x, 2)) {
@@ -718,21 +748,17 @@ namespace ui {
                 m_node_target->set_origin_position(origin_position);
             }
         }
-
-        draw_property_section("resolved geometry");
-        draw_rect_properties("arranged in parent", layout.arranged_rect());
-        draw_rect_properties("screen bounds", layout.screen_rect());
-        draw_rect_properties("parent content", layout.parent_content_rect());
     }
 
     void Debugger::render_style_variables(Style& style) {
         StyleVariableStore& variables = style.variables();
-
         m_variable_names.clear();
+
         variables.for_each([&](const std::string& name, const StyleValue&) {
             m_variable_names.push_back(name);
             return true;
         });
+
         std::sort(m_variable_names.begin(), m_variable_names.end());
 
         if (m_variable_names.empty()) {
@@ -768,17 +794,104 @@ namespace ui {
         }
     }
 
+    void Debugger::render_style_controls(const StyledNode& node, Style& style) {
+        const bool is_line = node.type_name() == "Line";
+
+        ImVec4 color = style.color().get();
+        if (draw_color_input("color", color)) {
+            style.color().set(color);
+        }
+
+        if (!is_line) {
+            ImVec4 background_color = style.background_color().get();
+            if (draw_color_input("background", background_color)) {
+                style.background_color().set(background_color);
+            }
+
+            ImVec4 border_color = style.border_color().get();
+            if (draw_color_input("border color", border_color)) {
+                style.border_color().set(border_color);
+            }
+
+            uint8_t border = style.border();
+            if (draw_border_flags("border sides", &border)) {
+                style.border(border);
+            }
+
+            int border_style = static_cast<int>(style.border_style());
+            if (draw_inline_combo("border style", &border_style, BORDER_STYLE_NAMES, IM_ARRAYSIZE(BORDER_STYLE_NAMES))) {
+                style.border_style(static_cast<BorderStyle>(border_style));
+            }
+
+            ImVec2 padding = style.padding();
+            if (draw_number_input("padding", &padding.x, 2, 0.1F, 0.0F, 128.0F)) {
+                style.padding(padding);
+            }
+
+            int blur = style.blur();
+            if (draw_number_input("blur", &blur, 1, 1.0F, 0, 64)) {
+                style.blur(blur);
+            }
+
+            float radius = style.border_radius();
+            if (draw_number_input("border radius", &radius, 1, 0.1F, 0.0F, 64.0F)) {
+                style.border_radius(radius);
+            }
+        }
+
+        float alpha = style.alpha();
+        if (draw_number_input("alpha", &alpha, 1, 0.01F, 0.0F, 1.0F)) {
+            style.alpha(alpha);
+        }
+
+        float thickness = style.border_thickness();
+        if (draw_number_input("border thickness", &thickness, 1, 0.1F, 0.0F, 16.0F)) {
+            style.border_thickness(thickness);
+        }
+    }
+
+    void Debugger::render_decoration_properties(StyledNode& node) {
+        const auto render = [&](std::string_view label, bool before) {
+            draw_property_section(label);
+
+            bool enabled = before ? node.has_before() : node.has_after();
+            if (draw_labeled_input("enabled", [&enabled] { return ImGui::Checkbox("##value", &enabled); })) {
+                if (before) {
+                    if (enabled) {
+                        node.before();
+                    } else {
+                        node.remove_before();
+                    }
+                } else {
+                    if (enabled) {
+                        node.after();
+                    } else {
+                        node.remove_after();
+                    }
+                }
+            }
+
+            if (!enabled) {
+                return;
+            }
+
+            StyledNode& decoration = before ? node.before() : node.after();
+            render_style_controls(decoration, decoration.style());
+        };
+
+        render("before", true);
+        render("after", false);
+    }
+
     void Debugger::render_style_properties() {
         auto* styled = dynamic_cast<StyledNode*>(m_node_target);
-
         if (styled == nullptr) {
             return;
         }
 
         draw_property_section("style");
 
-        const bool app_focused = m_target.backend().focused();
-        if (app_focused) {
+        if (m_target.backend().focused()) {
             m_inspected_style = styled->style_type();
         }
 
@@ -787,75 +900,10 @@ namespace ui {
             m_inspected_style = static_cast<StyleType>(style_index);
         }
 
-        Style* style = &styled->style(m_inspected_style);
-
-        bool supports_color = true;
-        bool supports_background = true;
-        bool supports_border = true;
-        bool supports_padding = true;
-        bool supports_radius = true;
-        bool supports_thickness = true;
-        if (styled->type_name() == "Text") {
-            supports_background = false;
-            supports_border = false;
-            supports_padding = false;
-            supports_radius = false;
-            supports_thickness = false;
-        } else if (styled->type_name() == "Line") {
-            supports_background = false;
-            supports_border = false;
-            supports_padding = false;
-            supports_radius = false;
-        }
-
-        if (supports_color) {
-            ImVec4 color = style->color().get();
-            if (draw_color_input("color", color)) {
-                style->color().set(color);
-            }
-        }
-
-        if (supports_background) {
-            ImVec4 background_color = style->background_color().get();
-            if (draw_color_input("background", background_color)) {
-                style->background_color().set(background_color);
-            }
-        }
-
-        if (supports_border) {
-            ImVec4 border_color = style->border_color().get();
-            if (draw_color_input("border", border_color)) {
-                style->border_color().set(border_color);
-            }
-        }
-
-        if (supports_padding) {
-            ImVec2 padding = style->padding();
-            if (draw_number_input("padding", &padding.x, 2, 0.1F, 0.0F, 128.0F)) {
-                style->padding(padding);
-            }
-        }
-
-        float alpha = style->alpha();
-        if (draw_number_input("alpha", &alpha, 1, 0.01F, 0.0F, 1.0F)) {
-            style->alpha(alpha);
-        }
-
-        if (supports_radius) {
-            float radius = style->border_radius();
-            if (draw_number_input("border radius", &radius, 1, 0.1F, 0.0F, 64.0F)) {
-                style->border_radius(radius);
-            }
-        }
-
-        if (supports_thickness) {
-            float thickness = style->border_thickness();
-            if (draw_number_input("border thickness", &thickness, 1, 0.1F, 0.0F, 16.0F)) {
-                style->border_thickness(thickness);
-            }
-        }
-
-        render_style_variables(*style);
+        Style& style = styled->style(m_inspected_style);
+        render_style_controls(*styled, style);
+        render_style_variables(style);
+        render_decoration_properties(*styled);
     }
 
     void Debugger::render_properties() {

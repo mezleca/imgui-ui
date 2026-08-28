@@ -1,6 +1,7 @@
 #include "child-container.hpp"
 
 #include "../constants.hpp"
+#include "../imgui/blur.hpp"
 #include "../imgui/draw.hpp"
 #include "../style/style.hpp"
 
@@ -32,9 +33,6 @@ namespace ui {
     }
 
     bool ChildContainer::on_draw() {
-        const Style& current_style = style();
-        const bool has_full_border = (current_style.border() & BORDER_ALL) != 0;
-
         ImGuiChildFlags child_flags = ImGuiChildFlags_AlwaysUseWindowPadding;
         ImGuiWindowFlags window_flags = constants::WIDGET_WINDOW_FLAGS;
 
@@ -45,13 +43,17 @@ namespace ui {
         if (layout().size().x <= 0.0F) child_flags |= ImGuiChildFlags_AutoResizeX;
         if (layout().size().y <= 0.0F) child_flags |= ImGuiChildFlags_AutoResizeY;
 
-        if (has_full_border) child_flags |= ImGuiChildFlags_Borders;
-
-        ImVec2 padding = current_style.padding();
+        ImVec2 padding = style().padding();
         if (m_center_content_vertically && layout().size().y > 0.0F) {
             padding.y = std::max(0.0F, (layout().size().y - ImGui::GetFontSize()) * 0.5F);
         }
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+
+        const ImVec2 position = ImGui::GetCursorScreenPos();
+        draw_blur(
+            {position, {position.x + layout().size().x, position.y + layout().size().y}}, style().blur(), style().border_radius(),
+            style().alpha()
+        );
 
         // beginchild copies window padding, border and background into the child
         // window padding can be restored while the child scope stays open.
@@ -74,9 +76,10 @@ namespace ui {
         // scrolling and empty containers still have reliable outer bounds.
         set_screen_rect(m_child_rect);
 
-        ImGui::EndChild();
-
+        // draw on the child list before ending it; parent lists are composited first.
         draw_borders();
+
+        ImGui::EndChild();
     }
 
     void ChildContainer::draw_borders() {
@@ -84,7 +87,7 @@ namespace ui {
         const ImVec2& max = m_child_rect.max;
 
         const Style& current_style = style();
-        if (current_style.border() == BORDER_NONE || (current_style.border() & BORDER_ALL) != 0) {
+        if (current_style.border() == BORDER_NONE) {
             return;
         }
 

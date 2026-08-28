@@ -182,9 +182,9 @@ bool NumberInputWidget::on_draw() {
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, m_thumb_color.Value);
 
     m_changed = std::visit([this](auto* value) { return draw_value(*value); }, m_number);
-    if (current_style.border() != BORDER_NONE && (current_style.border() & BORDER_ALL) == 0) {
-        draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style);
-    }
+    if (m_changed) notify_change();
+
+    draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style);
 
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
@@ -201,7 +201,7 @@ std::optional<std::string> NumberInputWidget::content() const {
 }
 
 bool NumberInputWidget::try_set_content(std::string content) {
-    return std::visit(
+    const bool changed = std::visit(
         [&content](auto* value) {
             using ValueType = std::remove_pointer_t<decltype(value)>;
             ValueType parsed{};
@@ -215,4 +215,7 @@ bool NumberInputWidget::try_set_content(std::string content) {
         },
         m_number
     );
+
+    if (changed) notify_change();
+    return changed;
 }

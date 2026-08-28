@@ -30,7 +30,7 @@ int main() {
         runtime.add_font(ui::FontType::BOLD, font);
 
         // standalone: the surface creates and owns its sdl window and opengl context.
-        UI surface(runtime, {.title = "imgui-ui sdl", .size = {900.0F, 600.0F}, .resizable = true});
+        UI surface(runtime, {.title = "imgui-ui sdl", .size = {1120.0F, 920.0F}, .resizable = true});
 
         // attached: use an existing sdl window and opengl context instead.
         // auto backend = ui::attach_sdl_backend(existing_window, existing_gl_context);

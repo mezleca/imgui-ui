@@ -3,9 +3,10 @@
 
 #include "../../constants.hpp"
 #include "../../imgui/context-scope.hpp"
+#include "../../imgui/opengl-blur.hpp"
 #include "../../ui.hpp"
 
-#include <SDL3/SDL_opengl.h>
+#include <glad/gl.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl3.h>
 #include <SDL3/SDL_log.h>
@@ -15,6 +16,10 @@
 #include <utility>
 
 namespace ui {
+    static GLADapiproc load_opengl(const char* name) {
+        return reinterpret_cast<GLADapiproc>(SDL_GL_GetProcAddress(name));
+    }
+
     static SDL_WindowID event_window_id(const SDL_Event& event) {
         if (event.type >= SDL_EVENT_WINDOW_FIRST && event.type <= SDL_EVENT_WINDOW_LAST) {
             return event.window.windowID;
@@ -163,6 +168,10 @@ namespace ui {
         }
 
         m_window->make_current();
+        if (gladLoadGL(load_opengl) == 0 || !GLAD_GL_VERSION_3_3) {
+            SDL_Log("ui: OpenGL 3.3 or newer is required");
+            return false;
+        }
         return true;
     }
 
@@ -177,6 +186,12 @@ namespace ui {
         }
 
         m_imgui_initialized = true;
+        if (!initialize_opengl_blur()) {
+            ImGui_ImplOpenGL3_Shutdown();
+            ImGui_ImplSDL3_Shutdown();
+            m_imgui_initialized = false;
+            return false;
+        }
         return true;
     }
 
@@ -185,6 +200,7 @@ namespace ui {
             return;
         }
 
+        shutdown_opengl_blur();
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplSDL3_Shutdown();
         m_imgui_initialized = false;
@@ -195,6 +211,7 @@ namespace ui {
     }
 
     void SdlBackend::begin_frame(ImVec4 clear_color) {
+        begin_opengl_blur_frame();
         const ImVec2 size = display_size();
         if (!m_attached) {
             glViewport(0, 0, static_cast<int>(size.x), static_cast<int>(size.y));

@@ -1,7 +1,7 @@
 #include "text-input.hpp"
 
-#include "../ui.hpp"
 #include "../style/theme.hpp"
+#include "../ui.hpp"
 #include "image.hpp"
 
 #include <cfloat>
@@ -12,7 +12,7 @@ static constexpr float INPUT_ICON_SPACING = 10.0F;
 
 using namespace ui;
 
-class ui::TextInputWidget::FieldNode final : public StyledNode {
+class TextInputWidget::FieldNode final : public StyledNode {
 public:
     FieldNode(std::string& value, bool& focus_requested)
         : StyledNode("text", "TextInput"), m_value(&value), m_focus_requested(&focus_requested) {}
@@ -68,7 +68,6 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
     set_accepts_focus(true);
     set_center_content_vertically(true);
     set_font(ui.get_primary_font(18));
-
     configure_all_styles([&theme](Style& style) {
         style.border_color(theme.border_color, 0.15F)
             .padding({12.0F, 14.0F})
@@ -149,6 +148,10 @@ void TextInputWidget::on_draw_end() {
     }
 
     apply_input_state(m_input_state);
+    if (m_field_node->changed()) {
+        notify_change();
+    }
+
     ChildContainer::on_draw_end();
 }
 
@@ -170,5 +173,6 @@ bool TextInputWidget::try_set_content(std::string content) {
     }
 
     *m_value = std::move(content);
+    notify_change();
     return true;
 }

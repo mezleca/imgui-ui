@@ -6,7 +6,10 @@ add_library(imgui-ui::core ALIAS imgui-ui-core)
 imgui_ui_enable_sanitizers(imgui-ui-core)
 
 target_compile_features(imgui-ui-core PUBLIC cxx_std_20)
-target_include_directories(imgui-ui-core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
+target_include_directories(imgui-ui-core
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/.."
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glad/include"
+)
 target_link_libraries(imgui-ui-core PUBLIC imgui)
 
 if(WIN32)
@@ -29,10 +32,10 @@ if(IMGUI_UI_BUILD_SDL)
     add_library(imgui-ui::sdl ALIAS imgui-ui-sdl)
     imgui_ui_enable_sanitizers(imgui-ui-sdl)
 
-    target_compile_features(imgui-ui-sdl PUBLIC cxx_std_20)
     target_include_directories(imgui-ui-sdl PRIVATE "${IMGUI_UI_IMGUI_BACKENDS_DIR}")
     target_link_libraries(imgui-ui-sdl PUBLIC
         imgui-ui-core
+        imgui-ui::glad
         SDL3::SDL3
         OpenGL::GL
         lunasvg
@@ -47,7 +50,6 @@ if(IMGUI_UI_BUILD_RAYLIB)
     add_library(imgui-ui::raylib ALIAS imgui-ui-raylib)
     imgui_ui_enable_sanitizers(imgui-ui-raylib)
 
-    target_compile_features(imgui-ui-raylib PUBLIC cxx_std_20)
     target_include_directories(imgui-ui-raylib PRIVATE "${IMGUI_UI_IMGUI_BACKENDS_DIR}")
     target_link_libraries(imgui-ui-raylib PUBLIC imgui-ui-core raylib)
 endif()

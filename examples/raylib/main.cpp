@@ -3,6 +3,8 @@
 
 #include "../demo.hpp"
 
+#include <raylib.h>
+
 #include <filesystem>
 #include <utility>
 
@@ -18,8 +20,10 @@ int main() {
     runtime.add_font(ui::FontType::SEMIBOLD, font);
     runtime.add_font(ui::FontType::BOLD, font);
 
+    SetConfigFlags(FLAG_VSYNC_HINT);
+
     // standalone: the surface creates and owns the raylib window from its config.
-    UI surface(runtime, {.title = "imgui-ui raylib", .size = {900.0F, 600.0F}, .resizable = true});
+    UI surface(runtime, {.title = "imgui-ui raylib", .size = {1120.0F, 920.0F}, .resizable = true});
 
     // attached: use the current raylib window instead.
     // auto backend = ui::attach_raylib_backend();

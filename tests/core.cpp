@@ -1,6 +1,8 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "imgui-context.hpp"
+#include <ui/imgui/draw.hpp>
 #include <ui/layout/child-container.hpp>
 #include <ui/layout/geometry.hpp>
 #include <ui/layout/overlay-container.hpp>
@@ -9,14 +11,154 @@
 
 #include <imgui_internal.h>
 
+#include <algorithm>
 #include <memory>
+#include <limits>
+#include <numbers>
 #include <string>
 #include <string_view>
 #include <vector>
 
 using namespace ui;
 
-TEST_CASE("ui nodes draw children between their begin and end hooks") {
+TEST_CASE("rounded border paths split corners between adjacent sides") {
+    const BorderPath path = rounded_rect_border_path({{10.0F, 20.0F}, {110.0F, 80.0F}}, 12.0F);
+
+    REQUIRE(path.segments[0].type == BorderPathSegmentType::Line);
+    REQUIRE(path.segments[0].length == Catch::Approx(76.0F));
+    REQUIRE(path.segments[1].type == BorderPathSegmentType::Arc);
+    REQUIRE(path.segments[1].sides == BORDER_TOP);
+    REQUIRE(path.segments[2].sides == BORDER_RIGHT);
+    REQUIRE(path.segments[5].sides == BORDER_BOTTOM);
+    REQUIRE(path.segments[8].sides == BORDER_LEFT);
+    REQUIRE(path.segments[1].end.x == Catch::Approx(106.49F).margin(0.01F));
+    REQUIRE(path.segments[8].start.y == Catch::Approx(76.49F).margin(0.01F));
+
+    const BorderPath clamped = rounded_rect_border_path({{0.0F, 0.0F}, {40.0F, 20.0F}}, 30.0F);
+    REQUIRE(clamped.segments[0].length == Catch::Approx(20.0F));
+    REQUIRE(clamped.segments[3].length == Catch::Approx(0.0F));
+    REQUIRE(clamped.segments[1].length == Catch::Approx(std::numbers::pi_v<float> * 2.5F));
+}
+
+TEST_CASE("partial borders keep every draw style inside its selected side") {
+    const BorderPath path = rounded_rect_border_path({{10.0F, 20.0F}, {110.0F, 80.0F}}, 12.0F);
+    ui_test::ImGuiContext context({160.0F, 120.0F});
+    ImGui::NewFrame();
+    ImGui::Begin("border-path-test");
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    const int vertices_before = draw_list->VtxBuffer.Size;
+
+    const auto require_left_bounds = [&](BorderStyle style) {
+        const int first_vertex = draw_list->VtxBuffer.Size;
+        draw_border_path(path, BORDER_LEFT, ImColor{255, 255, 255, 255}, 2.0F, style);
+        REQUIRE(draw_list->VtxBuffer.Size > first_vertex);
+
+        float min_y = std::numeric_limits<float>::max();
+        float max_y = std::numeric_limits<float>::lowest();
+        for (int index = first_vertex; index < draw_list->VtxBuffer.Size; ++index) {
+            const float y = draw_list->VtxBuffer[index].pos.y;
+            min_y = std::min(min_y, y);
+            max_y = std::max(max_y, y);
+        }
+
+        REQUIRE(min_y > 21.0F);
+        REQUIRE(max_y < 79.0F);
+    };
+
+    draw_border_path(path, BORDER_NONE, ImColor{255, 255, 255, 255}, 2.0F, BorderStyle::Solid);
+    REQUIRE(draw_list->VtxBuffer.Size == vertices_before);
+
+    require_left_bounds(BorderStyle::Solid);
+    require_left_bounds(BorderStyle::Dashed);
+    require_left_bounds(BorderStyle::Dotted);
+
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+TEST_CASE("border style is preserved by style updates") {
+    Style style;
+    style.border(BORDER_LEFT | BORDER_BOTTOM | 0x80).border_style(BorderStyle::Dashed);
+
+    REQUIRE(style.border() == (BORDER_LEFT | BORDER_BOTTOM));
+    REQUIRE(style.border_style() == BorderStyle::Dashed);
+
+    Style target = style;
+    target.border_style(BorderStyle::Dotted);
+    REQUIRE_FALSE(style.is_close_to(target, 0.0F));
+
+    Style::lerp(style, target, 0.0F);
+    REQUIRE(style.border_style() == BorderStyle::Dotted);
+}
+
+TEST_CASE("blur style is preserved by style updates") {
+    Style style;
+    style.blur(8);
+    REQUIRE(style.blur() == 8);
+
+    Style target;
+    target.blur(14);
+    Style::lerp(style, target, 0.0F);
+    REQUIRE(style.blur() == 14);
+
+    style.blur(-1);
+    REQUIRE(style.blur() == 0);
+}
+
+TEST_CASE("styled nodes create decorations only when requested") {
+    ChildContainer node("node");
+    REQUIRE_FALSE(node.has_before());
+    REQUIRE_FALSE(node.has_after());
+
+    node.before().style().background_color(ImColor{255, 0, 0, 255});
+    node.after().style().border(BORDER_ALL).border_color(ImColor{255, 255, 255, 255});
+
+    REQUIRE(node.has_before());
+    REQUIRE(node.has_after());
+
+    node.remove_before();
+    node.remove_after();
+    REQUIRE_FALSE(node.has_before());
+    REQUIRE_FALSE(node.has_after());
+}
+
+TEST_CASE("styled decorations render in before and after order") {
+    ui_test::ImGuiContext context({160.0F, 120.0F});
+    ImGui::NewFrame();
+    ImGui::Begin("decoration-test");
+
+    StyledNode node("node");
+    node.set_size({80.0F, 40.0F});
+    node.before().style().background_color(ImColor{255, 0, 0, 255});
+    node.after().style().border(BORDER_ALL).border_color(ImColor{255, 255, 255, 255});
+    node.update(1.0F);
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    const int vertices_before = draw_list->VtxBuffer.Size;
+    node.draw();
+    REQUIRE(draw_list->VtxBuffer.Size > vertices_before);
+
+    const ImU32 before_color = ImGui::GetColorU32(ImVec4{1.0F, 0.0F, 0.0F, 1.0F});
+    const ImU32 after_color = ImGui::GetColorU32(ImVec4{1.0F, 1.0F, 1.0F, 1.0F});
+    int first_before = -1;
+    int first_after = -1;
+    for (int index = vertices_before; index < draw_list->VtxBuffer.Size; ++index) {
+        if (draw_list->VtxBuffer[index].col == before_color && first_before < 0) {
+            first_before = index;
+        }
+        if (draw_list->VtxBuffer[index].col == after_color && first_after < 0) {
+            first_after = index;
+        }
+    }
+
+    REQUIRE(first_before >= 0);
+    REQUIRE(first_after > first_before);
+
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+TEST_CASE("ui nodes draw children and after hooks before end hooks") {
     class DrawNode final : public ui::Node {
     public:
         DrawNode(std::string id, std::vector<std::string>& events, bool skip = false)
@@ -40,6 +182,10 @@ TEST_CASE("ui nodes draw children between their begin and end hooks") {
             m_events.push_back(id() + ":end");
         }
 
+        void draw_after() override {
+            m_events.push_back(id() + ":after");
+        }
+
         std::vector<std::string>& m_events;
         bool m_skip = false;
     };
@@ -50,7 +196,10 @@ TEST_CASE("ui nodes draw children between their begin and end hooks") {
 
     root.draw();
     REQUIRE(
-        events == std::vector<std::string>{"root:layout", "root:begin", "child:layout", "child:begin", "child:end", "root:end"}
+        events ==
+        std::vector<std::string>{
+            "root:layout", "root:begin", "child:layout", "child:begin", "child:after", "child:end", "root:after", "root:end"
+        }
     );
 
     events.clear();

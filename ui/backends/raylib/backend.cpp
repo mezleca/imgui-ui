@@ -2,8 +2,10 @@
 
 #include "../../constants.hpp"
 #include "../../imgui/context-scope.hpp"
+#include "../../imgui/opengl-blur.hpp"
 #include "../../ui.hpp"
 
+#include <external/glad.h>
 #include <imgui_impl_opengl3.h>
 #include <raylib.h>
 #include <rlgl.h>
@@ -219,12 +221,22 @@ namespace ui {
     }
 
     bool RaylibBackend::initialize_imgui() {
+        if (!GLAD_GL_VERSION_3_3) {
+            TraceLog(LOG_ERROR, "ui: OpenGL 3.3 or newer is required");
+            return false;
+        }
+
         m_imgui_initialized = ImGui_ImplOpenGL3_Init(nullptr);
+        if (m_imgui_initialized && !initialize_opengl_blur()) {
+            ImGui_ImplOpenGL3_Shutdown();
+            m_imgui_initialized = false;
+        }
         return m_imgui_initialized;
     }
 
     void RaylibBackend::shutdown_imgui() {
         if (!m_imgui_initialized) return;
+        shutdown_opengl_blur();
         ImGui_ImplOpenGL3_Shutdown();
         m_imgui_initialized = false;
     }
@@ -232,6 +244,7 @@ namespace ui {
     void RaylibBackend::make_current() {}
 
     void RaylibBackend::begin_frame(ImVec4 clear_color) {
+        begin_opengl_blur_frame();
         if (!m_attached) {
             BeginDrawing();
             ClearBackground(raylib_color(clear_color));

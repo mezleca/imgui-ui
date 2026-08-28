@@ -277,11 +277,17 @@ namespace ui {
         /// override this for imgui-dependent layout values, not rendering.
         virtual void on_layout();
 
-        /// opens the draw scope. returning false skips children and on_draw_end().
+        /// opens the draw scope. returning false skips children, draw_after(), and on_draw_end().
         virtual bool on_draw();
+
+        /// draws an optional decoration behind this node's contents.
+        virtual void draw_before();
 
         /// draws children while the scope opened by on_draw() remains active.
         virtual void draw_children();
+
+        /// draws an optional decoration above this node's contents while its draw scope remains active.
+        virtual void draw_after();
 
         /// finalizes drawing and closes any scope opened by on_draw().
         virtual void on_draw_end();

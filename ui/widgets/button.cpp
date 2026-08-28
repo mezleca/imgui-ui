@@ -1,4 +1,5 @@
 #include "button.hpp"
+#include "../imgui/blur.hpp"
 #include "../imgui/draw.hpp"
 #include "../ui.hpp"
 #include "../style/theme.hpp"
@@ -39,6 +40,11 @@ bool ButtonWidget::try_set_content(std::string content) {
 
 bool ButtonWidget::on_draw() {
     const Style& style = this->style();
+    const ImVec2 position = ImGui::GetCursorScreenPos();
+    draw_blur(
+        {position, {position.x + layout().size().x, position.y + layout().size().y}}, style.blur(), style.border_radius(),
+        style.alpha()
+    );
 
     ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, m_text_alignment);
     const bool pressed = ImGui::Button(m_text.c_str(), layout().size());
@@ -46,9 +52,7 @@ bool ButtonWidget::on_draw() {
 
     update_input(m_ui.input(), pressed);
 
-    if ((style.border() & BORDER_ALL) == 0) {
-        draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, style);
-    }
+    draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, style);
 
     return true;
 }

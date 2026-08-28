@@ -20,9 +20,11 @@ class DemoScreen final : public ui::StackContainer {
 public:
     DemoScreen(UI& surface, std::string backend);
     void setup_dynamic_nodes(ui::Node& parent);
+    int& blur();
 
 private:
     void on_update(float dt) override;
+    static void apply_border_style(ui::Node& node, ui::BorderStyle style);
 
     UI& m_surface;
     ui::StackContainer* m_dynamic_nodes = nullptr;
@@ -36,7 +38,8 @@ private:
     int m_next_dynamic_id = 0;
     std::string m_name = "imgui-ui";
     std::string m_theme = "blue";
-    std::string m_applied_theme;
+    std::string m_border_style = "solid";
+    int m_blur = 5;
 };
 
 void setup_demo(UI& surface, std::string backend);

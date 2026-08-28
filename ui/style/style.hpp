@@ -19,7 +19,13 @@ namespace ui {
         BORDER_TOP = 1 << 1,
         BORDER_RIGHT = 1 << 2,
         BORDER_BOTTOM = 1 << 3,
-        BORDER_ALL = 1 << 4,
+        BORDER_ALL = BORDER_LEFT | BORDER_TOP | BORDER_RIGHT | BORDER_BOTTOM,
+    };
+
+    enum class BorderStyle : uint8_t {
+        Solid,
+        Dashed,
+        Dotted,
     };
 
     enum class StyleType : int32_t {
@@ -121,6 +127,15 @@ namespace ui {
             return *this;
         }
 
+        int blur() const {
+            return m_blur;
+        }
+
+        Style& blur(int value) {
+            m_blur = std::max(0, value);
+            return *this;
+        }
+
         float border_radius() const {
             return m_border_radius;
         }
@@ -144,7 +159,16 @@ namespace ui {
         }
 
         Style& border(uint8_t value) {
-            m_border = value;
+            m_border = value & BORDER_ALL;
+            return *this;
+        }
+
+        BorderStyle border_style() const {
+            return m_border_style;
+        }
+
+        Style& border_style(BorderStyle value) {
+            m_border_style = value;
             return *this;
         }
 
@@ -165,9 +189,11 @@ namespace ui {
             style.m_font = target.m_font;
             style.m_padding = target.m_padding;
             style.m_alpha = target.m_alpha;
+            style.m_blur = target.m_blur;
             style.m_border_thickness = target.m_border_thickness;
             style.m_border_radius = target.m_border_radius;
             style.m_border = target.m_border;
+            style.m_border_style = target.m_border_style;
             style.m_color.tick(target.m_color, dt);
             style.m_border_color.tick(target.m_border_color, dt);
             style.m_background_color.tick(target.m_background_color, dt);
@@ -216,9 +242,9 @@ namespace ui {
 
         bool is_close_to(const Style& target, float epsilon) const {
             if (m_font != target.m_font || m_padding.x != target.m_padding.x || m_padding.y != target.m_padding.y ||
-                std::abs(m_alpha - target.m_alpha) > epsilon || m_border != target.m_border ||
+                std::abs(m_alpha - target.m_alpha) > epsilon || m_border != target.m_border || m_blur != target.m_blur ||
                 std::abs(m_border_thickness - target.m_border_thickness) > epsilon ||
-                std::abs(m_border_radius - target.m_border_radius) > epsilon) {
+                std::abs(m_border_radius - target.m_border_radius) > epsilon || m_border_style != target.m_border_style) {
                 return false;
             }
 
@@ -265,12 +291,14 @@ namespace ui {
         ImFont* m_font = nullptr;
         ImVec2 m_padding = {};
         float m_alpha = 1.0F;
+        int m_blur = 0;
         float m_border_thickness = 1.0F;
         float m_border_radius = 4.0F;
         ColorValue m_color;
         ColorValue m_border_color;
         ColorValue m_background_color;
         uint8_t m_border = BORDER_NONE;
+        BorderStyle m_border_style = BorderStyle::Solid;
         StyleVariableStore m_vars;
         void* m_change_owner = nullptr;
         ChangeCallback m_change_callback = nullptr;

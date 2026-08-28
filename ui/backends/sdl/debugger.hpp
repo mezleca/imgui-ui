@@ -13,6 +13,8 @@ class UI;
 
 namespace ui {
     enum class FontType;
+    class Style;
+    class StyledNode;
 
     class Debugger {
     public:
@@ -46,6 +48,8 @@ namespace ui {
         void render_node_properties();
         void render_layout_properties();
         void render_style_properties();
+        void render_style_controls(const StyledNode& node, Style& style);
+        void render_decoration_properties(StyledNode& node);
         void render_style_variables(Style& style);
         void render_profiling();
         bool handle_inspect_event(const SDL_Event& event, bool mouse_event, SDL_WindowID main_window_id);
@@ -61,6 +65,7 @@ namespace ui {
         Rect m_highlight{};
         bool m_highlight_valid = false;
         ImageWidget m_icon;
+        std::unique_ptr<IconTexture> m_inspect_icon;
         Node* m_node_target = nullptr;
         Node* m_profiling_target = nullptr;
         Node* m_hover_target = nullptr;
