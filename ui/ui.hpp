@@ -4,8 +4,7 @@
 #include "style/theme.hpp"
 #include "diagnostics/profiler.hpp"
 #include "runtime.hpp"
-#include "imgui/input-bridge.hpp"
-#include "layout/geometry.hpp"
+#include "input/router.hpp"
 #include "resources/assets.hpp"
 
 #include <imgui.h>
@@ -88,10 +87,6 @@ public:
         return ImGui::GetCurrentContext() == nullptr ? nullptr : ImGui::GetFont();
     }
 
-    ui::ImGuiInputBridge& input() {
-        return m_imgui_input;
-    }
-
     ui::InputRouter& input_router() {
         return m_input_router;
     }
@@ -112,6 +107,8 @@ public:
         return m_runtime;
     }
 
+    IconTexture* find_texture(std::string_view id);
+
     /// application nodes should normally be owned below this retained root.
     ui::Node& root() {
         return *m_container;
@@ -124,9 +121,6 @@ public:
     ImGuiContext* imgui_context() {
         return m_context;
     }
-
-    ImVec2 mouse_position() const;
-    ui::Rect work_area() const;
 
     IconTexture* get_texture(std::string_view id);
 
@@ -145,7 +139,6 @@ private:
     std::unique_ptr<ui::Backend> m_backend;
     std::unique_ptr<ui::Node> m_container;
     ui::InputRouter m_input_router;
-    ui::ImGuiInputBridge m_imgui_input;
     ui::Profiler m_profiler;
     ui::Font* m_primary_font = nullptr;
     ui::Font* m_secondary_font = nullptr;

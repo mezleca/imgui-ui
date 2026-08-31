@@ -28,30 +28,13 @@ namespace ui {
 
     static constexpr ImVec2 ICON_SIZE = {16.0F, 16.0F};
     static constexpr float WINDOW_PADDING = 10.0F;
-    static constexpr float ITEM_SPACING = 10.0F;
+    static constexpr float ITEM_SPACING = 12.0F;
     static constexpr float INPUT_MAX_WIDTH = 180.0F;
     static constexpr ImVec2 INPUT_PADDING = {0.0F, 0.0F};
     static constexpr ImVec2 SECTION_PADDING = {10.0F, 8.0F};
 
     static bool property_section_open = false;
     static bool property_section_indented = false;
-
-    static const char* input_layer_name(InputLayer layer) {
-        switch (layer) {
-            case InputLayer::Content:
-                return "content";
-            case InputLayer::Overlay:
-                return "overlay";
-            case InputLayer::Modal:
-                return "modal";
-            case InputLayer::Notification:
-                return "notification";
-            case InputLayer::Count:
-                return "unassigned";
-        }
-
-        return "unknown";
-    }
 
     template <typename... Args>
     static void draw_property_value(std::string_view label, std::string_view format, Args&&... args) {
@@ -353,7 +336,6 @@ namespace ui {
         }
 
         m_node_target = target;
-        m_profiling_target = target;
         m_target_identity = target == nullptr ? 0 : target->identity();
         m_target_was_flow_position = target != nullptr && !target->layout().has_explicit_position();
         m_select_properties = target != nullptr;
@@ -397,8 +379,8 @@ namespace ui {
         }
 
         m_enabled = enabled;
-        m_target.profiler().set_enabled(enabled);
         if (!enabled) {
+            m_target.profiler().set_enabled(false);
             m_target.profiler().save_report();
         }
 
@@ -443,7 +425,7 @@ namespace ui {
             return false;
         }
 
-        Node* focused_node = m_target.input_router().debug_node_at(mouse_event_position(event));
+        Node* focused_node = m_target.root().debug_node_at(mouse_event_position(event));
 
         if (!focused_node) {
             m_hover_target = nullptr;
@@ -478,6 +460,12 @@ namespace ui {
 
         if (handle_inspect_event(*event, mouse_event, main_window_id)) {
             return true;
+        }
+
+        if (mouse_event && event_window_id == main_window_id && event->type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+            event->button.button == SDL_BUTTON_LEFT && !m_inspect_mode && m_highlight_selected) {
+            m_highlight_selected = false;
+            m_highlight_valid = false;
         }
 
         // inspect mode belongs to the main application window.
@@ -618,10 +606,9 @@ namespace ui {
         ImGui::PopID();
 
         if (clicked) {
-            const bool selected_again = selected_target == &node;
             if (update_target) {
-                if (selected_again) {
-                    m_highlight_selected = true;
+                if (selected_target == &node) {
+                    m_highlight_selected = !m_highlight_selected;
                 }
                 set_target(&node);
                 m_scroll_to_target = true;
@@ -659,47 +646,27 @@ namespace ui {
         if (draw_labeled_input("input enabled", [&enabled] { return ImGui::Checkbox("##value", &enabled); })) {
             m_node_target->set_enabled(enabled);
         }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("controls input only; use visible to stop update and drawing");
-        }
 
         draw_property_value("id", "{}", m_node_target->id().empty() ? "unnamed" : m_node_target->id().c_str());
         const std::string_view type = m_node_target->type_name();
         draw_property_value("type", "{}", type);
-
-        if (const std::optional<std::string> content = m_node_target->content(); content.has_value()) {
-            std::string editable_content = *content;
-            if (draw_text_input("content", editable_content)) {
-                m_node_target->try_set_content(std::move(editable_content));
-            }
-        }
-
-        draw_property_section("diagnostics");
-        draw_property_value("identity", "{}", m_node_target->identity());
-        draw_property_value("children", "{}", m_node_target->children().size());
-        if (const auto* styled = dynamic_cast<const StyledNode*>(m_node_target); styled != nullptr) {
-            draw_property_value("opacity", "{:.3f}", styled->opacity());
-            draw_property_value("style state", "{}", STYLE_NAMES[static_cast<int>(styled->style_type())]);
-        }
-
-        draw_property_value("input layer", "{}", input_layer_name(m_node_target->input_layer()));
-        draw_property_value("accepts input", "{}", m_node_target->accepts_input() ? "yes" : "no");
-        draw_property_value("accepts focus", "{}", m_node_target->accepts_focus() ? "yes" : "no");
-        draw_property_value("focused", "{}", m_target.input_router().focused_node() == m_node_target ? "yes" : "no");
     }
 
-    void Debugger::render_profiling() {
-        Profiler& profiler = m_target.profiler();
-        if (ImGui::Button("save metrics")) {
-            profiler.save_report();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("clear metrics")) {
-            profiler.clear_report();
+    void Debugger::render_node_profiling() {
+        const Profiler& profiler = m_target.profiler();
+        if (!profiler.enabled()) {
+            return;
         }
 
-        for (const auto& child : m_target.root().children()) {
-            render_node_tree(*child, 0, true, m_profiling_target, false);
+        draw_property_section("profiling");
+        draw_property_value("total (update + draw)", "{:.3f} ms", profiler.node_duration_ms(m_node_target->identity()));
+
+        for (const ProfileEvent& event : profiler.latest_events()) {
+            if (event.node_identity != m_node_target->identity()) {
+                continue;
+            }
+
+            draw_property_value(event.name, "{:.3f} ms", static_cast<double>(event.end - event.start) / 1'000'000.0);
         }
     }
 
@@ -794,9 +761,7 @@ namespace ui {
         }
     }
 
-    void Debugger::render_style_controls(const StyledNode& node, Style& style) {
-        const bool is_line = node.type_name() == "Line";
-
+    void Debugger::render_style_controls(Style& style, bool is_line) {
         ImVec4 color = style.color().get();
         if (draw_color_input("color", color)) {
             style.color().set(color);
@@ -875,8 +840,8 @@ namespace ui {
                 return;
             }
 
-            StyledNode& decoration = before ? node.before() : node.after();
-            render_style_controls(decoration, decoration.style());
+            PaintSlot& slot = before ? node.before() : node.after();
+            render_style_controls(slot.style());
         };
 
         render("before", true);
@@ -901,7 +866,7 @@ namespace ui {
         }
 
         Style& style = styled->style(m_inspected_style);
-        render_style_controls(*styled, style);
+        render_style_controls(style, styled->type_name() == "Line");
         render_style_variables(style);
         render_decoration_properties(*styled);
     }
@@ -916,6 +881,7 @@ namespace ui {
         render_node_properties();
         render_layout_properties();
         render_style_properties();
+        render_node_profiling();
         ImGui::PopStyleVar();
         end_property_section();
 
@@ -955,33 +921,49 @@ namespace ui {
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ICON_SIZE.y - ImGui::GetTextLineHeight()) * 0.5F);
         ImGui::TextUnformatted("inspect");
 
-        const Profiler& profiler = m_target.profiler();
-        ImGui::SameLine(0.0F, ITEM_SPACING * 2.0F);
-        ImGui::TextDisabled(
-            "%.2f ms render  %zu zones", profiler.latest_frame_ms(), static_cast<std::size_t>(profiler.latest_events().size())
-        );
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("CPU frame work; present/VSync wait is excluded");
-        }
-        if (profiler.dropped_events() > 0) {
-            ImGui::SameLine(0.0F, ITEM_SPACING);
-            ImGui::TextColored(m_ui->theme().accent_color, "%u dropped", profiler.dropped_events());
-        }
-
         ImGui::Separator();
     }
 
     void Debugger::render_node_list() {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {WINDOW_PADDING, 4.0F});
         ImGui::BeginChild(
-            "##debugger-nodes", {0.0F, 260.0F}, ImGuiChildFlags_Borders,
+            "##debugger-nodes", {0.0F, 340.0F}, ImGuiChildFlags_Borders,
             ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar
         );
         ImGui::PopStyleVar();
 
         for (const auto& child : m_target.root().children()) {
-            render_node_tree(*child, 0, false, m_node_target, true);
+            render_node_tree(*child, 0, m_target.profiler().enabled(), m_node_target, true);
         }
+
+        Profiler& profiler = m_target.profiler();
+        const bool frame_time_enabled = profiler.enabled();
+        const ImVec2 button_padding = {2.0F, 0.0F};
+        const ImVec2 label_size = ImGui::CalcTextSize("frame time");
+        const ImVec2 button_size = {label_size.x + button_padding.x * 2.0F, label_size.y + button_padding.y * 2.0F};
+        const ImVec2 position = {
+            ImGui::GetWindowPos().x + ImGui::GetWindowSize().x - button_size.x - 6.0F,
+            ImGui::GetWindowPos().y + ImGui::GetWindowSize().y - button_size.y - 6.0F,
+        };
+        ImGui::SetCursorScreenPos(position);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{});
+        ImGui::BeginChild(
+            "##debugger-frame-time", button_size, ImGuiChildFlags_None,
+            ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
+        );
+        ImGui::PopStyleVar();
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, button_padding);
+        if (frame_time_enabled) {
+            ImGui::PushStyleColor(ImGuiCol_Button, m_ui->theme().accent_color);
+        }
+        if (ImGui::Button("frame time##toggle", button_size)) {
+            profiler.set_enabled(!frame_time_enabled);
+        }
+        if (frame_time_enabled) {
+            ImGui::PopStyleColor();
+        }
+        ImGui::PopStyleVar();
+        ImGui::EndChild();
 
         m_scroll_to_target = false;
         ImGui::EndChild();
@@ -1007,16 +989,6 @@ namespace ui {
                 ImGui::EndTabItem();
             }
 
-            if (ImGui::BeginTabItem("profiling")) {
-                ImGui::BeginChild(
-                    "##debugger-profiling-content", {0.0F, 0.0F}, ImGuiChildFlags_None,
-                    ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar
-                );
-                render_profiling();
-                ImGui::EndChild();
-                ImGui::EndTabItem();
-            }
-
             ImGui::EndTabBar();
         }
 
@@ -1037,10 +1009,6 @@ namespace ui {
         } else if (m_node_target != nullptr && m_node_target->identity() != m_target_identity) {
             set_target(nullptr);
             m_scroll_to_target = false;
-        }
-
-        if (m_profiling_target != nullptr && !m_target.root().contains(m_profiling_target)) {
-            m_profiling_target = nullptr;
         }
 
         const ImVec2 display_size = m_ui->backend().display_size();

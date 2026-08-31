@@ -1,18 +1,20 @@
 # imgui-ui
 
 a small retained ui "framework" built on top of dear imgui and opengl. it provides a node tree,
-layout, styling, input routing with sdl or raylib backends.
+layout, styling, and input routing with sdl or raylib backends.
 
 # usage
 
 ```cmake
-set(IMGUI_UI_BUILD_SDL ON) # or IMGUI_UI_BUILD_RAYLIB
+set(IMGUI_UI_BUILD_SDL ON)
+# or
+set(IMGUI_UI_BUILD_RAYLIB ON)
+
 add_subdirectory(vendor/imgui-ui)
+
+# cmake also exposes the selected backend and vendored dependencies through the "imgui-ui" namespace
 target_link_libraries(my-app PRIVATE imgui-ui::sdl)
 ```
-
-dear imgui, glad and the selected backend dependencies are bundled in `vendor/`
-and built by the framework target.
 
 ```cpp
 #include <ui/backends/sdl/backend.hpp>
@@ -28,15 +30,4 @@ surface.root().add_child<ui::ButtonWidget>(surface, "hello");
 
 the application selects a backend, forwards its platform events, and calls
 `begin_input_frame`, `begin_frame`, updates and draws the root, then finishes
-with `end_frame`.
-
-```sh
-./ez format
-./ez tests
-./ez build --backend sdl
-./ez build --backend raylib
-./ez run sdl
-./ez run raylib
-```
-
-see `examples/` for a "complete" demo.
+with `end_frame`. see `examples/` for a complete demo.

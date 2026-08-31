@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <array>
 #include <cfloat>
-#include <cmath>
 #include <string>
 #include <utility>
 
@@ -189,7 +188,6 @@ namespace ui {
     }
 
     RaylibBackend::RaylibBackend(Config config) : m_config(std::move(config)) {}
-
     RaylibBackend::RaylibBackend(bool attach_to_current_window) : m_attached(attach_to_current_window) {}
 
     RaylibBackend::~RaylibBackend() {
@@ -309,17 +307,24 @@ namespace ui {
         }
 
         const ImGuiContextScope scope(surface.imgui_context());
-        ImGuiIO& io = ImGui::GetIO();
         const Vector2 mouse = GetMousePosition();
         const ImVec2 mouse_position = {mouse.x, mouse.y};
+        const ImVec2 viewport_size = display_size();
+        const bool pointer_inside = mouse.x >= 0.0F && mouse.y >= 0.0F && mouse.x < viewport_size.x && mouse.y < viewport_size.y;
+        const ImVec2 input_position = pointer_inside ? mouse_position : ImVec2{-FLT_MAX, -FLT_MAX};
 
-        dispatch_pointer(surface, EventType::PointerMove, mouse_position);
-        const bool pointer_blocked = surface.input_router().pointer_blocked_at(mouse_position);
-        if (pointer_blocked) {
-            io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
-        } else {
-            io.AddMousePosEvent(mouse.x, mouse.y);
+        ImGuiIO& io = ImGui::GetIO();
+        bool handled = false;
+
+        if (!m_has_pointer_position || mouse_position.x != m_pointer_position.x || mouse_position.y != m_pointer_position.y) {
+            // node drawing refreshes hover after registering current-frame regions, so stationary pointers need no synthetic
+            // move.
+            handled = dispatch_pointer(surface, EventType::PointerMove, input_position);
+            m_pointer_position = mouse_position;
+            m_has_pointer_position = true;
         }
+
+        io.AddMousePosEvent(input_position.x, input_position.y);
 
         constexpr std::array mouse_buttons = {
             std::pair{MOUSE_BUTTON_LEFT, PointerButton::Left},
@@ -327,29 +332,18 @@ namespace ui {
             std::pair{MOUSE_BUTTON_MIDDLE, PointerButton::Middle},
         };
 
-        bool handled = false;
         for (std::size_t index = 0; index < mouse_buttons.size(); ++index) {
             const auto [raylib_button, core_button] = mouse_buttons[index];
-            bool button_handled = false;
+
             if (IsMouseButtonPressed(raylib_button)) {
-                button_handled = dispatch_pointer(surface, EventType::PointerDown, mouse_position, core_button);
-                handled = true;
+                handled = dispatch_pointer(surface, EventType::PointerDown, mouse_position, core_button) || handled;
             }
+
             if (IsMouseButtonReleased(raylib_button)) {
-                button_handled = dispatch_pointer(surface, EventType::PointerUp, mouse_position, core_button) || button_handled;
-                handled = true;
+                handled = dispatch_pointer(surface, EventType::PointerUp, mouse_position, core_button) || handled;
             }
 
-            // imgui must receive transitions that the framework did not consume.
-            const bool button_down = !pointer_blocked && !button_handled && IsMouseButtonDown(raylib_button);
-            io.AddMouseButtonEvent(static_cast<int>(index), button_down);
-        }
-
-        if (!m_has_mouse_position || mouse_position.x != m_previous_mouse_position.x ||
-            mouse_position.y != m_previous_mouse_position.y) {
-            m_previous_mouse_position = mouse_position;
-            m_has_mouse_position = true;
-            handled = true;
+            io.AddMouseButtonEvent(static_cast<int>(index), IsMouseButtonDown(raylib_button));
         }
 
         const Vector2 wheel = GetMouseWheelMoveV();
@@ -357,10 +351,8 @@ namespace ui {
             UiEvent event = UiEvent::make(EventType::Scroll);
             event.position = mouse_position;
             event.scroll = {wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE};
-            if (!surface.dispatch(event)) {
-                io.AddMouseWheelEvent(wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE);
-            }
-            handled = true;
+            handled = surface.dispatch(event) || handled;
+            io.AddMouseWheelEvent(wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE);
         }
 
         io.AddKeyEvent(ImGuiMod_Ctrl, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
@@ -370,20 +362,20 @@ namespace ui {
 
         for (const RaylibKeyMapping& mapping : RAYLIB_KEYS) {
             io.AddKeyEvent(mapping.imgui_key, IsKeyDown(mapping.raylib_key));
-            if (!IsKeyPressed(mapping.raylib_key) && !IsKeyReleased(mapping.raylib_key)) continue;
+            const bool pressed = IsKeyPressed(mapping.raylib_key);
+            const bool released = IsKeyReleased(mapping.raylib_key);
+            if (!pressed && !released) continue;
 
-            UiEvent event = UiEvent::make(IsKeyPressed(mapping.raylib_key) ? EventType::KeyDown : EventType::KeyUp);
+            UiEvent event = UiEvent::make(pressed ? EventType::KeyDown : EventType::KeyUp);
             event.key = core_key(mapping.raylib_key);
-            surface.dispatch(event);
-            handled = true;
+            handled = surface.dispatch(event) || handled;
         }
 
         for (int codepoint = GetCharPressed(); codepoint > 0; codepoint = GetCharPressed()) {
             io.AddInputCharacter(static_cast<unsigned int>(codepoint));
             UiEvent event = UiEvent::make(EventType::TextInput);
             event.text = utf8_from_codepoint(codepoint);
-            surface.dispatch(event);
-            handled = true;
+            handled = surface.dispatch(event) || handled;
         }
 
         return handled;

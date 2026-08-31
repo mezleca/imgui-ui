@@ -21,30 +21,18 @@ public:
         return false;
     }
 
-    bool changed() const override {
+    bool changed() const {
         return m_changed;
     }
 
-    std::optional<std::string> content() const override {
-        return *m_value;
-    }
-
-    bool try_set_content(std::string content) override {
-        if (*m_value == content) {
-            return false;
-        }
-
-        *m_value = std::move(content);
-        return true;
-    }
-
 private:
-    bool on_draw() override {
+    bool paint_content() override {
         if (*m_focus_requested) {
             ImGui::SetKeyboardFocusHere();
             *m_focus_requested = false;
         }
 
+        // imgui provides utf-8 editing, selection, clipboard, and ime handling.
         ImGui::PushID(this);
         ImGui::SetNextItemWidth(-FLT_MIN);
         m_changed = ImGui::InputText("##value", m_value);
@@ -61,6 +49,7 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value) : TextInputWidget(u
 
 TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
     : StackContainer(std::move(label), StackDirection::Horizontal), m_ui(ui), m_value(&value) {
+    set_input_target();
     const Theme& theme = m_ui.theme();
 
     set_type_name("TextInput");
@@ -97,12 +86,10 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
             m_focus_requested = m_ui.input_router().set_focus(*this);
         }
 
-        if (event.type != EventType::Cancel && !(event.type == EventType::KeyDown && event.key == Key::Escape)) {
-            return;
+        if (event.type == EventType::Cancel || (event.type == EventType::KeyDown && event.key == Key::Escape)) {
+            m_ui.input_router().clear_focus(*this);
+            event.stop_propagation();
         }
-
-        m_ui.input_router().clear_focus(*this);
-        event.stop_propagation();
     };
 }
 
@@ -110,6 +97,16 @@ TextInputWidget& TextInputWidget::set_icon(IconTexture* icon) {
     m_icon_node->set_texture(icon);
     m_icon_node->set_visible(icon != nullptr);
     return *this;
+}
+
+bool TextInputWidget::set_value(std::string value) {
+    if (m_value == nullptr || *m_value == value) {
+        return false;
+    }
+
+    *m_value = std::move(value);
+    notify_change();
+    return true;
 }
 
 void TextInputWidget::on_measure() {
@@ -123,56 +120,16 @@ void TextInputWidget::on_measure() {
     set_size(size);
 }
 
-void TextInputWidget::on_layout() {
-    if (!size_was_resolved()) {
-        ImVec2 size = requested_size();
-        const ImVec2 available = ImGui::GetContentRegionAvail();
-
-        size.y = size.y > 0.0F ? size.y : ImGui::GetFontSize() + style().padding().y * 2.0F;
-        resolve_size(resolve_layout_size(size, available));
-    }
-
-    StackContainer::on_layout();
-}
-
 void TextInputWidget::on_draw_end() {
-    // the field supplies item geometry
-    // the outer container owns interaction and focus.
-    m_input_state = m_ui.input().observe_item(*this);
-    m_input_state.hovered = m_input_state.hovered || ImGui::IsWindowHovered();
-
     if (m_icon_node->visible()) {
         const ImVec4 icon_color =
-            m_input_state.hovered || m_input_state.active ? m_ui.theme().text_color : m_ui.theme().text_secondary_color;
+            input_state().hovered || input_state().active ? m_ui.theme().text_color : m_ui.theme().text_secondary_color;
         m_icon_node->style().color().set(ImColor(icon_color));
     }
 
-    apply_input_state(m_input_state);
     if (m_field_node->changed()) {
         notify_change();
     }
 
     ChildContainer::on_draw_end();
-}
-
-const ItemInputState& TextInputWidget::input_state() const {
-    return m_input_state;
-}
-
-bool TextInputWidget::changed() const {
-    return m_field_node->changed();
-}
-
-std::optional<std::string> TextInputWidget::content() const {
-    return m_value == nullptr ? std::nullopt : std::optional<std::string>{*m_value};
-}
-
-bool TextInputWidget::try_set_content(std::string content) {
-    if (m_value == nullptr || *m_value == content) {
-        return false;
-    }
-
-    *m_value = std::move(content);
-    notify_change();
-    return true;
 }

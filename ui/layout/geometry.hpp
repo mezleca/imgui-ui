@@ -5,7 +5,6 @@
 #include <cstdint>
 
 namespace ui {
-    /// normalized reference point in the parent content rectangle.
     enum class Anchor : uint8_t {
         TopLeft,
         TopCenter,
@@ -19,13 +18,11 @@ namespace ui {
         Custom,
     };
 
-    /// main axis used by a stack container.
     enum class StackDirection : uint8_t {
         Horizontal,
         Vertical,
     };
 
-    /// axes that a resizable container may change during a drag.
     enum class ResizeAxes : uint8_t {
         None = 0,
         X = 1 << 0,
@@ -33,8 +30,13 @@ namespace ui {
         Both = static_cast<uint8_t>(X) | static_cast<uint8_t>(Y),
     };
 
-    /// origin uses the same normalized points as anchor, but on the child side.
     using Origin = Anchor;
+
+    struct Placement {
+        Anchor anchor = Anchor::TopLeft;
+        Origin origin = Origin::TopLeft;
+        ImVec2 offset{};
+    };
 
     /// axis-aligned bounds in one coordinate space.
     struct Rect {
@@ -245,10 +247,10 @@ namespace ui {
             m_in_flow = false;
         }
 
-        void set_placement(Anchor anchor, Origin origin, ImVec2 offset) {
-            m_anchor = anchor;
-            m_origin = origin;
-            m_offset = offset;
+        void set_placement(Placement placement) {
+            m_anchor = placement.anchor;
+            m_origin = placement.origin;
+            m_offset = placement.offset;
             m_has_explicit_position = true;
             m_in_flow = false;
         }

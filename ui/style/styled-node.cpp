@@ -1,49 +1,116 @@
 #include "styled-node.hpp"
 
-#include "decoration.hpp"
+#include "paint-slot.hpp"
+#include "../constants.hpp"
+#include "../diagnostics/profiler.hpp"
 
-namespace ui {
-    StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::move(id)), m_type_name(type_name) {
-        m_state.set_change_callback(this, &StyledNode::style_changed);
+using namespace ui;
+
+StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::move(id)), m_type_name(type_name) {
+    m_state.set_change_callback(this, &StyledNode::style_changed);
+}
+
+StyledNode::~StyledNode() = default;
+
+PaintSlot& StyledNode::before() {
+    if (m_before == nullptr) {
+        m_before = std::make_unique<PaintSlot>(this, &StyledNode::style_changed);
     }
 
-    StyledNode::~StyledNode() = default;
+    return *m_before;
+}
 
-    StyledNode& StyledNode::before() {
-        if (m_before == nullptr) {
-            m_before = std::make_unique<Decoration>("Before");
+PaintSlot& StyledNode::after() {
+    if (m_after == nullptr) {
+        m_after = std::make_unique<PaintSlot>(this, &StyledNode::style_changed);
+    }
+
+    return *m_after;
+}
+
+void StyledNode::remove_before() {
+    m_before.reset();
+}
+
+void StyledNode::remove_after() {
+    m_after.reset();
+}
+
+void StyledNode::draw() {
+    if (!m_state.is_visible()) {
+        return;
+    }
+
+    if (ImGui::GetCurrentContext() == nullptr) {
+        Node::draw();
+        return;
+    }
+
+    update_cursor();
+    const Style::PushState push_state = style().push(opacity(), font());
+    if constexpr (constants::IS_DEBUG_BUILD) {
+        if (Profiler* active_profiler = profiler(); active_profiler != nullptr) {
+            active_profiler->record_style_scope();
         }
-
-        return *m_before;
     }
 
-    StyledNode& StyledNode::after() {
-        if (m_after == nullptr) {
-            m_after = std::make_unique<Decoration>("After");
+    Node::draw();
+    Style::pop(push_state);
+}
+
+bool StyledNode::on_draw() {
+    return paint_content();
+}
+
+bool StyledNode::paint_content() {
+    return true;
+}
+
+void StyledNode::advance_frame_state(float dt) {
+    m_state.update(dt);
+    if constexpr (constants::IS_DEBUG_BUILD) {
+        if (m_state.transitioning()) {
+            if (Profiler* active_profiler = profiler(); active_profiler != nullptr) {
+                active_profiler->record_active_transition();
+            }
         }
+    }
+}
 
-        return *m_after;
+void StyledNode::input_state_changed() {
+    const InputState& input = input_state();
+    set_interaction_style(input.hovered, input.active, input.focused);
+    update_cursor();
+}
+
+void StyledNode::update_cursor() {
+    if (ImGui::GetCurrentContext() == nullptr) {
+        return;
     }
 
-    void StyledNode::remove_before() {
-        m_before.reset();
+    if (input_state().hovered) {
+        const ImGuiMouseCursor cursor = style(style_type()).cursor();
+        ImGui::SetMouseCursor(cursor == ImGuiMouseCursor_None ? ImGuiMouseCursor_Arrow : cursor);
+        m_cursor_applied = true;
+        return;
     }
 
-    void StyledNode::remove_after() {
-        m_after.reset();
+    if (m_cursor_applied) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
+        m_cursor_applied = false;
     }
+}
 
-    void StyledNode::advance_frame_state(float dt) {
-        m_state.update(dt);
-        if (m_before != nullptr) m_before->update(dt);
-        if (m_after != nullptr) m_after->update(dt);
+void StyledNode::draw_before() {
+    if (m_before != nullptr) {
+        const Rect rect = layout().screen_rect();
+        m_before->paint(rect, rect.inset(style().padding()));
     }
+}
 
-    void StyledNode::draw_before() {
-        if (m_before != nullptr) m_before->draw_for(layout().screen_rect());
+void StyledNode::draw_after() {
+    if (m_after != nullptr) {
+        const Rect rect = layout().screen_rect();
+        m_after->paint(rect, rect.inset(style().padding()));
     }
-
-    void StyledNode::draw_after() {
-        if (m_after != nullptr) m_after->draw_for(layout().screen_rect());
-    }
-} // namespace ui
+}

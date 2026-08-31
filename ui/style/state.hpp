@@ -3,6 +3,7 @@
 #include "style.hpp"
 
 #include <algorithm>
+#include <memory>
 
 namespace ui {
     static constexpr float OPACITY_TRANSITION_DURATION = 0.15F;
@@ -36,15 +37,16 @@ namespace ui {
             for (Style& style : styles) {
                 style.set_change_callback(owner, callback);
             }
-            current_style.set_change_callback(owner, callback);
+            if (m_transition_style != nullptr) {
+                m_transition_style->set_change_callback(owner, callback);
+            }
         }
 
         /// selects a slot without running a style transition.
         void snap_to_style(StyleType type) {
-            current_style = styles[static_cast<size_t>(type)];
             transition_data.to = type;
             transition_data.done = true;
-            current_style_tracks_target = true;
+            m_transition_style.reset();
         }
 
         bool is_visible() const {
@@ -86,9 +88,13 @@ namespace ui {
             return current_opacity.value;
         }
 
+        bool transitioning() const {
+            return current_opacity.value != m_opacity || m_transition_style != nullptr;
+        }
+
         /// advances opacity and style interpolation by one simulation frame.
         void update(float dt) {
-            if (!first_frame && current_opacity.value == m_opacity && transition_data.done) {
+            if (!first_frame && current_opacity.value == m_opacity && m_transition_style == nullptr) {
                 return;
             }
 
@@ -98,13 +104,13 @@ namespace ui {
                 current_opacity.value = m_opacity;
             }
 
-            if (!transition_data.done) {
+            if (m_transition_style != nullptr) {
                 const Style& target_style = styles[static_cast<size_t>(transition_data.to)];
-                Style::lerp(current_style, target_style, dt);
+                Style::lerp(*m_transition_style, target_style, dt);
 
-                if (current_style.is_close_to(target_style, TRANSITION_SETTLE_EPSILON)) {
+                if (m_transition_style->is_close_to(target_style, TRANSITION_SETTLE_EPSILON)) {
                     transition_data.end();
-                    current_style_tracks_target = true;
+                    m_transition_style.reset();
                 }
             }
 
@@ -117,9 +123,11 @@ namespace ui {
                 return;
             }
 
-            current_style.adopt_missing_keys_from(styles[static_cast<size_t>(type)]);
+            if (m_transition_style == nullptr) {
+                m_transition_style = std::make_unique<Style>(styles[static_cast<size_t>(transition_data.to)]);
+            }
+
             transition_data.start(type);
-            current_style_tracks_target = false;
         }
 
         /// interaction precedence is active, focus, hover, then default.
@@ -143,19 +151,12 @@ namespace ui {
                 func(style);
             }
 
-            if (transition_data.done && transition_data.to == StyleType::DEFAULT) {
-                snap_to_style(StyleType::DEFAULT);
-            }
-
             return *this;
         }
 
         template <typename Func>
         VisualState& configure_style(StyleType type, Func&& func) {
             func(styles[static_cast<size_t>(type)]);
-            if (transition_data.done && transition_data.to == type) {
-                snap_to_style(type);
-            }
             return *this;
         }
 
@@ -165,8 +166,7 @@ namespace ui {
 
         /// resolved style currently used for drawing.
         Style& style() {
-            return transition_data.done && current_style_tracks_target ? styles[static_cast<size_t>(transition_data.to)]
-                                                                       : current_style;
+            return m_transition_style != nullptr ? *m_transition_style : styles[static_cast<size_t>(transition_data.to)];
         }
 
         /// mutable named slot, independent from the current transition.
@@ -175,8 +175,7 @@ namespace ui {
         }
 
         const Style& style() const {
-            return transition_data.done && current_style_tracks_target ? styles[static_cast<size_t>(transition_data.to)]
-                                                                       : current_style;
+            return m_transition_style != nullptr ? *m_transition_style : styles[static_cast<size_t>(transition_data.to)];
         }
 
         const Style& style(StyleType type) const {
@@ -187,11 +186,10 @@ namespace ui {
         StyleTransitionData transition_data;
         FloatValue current_opacity;
         Style styles[static_cast<size_t>(StyleType::_COUNT)];
-        Style current_style;
+        std::unique_ptr<Style> m_transition_style;
         float m_opacity = 1.0f;
         bool visible = true;
         bool first_frame = true;
-        bool current_style_tracks_target = false;
     };
 
 } // namespace ui

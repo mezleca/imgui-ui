@@ -30,6 +30,7 @@ namespace ui {
         void hide() override;
         void raise() override;
 
+        /// returns true only when the retained tree handles this native event.
         bool process_event(UI& surface, const SDL_Event& event);
 
     private:

@@ -1,11 +1,14 @@
 #pragma once
 
 #include <concepts>
+#include <algorithm>
+#include <cfloat>
+#include <cmath>
 #include <cstdint>
 #include <format>
 #include <imgui.h>
 #include <string>
-#include <tuple>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -62,12 +65,22 @@ namespace ui {
             m_dirty = true;
         }
 
-        void set_wrap(float wrap_end) {
-            if (m_wrap_end == wrap_end) {
+        void set_wrap(float wrap_width) {
+            if (m_wrap_width == wrap_width) {
                 return;
             }
 
-            m_wrap_end = wrap_end;
+            m_wrap_width = wrap_width;
+            m_dirty = true;
+        }
+
+        void set_line_height(float multiplier) {
+            const float resolved = std::max(0.0F, multiplier);
+            if (m_line_height_multiplier == resolved) {
+                return;
+            }
+
+            m_line_height_multiplier = resolved;
             m_dirty = true;
         }
 
@@ -89,6 +102,79 @@ namespace ui {
 
         ImFont* font() const {
             return m_font;
+        }
+
+        void draw(ImDrawList& draw_list, ImVec2 position, ImU32 color, const ImVec4* clip_rect = nullptr) const {
+            ImFont* current_font = m_font != nullptr ? m_font : ImGui::GetFont();
+            const float font_size = ImGui::GetFontSize();
+            if (m_line_height_multiplier == 1.0F) {
+                draw_list.AddText(
+                    current_font, font_size, position, color, c_str(), nullptr, m_wrap_width >= 0.0F ? m_wrap_width : 0.0F,
+                    clip_rect
+                );
+                return;
+            }
+
+            // addtext has no line-height parameter, so each wrapped line is emitted at the configured vertical advance.
+            const char* const text = c_str();
+            const char* const text_end = text + std::char_traits<char>::length(text);
+            const float wrap_width = m_wrap_width >= 0.0F ? m_wrap_width : 0.0F;
+            const float line_height = font_size * m_line_height_multiplier;
+            float y = position.y;
+
+            for (const char* paragraph = text;;) {
+                const char* const paragraph_end = std::find(paragraph, text_end, '\n');
+                const char* line = paragraph;
+
+                do {
+                    const char* line_end = paragraph_end;
+                    if (wrap_width > 0.0F && line < paragraph_end) {
+                        line_end = current_font->CalcWordWrapPosition(font_size, line, paragraph_end, wrap_width);
+                        if (line_end == line) {
+                            line_end = paragraph_end;
+                        }
+                    }
+
+                    draw_list.AddText(current_font, font_size, {position.x, y}, color, line, line_end, 0.0F, clip_rect);
+                    y += line_height;
+
+                    if (line_end == paragraph_end) {
+                        break;
+                    }
+
+                    line = line_end;
+                    while (line < paragraph_end && (*line == ' ' || *line == '\t')) {
+                        ++line;
+                    }
+                } while (line < paragraph_end);
+
+                if (paragraph_end == text_end) {
+                    break;
+                }
+
+                paragraph = paragraph_end + 1;
+            }
+        }
+
+        void draw_ellipsis(ImDrawList& draw_list, ImVec2 position, ImU32 color, ImVec4 clip_rect) const {
+            ImFont* current_font = m_font != nullptr ? m_font : ImGui::GetFont();
+            const float font_size = ImGui::GetFontSize();
+            const char* const text = c_str();
+            const char* const text_end = text + std::char_traits<char>::length(text);
+            const float line_height = font_size * m_line_height_multiplier;
+            float y = position.y;
+
+            for (const char* line = text;;) {
+                const char* const line_end = std::find(line, text_end, '\n');
+                draw_ellipsis_line(draw_list, current_font, font_size, {position.x, y}, color, line, line_end, clip_rect);
+
+                if (line_end == text_end) {
+                    break;
+                }
+
+                line = line_end + 1;
+                y += line_height;
+            }
         }
 
         template <typename T>
@@ -117,6 +203,32 @@ namespace ui {
         }
 
     private:
+        static void draw_ellipsis_line(
+            ImDrawList& draw_list, ImFont* font, float font_size, ImVec2 position, ImU32 color, const char* text,
+            const char* text_end, ImVec4 clip_rect
+        ) {
+            const float available_width = std::max(0.0F, clip_rect.z - position.x);
+            const ImVec2 text_size = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, text, text_end);
+            if (text_size.x <= available_width) {
+                draw_list.AddText(font, font_size, position, color, text, text_end, 0.0F, &clip_rect);
+                return;
+            }
+
+            constexpr std::string_view ellipsis = "...";
+            const float ellipsis_width = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, ellipsis.data()).x;
+            const char* visible_end = text;
+            const float text_width = std::max(0.0F, available_width - ellipsis_width);
+            const ImVec2 visible_size = font->CalcTextSizeA(font_size, text_width, 0.0F, text, text_end, &visible_end);
+
+            if (visible_end != text) {
+                draw_list.AddText(font, font_size, position, color, text, visible_end, 0.0F, &clip_rect);
+            }
+
+            draw_list.AddText(
+                font, font_size, {position.x + visible_size.x, position.y}, color, ellipsis.data(), nullptr, 0.0F, &clip_rect
+            );
+        }
+
         // convert every supported arithmetic category to one of the canonical storage types above.
         template <std::integral T>
         static Value make_value(T value) {
@@ -138,7 +250,7 @@ namespace ui {
             }
         }
 
-        // recomputes values for size and line height.
+        // measures the current text and applies the configured line-height multiplier to its total height.
         void recompute() const {
             if (ImGui::GetCurrentContext() == nullptr) {
                 m_text_size = {};
@@ -150,7 +262,12 @@ namespace ui {
             ImGui::PushFont(font);
 
             m_line_height = ImGui::GetTextLineHeight();
-            m_text_size = ImGui::CalcTextSize(c_str(), nullptr, false, m_wrap_end);
+            m_text_size = ImGui::CalcTextSize(c_str(), nullptr, false, m_wrap_width);
+
+            // imgui measured wrapped and explicit lines with its native height; recover that line count before scaling it.
+            if (m_line_height > 0.0F) {
+                m_text_size.y = std::round(m_text_size.y / m_line_height) * m_line_height * m_line_height_multiplier;
+            }
 
             ImGui::PopFont();
             m_dirty = false;
@@ -161,36 +278,10 @@ namespace ui {
         ImFont* m_font = nullptr;
         mutable ImVec2 m_text_size;
         mutable float m_line_height = 0.0F;
-        float m_wrap_end = -1.0f;
+        float m_line_height_multiplier = 1.0F;
+        float m_wrap_width = -1.0F;
         mutable bool m_string_dirty = true;
         mutable bool m_dirty = true;
-    };
-
-    /// recomputes its string only when the bound tuple changes.
-    template <typename... Args>
-    class TextFormatted : public GenericValue {
-    public:
-        explicit TextFormatted(std::string fmt, ImFont* font = nullptr)
-            : GenericValue(std::string{}, font), m_fmt(std::move(fmt)) {}
-
-        void set(std::tuple<Args...> new_values) {
-            if (new_values == m_values) {
-                return;
-            }
-
-            m_values = std::move(new_values);
-            recompute_text();
-        }
-
-    private:
-        void recompute_text() {
-            GenericValue::set(
-                std::apply([this](auto const&... vals) { return std::vformat(m_fmt, std::make_format_args(vals...)); }, m_values)
-            );
-        }
-
-        std::string m_fmt;
-        std::tuple<Args...> m_values = {};
     };
 
 } // namespace ui

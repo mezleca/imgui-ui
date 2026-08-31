@@ -37,8 +37,7 @@ namespace ui {
 UI::UI(ui::Runtime& runtime, const ui::Config& config) : UI(runtime, ui::create_backend(config)) {}
 
 UI::UI(ui::Runtime& runtime, std::unique_ptr<ui::Backend> backend)
-    : m_runtime(runtime), m_backend(std::move(backend)), m_imgui_input(input_router()),
-      m_profiler(runtime.performance_directory()) {
+    : m_runtime(runtime), m_backend(std::move(backend)), m_profiler(runtime.performance_directory()) {
     initialize();
 }
 
@@ -87,6 +86,7 @@ void UI::initialize() {
     m_container = std::make_unique<ui::SurfaceRootNode>();
     m_container->set_input_router(&m_input_router);
     m_container->set_profiler(&m_profiler);
+    m_profiler.set_root_node(m_container->identity());
 }
 
 void UI::begin_input_frame() {
@@ -184,6 +184,7 @@ void UI::apply_theme_colors() {
     colors[ImGuiCol_FrameBg] = theme.control_background_color;
     colors[ImGuiCol_FrameBgHovered] = theme.control_hover_color;
     colors[ImGuiCol_FrameBgActive] = theme.control_active_color;
+    colors[ImGuiCol_ScrollbarBg] = theme.scrollbar_background_color;
     colors[ImGuiCol_CheckboxSelectedBg] = theme.control_background_color;
     colors[ImGuiCol_TitleBg] = theme.background_secondary_color;
     colors[ImGuiCol_TitleBgActive] = theme.background_secondary_color;
@@ -196,35 +197,12 @@ IconTexture* UI::get_texture(std::string_view id) {
     return m_runtime.resource(id);
 }
 
+IconTexture* UI::find_texture(std::string_view id) {
+    return m_runtime.find_resource(id);
+}
+
 bool UI::dispatch(ui::UiEvent& event) {
     return m_ready && input_router().dispatch(event);
-}
-
-ImVec2 UI::mouse_position() const {
-    if (m_context == nullptr) {
-        return {};
-    }
-
-    const ui::ImGuiContextScope scope(m_context);
-    return ImGui::GetMousePos();
-}
-
-ui::Rect UI::work_area() const {
-    if (m_context == nullptr) {
-        return {};
-    }
-
-    const ui::ImGuiContextScope scope(m_context);
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImVec2 position = viewport->WorkPos;
-    ImVec2 size = viewport->WorkSize;
-
-    if (size.x <= 0.0F || size.y <= 0.0F) {
-        position = {};
-        size = ImGui::GetIO().DisplaySize;
-    }
-
-    return ui::Rect::from_position_size(position, size);
 }
 
 void UI::begin_frame() {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../style/styled-node.hpp"
-#include "../imgui/input-bridge.hpp"
 
 #include <functional>
 #include <string>
@@ -10,11 +9,11 @@
 namespace ui {
     class Widget : public StyledNode {
     public:
-        explicit Widget(std::string id, std::string_view type_name = "Widget") : StyledNode(std::move(id), type_name) {}
-
-        Widget& set_font(ImFont* font) override {
-            StyledNode::set_font(font);
-            return *this;
+        explicit Widget(std::string id, std::string_view type_name = "Widget", bool input_target = true)
+            : StyledNode(std::move(id), type_name) {
+            if (input_target) {
+                set_input_target();
+            }
         }
 
         /// receives events after the widget's internal behavior has run.
@@ -25,18 +24,6 @@ namespace ui {
 
         bool accepts_input() const override {
             return Node::accepts_input() && accepts_visual_input();
-        }
-
-        /// converts an input snapshot into active/focus/hover style selection.
-        void apply_input_state(const ItemInputState& input, bool active = false) {
-            set_interaction_style(input.hovered, input.active || active, input.focused);
-        }
-
-        /// observes the current item and updates this widget's interaction style.
-        ItemInputState update_input(ImGuiInputBridge& bridge, bool active = false) {
-            const ItemInputState input = bridge.observe_item(*this);
-            apply_input_state(input, active && !input.blocked);
-            return input;
         }
 
     protected:
@@ -51,11 +38,6 @@ namespace ui {
             if (on_event) {
                 on_event(event);
             }
-        }
-
-    private:
-        float draw_opacity() const override {
-            return opacity();
         }
     };
 

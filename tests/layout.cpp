@@ -5,6 +5,7 @@
 #include <ui/layout/geometry.hpp>
 #include <ui/layout/resizable-container.hpp>
 #include <ui/layout/stack-container.hpp>
+#include <ui/input/router.hpp>
 #include <ui/style/theme.hpp>
 #include <ui/widgets/image.hpp>
 #include <ui/widgets/text.hpp>
@@ -34,6 +35,43 @@ TEST_CASE("image padding keeps the outer screen bounds", "[Widget][layout]") {
 
     REQUIRE(bounds.size().x == Catch::Approx(24.0F));
     REQUIRE(bounds.size().y == Catch::Approx(20.0F));
+}
+
+TEST_CASE("input regions exclude clipped widget bounds", "[Widget][input][regression]") {
+    class InputNode final : public ui::Node {
+    public:
+        InputNode() {
+            set_size({24.0F, 20.0F});
+            set_input_target();
+        }
+
+    private:
+        bool on_draw() override {
+            ImGui::Dummy(layout().size());
+            return true;
+        }
+    };
+
+    ui_test::ImGuiContext context({200.0F, 120.0F});
+    ui::InputRouter router;
+    InputNode node;
+    node.set_input_router(&router);
+
+    router.begin_frame();
+    ImGui::NewFrame();
+    ImGui::SetNextWindowSize({200.0F, 120.0F});
+    ImGui::Begin("clipped-image-input-test");
+    const ImVec2 position = ImGui::GetCursorScreenPos();
+    ImGui::PushClipRect(position, {position.x + 12.0F, position.y + 100.0F}, true);
+    node.draw();
+    ImGui::PopClipRect();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    const ui::Rect bounds = node.layout().screen_rect();
+    REQUIRE(router.stats().region_count == 1);
+    REQUIRE(router.node_at({bounds.min.x + 6.0F, bounds.min.y + 10.0F}) == &node);
+    REQUIRE(router.node_at({bounds.min.x + 18.0F, bounds.min.y + 10.0F}) == nullptr);
 }
 
 TEST_CASE("layout anchors resolve the child origin against the parent") {
@@ -125,7 +163,7 @@ TEST_CASE("stack layout excludes explicitly positioned children from its flow") 
     stack.style().padding({});
     auto& first = stack.add_child<FixedNode>(ImVec2{30.0F, 10.0F});
     auto& positioned = stack.add_child<FixedNode>(ImVec2{80.0F, 40.0F});
-    positioned.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {100.0F, 20.0F});
+    positioned.set_placement({.anchor = ui::Anchor::TopLeft, .origin = ui::Origin::TopLeft, .offset = {100.0F, 20.0F}});
     auto& second = stack.add_child<FixedNode>(ImVec2{30.0F, 10.0F});
 
     ImGui::NewFrame();
@@ -272,7 +310,7 @@ TEST_CASE("visibility changes in an anchored overlay do not move its fixed sibli
 
     ui::StackContainer overlay("overlay", ui::StackDirection::Horizontal);
     overlay.fit_content();
-    overlay.set_placement(ui::Anchor::TopRight, ui::Origin::TopRight, {-20.0F, 20.0F});
+    overlay.set_placement({.anchor = ui::Anchor::TopRight, .origin = ui::Origin::TopRight, .offset = {-20.0F, 20.0F}});
     overlay.style().padding({});
 
     auto& optional_panel = overlay.add_child<FixedNode>(ImVec2{120.0F, 80.0F});
@@ -348,7 +386,7 @@ TEST_CASE("horizontal stack places a fixed item after auto-sized text") {
     REQUIRE(item.valid());
     REQUIRE(item.min.x >= text.max.x + 8.0F);
 
-    REQUIRE(text_node.try_set_content("notifications: 10000"));
+    text_node.set_text("notifications: 10000");
     draw_frame();
 
     const ui::Rect resized_text = stack.children()[0]->layout().screen_rect();
@@ -535,12 +573,12 @@ TEST_CASE("resizable container stays within its parent bounds") {
     ui_test::ImGuiContext context({320.0F, 220.0F});
 
     ui::ResizableContainer resizable("resizable");
+    ui::InputRouter router;
+    resizable.set_input_router(&router);
     resizable.set_size({80.0F, 60.0F});
     resizable.set_resize(ui::ResizeAxes::Both);
 
-    const auto draw_frame = [&resizable](ImVec2 mouse_position, bool mouse_down) {
-        ImGui::GetIO().MousePos = mouse_position;
-        ImGui::GetIO().MouseDown[ImGuiMouseButton_Left] = mouse_down;
+    const auto draw_frame = [&resizable] {
         ImGui::NewFrame();
         ImGui::SetNextWindowPos({0.0F, 0.0F});
         ImGui::SetNextWindowSize({320.0F, 220.0F});
@@ -552,12 +590,30 @@ TEST_CASE("resizable container stays within its parent bounds") {
         ImGui::EndFrame();
     };
 
-    draw_frame({0.0F, 0.0F}, false);
+    router.begin_frame();
+    draw_frame();
     const ui::Rect initial_rect = resizable.layout().screen_rect();
     const ImVec2 handle_position = {initial_rect.max.x - 5.0F, initial_rect.max.y - 5.0F};
-    draw_frame(handle_position, true);
-    draw_frame({300.0F, 200.0F}, true);
-    draw_frame({300.0F, 200.0F}, false);
+
+    REQUIRE(router.node_at({initial_rect.min.x + 5.0F, initial_rect.min.y + 5.0F}) == nullptr);
+    REQUIRE(router.node_at(handle_position) == &resizable);
+
+    ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
+    down.position = handle_position;
+    down.button = ui::PointerButton::Left;
+    REQUIRE(router.dispatch(down));
+
+    ui::UiEvent move = ui::UiEvent::make(ui::EventType::PointerMove);
+    move.position = {300.0F, 200.0F};
+    REQUIRE(router.dispatch(move));
+
+    router.begin_frame();
+    draw_frame();
+
+    ui::UiEvent up = ui::UiEvent::make(ui::EventType::PointerUp);
+    up.position = move.position;
+    up.button = ui::PointerButton::Left;
+    REQUIRE(router.dispatch(up));
 
     REQUIRE(resizable.layout().size().x > 80.0F);
     REQUIRE(resizable.layout().size().x <= 120.0F);
@@ -567,7 +623,9 @@ TEST_CASE("resizable container stays within its parent bounds") {
 TEST_CASE("nodes without explicit positions follow the ImGui cursor") {
     class FlowNode final : public ui::Node {
     public:
-        explicit FlowNode(std::string id) : ui::Node(std::move(id)) {}
+        explicit FlowNode(std::string id) : ui::Node(std::move(id)) {
+            set_input_target();
+        }
 
         bool on_draw() override {
             ImGui::Dummy({20.0F, 10.0F});
@@ -597,19 +655,15 @@ TEST_CASE("nodes without explicit positions follow the ImGui cursor") {
     REQUIRE(second_rect.min.y > first_rect.min.y);
     REQUIRE(same_line_rect.min.x > second_rect.min.x);
 
-    ui::InputRouter router;
     ui::Node logical_root("logical-root");
-    logical_root.set_input_router(&router);
     auto routed_child = std::make_unique<FlowNode>("routed-child");
-    FlowNode* routed_child_ptr = routed_child.get();
     logical_root.add(std::move(routed_child));
 
     ImGui::SetCursorPos({0.0F, 60.0F});
-    router.begin_frame();
     logical_root.draw();
 
     const ImVec2 routed_position = logical_root.children().front()->layout().screen_rect().min;
-    REQUIRE(router.debug_node_at({routed_position.x + 5.0F, routed_position.y + 5.0F}) == routed_child_ptr);
+    REQUIRE(routed_position.y == Catch::Approx(60.0F));
 
     ImGui::End();
     ImGui::Render();
@@ -684,9 +738,9 @@ TEST_CASE("node screen rectangles follow scrollable child windows") {
         float current_scroll_y = 0.0F;
 
     protected:
-        bool on_draw() override {
+        bool paint_content() override {
             ImGui::SetNextWindowContentSize({100.0F, 400.0F});
-            return ui::ChildContainer::on_draw();
+            return ui::ChildContainer::paint_content();
         }
 
         void on_draw_end() override {

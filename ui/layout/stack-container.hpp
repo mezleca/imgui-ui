@@ -8,10 +8,10 @@ namespace ui {
         explicit StackContainer(std::string id, StackDirection direction = StackDirection::Vertical);
 
         /// changes the main axis used to arrange visible children.
-        void set_direction(StackDirection direction);
+        StackContainer& set_direction(StackDirection direction);
         StackDirection direction() const;
         /// sets the gap between visible children; negative values become zero.
-        void set_spacing(float spacing);
+        StackContainer& set_spacing(float spacing);
         float spacing() const;
         /// sizes both axes to their measured children instead of available space.
         StackContainer& fit_content(bool enabled = true);
@@ -21,7 +21,7 @@ namespace ui {
         StackContainer& fit_content_height(bool enabled = true);
 
     protected:
-        bool on_draw() override;
+        bool paint_content() override;
         void on_measure() override;
         void on_layout() override;
         ImVec2 requested_size_for_layout() const override;

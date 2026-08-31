@@ -9,6 +9,9 @@ namespace ui {
     AssetRegistry::AssetRegistry(std::unique_ptr<IconLoader> icon_loader) : m_icon_loader(std::move(icon_loader)) {
         if (m_icon_loader != nullptr) {
             m_textures.emplace("default", m_icon_loader->load_data(DEFAULT_WARN_SVG, "default"));
+            m_textures.emplace(
+                "context-menu-chevron", m_icon_loader->load_data(CONTEXT_MENU_CHEVRON_SVG, "context-menu-chevron")
+            );
         }
     }
 
@@ -70,15 +73,18 @@ namespace ui {
     }
 
     IconTexture* AssetRegistry::texture(std::string_view id) {
-        const auto it = m_textures.find(std::string{id});
-
-        if (it == m_textures.end()) {
+        IconTexture* result = find_texture(id);
+        if (result == nullptr) {
             std::cout << "[ui] failed to find " << id << " (returning default svg)\n";
-            const auto fallback = m_textures.find("default");
-            return fallback == m_textures.end() ? nullptr : fallback->second.get();
+            return find_texture("default");
         }
 
-        return it->second.get();
+        return result;
+    }
+
+    IconTexture* AssetRegistry::find_texture(std::string_view id) {
+        const auto it = m_textures.find(std::string{id});
+        return it == m_textures.end() ? nullptr : it->second.get();
     }
 
     void AssetRegistry::release_context(ImGuiContext* context) {

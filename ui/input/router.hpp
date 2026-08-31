@@ -1,82 +1,87 @@
 #pragma once
 
 #include "event.hpp"
-#include "layer.hpp"
+#include "../constants.hpp"
 #include "../layout/geometry.hpp"
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <optional>
 #include <vector>
 
 namespace ui {
+    class Debugger;
     class Node;
 
-    enum class InputPolicy : unsigned char {
-        /// the layer does not affect events below it.
-        PassThrough,
+    enum class RegionKind : unsigned char {
+        Target,
+        Blocker,
+        Observer,
+    };
 
-        /// pointer events stop at this layer, but keyboard focus below remains usable.
-        BlockPointer,
+    struct RegionConfig {
+        /// manual router calls read this rect in screen coordinates; node calls offset it from the node's top-left.
+        Rect rect{};
 
-        /// pointer and keyboard events stop at this layer.
-        BlockAll,
+        /// defaults to pointer events; this config never gives keyboard focus to a node.
+        EventMask events = EventMask::Pointer;
+
+        /// runs after this target, blocker, or observer matches the event position and type.
+        std::function<void(UiEvent&)> on_event;
+
+        /// a larger value selects this target before overlapping targets with lower values.
+        int priority = 0;
     };
 
     struct Region {
-        /// node receiving an event when this region wins hit testing.
-        Node* node;
+        /// null targets absorb matching events; other targets dispatch to this node.
+        Node* node = nullptr;
+
+        /// descendants of a blocker owner remain eligible targets.
+        Node* owner = nullptr;
 
         /// screen-space bounds used by hit testing.
         Rect rect;
 
-        /// layer used to apply input policies.
-        InputLayer layer;
+        /// event families accepted by this region.
+        EventMask events = EventMask::Pointer;
+
+        /// runs when this region wins hit testing.
+        std::function<void(UiEvent&)> on_event;
+
+        RegionKind kind = RegionKind::Target;
+        int priority = 0;
     };
 
-    inline constexpr std::size_t LAYER_COUNT = static_cast<std::size_t>(InputLayer::Count);
     inline constexpr std::size_t POINTER_BUTTON_COUNT = 3;
+
+    struct InputRouterStats {
+        std::size_t region_count = 0;
+        std::size_t hit_test_count = 0;
+        std::size_t region_checks = 0;
+    };
 
     class InputRouter {
     public:
-        /// clears regions from the previous draw pass and stale persistent targets.
+        /// removes every manual registration from the last frame; call register_* again before dispatching input.
         void begin_frame();
 
-        /// blocks normal dispatch while the debugger selects a node.
-        void set_debug_inspect_mode(bool enabled);
+        /// advanced: sends input inside config.rect to node; normal widgets call Node::set_input_target().
+        void register_region(Node& node, RegionConfig config);
 
-        /// keeps the next mouse release from reaching application nodes.
-        void finish_debug_inspect_mode();
+        /// advanced: consumes matching pointer events inside config.rect without dispatching to a node.
+        void register_blocker(RegionConfig config);
 
-        /// stops debugger input suppression immediately.
-        void clear_debug_inspect_mode();
+        /// consumes pointer events inside rect without dispatching them to a node.
+        void register_blocker(Rect rect);
 
-        /// defines which events a layer prevents from reaching lower layers.
-        void set_layer_policy(InputLayer layer, InputPolicy policy);
+        /// advanced: consumes matching pointer events unless their target is owner or one of its descendants.
+        void register_blocker(Node& owner, RegionConfig config);
 
-        /// reports whether pointer state for a layer is blocked by a higher layer.
-        bool pointer_blocked_for(InputLayer layer) const;
-
-        /// reports whether a node at a position is behind a pointer-blocking ancestor.
-        bool pointer_blocked_at(ImVec2 position, const Node& node) const;
-
-        /// reports whether native pointer input is blocked at a screen position.
-        bool pointer_blocked_at(ImVec2 position) const;
-
-        /// assigns the fallback keyboard target for the node's layer.
-        void set_keyboard_target(Node& node);
-
-        /// removes the keyboard fallback for a layer.
-        void clear_keyboard_target(InputLayer layer);
-
-        /// removes keyboard fallbacks pointing into a subtree.
-        void clear_keyboard_target(Node& subtree);
-
-        /// adds a screen-space hit-test region using the node's assigned layer.
-        void register_region(Node& node, Rect rect);
-
-        /// adds a region with an explicit layer without changing the node tree.
-        void register_region_in_layer(Node& node, Rect rect, InputLayer layer);
+        /// advanced: runs config.on_event for matching clicks without changing the selected input target.
+        void register_observer(Node& owner, RegionConfig config);
 
         /// captures subsequent pointer moves and releases for a node.
         bool capture_pointer(Node& node);
@@ -87,11 +92,8 @@ namespace ui {
         /// releases pointer state pointing into a subtree.
         void release_pointer(Node& subtree);
 
-        /// gives keyboard events to a visible input node in its assigned layer.
+        /// gives keyboard events to a visible input node.
         bool set_focus(Node& node);
-
-        /// gives keyboard events to a node in an explicit layer.
-        bool set_focus_in_layer(Node& node, InputLayer layer);
 
         /// sends a focus-lost event and clears the current focus.
         void clear_focus();
@@ -108,11 +110,6 @@ namespace ui {
             return m_focused_node;
         }
 
-        /// reports whether normal event dispatch is currently suppressed.
-        bool debug_inspect_mode() const {
-            return m_debug_inspect_mode || m_debug_inspect_release_pending;
-        }
-
         /// resolves and dispatches a platform event.
         bool dispatch(UiEvent& event);
 
@@ -122,31 +119,59 @@ namespace ui {
         /// returns the normal input node at a screen position.
         Node* node_at(ImVec2 position) const;
 
-        /// returns an input node at a position, or a visible non-interactive node when none exists.
-        Node* debug_node_at(ImVec2 position) const;
+        /// returns debug-only region and hit-test counters accumulated since begin_frame().
+        InputRouterStats stats() const;
 
     private:
         friend class Node;
+        friend class Debugger;
 
-        void set_pointer_blocker(Node& node, bool enabled);
+        enum class InputFlag {
+            Hovered,
+            Active,
+            Focused,
+        };
+
+        struct PressedPointer {
+            Node* target = nullptr;
+            bool prevent_click = false;
+        };
+
+        /// blocks normal dispatch while the debugger selects a node.
+        void set_debug_inspect_mode(bool enabled);
+
+        /// keeps the next mouse release from reaching application nodes.
+        void finish_debug_inspect_mode();
+
+        /// stops debugger input suppression immediately.
+        void clear_debug_inspect_mode();
+
+        bool debug_inspect_mode() const {
+            return m_debug_inspect_mode || m_debug_inspect_release_pending;
+        }
+
+        void clear_region(Node& node);
         void clear_regions(Node& subtree);
         void clear_inactive_targets();
-        Node* target_at(ImVec2 position, InputLayer minimum_layer, bool include_non_input) const;
-        Node* pointer_blocker_at(ImVec2 position) const;
-        Node* topmost_keyboard_target_from(std::size_t minimum_index) const;
-        std::optional<InputLayer> highest_blocking_layer(EventType type) const;
+        void refresh_pointer_state(ImVec2 position);
+        void set_input_flag(Node*& current, Node* next, InputFlag flag);
+        const Region* pointer_target(UiEvent& event, bool& blocked);
+        const Region* target_at(ImVec2 position, bool include_non_input, EventType type = EventType::PointerMove) const;
+        const Region* blocking_region_at(ImVec2 position, EventType type, const Node* target = nullptr) const;
+        void notify_observers(UiEvent& event);
+        bool dispatch_target(const Region& target, UiEvent& event);
 
         std::vector<Region> m_regions;
-        std::vector<Node*> m_pointer_blockers;
-        std::array<InputPolicy, LAYER_COUNT> m_policies{};
         Node* m_focused_node = nullptr;
-        InputLayer m_focused_layer = InputLayer::Content;
         bool m_debug_inspect_mode = false;
         bool m_debug_inspect_release_pending = false;
-        std::array<Node*, LAYER_COUNT> m_keyboard_targets{};
         Node* m_pointer_capture = nullptr;
-        std::array<Node*, POINTER_BUTTON_COUNT> m_pressed_targets{};
-        std::array<bool, POINTER_BUTTON_COUNT> m_pressed_default_prevented{};
+        Node* m_hovered_node = nullptr;
+        Node* m_active_node = nullptr;
+        bool m_has_blockers = false;
+        bool m_has_observers = false;
+        std::array<PressedPointer, POINTER_BUTTON_COUNT> m_pressed{};
+        mutable InputRouterStats m_stats;
     };
 
 } // namespace ui

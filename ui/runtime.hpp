@@ -53,6 +53,10 @@ namespace ui {
             return m_assets.texture(id);
         }
 
+        IconTexture* find_resource(std::string_view id) {
+            return m_assets.find_texture(id);
+        }
+
         const std::filesystem::path& performance_directory() const {
             return m_performance_directory;
         }

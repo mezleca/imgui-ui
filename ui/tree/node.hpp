@@ -1,13 +1,12 @@
 #pragma once
 
 #include "../input/event.hpp"
-#include "../input/layer.hpp"
+#include "../input/router.hpp"
 #include "../layout/geometry.hpp"
 
 #include <memory>
 #include <functional>
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <stdexcept>
@@ -15,8 +14,13 @@
 #include <vector>
 
 namespace ui {
-    class InputRouter;
     class Profiler;
+
+    struct InputState {
+        bool hovered = false;
+        bool active = false;
+        bool focused = false;
+    };
 
     class Node {
     public:
@@ -50,7 +54,7 @@ namespace ui {
         /// visible nodes advance framework state, call on_update(), then update descendants.
         void update(float dt);
 
-        /// runs measure, placement and draw lifecycle, then registers the input region.
+        /// draws this node, then sends its final bounds to the input router when it has an input target.
         virtual void draw();
 
         /// detaches a direct child; input targets into its subtree are cleared.
@@ -73,6 +77,14 @@ namespace ui {
 
         /// returns true when this node is the same as or contains the target.
         bool contains(const Node* node) const;
+
+        /// returns the deepest visible node whose final bounds contain position.
+        Node* debug_node_at(ImVec2 position);
+
+        /// returns whether this node has visible content the debugger can select on the canvas.
+        virtual bool debug_selectable() const {
+            return false;
+        }
 
         const std::string& id() const {
             return m_id;
@@ -103,17 +115,6 @@ namespace ui {
             return m_children;
         }
 
-        /// returns the inherited layer used by the input router, or Count when unassigned.
-        InputLayer input_layer() const {
-            return m_input_layer;
-        }
-
-        /// input layer assignment propagates to descendants.
-        Node& set_input_layer(InputLayer layer) {
-            assign_input_layer(layer);
-            return *this;
-        }
-
         bool visible() const {
             return m_visible;
         }
@@ -134,15 +135,19 @@ namespace ui {
             return m_visible && m_enabled;
         }
 
-        /// returns whether this node consumes pointer input outside its descendants.
-        virtual bool blocks_pointer_input() const {
-            return false;
+        const InputState& input_state() const {
+            return m_input_state;
         }
 
-        /// returns the screen-space bounds where this node blocks pointer input.
-        virtual Rect pointer_blocking_rect() const {
-            return m_layout.screen_rect();
-        }
+        /// sends pointer events inside this node's final bounds to this node after drawing.
+        /// config.rect replaces those bounds and starts at this node's top-left.
+        Node& set_input_target(RegionConfig config = {});
+
+        /// consumes pointer events inside this node's final bounds unless a descendant is the target.
+        Node& set_input_blocker(RegionConfig config = {});
+
+        /// stops this node from registering its target or blocker after drawing.
+        Node& clear_input_target();
 
         bool accepts_focus() const {
             return m_accepts_focus;
@@ -204,8 +209,8 @@ namespace ui {
         }
 
         /// sets anchor, origin and offset in one explicit placement operation.
-        Node& set_placement(Anchor anchor, Origin origin, ImVec2 offset = {}) {
-            m_layout.set_placement(anchor, origin, offset);
+        Node& set_placement(Placement placement) {
+            m_layout.set_placement(placement);
             return *this;
         }
 
@@ -214,11 +219,6 @@ namespace ui {
             m_layout.clear_explicit_position();
             return *this;
         }
-
-        /// optional text-like representation used by the debugger and generic tooling.
-        virtual std::optional<std::string> content() const;
-
-        virtual bool try_set_content(std::string content);
 
     protected:
         /// internal event behavior implemented by the node itself.
@@ -229,8 +229,14 @@ namespace ui {
 
         /// resolves flow or explicit placement and records local and screen bounds.
         void resolve_position();
-        void assign_input_layer(InputLayer layer);
-        void update_pointer_blocker_registration();
+
+        /// returns the screen-space bounds registered when set_input_target() has no config.rect.
+        virtual Rect input_target_rect(Rect screen_rect) const {
+            return screen_rect;
+        }
+
+        virtual void input_state_changed() {}
+
         /// reports whether set_size() supplied a requested size.
         bool has_size_request() const;
 
@@ -242,6 +248,9 @@ namespace ui {
 
         /// returns a child's requested size without changing its layout state.
         ImVec2 requested_size_of(const Node& child) const;
+
+        /// writes the final width and height before draw
+        /// containers call this when a requested zero axis must use the measured or available space.
         void resolve_size(ImVec2 size);
 
         /// returns the size a parent should use when arranging this node.
@@ -256,14 +265,9 @@ namespace ui {
         /// the child computes its screen bounds when its own draw pass starts.
         void arrange_child(Node& child, ImVec2 size, Anchor anchor, Origin origin, ImVec2 offset = {});
 
-        /// places a child by its top-left corner in screen coordinates.
-        void arrange_child_at_screen(Node& child, ImVec2 size, ImVec2 screen_position);
+        bool capture_pointer();
+        void release_pointer();
 
-        /// draws a child at its top-left corner in screen coordinates.
-        void draw_child_at_screen(Node& child, ImVec2 size, ImVec2 screen_position);
-
-        /// overrides a child node's screen bounds when its drawing happens elsewhere.
-        void set_child_screen_rect(Node& child, Rect rect);
         void invalidate_measure_subtree();
 
         virtual void on_update(float dt);
@@ -292,28 +296,44 @@ namespace ui {
         /// finalizes drawing and closes any scope opened by on_draw().
         virtual void on_draw_end();
 
+        void set_input_state(InputState state);
+
+        Profiler* profiler() const {
+            return m_profiler;
+        }
+
     private:
         friend class InputRouter;
 
-        void measure_tree();
-        void capture_leaf_rect(ImGuiID previous_item_id, Rect previous_item_rect);
+        struct NodeRegion {
+            bool blocks_input = false;
+            RegionConfig config;
+        };
 
+        void measure_tree();
+        Node& configure_region(bool blocks_input, RegionConfig config);
+        void capture_leaf_rect(ImGuiID previous_item_id, Rect previous_item_rect);
+        void register_input_target();
+        void refresh_root_hover();
+
+        /// public node key
         std::string m_id;
-        // immutable runtime key; unlike id(), this does not need to be unique or user supplied.
+
+        // immutable runtime key
+        // unlike id(), this does not need to be unique or user supplied.
         uint64_t m_identity = 0;
-        // non-owning; ownership always lives in the parent's child vector.
+
         Node* m_parent = nullptr;
         std::vector<std::unique_ptr<Node>> m_children;
         bool m_visible = true;
         bool m_enabled = true;
         bool m_accepts_focus = false;
-        // dirty state propagates upward so a root draw can measure affected subtrees once.
         bool m_measure_dirty = true;
-        InputLayer m_input_layer = InputLayer::Count;
         NodeLayout m_layout;
-        // surface services are inherited when a node is attached and cleared on removal.
         InputRouter* m_input_router = nullptr;
         Profiler* m_profiler = nullptr;
+        std::optional<NodeRegion> m_region;
+        InputState m_input_state;
     };
 
 } // namespace ui

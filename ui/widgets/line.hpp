@@ -9,9 +9,8 @@ namespace ui {
     public:
         LineWidget(ImVec2 start, ImVec2 end, ImColor color, float thickness = 1.0f);
 
-        bool on_draw() override;
-
     private:
+        bool paint_content() override;
         ImVec2 m_start;
         ImVec2 m_end;
     };

@@ -6,23 +6,17 @@
 
 using namespace ui;
 
-ImageWidget::ImageWidget(IconTexture* texture) : Widget({}, "Image"), m_texture(texture) {}
+ImageWidget::ImageWidget(IconTexture* texture) : DrawListWidget({}, "Image", false), m_texture(texture) {}
 
-bool ImageWidget::on_draw() {
-    const Style& style = this->style();
-    const Rect outer = layout().screen_rect();
-    const Rect content = outer.inset(style.padding());
-
-    ImGui::Dummy(outer.size());
-
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    draw_frame(outer, style);
+void ImageWidget::paint(ImDrawList& draw_list, Rect rect, const Style& style) {
+    const Rect content = rect.inset(style.padding());
+    draw_frame(rect, style);
 
     if (m_texture != nullptr && content.valid()) {
         const ImVec2 image_size = content.size();
         const ImTextureID texture_id = m_texture->get(image_size);
         if (m_rotation == 0.0F) {
-            draw_list->AddImageRounded(
+            draw_list.AddImageRounded(
                 texture_id, content.min, content.max, {0, 0}, {1, 1}, style.color().get_col(), style.border_radius(),
                 ImDrawFlags_RoundCornersAll
             );
@@ -38,12 +32,11 @@ bool ImageWidget::on_draw() {
                 };
             };
 
-            draw_list->AddImageQuad(
+            draw_list.AddImageQuad(
                 texture_id, rotate({-half_size.x, -half_size.y}), rotate({half_size.x, -half_size.y}),
                 rotate({half_size.x, half_size.y}), rotate({-half_size.x, half_size.y}), {0, 0}, {1, 0}, {1, 1}, {0, 1},
                 style.color().get_col()
             );
         }
     }
-    return true;
 }

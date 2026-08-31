@@ -36,6 +36,7 @@ namespace ui {
         std::array<BorderPathSegment, 12> segments;
     };
 
+    void draw_line(ImDrawList& draw_list, ImVec2 start, ImVec2 end, ImColor color, float thickness);
     void draw_line(ImVec2 start, ImVec2 end, ImColor color, float thickness);
     void draw_circle(ImVec2 center, float radius, ImColor color);
     void draw_circle_outline(ImVec2 center, float radius, ImColor color, float thickness);
@@ -44,9 +45,12 @@ namespace ui {
     void draw_frame(Rect rect, const Style& style);
     void draw_frame(Rect rect, const Style& style, ImColor background);
     void draw_frame(Rect rect, const Style& style, float opacity);
-    // builds a clockwise path parameterized by arc length.
     BorderPath rounded_rect_border_path(Rect rect, float rounding);
+    void draw_border_path(
+        ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImColor color, float thickness, BorderStyle style
+    );
     void draw_border_path(const BorderPath& path, uint8_t border, ImColor color, float thickness, BorderStyle style);
+    void draw_border(ImDrawList& draw_list, Rect rect, const Style& style, ImColor color);
     void draw_border(Rect rect, const Style& style);
     void draw_border(Rect rect, const Style& style, ImColor color);
 } // namespace ui

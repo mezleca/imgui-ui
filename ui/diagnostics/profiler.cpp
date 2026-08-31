@@ -1,5 +1,7 @@
 #include "profiler.hpp"
 
+#include "../constants.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -68,6 +70,10 @@ namespace ui {
     }
 
     Profiler::Profiler(std::filesystem::path output_directory) {
+        if constexpr (!constants::IS_DEBUG_BUILD) {
+            return;
+        }
+
         if (output_directory.empty()) {
             output_directory = default_profile_directory();
         }
@@ -93,6 +99,11 @@ namespace ui {
     }
 
     void Profiler::set_enabled(bool enabled) {
+        if constexpr (!constants::IS_DEBUG_BUILD) {
+            m_enabled = false;
+            return;
+        }
+
         m_enabled = enabled;
         if (!enabled) {
             m_frame_open = false;
@@ -101,10 +112,18 @@ namespace ui {
     }
 
     bool Profiler::enabled() const {
-        return m_enabled;
+        return constants::IS_DEBUG_BUILD && m_enabled;
+    }
+
+    void Profiler::set_root_node(uint64_t identity) {
+        m_root_identity = identity;
     }
 
     void Profiler::begin_frame() {
+        if constexpr (!constants::IS_DEBUG_BUILD) {
+            return;
+        }
+
         if (!m_enabled) {
             return;
         }
@@ -112,6 +131,7 @@ namespace ui {
         FrameBuffer& frame = m_frames[m_write_index];
         frame.count = 0;
         frame.dropped = 0;
+        frame.metrics = {};
         frame.start = profile_timestamp();
         frame.end = frame.start;
         m_depth = 0;
@@ -119,12 +139,17 @@ namespace ui {
     }
 
     void Profiler::end_frame() {
+        if constexpr (!constants::IS_DEBUG_BUILD) {
+            return;
+        }
+
         if (!m_enabled || !m_frame_open) {
             return;
         }
 
         FrameBuffer& frame = m_frames[m_write_index];
         frame.end = profile_timestamp();
+        record_root_phase_times(frame);
         m_read_index = m_write_index;
         m_write_index = 1 - m_write_index;
         m_depth = 0;
@@ -144,6 +169,10 @@ namespace ui {
         return {frame.events.data(), frame.count};
     }
 
+    const ProfileFrameMetrics& Profiler::latest_metrics() const {
+        return m_frames[m_read_index].metrics;
+    }
+
     double Profiler::latest_frame_ms() const {
         const FrameBuffer& frame = m_frames[m_read_index];
         return profile_milliseconds(frame.start, frame.end);
@@ -154,13 +183,14 @@ namespace ui {
             return 0.0;
         }
 
+        double duration = 0.0;
         for (const ProfileEvent& event : latest_events()) {
-            if (event.node_identity == node_identity) {
-                return profile_milliseconds(event.start, event.end);
+            if (event.node_identity == node_identity && (event.name == "Node::update" || event.name == "Node::draw")) {
+                duration += profile_milliseconds(event.start, event.end);
             }
         }
 
-        return 0.0;
+        return duration;
     }
 
     uint32_t Profiler::dropped_events() const {
@@ -213,6 +243,13 @@ namespace ui {
         write_metric("frame", m_frame_metric, "ms");
         write_metric("memory", m_memory_metric, "mb");
 
+        const ProfileFrameMetrics& metrics = latest_metrics();
+        output << "latest.style_pushes = " << metrics.style_pushes << '\n';
+        output << "latest.style_pops = " << metrics.style_pops << '\n';
+        output << "latest.active_transitions = " << metrics.active_transitions << '\n';
+        output << "latest.update_ms = " << metrics.update_ms << '\n';
+        output << "latest.draw_ms = " << metrics.draw_ms << '\n';
+
         if (!output.good()) {
             return false;
         }
@@ -225,6 +262,10 @@ namespace ui {
     }
 
     Profiler::ZoneToken Profiler::begin_zone(std::string_view name, uint64_t node_identity) {
+        if constexpr (!constants::IS_DEBUG_BUILD) {
+            return {};
+        }
+
         if (!m_enabled || !m_frame_open) {
             return {};
         }
@@ -248,6 +289,10 @@ namespace ui {
     }
 
     void Profiler::end_zone(ZoneToken token) {
+        if constexpr (!constants::IS_DEBUG_BUILD) {
+            return;
+        }
+
         if (!m_enabled || !m_frame_open) {
             return;
         }
@@ -258,6 +303,42 @@ namespace ui {
 
         if (token.recorded) {
             m_frames[m_write_index].events[token.event_index].end = profile_timestamp();
+        }
+    }
+
+    void Profiler::record_style_scope() {
+        if (!m_enabled || !m_frame_open) {
+            return;
+        }
+
+        ++m_frames[m_write_index].metrics.style_pushes;
+        ++m_frames[m_write_index].metrics.style_pops;
+    }
+
+    void Profiler::record_active_transition() {
+        if (!m_enabled || !m_frame_open) {
+            return;
+        }
+
+        ++m_frames[m_write_index].metrics.active_transitions;
+    }
+
+    void Profiler::record_root_phase_times(FrameBuffer& frame) {
+        if (m_root_identity == 0) {
+            return;
+        }
+
+        for (std::size_t index = 0; index < frame.count; ++index) {
+            const ProfileEvent& event = frame.events[index];
+            if (event.node_identity != m_root_identity) {
+                continue;
+            }
+
+            if (event.name == "Node::update") {
+                frame.metrics.update_ms = profile_milliseconds(event.start, event.end);
+            } else if (event.name == "Node::draw") {
+                frame.metrics.draw_ms = profile_milliseconds(event.start, event.end);
+            }
         }
     }
 

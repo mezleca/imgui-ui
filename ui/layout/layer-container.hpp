@@ -10,7 +10,7 @@ namespace ui {
 
     protected:
         void on_layout() override;
-        bool on_draw() override;
+        bool paint_content() override;
         void on_draw_end() override;
 
     private:

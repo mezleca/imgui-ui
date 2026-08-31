@@ -6,25 +6,16 @@
 #include <imgui.h>
 
 #include <algorithm>
-#include <charconv>
 
 using namespace ui;
 
-void NumberInputWidget::configure_default_styles() {
-    const Theme& theme = m_ui.theme();
+void NumberInputWidget::configure_default_styles(UI& ui) {
+    const Theme& theme = ui.theme();
 
     m_thumb_color = theme.control_mark_color;
     m_thumb_size = theme.control_thumb_size;
 
-    configure_all_styles([&theme](Style& style) {
-        style.color(theme.text_color)
-            .background_color(theme.control_background_color, 0.15F)
-            .border_color(theme.control_border_color, 0.15F)
-            .padding({10.0F, 6.0F})
-            .border(BORDER_ALL)
-            .border_radius(theme.control_rounding)
-            .border_thickness(theme.control_border_thickness);
-    });
+    configure_all_styles([&theme](Style& style) { style.control(theme); });
 
     configure_style(StyleType::HOVER, [&theme](Style& style) {
         style.background_color(theme.control_hover_color).border_color(theme.accent_hover_color);
@@ -92,10 +83,6 @@ NumberInputWidget& NumberInputWidget::set_thumb_color(ImColor color) {
     return *this;
 }
 
-bool NumberInputWidget::changed() const {
-    return m_changed;
-}
-
 void NumberInputWidget::sync_value() const {
     std::visit([this](const auto* value) { m_value.set(*value); }, m_number);
 }
@@ -116,7 +103,7 @@ void NumberInputWidget::on_measure() {
 
 template <typename T>
 constexpr ImGuiDataType number_data_type() {
-    // dragscalar and sliderscalar require the imgui data type to match the pointed-to scalar exactly.
+    // imgui requires the scalar type to match the bound value.
     if constexpr (std::same_as<T, float>) {
         return ImGuiDataType_Float;
     } else if constexpr (std::same_as<T, double>) {
@@ -150,7 +137,7 @@ bool NumberInputWidget::draw_value(T& value) {
     return ImGui::DragScalar("##value", data_type, &value, m_speed, minimum_ptr, maximum_ptr, format);
 }
 
-bool NumberInputWidget::on_draw() {
+bool NumberInputWidget::paint_content() {
     const Style& current_style = style();
     ImVec2 frame_padding = current_style.padding();
     m_label.set_font(font());
@@ -181,8 +168,9 @@ bool NumberInputWidget::on_draw() {
     ImGui::PushStyleColor(ImGuiCol_SliderGrab, m_thumb_color.Value);
     ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, m_thumb_color.Value);
 
-    m_changed = std::visit([this](auto* value) { return draw_value(*value); }, m_number);
-    if (m_changed) notify_change();
+    if (std::visit([this](auto* value) { return draw_value(*value); }, m_number)) {
+        notify_change();
+    }
 
     draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style);
 
@@ -191,31 +179,5 @@ bool NumberInputWidget::on_draw() {
     ImGui::EndGroup();
     ImGui::PopID();
 
-    update_input(m_ui.input());
     return true;
-}
-
-std::optional<std::string> NumberInputWidget::content() const {
-    sync_value();
-    return m_value.str();
-}
-
-bool NumberInputWidget::try_set_content(std::string content) {
-    const bool changed = std::visit(
-        [&content](auto* value) {
-            using ValueType = std::remove_pointer_t<decltype(value)>;
-            ValueType parsed{};
-            const auto result = std::from_chars(content.data(), content.data() + content.size(), parsed);
-            if (result.ec != std::errc{} || result.ptr != content.data() + content.size() || parsed == *value) {
-                return false;
-            }
-
-            *value = parsed;
-            return true;
-        },
-        m_number
-    );
-
-    if (changed) notify_change();
-    return changed;
 }

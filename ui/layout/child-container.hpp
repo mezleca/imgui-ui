@@ -7,7 +7,7 @@
 #include <string_view>
 
 namespace ui {
-    /// style padding defines the content inset; screen bounds include it.
+    /// arranges children without owning pointer input; call set_input_target() when this container handles events.
     class ChildContainer : public Widget {
     public:
         explicit ChildContainer(std::string id, std::string_view type_name = "ChildContainer");
@@ -16,17 +16,18 @@ namespace ui {
         ChildContainer& set_scrollable(bool scrollable);
         /// replaces vertical style padding so one text line is centered in fixed height.
         ChildContainer& set_center_content_vertically(bool enabled);
-        /// derived containers must close the imgui scope opened here in on_draw_end().
-        bool on_draw() override;
 
     protected:
+        /// opens the imgui child scope; on_draw_end() records its bounds and closes it after child nodes draw.
+        bool paint_content() override;
         void on_layout() override;
 
-        /// draws the container border after its content while the child drawlist is active.
-        virtual void draw_borders();
-
-        /// records the outer rectangle, draws its border, and closes the imgui child window.
+        /// records the outer rectangle and closes the ImGui child window.
         void on_draw_end() override;
+
+        virtual bool accepts_imgui_input() const {
+            return true;
+        }
 
     private:
         bool m_scrollable = false;

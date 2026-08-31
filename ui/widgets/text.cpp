@@ -5,49 +5,60 @@
 
 using namespace ui;
 
-void TextWidget::set_wrap(float wrap) {
-    if (m_wrap == wrap) {
-        return;
+TextWidget& TextWidget::set_wrap(float width) {
+    if (m_wrap != width) {
+        m_wrap = width;
+        m_text.set_wrap(width);
+        invalidate_measure();
     }
 
-    m_wrap = wrap;
-    m_text->set_wrap(wrap);
-    invalidate_measure();
+    return *this;
+}
+
+TextWidget& TextWidget::set_overflow(TextOverflow overflow) {
+    m_overflow = overflow;
+    return *this;
+}
+
+bool TextWidget::empty() const {
+    return m_text.str().empty();
+}
+
+TextWidget& TextWidget::set_text(std::string text) {
+    if (text != m_text.str()) {
+        m_text.set(std::move(text));
+        invalidate_measure();
+    }
+    return *this;
 }
 
 void TextWidget::on_measure() {
-    m_text->set_font(font());
+    m_text.set_font(font());
+    m_text.set_line_height(style().line_height());
     const ImVec2 padding = style().padding();
-    const ImVec2 text_size = m_text->text_size();
-    set_size({text_size.x + padding.x * 2.0F, text_size.y + padding.y * 2.0F});
+    const ImVec2 text_size = m_text.text_size();
+    if (!m_has_explicit_size) {
+        StyledNode::set_size({text_size.x + padding.x * 2.0F, text_size.y + padding.y * 2.0F});
+    }
 }
 
-bool TextWidget::on_draw() {
+bool TextWidget::paint_content() {
     const Style& current_style = style();
     const ImVec2 minimum = ImGui::GetCursorScreenPos();
     const Rect outer = Rect::from_position_size(minimum, layout().size());
     const Rect content = outer.inset(current_style.padding());
 
     draw_frame(outer, current_style);
+
     ImGui::Dummy(layout().size());
-    ImGui::GetWindowDrawList()->AddText(
-        font(), ImGui::GetFontSize(), content.min, current_style.color().get_col(), m_text->c_str(), nullptr,
-        m_wrap >= 0.0F ? m_wrap : 0.0F
-    );
-
-    return true;
-}
-
-std::optional<std::string> TextWidget::content() const {
-    return m_text->str();
-}
-
-bool TextWidget::try_set_content(std::string content) {
-    if (content == m_text->str()) {
-        return false;
+    const ImVec4 clip_rect = {content.min.x, content.min.y, content.max.x, content.max.y};
+    if (m_wrap < 0.0F && m_overflow == TextOverflow::Ellipsis) {
+        m_text.draw_ellipsis(*ImGui::GetWindowDrawList(), content.min, current_style.color().get_col(), clip_rect);
+    } else {
+        m_text.draw(
+            *ImGui::GetWindowDrawList(), content.min, current_style.color().get_col(), m_wrap < 0.0F ? &clip_rect : nullptr
+        );
     }
 
-    m_text->set(std::move(content));
-    invalidate_measure();
     return true;
 }

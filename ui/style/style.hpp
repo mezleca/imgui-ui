@@ -40,6 +40,12 @@ namespace ui {
     public:
         using ChangeCallback = void (*)(void*);
 
+        struct PushState {
+            bool font_pushed = false;
+            int variables = 0;
+            int colors = 0;
+        };
+
         Style() : m_padding({}) {
             const Theme theme = Theme::defaults();
             m_color.set(theme.text_color);
@@ -76,12 +82,64 @@ namespace ui {
             return *this;
         }
 
+        Style& control(const Theme& theme, ImVec2 padding = {10.0F, 6.0F}) {
+            return color(theme.text_color)
+                .background_color(theme.control_background_color, 0.15F)
+                .border_color(theme.control_border_color, 0.15F)
+                .padding(padding)
+                .border(BORDER_ALL)
+                .border_radius(theme.control_rounding)
+                .border_thickness(theme.control_border_thickness);
+        }
+
+        /// unitless multiplier applied to each text line's font height.
+        float line_height() const {
+            return m_line_height.value;
+        }
+
+        Style& line_height(float value, float transition_duration = -1.0F) {
+            const float resolved = std::max(0.0F, value);
+            const bool changed = m_line_height.value != resolved;
+            if (!changed && transition_duration < 0.0F) {
+                return *this;
+            }
+
+            if (changed) {
+                m_line_height.set(resolved);
+            }
+            if (transition_duration >= 0.0F) m_line_height.set_duration(transition_duration);
+            if (changed) {
+                notify_change();
+            }
+            return *this;
+        }
+
         float alpha() const {
             return m_alpha;
         }
 
         Style& alpha(float value) {
             m_alpha = std::clamp(value, 0.0F, 1.0F);
+            return *this;
+        }
+
+        /// cursor used while the mouse hovers a node in this style; none restores the arrow cursor.
+        ImGuiMouseCursor cursor() const {
+            return m_cursor;
+        }
+
+        Style& cursor(ImGuiMouseCursor value) {
+            m_cursor = value;
+            return *this;
+        }
+
+        /// uses this style's background color behind the child scrollbar.
+        bool use_background_for_scrollbar() const {
+            return m_use_background_for_scrollbar;
+        }
+
+        Style& use_background_for_scrollbar(bool value = true) {
+            m_use_background_for_scrollbar = value;
             return *this;
         }
 
@@ -172,7 +230,6 @@ namespace ui {
             return *this;
         }
 
-        /// custom animated values used by application-specific widgets.
         StyleVariableStore& variables() {
             return m_vars;
         }
@@ -181,14 +238,16 @@ namespace ui {
             return m_vars;
         }
 
-        /// advances continuous values in `style` towards `target` by one frame.
         static void lerp(Style& style, const Style& target, float dt) {
             const ImFont* previous_font = style.m_font;
             const ImVec2 previous_padding = style.m_padding;
+            const float previous_line_height = style.m_line_height.value;
 
             style.m_font = target.m_font;
             style.m_padding = target.m_padding;
             style.m_alpha = target.m_alpha;
+            style.m_cursor = target.m_cursor;
+            style.m_use_background_for_scrollbar = target.m_use_background_for_scrollbar;
             style.m_blur = target.m_blur;
             style.m_border_thickness = target.m_border_thickness;
             style.m_border_radius = target.m_border_radius;
@@ -197,6 +256,7 @@ namespace ui {
             style.m_color.tick(target.m_color, dt);
             style.m_border_color.tick(target.m_border_color, dt);
             style.m_background_color.tick(target.m_background_color, dt);
+            style.m_line_height.tick(target.m_line_height, dt);
 
             style.m_vars.for_each([&](const std::string& key, StyleValue& value) {
                 const StyleValue* target_value = target.m_vars.find(key);
@@ -219,30 +279,16 @@ namespace ui {
             });
 
             if (previous_font != style.m_font || previous_padding.x != style.m_padding.x ||
-                previous_padding.y != style.m_padding.y) {
+                previous_padding.y != style.m_padding.y || previous_line_height != style.m_line_height.value) {
                 style.notify_change();
-            }
-        }
-
-        void adopt_missing_keys_from(const Style& target) {
-            const ImFont* previous_font = m_font;
-            if (m_font == nullptr) {
-                m_font = target.m_font;
-            }
-
-            target.m_vars.for_each([&](const std::string& key, const StyleValue& target_value) {
-                if (m_vars.find(key) == nullptr) m_vars.set(key, target_value);
-                return true;
-            });
-
-            if (previous_font != m_font) {
-                notify_change();
             }
         }
 
         bool is_close_to(const Style& target, float epsilon) const {
             if (m_font != target.m_font || m_padding.x != target.m_padding.x || m_padding.y != target.m_padding.y ||
-                std::abs(m_alpha - target.m_alpha) > epsilon || m_border != target.m_border || m_blur != target.m_blur ||
+                !m_line_height.is_close(target.m_line_height, epsilon) || std::abs(m_alpha - target.m_alpha) > epsilon ||
+                m_cursor != target.m_cursor || m_use_background_for_scrollbar != target.m_use_background_for_scrollbar ||
+                m_border != target.m_border || m_blur != target.m_blur ||
                 std::abs(m_border_thickness - target.m_border_thickness) > epsilon ||
                 std::abs(m_border_radius - target.m_border_radius) > epsilon || m_border_style != target.m_border_style) {
                 return false;
@@ -273,6 +319,7 @@ namespace ui {
     private:
         friend class StyledNode;
         friend class VisualState;
+        friend class PaintSlot;
 
         void set_change_callback(void* owner, ChangeCallback callback) {
             m_change_owner = owner;
@@ -285,12 +332,15 @@ namespace ui {
             }
         }
 
-        bool push(float opacity, ImFont* effective_font) const;
-        static void pop(bool font_pushed);
+        PushState push(float opacity, ImFont* effective_font) const;
+        static void pop(PushState state);
 
         ImFont* m_font = nullptr;
         ImVec2 m_padding = {};
+        FloatValue m_line_height{1.0F};
         float m_alpha = 1.0F;
+        ImGuiMouseCursor m_cursor = ImGuiMouseCursor_None;
+        bool m_use_background_for_scrollbar = true;
         int m_blur = 0;
         float m_border_thickness = 1.0F;
         float m_border_radius = 4.0F;

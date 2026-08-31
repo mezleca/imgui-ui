@@ -7,6 +7,7 @@
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
 #include <ui/widgets/checkbox.hpp>
+#include <ui/widgets/context-menu.hpp>
 #include <ui/widgets/dropdown.hpp>
 #include <ui/widgets/number-input.hpp>
 #include <ui/widgets/text.hpp>
@@ -25,7 +26,7 @@
 
 using namespace ui;
 
-TEST_CASE("number input supports integer and floating point values", "[NumberInputWidget][content]") {
+TEST_CASE("number input supports typed value updates", "[NumberInputWidget][value]") {
     ui::Runtime runtime;
     UI surface(runtime, {.size = {400.0F, 180.0F}});
     int integer = 0;
@@ -33,9 +34,9 @@ TEST_CASE("number input supports integer and floating point values", "[NumberInp
     ui::NumberInputWidget integer_input(surface, integer);
     ui::NumberInputWidget decimal_input(surface, decimal);
 
-    REQUIRE(integer_input.try_set_content("42"));
+    REQUIRE(integer_input.set_value(42));
     REQUIRE(integer == 42);
-    REQUIRE(decimal_input.try_set_content("1.25"));
+    REQUIRE(decimal_input.set_value(1.25));
     REQUIRE(decimal == Catch::Approx(1.25));
 }
 
@@ -75,6 +76,119 @@ TEST_CASE("checkbox measurement includes style padding and remeasures after chan
     REQUIRE(stack.layout().size().y == Catch::Approx(checkbox.layout().size().y));
 }
 
+TEST_CASE("nested containers keep default padding empty and route checkbox clicks", "[container][input][regression]") {
+    ui::RuntimeConfig config;
+    config.theme.content_padding = 20.0F;
+    ui::Runtime runtime(std::move(config));
+    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    bool checked = false;
+
+    auto& page = surface.root().add_child<ui::StackContainer>("page");
+    page.set_size({320.0F, 120.0F});
+    auto& section = page.add_child<ui::ChildContainer>("section");
+    auto& form = section.add_child<ui::StackContainer>("form");
+    auto& checkbox = form.add_child<ui::CheckboxWidget>(surface, checked, "enabled");
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ui_test::ImGuiContext::build_fonts();
+    ImGui::GetIO().DisplaySize = {400.0F, 180.0F};
+
+    const auto draw_frame = [&surface] {
+        surface.begin_input_frame();
+        surface.begin_frame();
+        surface.root().update(ImGui::GetIO().DeltaTime);
+        surface.root().draw();
+        surface.end_frame();
+    };
+
+    draw_frame();
+    REQUIRE(runtime.theme().content_padding == Catch::Approx(20.0F));
+    REQUIRE(page.style().padding().x == 0.0F);
+    REQUIRE(page.style().padding().y == 0.0F);
+    REQUIRE(section.style().padding().x == 0.0F);
+    REQUIRE(section.style().padding().y == 0.0F);
+
+    const ui::Rect rect = checkbox.layout().screen_rect();
+    const ImVec2 position = {(rect.min.x + rect.max.x) * 0.5F, (rect.min.y + rect.max.y) * 0.5F};
+    REQUIRE(surface.input_router().node_at(position) == &checkbox);
+
+    ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
+    down.position = position;
+    down.button = ui::PointerButton::Left;
+    surface.dispatch(down);
+
+    ui::UiEvent up = ui::UiEvent::make(ui::EventType::PointerUp);
+    up.position = position;
+    up.button = ui::PointerButton::Left;
+    surface.dispatch(up);
+    REQUIRE(checked);
+}
+
+TEST_CASE("dropdown opens from a nested container without extending its parent", "[dropdown][container][regression]") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.size = {400.0F, 240.0F}});
+    std::string value = "light";
+
+    auto& page = surface.root().add_child<ui::StackContainer>("page");
+    page.set_size({360.0F, 200.0F});
+    auto& section = page.add_child<ui::ChildContainer>("section");
+    auto& form = section.add_child<ui::StackContainer>("form");
+    auto& dropdown = form.add_child<ui::DropdownWidget>(
+        surface, value, std::vector<ui::DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "theme"
+    );
+    dropdown.set_size({180.0F, 32.0F});
+    bool checked = false;
+    auto& checkbox = surface.root().add_child<ui::CheckboxWidget>(surface, checked, "enabled");
+    checkbox.set_size({180.0F, 32.0F});
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ui_test::ImGuiContext::build_fonts();
+    ImGui::GetIO().DisplaySize = {400.0F, 240.0F};
+
+    const auto draw_frame = [&surface] {
+        surface.begin_input_frame();
+        surface.begin_frame();
+        surface.root().update(ImGui::GetIO().DeltaTime);
+        surface.root().draw();
+        surface.end_frame();
+    };
+
+    draw_frame();
+    const ui::Rect trigger_rect = dropdown.trigger().layout().screen_rect();
+    const ImVec2 trigger_center = {
+        (trigger_rect.min.x + trigger_rect.max.x) * 0.5F,
+        (trigger_rect.min.y + trigger_rect.max.y) * 0.5F,
+    };
+
+    ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
+    down.position = trigger_center;
+    down.button = ui::PointerButton::Left;
+    surface.dispatch(down);
+
+    ui::UiEvent up = ui::UiEvent::make(ui::EventType::PointerUp);
+    up.position = trigger_center;
+    up.button = ui::PointerButton::Left;
+    surface.dispatch(up);
+
+    draw_frame();
+    REQUIRE(dropdown.is_open());
+    const ui::Rect body_rect = dropdown.body().layout().screen_rect();
+    REQUIRE(body_rect.min.y >= trigger_rect.max.y);
+    surface.input_router().register_region(checkbox, {.rect = body_rect});
+
+    const ImVec2 option_position = {
+        (body_rect.min.x + body_rect.max.x) * 0.5F,
+        (body_rect.min.y + body_rect.max.y) * 0.5F,
+    };
+    REQUIRE(surface.input_router().node_at(option_position) == &checkbox);
+
+    down.position = option_position;
+    surface.dispatch(down);
+    up.position = option_position;
+    surface.dispatch(up);
+    REQUIRE_FALSE(checked);
+}
+
 TEST_CASE("text measurement and drawing include style padding", "[TextWidget][layout][style]") {
     ui::Runtime runtime;
     UI surface(runtime, {.size = {400.0F, 180.0F}});
@@ -102,6 +216,61 @@ TEST_CASE("text measurement and drawing include style padding", "[TextWidget][la
     REQUIRE(text.layout().size().y == Catch::Approx(raw_size.y + 6.0F));
 }
 
+TEST_CASE("unwrapped text keeps its explicit width for overflow", "[TextWidget][layout]") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    ui::TextWidget clipped("this text exceeds the explicit width");
+    ui::TextWidget ellipsized("this text exceeds the explicit width");
+    clipped.set_size({80.0F, 24.0F});
+    ellipsized.set_size({80.0F, 24.0F}).set_overflow(ui::TextOverflow::Ellipsis);
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ui_test::ImGuiContext::build_fonts();
+    ImGui::GetIO().DisplaySize = {400.0F, 180.0F};
+
+    surface.begin_frame();
+    ImGui::Begin("text-overflow-test");
+    clipped.draw();
+    ellipsized.draw();
+    ImGui::End();
+    surface.end_frame();
+
+    REQUIRE(clipped.overflow() == ui::TextOverflow::Clip);
+    REQUIRE(ellipsized.overflow() == ui::TextOverflow::Ellipsis);
+    REQUIRE(clipped.layout().size().x == Catch::Approx(80.0F));
+    REQUIRE(ellipsized.layout().size().x == Catch::Approx(80.0F));
+}
+
+TEST_CASE("text line height scales multi-line text layout", "[TextWidget][layout][style]") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    ui::TextWidget text("first line\nsecond line");
+    text.configure_all_styles([](ui::Style& style) { style.padding({}).line_height(1.5F); });
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ui_test::ImGuiContext::build_fonts();
+    ImGui::GetIO().DisplaySize = {400.0F, 180.0F};
+
+    surface.begin_frame();
+    const float native_line_height = ImGui::GetTextLineHeight();
+    ImGui::Begin("text-line-height-test");
+    text.draw();
+    ImGui::End();
+    surface.end_frame();
+
+    REQUIRE(text.layout().size().y == Catch::Approx(native_line_height * 3.0F));
+}
+
+TEST_CASE("text line height interpolates between visual states", "[TextWidget][style]") {
+    ui::TextWidget text("line");
+    text.configure_style(ui::StyleType::HOVER, [](ui::Style& style) { style.line_height(2.0F, 1.0F); });
+
+    text.set_interaction_style(true, false);
+    text.update(0.5F);
+
+    REQUIRE(text.style().line_height() == Catch::Approx(1.5F));
+}
+
 TEST_CASE("value widgets notify changes", "[Widget][change]") {
     Runtime runtime;
     UI surface(runtime, Config{});
@@ -121,16 +290,19 @@ TEST_CASE("value widgets notify changes", "[Widget][change]") {
     dropdown.on_change = [&changes] { ++changes; };
     text_input.on_change = [&changes] { ++changes; };
 
-    REQUIRE(checkbox.try_set_content("true"));
-    REQUIRE(input.try_set_content("2"));
-    REQUIRE(dropdown.try_set_content("two"));
-    REQUIRE(text_input.try_set_content("after"));
+    checkbox.set_checked(true);
+    REQUIRE(changes == 1);
+    REQUIRE(input.set_value(2));
+    REQUIRE(changes == 2);
+    REQUIRE(dropdown.select_value("two"));
+    REQUIRE(changes == 3);
+    REQUIRE(text_input.set_value("after"));
     REQUIRE(changes == 4);
 
-    REQUIRE_FALSE(checkbox.try_set_content("true"));
-    REQUIRE_FALSE(input.try_set_content("2"));
-    REQUIRE_FALSE(dropdown.try_set_content("two"));
-    REQUIRE_FALSE(text_input.try_set_content("after"));
+    checkbox.set_checked(true);
+    REQUIRE_FALSE(input.set_value(2));
+    REQUIRE_FALSE(dropdown.select_value("two"));
+    REQUIRE_FALSE(text_input.set_value("after"));
     REQUIRE(changes == 4);
 }
 
@@ -168,36 +340,6 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
     REQUIRE(expanded_width > initial_width);
     REQUIRE(input.layout().size().x < initial_width);
     REQUIRE(input.layout().size().y < parent.layout().size().y);
-}
-
-TEST_CASE("blocking overlay prevents hover state on content behind it", "[ButtonWidget][input][regression]") {
-    ui::Runtime runtime;
-    UI surface(runtime, {.size = {240.0F, 120.0F}});
-
-    auto& content_button = surface.root().add_child<ui::ButtonWidget>(surface, "content", ImVec2{120.0F, 40.0F});
-    content_button.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {20.0F, 20.0F});
-
-    auto& overlay = surface.root().add_child<ui::OverlayNode>("overlay");
-    overlay.set_blocks_pointer_input(true);
-    auto& overlay_button = overlay.add_child<ui::ButtonWidget>(surface, "overlay", ImVec2{120.0F, 40.0F});
-    overlay_button.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {20.0F, 20.0F});
-
-    ImGui::SetCurrentContext(surface.imgui_context());
-    ImGui::GetIO().DisplaySize = {240.0F, 120.0F};
-    ImGui::GetIO().MousePos = {80.0F, 40.0F};
-    ui_test::ImGuiContext::build_fonts();
-    surface.begin_input_frame();
-    surface.begin_frame();
-    ImGui::SetNextWindowPos({0.0F, 0.0F});
-    ImGui::SetNextWindowSize({240.0F, 120.0F});
-    ImGui::Begin("overlay-hover-test");
-    surface.root().update(ImGui::GetIO().DeltaTime);
-    surface.root().draw();
-    ImGui::End();
-    surface.end_frame();
-
-    REQUIRE(overlay_button.style_type() == ui::StyleType::HOVER);
-    REQUIRE(content_button.style_type() != ui::StyleType::HOVER);
 }
 
 TEST_CASE("pointer block prevents hover and clicks on content controls", "[input][regression]") {
@@ -331,7 +473,9 @@ TEST_CASE("dropdown opens after fading out and fades after selection", "[Dropdow
     ui::Runtime runtime;
     UI surface(runtime, {.size = {320.0F, 220.0F}});
     std::string value = "blue";
+    int changes = 0;
     ui::StackContainer stack("dropdown-stack");
+    stack.set_input_router(&surface.input_router());
     stack.set_size({280.0F, 180.0F});
     stack.set_spacing(16.0F);
     auto& dropdown = stack.add_child<ui::DropdownWidget>(
@@ -339,27 +483,42 @@ TEST_CASE("dropdown opens after fading out and fades after selection", "[Dropdow
     );
     dropdown.set_size({180.0F, 62.0F});
     dropdown.set_label("theme");
+    dropdown.on_change = [&changes] { ++changes; };
     auto& status = stack.add_child<ui::TextWidget>("no clicks yet");
 
     ImGui::SetCurrentContext(surface.imgui_context());
     ui_test::ImGuiContext::build_fonts();
 
-    const auto draw_frame = [&surface, &stack](ImVec2 mouse_position, bool mouse_down) {
+    bool previous_mouse_down = false;
+    const auto draw_frame = [&surface, &stack, &dropdown, &previous_mouse_down](ImVec2 mouse_position, bool mouse_down) {
         ImGui::SetCurrentContext(surface.imgui_context());
         ImGui::GetIO().DisplaySize = {320.0F, 220.0F};
         ImGui::GetIO().MousePos = mouse_position;
         ImGui::GetIO().MouseDown[ImGuiMouseButton_Left] = mouse_down;
 
+        if (mouse_down && !previous_mouse_down) {
+            ui::UiEvent event = ui::UiEvent::make(ui::EventType::PointerDown);
+            event.position = mouse_position;
+            event.button = ui::PointerButton::Left;
+            surface.dispatch(event);
+        } else if (!mouse_down && previous_mouse_down) {
+            ui::UiEvent event = ui::UiEvent::make(ui::EventType::PointerUp);
+            event.position = mouse_position;
+            event.button = ui::PointerButton::Left;
+            surface.dispatch(event);
+        }
+        previous_mouse_down = mouse_down;
+
+        surface.begin_input_frame();
         surface.begin_frame();
         ImGui::SetNextWindowPos({0.0F, 0.0F});
         ImGui::SetNextWindowSize({320.0F, 220.0F});
         ImGui::Begin("dropdown-test");
         stack.update(ImGui::GetIO().DeltaTime);
         stack.draw();
-        const bool popup_open = ImGui::GetCurrentContext()->OpenPopupStack.Size > 0;
         ImGui::End();
         surface.end_frame();
-        return popup_open;
+        return dropdown.is_open();
     };
 
     for (int frame = 0; frame < 12; ++frame) {
@@ -374,24 +533,46 @@ TEST_CASE("dropdown opens after fading out and fades after selection", "[Dropdow
         (trigger_rect.min.y + trigger_rect.max.y) * 0.5F,
     };
 
-    REQUIRE(draw_frame(trigger_center, true));
+    REQUIRE_FALSE(draw_frame(trigger_center, true));
     REQUIRE(draw_frame(trigger_center, false));
     REQUIRE(draw_frame(trigger_center, false));
     REQUIRE(draw_frame({0.0F, 0.0F}, false));
     REQUIRE(dropdown.is_open());
 
+    REQUIRE(draw_frame(trigger_center, true));
+    REQUIRE_FALSE(draw_frame(trigger_center, false));
+    REQUIRE_FALSE(dropdown.is_open());
+    REQUIRE(dropdown.body().visually_visible());
+    REQUIRE_FALSE(dropdown.body().accepts_input());
+    REQUIRE_FALSE(draw_frame(trigger_center, true));
+    REQUIRE_FALSE(draw_frame(trigger_center, false));
+    REQUIRE_FALSE(dropdown.is_open());
+    const float trigger_closing_opacity = dropdown.body().opacity();
+    REQUIRE_FALSE(draw_frame({0.0F, 0.0F}, false));
+    REQUIRE(dropdown.body().opacity() < trigger_closing_opacity);
+
+    for (int frame = 0; frame < 12; ++frame) {
+        REQUIRE_FALSE(draw_frame({0.0F, 0.0F}, false));
+    }
+
+    REQUIRE_FALSE(draw_frame(trigger_center, true));
+    REQUIRE(draw_frame(trigger_center, false));
+    REQUIRE(draw_frame({0.0F, 0.0F}, false));
+    REQUIRE(dropdown.is_open());
+
     const ui::Rect body_rect = dropdown.body().layout().screen_rect();
-    const float item_height = ImGui::GetTextLineHeight() + dropdown.body().style().padding().y * 2.0F;
+    const float item_height = ImGui::GetTextLineHeight() + 8.0F;
     const ImVec2 second_option = {
         (body_rect.min.x + body_rect.max.x) * 0.5F,
-        body_rect.min.y + 8.0F + item_height * 1.5F,
+        body_rect.min.y + item_height * 1.5F,
     };
     REQUIRE(draw_frame(second_option, true));
-    REQUIRE(draw_frame(second_option, false));
+    REQUIRE_FALSE(draw_frame(second_option, false));
     REQUIRE(value == "contrast");
+    REQUIRE(changes == 1);
     REQUIRE_FALSE(dropdown.body().accepts_input());
     const float closing_opacity = dropdown.body().opacity();
-    REQUIRE(draw_frame(second_option, false));
+    REQUIRE_FALSE(draw_frame(second_option, false));
     REQUIRE(dropdown.body().opacity() < closing_opacity);
 
     for (int frame = 0; frame < 12; ++frame) {
@@ -415,21 +596,6 @@ TEST_CASE("runtime owns shared theme and explicitly registered assets", "[Runtim
 
     REQUIRE(runtime.theme().box_rounding == 8.0F);
     REQUIRE(other_runtime.theme().content_padding == ui::Theme::defaults().content_padding);
-}
-
-TEST_CASE("style defaults are independent from runtime themes", "[theme][layout]") {
-    ui::Theme theme = ui::Theme::defaults();
-    theme.content_padding = 20.0F;
-    theme.box_rounding = 8.0F;
-    theme.text_color = {0.2F, 0.3F, 0.4F, 1.0F};
-    ui::RuntimeConfig config;
-    config.theme = theme;
-    ui::Runtime runtime(std::move(config));
-
-    ui::ChildContainer container("container");
-    REQUIRE(runtime.theme().content_padding == Catch::Approx(20.0F));
-    REQUIRE(container.style().padding().x == Catch::Approx(ui::Theme::defaults().content_padding));
-    REQUIRE(container.style().border_radius() == Catch::Approx(ui::Theme::defaults().box_rounding));
 }
 
 TEST_CASE("style transition duration uses seconds", "[VisualState][transition]") {
@@ -503,12 +669,27 @@ TEST_CASE("interaction style precedence is active focus hover default", "[Visual
 
     state.set_item_state(true, true, true);
     REQUIRE(state.style_type() == ui::StyleType::ACTIVE);
+}
 
-    ui::Widget widget("focused-widget");
-    ui::ItemInputState input;
-    input.focused = true;
-    widget.apply_input_state(input);
-    REQUIRE(widget.style_type() == ui::StyleType::FOCUS);
+TEST_CASE("style cursor follows hovered nodes", "[Style][cursor]") {
+    ui_test::ImGuiContext context({320.0F, 180.0F});
+    ui::InputRouter router;
+    ui::Widget widget("cursor-widget");
+    widget.configure_style(ui::StyleType::HOVER, [](ui::Style& style) { style.cursor(ImGuiMouseCursor_Hand); });
+
+    ImGui::NewFrame();
+    router.begin_frame();
+    router.register_region(widget, {.rect = {{0.0F, 0.0F}, {40.0F, 20.0F}}});
+
+    ui::UiEvent move = ui::UiEvent::make(ui::EventType::PointerMove);
+    move.position = {10.0F, 10.0F};
+    router.dispatch(move);
+    REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
+
+    move.position = {100.0F, 100.0F};
+    router.dispatch(move);
+    REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Arrow);
+    ImGui::EndFrame();
 }
 
 TEST_CASE("border alpha fades out when a hover state is cleared", "[VisualState][transition]") {
@@ -565,7 +746,7 @@ TEST_CASE("fade transitions control input independently from drawing", "[widget_
 TEST_CASE("widget input requires both node and visual state to accept input", "[Widget][input]") {
     ui::Widget widget("widget");
     ui::InputRouter router;
-    router.register_region(widget, {{0.0F, 0.0F}, {10.0F, 10.0F}});
+    router.register_region(widget, {.rect = {{0.0F, 0.0F}, {10.0F, 10.0F}}});
 
     REQUIRE(widget.accepts_input());
     REQUIRE(router.node_at({5.0F, 5.0F}) == &widget);
@@ -592,7 +773,7 @@ TEST_CASE("styled nodes apply their effective font during draw", "[Widget][style
         ImFont* observed_font = nullptr;
 
     private:
-        bool on_draw() override {
+        bool paint_content() override {
             observed_font = ImGui::GetFont();
             ImGui::Dummy({10.0F, 10.0F});
             return true;
@@ -630,7 +811,7 @@ TEST_CASE("styled nodes keep borders out of imgui style scope", "[Widget][style]
         ImVec4 observed_background{};
 
     private:
-        bool on_draw() override {
+        bool paint_content() override {
             const ImGuiStyle& imgui_style = ImGui::GetStyle();
             observed_padding = imgui_style.FramePadding;
             observed_rounding = imgui_style.FrameRounding;
@@ -684,7 +865,7 @@ TEST_CASE("widgets skip drawing after their fade becomes invisible", "[Widget][o
         int draws = 0;
 
     private:
-        bool on_draw() override {
+        bool paint_content() override {
             ++draws;
             ImGui::Dummy({10.0F, 10.0F});
             return true;
@@ -794,6 +975,19 @@ TEST_CASE("a var introduced only on the target style still appears after transit
     REQUIRE(state.style().variables().get<ui::FloatValue>("line_alpha") != nullptr);
 }
 
+TEST_CASE("style variables stay local to their declared state", "[VisualState][variables]") {
+    ui::VisualState state;
+    state.style(ui::StyleType::HOVER).variables().set("line_width", ui::FloatValue{2.0F, 0.15F});
+
+    state.set_style(ui::StyleType::HOVER);
+    state.update(1.0F / 60.0F);
+    REQUIRE(state.style().variables().get<ui::FloatValue>("line_width") != nullptr);
+
+    state.set_style(ui::StyleType::ACTIVE);
+    state.update(1.0F / 60.0F);
+    REQUIRE(state.style().variables().get<ui::FloatValue>("line_width") == nullptr);
+}
+
 TEST_CASE("editing the selected style updates its effective appearance") {
     ui::VisualState state;
     state.style(ui::StyleType::DEFAULT).color(ImColor{0, 0, 0, 255});
@@ -807,4 +1001,173 @@ TEST_CASE("editing the selected style updates its effective appearance") {
     const ui::VisualState& const_state = state;
     REQUIRE(const_state.style().color().get().x == Catch::Approx(0.0F));
     REQUIRE(const_state.style().color().get().y == Catch::Approx(1.0F));
+}
+
+namespace context_menu_test {
+    void draw_frame(UI& surface, float dt = 0.2F) {
+        surface.begin_input_frame();
+        surface.begin_frame();
+        surface.root().update(dt);
+        surface.root().draw();
+        surface.end_frame();
+    }
+
+    UiEvent pointer_event(EventType type, ImVec2 position) {
+        UiEvent event = UiEvent::make(type);
+        event.position = position;
+        event.button = PointerButton::Left;
+        return event;
+    }
+} // namespace context_menu_test
+
+TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]") {
+    Runtime runtime;
+    UI surface(runtime, {.size = {320.0F, 240.0F}});
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
+    ui_test::ImGuiContext::build_fonts();
+
+    ContextMenuItems items;
+    items.push_back({.label = "item"});
+    auto& menu = surface.root().add_child<ContextMenuWidget>(surface, std::move(items));
+
+    REQUIRE_FALSE(menu.visible());
+    menu.show({300.0F, 220.0F});
+    context_menu_test::draw_frame(surface);
+
+    REQUIRE(menu.is_open());
+    REQUIRE(menu.layout().screen_rect().min.x == Catch::Approx(136.0F));
+    REQUIRE(menu.layout().screen_rect().min.y == Catch::Approx(204.0F));
+
+    ImGui::GetIO().MousePos = {140.0F, 208.0F};
+    context_menu_test::draw_frame(surface, 0.01F);
+
+    ImGui::GetIO().MousePos = {0.0F, 0.0F};
+    context_menu_test::draw_frame(surface, 0.78F);
+    REQUIRE(menu.is_open());
+
+    context_menu_test::draw_frame(surface, 0.02F);
+    REQUIRE_FALSE(menu.is_open());
+    context_menu_test::draw_frame(surface);
+    REQUIRE_FALSE(menu.visible());
+}
+
+TEST_CASE("context menu item callbacks can keep the root menu open", "[ContextMenuWidget]") {
+    Runtime runtime;
+    UI surface(runtime, {.size = {320.0F, 240.0F}});
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
+    ui_test::ImGuiContext::build_fonts();
+
+    bool callback_called = false;
+    ContextMenuItems items;
+    items.push_back({
+        .label = "keep open",
+        .on_click = [&callback_called](ContextMenuWidget& menu) {
+            callback_called = true;
+            menu.cancel_close_request();
+        },
+    });
+    auto& menu = surface.root().add_child<ContextMenuWidget>(surface, std::move(items));
+    menu.show({20.0F, 20.0F});
+    context_menu_test::draw_frame(surface);
+
+    const Rect item_rect = menu.children().front()->layout().screen_rect();
+    const ImVec2 item_position = {item_rect.min.x + 4.0F, item_rect.min.y + 4.0F};
+    auto down = context_menu_test::pointer_event(EventType::PointerDown, item_position);
+    auto up = context_menu_test::pointer_event(EventType::PointerUp, item_position);
+    REQUIRE_FALSE(surface.dispatch(down));
+    REQUIRE(surface.dispatch(up));
+
+    REQUIRE(callback_called);
+    REQUIRE(menu.is_open());
+    REQUIRE(menu.visible());
+}
+
+TEST_CASE("context menu blocks and closes on outside pointer input", "[ContextMenuWidget]") {
+    Runtime runtime;
+    UI surface(runtime, {.size = {320.0F, 240.0F}});
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
+    ui_test::ImGuiContext::build_fonts();
+
+    int click_count = 0;
+    auto& button = surface.root().add_child<ButtonWidget>(surface, "under menu", ImVec2{100.0F, 32.0F});
+    button.set_placement({.anchor = Anchor::TopLeft, .origin = Origin::TopLeft, .offset = {8.0F, 8.0F}});
+    button.on_click([&click_count] { ++click_count; });
+
+    ContextMenuItems items;
+    items.push_back({.label = "item"});
+    auto& menu = surface.root().add_child<ContextMenuWidget>(surface, std::move(items));
+    menu.show({160.0F, 120.0F});
+    context_menu_test::draw_frame(surface);
+
+    auto down = context_menu_test::pointer_event(EventType::PointerDown, {20.0F, 20.0F});
+    auto up = context_menu_test::pointer_event(EventType::PointerUp, {20.0F, 20.0F});
+    REQUIRE(surface.dispatch(down));
+    REQUIRE(surface.dispatch(up));
+    REQUIRE_FALSE(menu.is_open());
+    REQUIRE(click_count == 0);
+
+    context_menu_test::draw_frame(surface);
+    REQUIRE_FALSE(menu.visible());
+}
+
+TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMenuWidget]") {
+    Runtime runtime;
+    UI surface(runtime, {.size = {480.0F, 240.0F}});
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {480.0F, 240.0F};
+    ui_test::ImGuiContext::build_fonts();
+
+    ContextMenuItems children;
+    children.push_back({.label = "child"});
+    ContextMenuItems items;
+    items.push_back({.label = "parent", .children = std::move(children)});
+    auto& menu = surface.root().add_child<ContextMenuWidget>(surface, std::move(items));
+    menu.show({20.0F, 20.0F});
+    context_menu_test::draw_frame(surface);
+
+    const Rect item_rect = menu.children().front()->layout().screen_rect();
+    const ImVec2 item_position = {item_rect.min.x + 4.0F, item_rect.min.y + 4.0F};
+    auto move = context_menu_test::pointer_event(EventType::PointerMove, item_position);
+    surface.dispatch(move);
+    ImGui::GetIO().MousePos = item_position;
+    context_menu_test::draw_frame(surface);
+
+    auto* submenu = dynamic_cast<ContextMenuWidget*>(menu.children()[1].get());
+    REQUIRE(submenu != nullptr);
+    REQUIRE(submenu->visible());
+    REQUIRE(submenu->layout().screen_rect().min.x == Catch::Approx(item_rect.max.x + 6.0F));
+
+    auto cross_gap = context_menu_test::pointer_event(
+        EventType::PointerMove, {(item_rect.max.x + submenu->layout().screen_rect().min.x) * 0.5F, item_rect.min.y + 4.0F}
+    );
+    surface.dispatch(cross_gap);
+    REQUIRE(submenu->is_open());
+
+    auto enter_submenu = context_menu_test::pointer_event(
+        EventType::PointerMove, {submenu->layout().screen_rect().min.x + 4.0F, submenu->layout().screen_rect().min.y + 4.0F}
+    );
+    surface.dispatch(enter_submenu);
+    REQUIRE(submenu->is_open());
+
+    auto leave_item = context_menu_test::pointer_event(
+        EventType::PointerMove, {menu.layout().screen_rect().min.x + 1.0F, menu.layout().screen_rect().min.y + 1.0F}
+    );
+    surface.dispatch(leave_item);
+    ImGui::GetIO().MousePos = leave_item.position;
+    context_menu_test::draw_frame(surface, 0.81F);
+    context_menu_test::draw_frame(surface, 0.0F);
+    REQUIRE_FALSE(submenu->is_open());
+
+    surface.dispatch(move);
+    ImGui::GetIO().MousePos = item_position;
+    context_menu_test::draw_frame(surface);
+    REQUIRE(submenu->is_open());
+
+    ImGui::GetIO().MousePos = {460.0F, 220.0F};
+    context_menu_test::draw_frame(surface);
+    REQUIRE_FALSE(submenu->is_open());
+    REQUIRE_FALSE(menu.is_open());
 }

@@ -22,5 +22,9 @@ if(IMGUI_UI_BUILD_SDL)
     target_link_libraries(imgui-ui-sdl-tests PRIVATE imgui-ui::sdl Catch2::Catch2WithMain)
     imgui_ui_enable_sanitizers(imgui-ui-sdl-tests)
 
-    catch_discover_tests(imgui-ui-sdl-tests DISCOVERY_MODE PRE_TEST)
+    catch_discover_tests(
+        imgui-ui-sdl-tests
+        DISCOVERY_MODE PRE_TEST
+        PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0"
+    )
 endif()

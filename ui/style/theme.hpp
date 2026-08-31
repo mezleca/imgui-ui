@@ -16,6 +16,7 @@ namespace ui {
         ImVec4 background_color = {30.0F / 255.0F, 30.0F / 255.0F, 30.0F / 255.0F, 1.0F};
         ImVec4 background_secondary_color = {42.0F / 255.0F, 42.0F / 255.0F, 42.0F / 255.0F, 1.0F};
         ImVec4 background_tertiary_color = {26.0F / 255.0F, 26.0F / 255.0F, 26.0F / 255.0F, 1.0F};
+        ImVec4 scrollbar_background_color = {0.0F, 0.0F, 0.0F, 0.0F};
         ImVec4 header_background_color = {36.0F / 255.0F, 36.0F / 255.0F, 36.0F / 255.0F, 1.0F};
         ImVec4 text_color = {247.0F / 255.0F, 250.0F / 255.0F, 251.0F / 252.0F, 1.0F};
         ImVec4 text_secondary_color = {203.0F / 255.0F, 213.0F / 255.0F, 224.0F / 255.0F, 1.0F};

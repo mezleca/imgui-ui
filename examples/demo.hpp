@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ui/layout/resizable-container.hpp>
 #include <ui/layout/stack-container.hpp>
 #include <ui/widgets/text.hpp>
 
@@ -27,7 +28,7 @@ private:
     static void apply_border_style(ui::Node& node, ui::BorderStyle style);
 
     UI& m_surface;
-    ui::StackContainer* m_dynamic_nodes = nullptr;
+    ui::ResizableContainer* m_dynamic_nodes = nullptr;
     ui::TextWidget* m_dynamic_status = nullptr;
     ui::Node* m_pending_remove = nullptr;
     bool m_enabled = true;

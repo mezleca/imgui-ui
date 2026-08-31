@@ -5,6 +5,7 @@
 class UI;
 
 namespace ui {
+    /// stacked modal content displayed inside ModalContainer and clamped to the viewport with an outer margin.
     class ModalPanel : public StackContainer {
     public:
         ModalPanel(UI& ui, std::string id);

@@ -12,24 +12,13 @@ namespace ui {
     public:
         explicit OverlayNode(std::string id) : Node(std::move(id)) {}
 
-        bool accepts_input() const override {
-            return m_blocks_pointer_input && Node::accepts_input();
-        }
-
-        /// makes this full-viewport overlay consume pointer input outside its children.
+        /// blocks pointer events outside this overlay's children when blocks is true.
         OverlayNode& set_blocks_pointer_input(bool blocks) {
-            m_blocks_pointer_input = blocks;
-            update_pointer_blocker_registration();
+            if (blocks)
+                set_input_blocker();
+            else
+                clear_input_target();
             return *this;
-        }
-
-        bool blocks_pointer_input() const override {
-            return m_blocks_pointer_input;
-        }
-
-        Rect pointer_blocking_rect() const override {
-            const ImGuiViewport* viewport = ImGui::GetMainViewport();
-            return Rect::from_position_size(viewport->WorkPos, viewport->WorkSize);
         }
 
     protected:
@@ -43,8 +32,5 @@ namespace ui {
             set_screen_rect(Rect::from_position_size(viewport->WorkPos, viewport->WorkSize));
             return true;
         }
-
-    private:
-        bool m_blocks_pointer_input = false;
     };
 } // namespace ui

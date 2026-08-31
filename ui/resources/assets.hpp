@@ -23,6 +23,7 @@ namespace ui {
         Font& font(FontType type);
         const Font& font(FontType type) const;
         IconTexture* add_resource(std::string id, std::filesystem::path location);
+        IconTexture* find_texture(std::string_view id);
         IconTexture* texture(std::string_view id);
 
         void release_context(ImGuiContext* context);

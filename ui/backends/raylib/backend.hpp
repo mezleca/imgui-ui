@@ -28,15 +28,16 @@ namespace ui {
         void hide() override;
         void raise() override;
 
+        /// returns true only when the retained tree handles a polled native event.
         bool process_events(UI& surface);
 
     private:
         Config m_config;
-        ImVec2 m_previous_mouse_position{};
         bool m_attached = false;
         bool m_owns_window = false;
         bool m_imgui_initialized = false;
-        bool m_has_mouse_position = false;
+        ImVec2 m_pointer_position{};
+        bool m_has_pointer_position = false;
     };
 
     std::unique_ptr<Backend> create_raylib_backend(const Config& config);

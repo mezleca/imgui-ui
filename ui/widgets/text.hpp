@@ -3,35 +3,51 @@
 #include "../style/styled-node.hpp"
 #include "text-value.hpp"
 
-#include <memory>
-#include <optional>
+#include <format>
 #include <string>
 #include <tuple>
 #include <utility>
 
 namespace ui {
+    enum class TextOverflow {
+        Clip,
+        Ellipsis,
+    };
+
     class TextWidget : public StyledNode {
     public:
-        explicit TextWidget(std::string text) : StyledNode({}, "Text"), m_text(std::make_unique<GenericValue>(std::move(text))) {}
+        explicit TextWidget(std::string text) : StyledNode({}, "Text"), m_text(std::move(text)) {}
 
         template <typename... Args>
         TextWidget(std::string format, std::tuple<Args...> values)
-            : StyledNode({}, "Text"), m_text(std::make_unique<TextFormatted<Args...>>(std::move(format))) {
-            static_cast<TextFormatted<Args...>*>(m_text.get())->set(std::move(values));
+            : StyledNode({}, "Text"),
+              m_text(
+                  std::apply(
+                      [&format](const auto&... args) { return std::vformat(format, std::make_format_args(args...)); }, values
+                  )
+              ) {}
+
+        TextWidget& set_wrap(float width);
+        TextWidget& set_overflow(TextOverflow overflow);
+        TextOverflow overflow() const {
+            return m_overflow;
         }
-
-        /// a negative wrap value disables wrapping.
-        void set_wrap(float wrap);
-        bool on_draw() override;
-        bool try_set_content(std::string content) override;
-
-        std::optional<std::string> content() const override;
+        bool empty() const;
+        TextWidget& set_size(ImVec2 size) {
+            m_has_explicit_size = true;
+            StyledNode::set_size(size);
+            return *this;
+        }
+        TextWidget& set_text(std::string text);
 
     private:
+        bool paint_content() override;
         void on_measure() override;
 
-        std::unique_ptr<GenericValue> m_text;
+        GenericValue m_text;
         float m_wrap = -1.0F;
+        TextOverflow m_overflow = TextOverflow::Clip;
+        bool m_has_explicit_size = false;
     };
 
 } // namespace ui

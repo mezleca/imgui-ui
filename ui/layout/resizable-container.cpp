@@ -4,107 +4,124 @@
 
 #include <algorithm>
 
-namespace ui {
-    static constexpr float MIN_CHILD_SIZE = 32.0F;
-    static constexpr float CHILD_RESIZE_HANDLE_SIZE = 20.0F;
+static constexpr float MIN_CHILD_SIZE = 32.0F;
+static constexpr float CHILD_RESIZE_HANDLE_SIZE = 10.0F;
+static constexpr float CHILD_RESIZE_HANDLE_INSET = 1.0F;
 
-    ResizableContainer::ResizableContainer(std::string id) : ChildContainer(std::move(id), "ResizableContainer") {}
+using namespace ui;
 
-    void ResizableContainer::set_resize(ResizeAxes resize) {
-        m_resize = resize;
+ResizableContainer::ResizableContainer(std::string id) : StackContainer(std::move(id)) {
+    set_type_name("ResizableContainer");
+    set_input_target();
+    _on_event = [this](UiEvent& event) { handle_resize(event); };
+}
+
+ResizableContainer& ResizableContainer::set_resize(ResizeAxes resize) {
+    m_resize = resize;
+    return *this;
+}
+
+ResizeAxes ResizableContainer::resize_axes() const {
+    return m_resize;
+}
+
+void ResizableContainer::on_draw_end() {
+    set_screen_rect(Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize()));
+    draw_resize_indicator();
+    StackContainer::on_draw_end();
+
+    const ImVec2 parent_window_position = ImGui::GetWindowPos();
+    const ImVec2 parent_content_max = ImGui::GetWindowContentRegionMax();
+    m_parent_content_max = {
+        parent_window_position.x + parent_content_max.x,
+        parent_window_position.y + parent_content_max.y,
+    };
+}
+
+Rect ResizableContainer::input_target_rect(Rect screen_rect) const {
+    if (m_resize == ResizeAxes::None) {
+        return screen_rect;
     }
 
-    ResizeAxes ResizableContainer::resize_axes() const {
-        return m_resize;
+    return resize_handle();
+}
+
+Rect ResizableContainer::resize_handle() const {
+    const ImVec2 max = layout().screen_rect().max;
+    return Rect::from_position_size(
+        {max.x - CHILD_RESIZE_HANDLE_SIZE - CHILD_RESIZE_HANDLE_INSET,
+         max.y - CHILD_RESIZE_HANDLE_SIZE - CHILD_RESIZE_HANDLE_INSET},
+        {CHILD_RESIZE_HANDLE_SIZE, CHILD_RESIZE_HANDLE_SIZE}
+    );
+}
+
+void ResizableContainer::handle_resize(UiEvent& event) {
+    if (m_resize == ResizeAxes::None) {
+        return;
     }
 
-    void ResizableContainer::on_draw_end() {
-        ChildContainer::on_draw_end();
-        draw_resize_indicator();
-        handle_resize();
+    if (event.type == EventType::PointerUp && event.button == PointerButton::Left && m_dragging) {
+        m_dragging = false;
+        m_resizing = ResizeAxes::None;
+        release_pointer();
+        event.stop_propagation();
+        return;
     }
 
-    void ResizableContainer::handle_resize() {
-        if (m_resize == ResizeAxes::None) {
+    if (event.type == EventType::PointerDown && event.button == PointerButton::Left && resize_handle().contains(event.position)) {
+        m_dragging = capture_pointer();
+        if (!m_dragging) {
             return;
         }
 
-        const ImVec2 max = ImGui::GetItemRectMax();
-        const ImVec2 handle_min = {max.x - CHILD_RESIZE_HANDLE_SIZE, max.y - CHILD_RESIZE_HANDLE_SIZE};
-
-        if (m_dragging) {
-            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-                const ImVec2 mouse_pos = ImGui::GetMousePos();
-                ImVec2 size = layout().size();
-                const ImVec2 child_min = ImGui::GetItemRectMin();
-                const ImVec2 parent_window_pos = ImGui::GetWindowPos();
-                const ImVec2 parent_content_region_max = ImGui::GetWindowContentRegionMax();
-                // clamp against the immediate parent content rectangle rather
-                // than the root viewport, which may be substantially larger.
-                const ImVec2 parent_content_max = {
-                    parent_window_pos.x + parent_content_region_max.x,
-                    parent_window_pos.y + parent_content_region_max.y,
-                };
-                const ImVec2 max_size = {
-                    std::max(MIN_CHILD_SIZE, parent_content_max.x - child_min.x),
-                    std::max(MIN_CHILD_SIZE, parent_content_max.y - child_min.y),
-                };
-
-                if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) {
-                    size.x = std::clamp(m_previous_size.x + mouse_pos.x - m_drag_start.x, MIN_CHILD_SIZE, max_size.x);
-                }
-
-                if ((m_resizing & ResizeAxes::Y) != ResizeAxes::None) {
-                    size.y = std::clamp(m_previous_size.y + mouse_pos.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y);
-                }
-
-                set_size(size);
-                return;
-            }
-
-            m_dragging = false;
-            m_resizing = ResizeAxes::None;
-            return;
-        }
-
-        const bool is_hovering_handle = ImGui::IsMouseHoveringRect(handle_min, max);
-        if (is_hovering_handle && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-            m_dragging = true;
-            m_drag_start = ImGui::GetMousePos();
-            m_previous_size = layout().size();
-            m_resizing = m_resize;
-        }
-
-        if (!is_hovering_handle) {
-            return;
-        }
-
-        if ((m_resize & ResizeAxes::X) != ResizeAxes::None && (m_resize & ResizeAxes::Y) != ResizeAxes::None) {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
-        } else if ((m_resize & ResizeAxes::X) != ResizeAxes::None) {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-        } else if ((m_resize & ResizeAxes::Y) != ResizeAxes::None) {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-        }
+        m_drag_start = event.position;
+        m_previous_size = layout().size();
+        m_resizing = m_resize;
+        event.prevent_default();
+        event.stop_propagation();
+        return;
     }
 
-    void ResizableContainer::draw_resize_indicator() {
-        if (m_resize == ResizeAxes::None) {
-            return;
-        }
-
-        const float border_thickness = style().border_thickness();
-        const ImU32 border_color = style().border_color().get_col();
-        const ImVec2 max = ImGui::GetItemRectMax();
-
-        for (int i = 0; i < 3; ++i) {
-            const float distance = 3.0F + static_cast<float>(i) * 4.0F;
-            draw_line({max.x - distance, max.y}, {max.x, max.y - distance}, border_color, border_thickness);
-            draw_line(
-                {max.x - distance + border_thickness + 0.5f, max.y}, {max.x, max.y - distance + border_thickness + 0.5f},
-                {20, 20, 20, 255}, border_thickness
-            );
-        }
+    if (event.type != EventType::PointerMove || !m_dragging) {
+        return;
     }
-} // namespace ui
+
+    const ImVec2 child_min = layout().screen_rect().min;
+    const ImVec2 max_size = {
+        std::max(MIN_CHILD_SIZE, m_parent_content_max.x - child_min.x),
+        std::max(MIN_CHILD_SIZE, m_parent_content_max.y - child_min.y),
+    };
+    ImVec2 size = layout().size();
+
+    if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) {
+        size.x = std::clamp(m_previous_size.x + event.position.x - m_drag_start.x, MIN_CHILD_SIZE, max_size.x);
+    }
+
+    if ((m_resizing & ResizeAxes::Y) != ResizeAxes::None) {
+        size.y = std::clamp(m_previous_size.y + event.position.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y);
+    }
+
+    set_size(size);
+    event.stop_propagation();
+}
+
+void ResizableContainer::draw_resize_indicator() {
+    if (m_resize == ResizeAxes::None) {
+        return;
+    }
+
+    const float border_thickness = style().border_thickness();
+    ImDrawList& draw_list = *ImGui::GetForegroundDrawList();
+    const ImVec2 max = resize_handle().max;
+
+    for (int i = 0; i < 3; ++i) {
+        const float distance = 3.0F + static_cast<float>(i) * 4.0F;
+        draw_line(
+            draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, ImColor(160, 160, 160, 255), border_thickness
+        );
+        draw_line(
+            draw_list, {max.x - distance + border_thickness + 0.5f, max.y}, {max.x, max.y - distance + border_thickness + 0.5f},
+            ImColor{20, 20, 20, 255}, border_thickness
+        );
+    }
+}

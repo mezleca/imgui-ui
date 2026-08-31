@@ -17,6 +17,14 @@ namespace ui {
         uint16_t depth = 0;
     };
 
+    struct ProfileFrameMetrics {
+        std::size_t style_pushes = 0;
+        std::size_t style_pops = 0;
+        std::size_t active_transitions = 0;
+        double update_ms = 0.0;
+        double draw_ms = 0.0;
+    };
+
     class Profiler {
     public:
         static constexpr std::size_t EVENT_CAPACITY = 8192;
@@ -25,11 +33,13 @@ namespace ui {
 
         void set_enabled(bool enabled);
         bool enabled() const;
+        void set_root_node(uint64_t identity);
 
         void begin_frame();
         void end_frame();
 
         std::span<const ProfileEvent> latest_events() const;
+        const ProfileFrameMetrics& latest_metrics() const;
         double latest_frame_ms() const;
         double node_duration_ms(uint64_t node_identity) const;
         uint32_t dropped_events() const;
@@ -41,6 +51,7 @@ namespace ui {
 
     private:
         friend class ScopedProfileZone;
+        friend class StyledNode;
 
         struct ZoneToken {
             std::size_t event_index = 0;
@@ -53,6 +64,7 @@ namespace ui {
             uint64_t start = 0;
             uint64_t end = 0;
             uint32_t dropped = 0;
+            ProfileFrameMetrics metrics;
         };
 
         struct MetricSummary {
@@ -68,6 +80,9 @@ namespace ui {
 
         ZoneToken begin_zone(std::string_view name, uint64_t node_identity);
         void end_zone(ZoneToken token);
+        void record_style_scope();
+        void record_active_transition();
+        void record_root_phase_times(FrameBuffer& frame);
 
         std::array<FrameBuffer, 2> m_frames;
         std::filesystem::path m_output_path;
@@ -77,6 +92,7 @@ namespace ui {
         std::size_t m_read_index = 1;
         uint16_t m_depth = 0;
         uint16_t m_memory_sample_counter = 0;
+        uint64_t m_root_identity = 0;
         bool m_enabled = false;
         bool m_frame_open = false;
     };

@@ -95,17 +95,17 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
         bool overlay_value = false;
         std::string dropdown_value = "one";
         auto& content_checkbox = surface.root().add_child<ui::CheckboxWidget>(surface, content_value, "content");
-        content_checkbox.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {20.0F, 20.0F});
+        content_checkbox.set_placement({.anchor = ui::Anchor::TopLeft, .origin = ui::Origin::TopLeft, .offset = {20.0F, 20.0F}});
         auto& content_dropdown = surface.root().add_child<ui::DropdownWidget>(
             surface, dropdown_value, std::vector<ui::DropdownOption>{{"one", "one"}, {"two", "two"}}, "dropdown"
         );
         content_dropdown.set_size({180.0F, 52.0F});
-        content_dropdown.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {20.0F, 60.0F});
+        content_dropdown.set_placement({.anchor = ui::Anchor::TopLeft, .origin = ui::Origin::TopLeft, .offset = {20.0F, 60.0F}});
 
         auto& blocker = surface.root().add_child<ui::OverlayNode>("blocker");
         blocker.set_blocks_pointer_input(true);
         auto& overlay_checkbox = blocker.add_child<ui::CheckboxWidget>(surface, overlay_value, "overlay");
-        overlay_checkbox.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {20.0F, 130.0F});
+        overlay_checkbox.set_placement({.anchor = ui::Anchor::TopLeft, .origin = ui::Origin::TopLeft, .offset = {20.0F, 130.0F}});
 
         const auto draw_frame = [&surface] {
             surface.begin_input_frame();

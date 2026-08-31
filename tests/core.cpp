@@ -16,7 +16,6 @@
 #include <limits>
 #include <numbers>
 #include <string>
-#include <string_view>
 #include <vector>
 
 using namespace ui;
@@ -105,7 +104,7 @@ TEST_CASE("blur style is preserved by style updates") {
     REQUIRE(style.blur() == 0);
 }
 
-TEST_CASE("styled nodes create decorations only when requested") {
+TEST_CASE("styled nodes create paint slots only when requested") {
     ChildContainer node("node");
     REQUIRE_FALSE(node.has_before());
     REQUIRE_FALSE(node.has_after());
@@ -122,7 +121,7 @@ TEST_CASE("styled nodes create decorations only when requested") {
     REQUIRE_FALSE(node.has_after());
 }
 
-TEST_CASE("styled decorations render in before and after order") {
+TEST_CASE("styled paint slots render in before and after order") {
     ui_test::ImGuiContext context({160.0F, 120.0F});
     ImGui::NewFrame();
     ImGui::Begin("decoration-test");
@@ -153,6 +152,44 @@ TEST_CASE("styled decorations render in before and after order") {
 
     REQUIRE(first_before >= 0);
     REQUIRE(first_after > first_before);
+
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+TEST_CASE("styled paint slots receive the owner rect and support custom drawing") {
+    ui_test::ImGuiContext context({160.0F, 120.0F});
+    ImGui::NewFrame();
+    ImGui::Begin("decoration-callback-test");
+
+    StyledNode node("node");
+    node.set_size({80.0F, 40.0F});
+    node.configure_all_styles([](Style& style) { style.padding({8.0F, 6.0F}); });
+    Rect before_rect{};
+    Rect after_rect{};
+    Rect before_content_rect{};
+    ImDrawList* before_draw_list = nullptr;
+    node.before().set_draw_callback([&](const PaintContext& context) {
+        before_rect = context.rect;
+        before_content_rect = context.content_rect;
+        before_draw_list = &context.draw_list;
+    });
+    node.after().set_draw_callback([&after_rect](const PaintContext& context) { after_rect = context.rect; });
+
+    node.update(1.0F);
+    node.draw();
+
+    REQUIRE(before_rect.valid());
+    REQUIRE(after_rect.valid());
+    REQUIRE(before_rect.min.x == Catch::Approx(after_rect.min.x));
+    REQUIRE(before_rect.min.y == Catch::Approx(after_rect.min.y));
+    REQUIRE(before_rect.max.x == Catch::Approx(after_rect.max.x));
+    REQUIRE(before_rect.max.y == Catch::Approx(after_rect.max.y));
+    REQUIRE(before_content_rect.min.x == Catch::Approx(before_rect.min.x + 8.0F));
+    REQUIRE(before_content_rect.min.y == Catch::Approx(before_rect.min.y + 6.0F));
+    REQUIRE(before_content_rect.max.x == Catch::Approx(before_rect.max.x - 8.0F));
+    REQUIRE(before_content_rect.max.y == Catch::Approx(before_rect.max.y - 6.0F));
+    REQUIRE(before_draw_list == ImGui::GetWindowDrawList());
 
     ImGui::End();
     ImGui::EndFrame();
@@ -270,10 +307,26 @@ TEST_CASE("clearing children destroys the subtree and clears input targets") {
     router.release_pointer();
 }
 
-TEST_CASE("leaf nodes do not capture an imgui item produced before their draw") {
+TEST_CASE("only input leaves capture their final imgui item rectangle") {
     class NoItemNode final : public ui::Node {
     public:
         using ui::Node::Node;
+    };
+
+    class ItemNode final : public ui::Node {
+    public:
+        ItemNode(std::string id, bool input) : Node(std::move(id)) {
+            set_size({10.0F, 10.0F});
+            if (input) {
+                set_input_target();
+            }
+        }
+
+    private:
+        bool on_draw() override {
+            ImGui::Dummy({40.0F, 30.0F});
+            return true;
+        }
     };
 
     class ManualRectNode final : public ui::Node {
@@ -296,6 +349,12 @@ TEST_CASE("leaf nodes do not capture an imgui item produced before their draw") 
     NoItemNode no_item("no-item");
     no_item.draw();
 
+    ItemNode passive_item("passive-item", false);
+    passive_item.draw();
+
+    ItemNode input_item("input-item", true);
+    input_item.draw();
+
     ManualRectNode manual;
     manual.draw();
 
@@ -303,13 +362,57 @@ TEST_CASE("leaf nodes do not capture an imgui item produced before their draw") 
     ImGui::EndFrame();
 
     const ui::Rect no_item_rect = no_item.layout().screen_rect();
+    const ui::Rect passive_item_rect = passive_item.layout().screen_rect();
+    const ui::Rect input_item_rect = input_item.layout().screen_rect();
     const ui::Rect manual_rect = manual.layout().screen_rect();
 
     REQUIRE_FALSE(no_item_rect.valid());
+    REQUIRE(passive_item_rect.size().x == 10.0F);
+    REQUIRE(passive_item_rect.size().y == 10.0F);
+    REQUIRE(input_item_rect.size().x == 40.0F);
+    REQUIRE(input_item_rect.size().y == 30.0F);
     REQUIRE(manual_rect.min.x == 40.0F);
     REQUIRE(manual_rect.min.y == 50.0F);
     REQUIRE(manual_rect.max.x == 70.0F);
     REQUIRE(manual_rect.max.y == 80.0F);
+}
+
+TEST_CASE("nodes register only explicitly configured local input regions") {
+    class RectNode final : public ui::Node {
+    public:
+        RectNode(std::string id, ui::Rect rect) : Node(std::move(id)), m_rect(rect) {}
+
+    private:
+        bool on_draw() override {
+            set_screen_rect(m_rect);
+            return true;
+        }
+
+        ui::Rect m_rect;
+    };
+
+    ui::InputRouter router;
+    ui::Node root("root");
+    auto& passive = root.add_child<RectNode>("passive", ui::Rect{{100.0F, 20.0F}, {200.0F, 120.0F}});
+    auto& target = root.add_child<RectNode>("target", ui::Rect{{100.0F, 20.0F}, {200.0F, 120.0F}});
+    int callbacks = 0;
+    target.set_input_target({
+        .rect = {{10.0F, 20.0F}, {50.0F, 60.0F}},
+        .on_event = [&callbacks](ui::UiEvent&) { ++callbacks; },
+    });
+    root.set_input_router(&router);
+
+    root.draw();
+
+    REQUIRE(router.node_at({120.0F, 50.0F}) == &target);
+    REQUIRE(router.node_at({180.0F, 100.0F}) == nullptr);
+    REQUIRE(router.node_at({120.0F, 50.0F}) != &passive);
+
+    ui::UiEvent event = ui::UiEvent::make(ui::EventType::PointerDown);
+    event.position = {120.0F, 50.0F};
+    event.button = ui::PointerButton::Left;
+    REQUIRE_FALSE(router.dispatch(event));
+    REQUIRE(callbacks == 1);
 }
 
 TEST_CASE("skipped explicitly placed nodes keep imgui child boundaries valid") {
@@ -324,7 +427,7 @@ TEST_CASE("skipped explicitly placed nodes keep imgui child boundaries valid") {
     ui::ChildContainer container("container");
     container.set_size({100.0F, 80.0F});
     auto& skipped = container.add_child<SkippedNode>();
-    skipped.set_placement(ui::Anchor::TopLeft, ui::Origin::TopLeft, {120.0F, 0.0F});
+    skipped.set_placement({.anchor = ui::Anchor::TopLeft, .origin = ui::Origin::TopLeft, .offset = {120.0F, 0.0F}});
 
     ImGui::NewFrame();
     ImGui::Begin("skipped-placement-test");
@@ -358,19 +461,4 @@ TEST_CASE("overlay children stay in the surface window") {
     ImGui::EndFrame();
 
     REQUIRE(child.window_name == "surface");
-}
-
-TEST_CASE("nodes can expose custom type names without core registration") {
-    class AppNode final : public ui::Node {
-    public:
-        std::string_view type_name() const override {
-            return "AppNode";
-        }
-    };
-
-    AppNode node;
-    ui::Widget widget("widget", "AppWidget");
-
-    REQUIRE(node.type_name() == "AppNode");
-    REQUIRE(widget.type_name() == "AppWidget");
 }

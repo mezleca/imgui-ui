@@ -1,14 +1,14 @@
 #pragma once
 
-#include "widget.hpp"
+#include "draw-list-widget.hpp"
 
 #include <imgui.h>
 
 class IconTexture;
 
 namespace ui {
-    /// style padding insets the image while screen bounds retain the outer size.
-    class ImageWidget : public Widget {
+    /// images are passive; call set_input_target() to route their pointer input.
+    class ImageWidget : public DrawListWidget {
     public:
         explicit ImageWidget(IconTexture* texture = nullptr);
 
@@ -22,9 +22,8 @@ namespace ui {
             return *this;
         }
 
-        bool on_draw() override;
-
     private:
+        void paint(ImDrawList& draw_list, Rect rect, const Style& style) override;
         IconTexture* m_texture = nullptr;
         float m_rotation = 0.0F;
     };

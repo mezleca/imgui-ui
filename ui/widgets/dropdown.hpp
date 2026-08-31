@@ -2,8 +2,8 @@
 
 #include "widget.hpp"
 
-#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class UI;
@@ -12,35 +12,28 @@ namespace ui {
     class DropdownBodyNode;
     class DropdownTriggerNode;
     class TextWidget;
-
-    enum class DropdownLabelPlacement {
-        Above,
-        Inline,
-    };
+    struct Theme;
 
     struct DropdownOption {
         std::string label;
         std::string value;
+
+        bool operator==(const DropdownOption&) const = default;
     };
 
-    /// label, trigger and popup body are real child nodes for inspection and styling.
+    /// exposes the label, trigger and popup body for styling and inspection.
     class DropdownWidget final : public Widget {
     public:
         DropdownWidget(UI& ui, std::string& value, std::vector<DropdownOption> options, std::string id = {});
 
         DropdownWidget& set_label(std::string label);
-        DropdownWidget& set_label_placement(DropdownLabelPlacement placement);
         DropdownWidget& set_placeholder(std::string placeholder);
-        /// leaves the bound value unchanged when options are replaced.
+        bool select_value(std::string_view value);
+        /// replaces visible options without changing the bound value.
         DropdownWidget& set_options(std::vector<DropdownOption> options);
 
-        bool changed() const override;
-        bool on_draw() override;
-        std::optional<std::string> content() const override;
-        bool try_set_content(std::string content) override;
-
         bool is_open() const {
-            return m_open && !m_closing;
+            return m_state.is_open();
         }
 
         TextWidget& label() {
@@ -51,24 +44,52 @@ namespace ui {
         Widget& body();
 
     private:
-        void configure_default_styles();
+        struct State {
+            bool is_open() const {
+                return visibility == Visibility::Open;
+            }
+
+            bool is_closing() const {
+                return visibility == Visibility::Closing;
+            }
+
+            bool is_closed() const {
+                return visibility == Visibility::Closed;
+            }
+
+            void open();
+
+            void close();
+
+            void finish_close() {
+                visibility = Visibility::Closed;
+            }
+
+            enum class Visibility {
+                Closed,
+                Open,
+                Closing,
+            };
+
+            std::string* value = nullptr;
+            std::vector<DropdownOption> options;
+            std::string placeholder = "select an option";
+            DropdownBodyNode* body = nullptr;
+            Visibility visibility = Visibility::Closed;
+        };
+
+        friend class DropdownBodyNode;
+        friend class DropdownTriggerNode;
+
+        void configure_default_styles(const Theme& theme);
         void draw_children() override;
         void on_measure() override;
         void on_layout() override;
-        void on_draw_end() override;
         bool has_label() const;
 
-        UI& m_ui;
         TextWidget* m_label_node = nullptr;
         DropdownTriggerNode* m_trigger = nullptr;
         DropdownBodyNode* m_body = nullptr;
-        std::string* m_value;
-        std::vector<DropdownOption> m_options;
-        std::string m_placeholder = "select an option";
-        DropdownLabelPlacement m_label_placement = DropdownLabelPlacement::Above;
-        Rect m_trigger_rect{};
-        bool m_open_requested = false;
-        bool m_open = false;
-        bool m_closing = false;
+        State m_state;
     };
 } // namespace ui

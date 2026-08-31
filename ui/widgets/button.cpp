@@ -1,16 +1,15 @@
 #include "button.hpp"
-#include "../imgui/blur.hpp"
 #include "../imgui/draw.hpp"
 #include "../ui.hpp"
 #include "../style/theme.hpp"
 
 using namespace ui;
 
-ButtonWidget::ButtonWidget(UI& ui, std::string text, ImVec2 size) : Widget({}, "Button"), m_ui(ui), m_text(text) {
+ButtonWidget::ButtonWidget(UI& ui, std::string text, ImVec2 size) : DrawListWidget({}, "Button"), m_text(text) {
     set_size(size);
     set_font(ui.get_primary_font(16));
 
-    const Theme& theme = m_ui.theme();
+    const Theme& theme = ui.theme();
     configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color)
             .background_color(theme.background_secondary_color)
@@ -18,41 +17,41 @@ ButtonWidget::ButtonWidget(UI& ui, std::string text, ImVec2 size) : Widget({}, "
             .padding({12.0F, 6.0F})
             .border(BORDER_ALL)
             .border_radius(4.0F)
-            .border_thickness(2.0F);
+            .border_thickness(2.0F)
+            .cursor(ImGuiMouseCursor_Hand);
     });
 
     configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color, 0.2F); });
     configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.border_color); });
 }
 
-std::optional<std::string> ButtonWidget::content() const {
-    return m_text.str();
+ButtonWidget& ButtonWidget::set_text(std::string text) {
+    m_text.set(std::move(text));
+    return *this;
 }
 
-bool ButtonWidget::try_set_content(std::string content) {
-    if (content == m_text.str()) {
-        return false;
+ButtonWidget& ButtonWidget::on_click(std::function<void()> callback) {
+    m_on_click = std::move(callback);
+    return *this;
+}
+
+void ButtonWidget::dispatch_event(UiEvent& event) {
+    Widget::dispatch_event(event);
+    if (event.type == EventType::Click && m_on_click) {
+        m_on_click();
     }
-
-    m_text.set(std::move(content));
-    return true;
 }
 
-bool ButtonWidget::on_draw() {
-    const Style& style = this->style();
-    const ImVec2 position = ImGui::GetCursorScreenPos();
-    draw_blur(
-        {position, {position.x + layout().size().x, position.y + layout().size().y}}, style.blur(), style.border_radius(),
-        style.alpha()
+void ButtonWidget::paint(ImDrawList&, Rect rect, const Style& style) {
+    const Rect content = rect.inset(style.padding());
+    const ImVec2 text_size = ImGui::CalcTextSize(m_text.c_str());
+
+    draw_frame(rect, style);
+    draw_text(
+        {
+            content.min.x + (content.size().x - text_size.x) * m_text_alignment.x,
+            content.min.y + (content.size().y - text_size.y) * m_text_alignment.y,
+        },
+        style.color().get_col(), m_text.str()
     );
-
-    ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, m_text_alignment);
-    const bool pressed = ImGui::Button(m_text.c_str(), layout().size());
-    ImGui::PopStyleVar();
-
-    update_input(m_ui.input(), pressed);
-
-    draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, style);
-
-    return true;
 }

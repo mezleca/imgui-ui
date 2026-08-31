@@ -1,15 +1,14 @@
 #pragma once
 
-#include "widget.hpp"
+#include "draw-list-widget.hpp"
 #include "text-value.hpp"
 
 #include <imgui.h>
-#include <optional>
-
+#include <functional>
 class UI;
 
 namespace ui {
-    class ButtonWidget : public Widget {
+    class ButtonWidget : public DrawListWidget {
     public:
         ButtonWidget(UI& ui, std::string text, ImVec2 size = {100.0f, 60.0f});
 
@@ -18,13 +17,15 @@ namespace ui {
             return *this;
         }
 
-        bool on_draw() override;
-        std::optional<std::string> content() const override;
-        bool try_set_content(std::string content) override;
+        ButtonWidget& set_text(std::string text);
+        ButtonWidget& on_click(std::function<void()> callback);
 
     private:
-        UI& m_ui;
+        void dispatch_event(UiEvent& event) override;
+        void paint(ImDrawList& draw_list, Rect rect, const Style& style) override;
+
         GenericValue m_text;
+        std::function<void()> m_on_click;
         ImVec2 m_text_alignment{0.5F, 0.5F};
     };
 

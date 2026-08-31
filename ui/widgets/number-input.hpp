@@ -6,6 +6,7 @@
 #include <concepts>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -13,7 +14,7 @@ class UI;
 
 namespace ui {
     class NumberInputWidget final : public Widget {
-        // imgui edits the original scalar through a typed pointer, while GenericValue mirrors it for text apis and metrics.
+        // imgui edits the original scalar through its typed pointer.
         using NumberValue = std::variant<
             char*, signed char*, unsigned char*, short*, unsigned short*, int*, unsigned int*, long*, unsigned long*, long long*,
             unsigned long long*, float*, double*>;
@@ -22,16 +23,15 @@ namespace ui {
         template <typename T>
             requires std::constructible_from<NumberValue, T*>
         NumberInputWidget(UI& ui, T& value, std::string id = {})
-            : Widget(std::move(id), "NumberInput"), m_ui(ui), m_value(value), m_number(&value),
+            : Widget(std::move(id), "NumberInput"), m_value(value), m_number(&value),
               m_format(std::floating_point<T> ? "%.3f" : ""), m_speed(std::floating_point<T> ? 0.1F : 1.0F) {
-            configure_default_styles();
+            configure_default_styles(ui);
         }
 
         NumberInputWidget& set_label(std::string label);
         NumberInputWidget& set_minimum(double minimum);
         NumberInputWidget& set_maximum(double maximum);
         NumberInputWidget& set_range(double minimum, double maximum);
-        /// removes both bounds and restores unbounded drag behavior.
         NumberInputWidget& clear_range();
         NumberInputWidget& set_speed(float speed);
         NumberInputWidget& set_format(std::string format);
@@ -39,21 +39,39 @@ namespace ui {
         NumberInputWidget& set_thumb_size(float size);
         NumberInputWidget& set_thumb_color(ImColor color);
 
-        bool changed() const override;
-        bool on_draw() override;
-        std::optional<std::string> content() const override;
-        bool try_set_content(std::string content) override;
+        template <typename T>
+            requires std::constructible_from<NumberValue, T*>
+        bool set_value(T value) {
+            const bool changed = std::visit(
+                [value](auto* bound_value) {
+                    using BoundValue = std::remove_cv_t<std::remove_pointer_t<decltype(bound_value)>>;
+                    if constexpr (!std::same_as<BoundValue, T>) {
+                        return false;
+                    } else if (*bound_value == value) {
+                        return false;
+                    } else {
+                        *bound_value = value;
+                        return true;
+                    }
+                },
+                m_number
+            );
+
+            if (changed) {
+                notify_change();
+            }
+            return changed;
+        }
 
     private:
+        bool paint_content() override;
         template <typename T>
         bool draw_value(T& value);
 
-        // keep the generic mirror current without making the imgui control operate on a converted copy.
         void sync_value() const;
-        void configure_default_styles();
+        void configure_default_styles(UI& ui);
         void on_measure() override;
 
-        UI& m_ui;
         mutable GenericValue m_value;
         NumberValue m_number;
         GenericValue m_label;
@@ -64,6 +82,5 @@ namespace ui {
         float m_speed;
         float m_thumb_size = 10.0F;
         bool m_thumb_visible = true;
-        bool m_changed = false;
     };
 } // namespace ui

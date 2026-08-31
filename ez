@@ -66,6 +66,7 @@ def main() -> None:
     build_parser.add_argument("--type", choices=("debug", "release"), default="debug")
 
     tests_parser = subparsers.add_parser("tests")
+    tests_parser.add_argument("--backend", choices=("core", "sdl", "raylib", "all"), default="core")
     tests_parser.add_argument("--type", choices=("debug", "release"), default="debug")
 
     subparsers.add_parser("format")
@@ -84,7 +85,7 @@ def main() -> None:
     if args.command == "build":
         build(build_type, args.backend)
     elif args.command == "tests":
-        build_dir = build(build_type, "core", tests=True)
+        build_dir = build(build_type, args.backend, tests=True)
         run(["ctest", "--test-dir", str(build_dir), "--output-on-failure"])
     else:
         build_dir = build(build_type, args.backend)

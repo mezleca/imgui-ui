@@ -46,12 +46,12 @@ namespace ui {
         void render_node_tree(Node& node, int depth, bool show_duration, Node*& selected_target, bool update_target);
         void render_properties();
         void render_node_properties();
+        void render_node_profiling();
         void render_layout_properties();
         void render_style_properties();
-        void render_style_controls(const StyledNode& node, Style& style);
+        void render_style_controls(Style& style, bool is_line = false);
         void render_decoration_properties(StyledNode& node);
         void render_style_variables(Style& style);
-        void render_profiling();
         bool handle_inspect_event(const SDL_Event& event, bool mouse_event, SDL_WindowID main_window_id);
         void refresh_highlight();
         void set_inspect_mode(bool enabled, bool wait_for_release = false);
@@ -67,7 +67,6 @@ namespace ui {
         ImageWidget m_icon;
         std::unique_ptr<IconTexture> m_inspect_icon;
         Node* m_node_target = nullptr;
-        Node* m_profiling_target = nullptr;
         Node* m_hover_target = nullptr;
         // removed nodes stay alive until shutdown because application widgets may retain raw child pointers.
         std::vector<std::unique_ptr<Node>> m_detached_nodes;

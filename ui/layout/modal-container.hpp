@@ -9,7 +9,7 @@
 class UI;
 
 namespace ui {
-    /// the most recently opened visible panel owns modal input policy.
+    /// owns the full-screen modal layer; its visible ModalPanel is the stacked content window that receives modal input.
     class ModalContainer final : public LayerContainer {
     public:
         explicit ModalContainer(UI& ui);
@@ -32,10 +32,11 @@ namespace ui {
 
     protected:
         void on_update(float dt) override;
-        bool on_draw() override;
+        bool paint_content() override;
         void draw_children() override;
 
     private:
+        void handle_event(UiEvent& event);
         void remove_pending_modal();
 
         UI& m_ui;
