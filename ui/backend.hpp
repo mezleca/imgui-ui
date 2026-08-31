@@ -18,6 +18,7 @@ namespace ui {
         virtual void shutdown_imgui() = 0;
         virtual void make_current() = 0;
         virtual void begin_frame(ImVec4 clear_color) = 0;
+        virtual void set_mouse_cursor(ImGuiMouseCursor cursor) = 0;
         virtual void render(ImDrawData* draw_data) = 0;
         virtual float content_scale() const = 0;
         virtual uint64_t window_id() const = 0;

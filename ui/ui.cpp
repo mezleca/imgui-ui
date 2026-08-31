@@ -227,6 +227,7 @@ void UI::end_frame() {
         return;
     }
 
+    if (m_backend != nullptr) m_backend->set_mouse_cursor(ImGui::GetMouseCursor());
     ImGui::Render();
     m_profiler.end_frame();
     if (m_backend != nullptr) m_backend->render(ImGui::GetDrawData());

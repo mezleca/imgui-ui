@@ -55,7 +55,7 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
     set_type_name("TextInput");
     set_spacing(INPUT_ICON_SPACING);
     set_accepts_focus(true);
-    set_center_content_vertically(true);
+    set_center_content(false, true);
     set_font(ui.get_primary_font(18));
     configure_all_styles([&theme](Style& style) {
         style.border_color(theme.border_color, 0.15F)

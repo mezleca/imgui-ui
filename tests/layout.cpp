@@ -141,6 +141,28 @@ TEST_CASE("stack layout places auto-sized children after their measured height")
     REQUIRE(second.min.y >= first.max.y + 4.0F);
 }
 
+TEST_CASE("stack layout centers flow content on requested axes") {
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+    ui::StackContainer stack("centered-stack", ui::StackDirection::Horizontal);
+    stack.set_size({200.0F, 100.0F});
+    stack.style().padding({});
+    stack.set_center_content(true, true);
+    auto& field = stack.add_child<ui::TextWidget>("field");
+    field.set_size({40.0F, 20.0F});
+
+    ImGui::NewFrame();
+    ImGui::Begin("centered-stack-test");
+    stack.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    const ui::Rect stack_rect = stack.layout().screen_rect();
+    const ui::Rect field_rect = field.layout().screen_rect();
+    REQUIRE(field_rect.min.x - stack_rect.min.x == Catch::Approx(80.0F));
+    REQUIRE(field_rect.min.y - stack_rect.min.y == Catch::Approx(40.0F));
+    REQUIRE(field_rect.size().x == Catch::Approx(40.0F));
+}
+
 TEST_CASE("stack layout excludes explicitly positioned children from its flow") {
     class FixedNode final : public ui::Node {
     public:
@@ -597,6 +619,11 @@ TEST_CASE("resizable container stays within its parent bounds") {
 
     REQUIRE(router.node_at({initial_rect.min.x + 5.0F, initial_rect.min.y + 5.0F}) == nullptr);
     REQUIRE(router.node_at(handle_position) == &resizable);
+
+    ui::UiEvent hover = ui::UiEvent::make(ui::EventType::PointerMove);
+    hover.position = handle_position;
+    router.dispatch(hover);
+    REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Arrow);
 
     ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
     down.position = handle_position;

@@ -14,8 +14,8 @@ namespace ui {
 
         /// enables scrolling while preserving the container's outer bounds.
         ChildContainer& set_scrollable(bool scrollable);
-        /// replaces vertical style padding so one text line is centered in fixed height.
-        ChildContainer& set_center_content_vertically(bool enabled);
+        /// centers flow content on the requested axes when the container lays out its children.
+        ChildContainer& set_center_content(bool horizontal = false, bool vertical = false);
 
     protected:
         /// opens the imgui child scope; on_draw_end() records its bounds and closes it after child nodes draw.
@@ -29,8 +29,11 @@ namespace ui {
             return true;
         }
 
+        ImVec2 content_alignment_factor() const;
+
     private:
         bool m_scrollable = false;
+        bool m_center_content_horizontally = false;
         bool m_center_content_vertically = false;
         Rect m_child_rect{};
     };

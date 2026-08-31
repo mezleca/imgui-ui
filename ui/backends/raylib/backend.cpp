@@ -22,6 +22,29 @@ namespace ui {
         ImGuiKey imgui_key;
     };
 
+    static int raylib_mouse_cursor(ImGuiMouseCursor cursor) {
+        switch (cursor) {
+            case ImGuiMouseCursor_TextInput:
+                return MOUSE_CURSOR_IBEAM;
+            case ImGuiMouseCursor_ResizeAll:
+                return MOUSE_CURSOR_RESIZE_ALL;
+            case ImGuiMouseCursor_ResizeNS:
+                return MOUSE_CURSOR_RESIZE_NS;
+            case ImGuiMouseCursor_ResizeEW:
+                return MOUSE_CURSOR_RESIZE_EW;
+            case ImGuiMouseCursor_ResizeNESW:
+                return MOUSE_CURSOR_RESIZE_NESW;
+            case ImGuiMouseCursor_ResizeNWSE:
+                return MOUSE_CURSOR_RESIZE_NWSE;
+            case ImGuiMouseCursor_Hand:
+                return MOUSE_CURSOR_POINTING_HAND;
+            case ImGuiMouseCursor_NotAllowed:
+                return MOUSE_CURSOR_NOT_ALLOWED;
+            default:
+                return MOUSE_CURSOR_DEFAULT;
+        }
+    }
+
     static constexpr std::array RAYLIB_KEYS = {
         RaylibKeyMapping{KEY_TAB, ImGuiKey_Tab},
         RaylibKeyMapping{KEY_LEFT, ImGuiKey_LeftArrow},
@@ -256,9 +279,24 @@ namespace ui {
         ImGui_ImplOpenGL3_NewFrame();
     }
 
+    void RaylibBackend::set_mouse_cursor(ImGuiMouseCursor cursor) {
+        m_mouse_cursor = cursor;
+    }
+
+    void RaylibBackend::apply_mouse_cursor() {
+        if (m_mouse_cursor == ImGuiMouseCursor_None) {
+            HideCursor();
+            return;
+        }
+
+        SetMouseCursor(raylib_mouse_cursor(m_mouse_cursor));
+        ShowCursor();
+    }
+
     void RaylibBackend::render(ImDrawData* draw_data) {
         rlDrawRenderBatchActive();
         ImGui_ImplOpenGL3_RenderDrawData(draw_data);
+        apply_mouse_cursor();
         if (!m_attached) {
             EndDrawing();
         }

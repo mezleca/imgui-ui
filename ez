@@ -18,6 +18,25 @@ def run(command: list[str]) -> None:
         sys.exit(result.returncode)
 
 
+def require_tool(name: str) -> None:
+    if shutil.which(name) is not None:
+        return
+
+    print(f"[ez] required tool not found: {name}")
+    sys.exit(1)
+
+
+def init() -> None:
+    for tool in ("git", "cmake", "ninja", "clang-format"):
+        require_tool(tool)
+
+    if not (ROOT / ".gitmodules").exists():
+        return
+
+    print("[ez] initializing submodules...")
+    run(["git", "submodule", "update", "--init", "--recursive"])
+
+
 def copy_compile_commands(build_dir: Path) -> None:
     source = build_dir / "compile_commands.json"
     if source.exists():
@@ -69,6 +88,7 @@ def main() -> None:
     tests_parser.add_argument("--backend", choices=("core", "sdl", "raylib", "all"), default="core")
     tests_parser.add_argument("--type", choices=("debug", "release"), default="debug")
 
+    subparsers.add_parser("init")
     subparsers.add_parser("format")
 
     run_parser = subparsers.add_parser("run")
@@ -76,6 +96,11 @@ def main() -> None:
     run_parser.add_argument("--type", choices=("debug", "release"), default="debug")
 
     args = parser.parse_args()
+
+    if args.command == "init":
+        init()
+        return
+
     if args.command == "format":
         format_code()
         return

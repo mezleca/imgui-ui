@@ -76,6 +76,33 @@ namespace ui {
         }
     }
 
+    static SDL_SystemCursor system_cursor(ImGuiMouseCursor cursor) {
+        switch (cursor) {
+            case ImGuiMouseCursor_TextInput:
+                return SDL_SYSTEM_CURSOR_TEXT;
+            case ImGuiMouseCursor_ResizeAll:
+                return SDL_SYSTEM_CURSOR_MOVE;
+            case ImGuiMouseCursor_ResizeNS:
+                return SDL_SYSTEM_CURSOR_NS_RESIZE;
+            case ImGuiMouseCursor_ResizeEW:
+                return SDL_SYSTEM_CURSOR_EW_RESIZE;
+            case ImGuiMouseCursor_ResizeNESW:
+                return SDL_SYSTEM_CURSOR_NESW_RESIZE;
+            case ImGuiMouseCursor_ResizeNWSE:
+                return SDL_SYSTEM_CURSOR_NWSE_RESIZE;
+            case ImGuiMouseCursor_Hand:
+                return SDL_SYSTEM_CURSOR_POINTER;
+            case ImGuiMouseCursor_Wait:
+                return SDL_SYSTEM_CURSOR_WAIT;
+            case ImGuiMouseCursor_Progress:
+                return SDL_SYSTEM_CURSOR_PROGRESS;
+            case ImGuiMouseCursor_NotAllowed:
+                return SDL_SYSTEM_CURSOR_NOT_ALLOWED;
+            default:
+                return SDL_SYSTEM_CURSOR_DEFAULT;
+        }
+    }
+
     static std::optional<UiEvent> event_from_sdl(const SDL_Event& event) {
         UiEvent result = UiEvent::make(EventType::Cancel);
 
@@ -125,6 +152,40 @@ namespace ui {
 
     SdlBackend::SdlBackend(SDL_Window* window, SDL_GLContext context)
         : m_window(std::make_unique<Window>(window, context)), m_attached(true) {}
+
+    SdlBackend::~SdlBackend() {
+        if (m_mouse_cursor != nullptr) {
+            SDL_DestroyCursor(m_mouse_cursor);
+        }
+    }
+
+    void SdlBackend::apply_mouse_cursor(ImGuiMouseCursor cursor) {
+        if (cursor == ImGuiMouseCursor_None) {
+            m_mouse_cursor_type = cursor;
+            SDL_HideCursor();
+            return;
+        }
+
+        if (cursor == m_mouse_cursor_type && m_mouse_cursor != nullptr) {
+            SDL_ShowCursor();
+            return;
+        }
+
+        SDL_Cursor* next_cursor = SDL_CreateSystemCursor(system_cursor(cursor));
+        if (next_cursor == nullptr) {
+            return;
+        }
+
+        SDL_SetCursor(next_cursor);
+        SDL_ShowCursor();
+        SDL_DestroyCursor(m_mouse_cursor);
+        m_mouse_cursor = next_cursor;
+        m_mouse_cursor_type = cursor;
+    }
+
+    void SdlBackend::set_mouse_cursor(ImGuiMouseCursor cursor) {
+        m_mouse_cursor_type = cursor;
+    }
 
     bool SdlBackend::initialize() {
         if (m_attached) {
@@ -209,6 +270,7 @@ namespace ui {
 
     void SdlBackend::render(ImDrawData* draw_data) {
         ImGui_ImplOpenGL3_RenderDrawData(draw_data);
+        apply_mouse_cursor(m_mouse_cursor_type);
         if (!m_attached) {
             m_window->swap();
         }

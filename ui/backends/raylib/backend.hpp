@@ -18,6 +18,7 @@ namespace ui {
         void shutdown_imgui() override;
         void make_current() override;
         void begin_frame(ImVec4 clear_color) override;
+        void set_mouse_cursor(ImGuiMouseCursor cursor) override;
         void render(ImDrawData* draw_data) override;
         float content_scale() const override;
         uint64_t window_id() const override;
@@ -32,10 +33,13 @@ namespace ui {
         bool process_events(UI& surface);
 
     private:
+        void apply_mouse_cursor();
+
         Config m_config;
         bool m_attached = false;
         bool m_owns_window = false;
         bool m_imgui_initialized = false;
+        ImGuiMouseCursor m_mouse_cursor = ImGuiMouseCursor_Arrow;
         ImVec2 m_pointer_position{};
         bool m_has_pointer_position = false;
     };

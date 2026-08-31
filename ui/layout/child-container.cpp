@@ -16,9 +16,14 @@ ChildContainer& ChildContainer::set_scrollable(bool scrollable) {
     return *this;
 }
 
-ChildContainer& ChildContainer::set_center_content_vertically(bool enabled) {
-    m_center_content_vertically = enabled;
+ChildContainer& ChildContainer::set_center_content(bool horizontal, bool vertical) {
+    m_center_content_horizontally = horizontal;
+    m_center_content_vertically = vertical;
     return *this;
+}
+
+ImVec2 ChildContainer::content_alignment_factor() const {
+    return {m_center_content_horizontally ? 0.5F : 0.0F, m_center_content_vertically ? 0.5F : 0.0F};
 }
 
 void ChildContainer::on_layout() {
@@ -49,11 +54,7 @@ bool ChildContainer::paint_content() {
     if (layout().size().x <= 0.0F) child_flags |= ImGuiChildFlags_AutoResizeX;
     if (layout().size().y <= 0.0F) child_flags |= ImGuiChildFlags_AutoResizeY;
 
-    ImVec2 padding = current_style.padding();
-    if (m_center_content_vertically && layout().size().y > 0.0F) {
-        padding.y = std::max(0.0F, (layout().size().y - ImGui::GetFontSize()) * 0.5F);
-    }
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, current_style.padding());
 
     if (current_style.use_background_for_scrollbar()) {
         ImVec4 background = current_style.background_color().value.Value;

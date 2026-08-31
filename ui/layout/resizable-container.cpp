@@ -25,10 +25,31 @@ ResizeAxes ResizableContainer::resize_axes() const {
     return m_resize;
 }
 
+ImGuiMouseCursor ResizableContainer::resize_cursor() const {
+    if (m_resize == ResizeAxes::X) {
+        return ImGuiMouseCursor_ResizeEW;
+    }
+    if (m_resize == ResizeAxes::Y) {
+        return ImGuiMouseCursor_ResizeNS;
+    }
+    if (m_resize == ResizeAxes::Both) {
+        return ImGuiMouseCursor_ResizeNWSE;
+    }
+    return ImGuiMouseCursor_Arrow;
+}
+
+void ResizableContainer::update_resize_cursor() const {
+    ImGui::SetMouseCursor(resize_cursor());
+}
+
 void ResizableContainer::on_draw_end() {
     set_screen_rect(Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize()));
     draw_resize_indicator();
     StackContainer::on_draw_end();
+
+    if (m_dragging) {
+        update_resize_cursor();
+    }
 
     const ImVec2 parent_window_position = ImGui::GetWindowPos();
     const ImVec2 parent_content_max = ImGui::GetWindowContentRegionMax();
