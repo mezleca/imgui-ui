@@ -10,7 +10,7 @@ namespace ui {
         LineWidget(ImVec2 start, ImVec2 end, ImColor color, float thickness = 1.0f);
 
     private:
-        bool paint_content() override;
+        bool paint() override;
         ImVec2 m_start;
         ImVec2 m_end;
     };

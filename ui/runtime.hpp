@@ -49,10 +49,6 @@ namespace ui {
             return m_assets.font(type);
         }
 
-        IconTexture* resource(std::string_view id) {
-            return m_assets.texture(id);
-        }
-
         IconTexture* find_resource(std::string_view id) {
             return m_assets.find_texture(id);
         }

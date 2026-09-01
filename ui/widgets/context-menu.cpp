@@ -4,7 +4,7 @@
 #include "../ui.hpp"
 #include "../imgui/draw.hpp"
 #include "../resources/icon.hpp"
-#include "draw-list-widget.hpp"
+#include "widget.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -79,13 +79,15 @@ public:
 private:
     friend class ContextMenuWidget;
 
-    void paint(ImDrawList& draw_list, Rect rect, const Style& style) override {
-        draw_frame(rect, style);
+    void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) override {
+        draw_frame(draw_list, rect, style);
 
         const ImVec2 padding = style.padding();
         const Rect content = rect.inset(padding);
         const ImVec2 text_size = ImGui::CalcTextSize(m_label.c_str());
-        draw_text({content.min.x, content.min.y + (content.size().y - text_size.y) * 0.5F}, style.color().get_col(), m_label);
+        draw_text(
+            draw_list, {content.min.x, content.min.y + (content.size().y - text_size.y) * 0.5F}, style.color().get_col(), m_label
+        );
 
         if (m_submenu != nullptr) {
             draw_submenu_icon(draw_list, content, style);
@@ -100,7 +102,7 @@ private:
 
         if (m_submenu_icon == nullptr) {
             draw_triangle(
-                {icon.min.x + icon_size * 0.5F, icon.min.y + icon_size * 0.5F}, {icon_size * 0.5F, icon_size * 0.3F},
+                draw_list, {icon.min.x + icon_size * 0.5F, icon.min.y + icon_size * 0.5F}, {icon_size * 0.5F, icon_size * 0.3F},
                 style.color().get_col(), TriangleDirection::Right
             );
             return;

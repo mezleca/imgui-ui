@@ -41,7 +41,7 @@ namespace ui {
         TextWidget& set_text(std::string text);
 
     private:
-        bool paint_content() override;
+        bool paint() override;
         void on_measure() override;
 
         GenericValue m_text;

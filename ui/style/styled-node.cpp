@@ -59,10 +59,10 @@ void StyledNode::draw() {
 }
 
 bool StyledNode::on_draw() {
-    return paint_content();
+    return paint();
 }
 
-bool StyledNode::paint_content() {
+bool StyledNode::paint() {
     return true;
 }
 

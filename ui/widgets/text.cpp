@@ -42,7 +42,7 @@ void TextWidget::on_measure() {
     }
 }
 
-bool TextWidget::paint_content() {
+bool TextWidget::paint() {
     const Style& current_style = style();
     const ImVec2 minimum = ImGui::GetCursorScreenPos();
     const Rect outer = Rect::from_position_size(minimum, layout().size());
@@ -53,11 +53,9 @@ bool TextWidget::paint_content() {
     ImGui::Dummy(layout().size());
     const ImVec4 clip_rect = {content.min.x, content.min.y, content.max.x, content.max.y};
     if (m_wrap < 0.0F && m_overflow == TextOverflow::Ellipsis) {
-        m_text.draw_ellipsis(*ImGui::GetWindowDrawList(), content.min, current_style.color().get_col(), clip_rect);
+        draw_text_ellipsis(content.min, current_style.color().get_col(), m_text, clip_rect);
     } else {
-        m_text.draw(
-            *ImGui::GetWindowDrawList(), content.min, current_style.color().get_col(), m_wrap < 0.0F ? &clip_rect : nullptr
-        );
+        draw_text(content.min, current_style.color().get_col(), m_text, m_wrap < 0.0F ? &clip_rect : nullptr);
     }
 
     return true;

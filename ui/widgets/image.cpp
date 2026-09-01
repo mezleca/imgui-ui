@@ -8,9 +8,9 @@ using namespace ui;
 
 ImageWidget::ImageWidget(IconTexture* texture) : DrawListWidget({}, "Image", false), m_texture(texture) {}
 
-void ImageWidget::paint(ImDrawList& draw_list, Rect rect, const Style& style) {
+void ImageWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) {
     const Rect content = rect.inset(style.padding());
-    draw_frame(rect, style);
+    draw_frame(draw_list, rect, style);
 
     if (m_texture != nullptr && content.valid()) {
         const ImVec2 image_size = content.size();

@@ -30,9 +30,13 @@ namespace ui {
         const ModalPanel* active() const;
         bool has_open_modal() const;
 
+        bool debug_selectable() const override {
+            return has_open_modal();
+        }
+
     protected:
         void on_update(float dt) override;
-        bool paint_content() override;
+        bool paint() override;
         void draw_children() override;
 
     private:

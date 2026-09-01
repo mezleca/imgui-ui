@@ -1,5 +1,5 @@
 #include "dropdown.hpp"
-#include "draw-list-widget.hpp"
+#include "widget.hpp"
 #include "../layout/stack-container.hpp"
 #include "../style/theme.hpp"
 #include "../ui.hpp"
@@ -30,28 +30,30 @@ public:
     }
 
 private:
-    void paint(ImDrawList&, Rect rect, const Style& current_style) override {
+    void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& current_style) override {
         const auto selected = std::find_if(m_state.options.begin(), m_state.options.end(), [this](const DropdownOption& option) {
             return option.value == *m_state.value;
         });
 
         const std::string_view preview = selected == m_state.options.end() ? m_state.placeholder : selected->label;
 
-        draw_contents(rect, preview, m_state.is_open(), current_style);
+        draw_contents(draw_list, rect, preview, m_state.is_open(), current_style);
     }
 
-    void draw_contents(Rect rect, std::string_view preview, bool open, const Style& current_style) const {
-        draw_frame(rect, current_style, open ? ImColor(m_theme.control_active_color) : current_style.background_color().value);
+    void draw_contents(ImDrawList& draw_list, Rect rect, std::string_view preview, bool open, const Style& current_style) const {
+        draw_frame(
+            draw_list, rect, current_style, open ? ImColor(m_theme.control_active_color) : current_style.background_color().value
+        );
 
         const ImVec2 text_size = ImGui::CalcTextSize(preview.data(), preview.data() + preview.size());
 
         draw_text(
-            {rect.min.x + current_style.padding().x, rect.min.y + (rect.size().y - text_size.y) * 0.5F},
+            draw_list, {rect.min.x + current_style.padding().x, rect.min.y + (rect.size().y - text_size.y) * 0.5F},
             current_style.color().get_col(), preview
         );
 
         draw_triangle(
-            {rect.max.x - current_style.padding().x - 4.0F, rect.min.y + rect.size().y * 0.5F}, {8.0F, 4.0F},
+            draw_list, {rect.max.x - current_style.padding().x - 4.0F, rect.min.y + rect.size().y * 0.5F}, {8.0F, 4.0F},
             current_style.color().get_col(), open ? TriangleDirection::Up : TriangleDirection::Down
         );
     }

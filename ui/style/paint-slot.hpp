@@ -6,6 +6,7 @@
 #include <functional>
 
 namespace ui {
+    /// values available to a paint slot draw callback for the current node paint pass.
     struct PaintContext {
         Rect rect;
         Rect content_rect;
@@ -14,6 +15,7 @@ namespace ui {
         float opacity;
     };
 
+    /// a configurable layer rendered immediately before or after a styled node's contents.
     class PaintSlot final {
     public:
         using DrawCallback = std::function<void(const PaintContext&)>;

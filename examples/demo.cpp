@@ -17,6 +17,10 @@
 #include <utility>
 #include <vector>
 
+static void style_demo_panel(ui::Style& style, const ui::Theme& theme) {
+    style.padding({14.0F, 14.0F}).background_color(theme.background_secondary_color).border(ui::BORDER_NONE).border_radius(8.0F);
+}
+
 DemoTextListWidget::DemoTextListWidget(std::vector<std::string> items) : ui::StackContainer("demo-text-list") {
     set_spacing(8.0F);
     fit_content();
@@ -41,35 +45,22 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
         style.padding({24.0F, 24.0F}).background_color(surface.theme().background_color);
     });
 
-    // summarizes the active backend before the editable sections below.
     auto& overview = add_child<ui::StackContainer>("overview");
     overview.fit_content_height().set_spacing(4.0F);
-    overview.configure_all_styles([&surface](ui::Style& style) {
-        style.padding({12.0F, 12.0F})
-            .background_color(surface.theme().background_secondary_color)
-            .border_color(surface.theme().accent_color)
-            .border(ui::BORDER_ALL);
-    });
+    overview.configure_all_styles([&surface](ui::Style& style) { style_demo_panel(style, surface.theme()); });
     overview.add_child<ui::TextWidget>("imgui-ui example");
     overview.add_child<ui::TextWidget>(std::format("backend: {}", backend));
     if (backend == "sdl") {
         overview.add_child<ui::TextWidget>("debugger: shift + d");
     }
 
-    // groups controls that edit the profile values stored by this demo.
     auto& profile = add_child<ui::StackContainer>("profile");
     profile.fit_content_height().set_spacing(8.0F);
-    profile.configure_all_styles([&surface](ui::Style& style) {
-        style.padding({12.0F, 12.0F})
-            .background_color(surface.theme().background_secondary_color)
-            .border_color(surface.theme().accent_color)
-            .border(ui::BORDER_ALL);
-    });
+    profile.configure_all_styles([&surface](ui::Style& style) { style_demo_panel(style, surface.theme()); });
     profile.add_child<ui::TextWidget>("profile");
     profile.add_child<ui::TextInputWidget>(surface, m_name, "name").set_size({360.0F, 42.0F});
     profile.add_child<ui::CheckboxWidget>(surface, m_enabled, "enabled").set_size({360.0F, 32.0F});
 
-    // shows style changes that only happen while this text receives pointer input.
     auto& custom_line_text = profile.add_child<ui::TextWidget>("hover this text to change its line height");
     custom_line_text.set_input_target();
     custom_line_text.configure_all_styles([](ui::Style& style) { style.line_height(1.0F, 0.1F); });
@@ -83,15 +74,9 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
         .set_overflow(ui::TextOverflow::Ellipsis);
     profile.add_child<ui::TextWidget>("clip: this text is longer than the available width").set_size({220.0F, 20.0F});
 
-    // keeps appearance controls together so their changes are easy to compare.
     auto& appearance = add_child<ui::StackContainer>("appearance");
     appearance.fit_content_height().set_spacing(8.0F);
-    appearance.configure_all_styles([&surface](ui::Style& style) {
-        style.padding({12.0F, 12.0F})
-            .background_color(surface.theme().background_secondary_color)
-            .border_color(surface.theme().accent_color)
-            .border(ui::BORDER_ALL);
-    });
+    appearance.configure_all_styles([&surface](ui::Style& style) { style_demo_panel(style, surface.theme()); });
     appearance.add_child<ui::TextWidget>("appearance");
 
     auto& theme = appearance.add_child<ui::DropdownWidget>(
@@ -118,35 +103,24 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
         apply_border_style(m_surface.root(), style);
     };
 
-    // contains actions that update text in the same section.
     auto& actions = add_child<ui::StackContainer>("actions");
     actions.fit_content_height().set_spacing(8.0F);
-    actions.configure_all_styles([&surface](ui::Style& style) {
-        style.padding({12.0F, 12.0F})
-            .background_color(surface.theme().background_secondary_color)
-            .border_color(surface.theme().accent_color)
-            .border(ui::BORDER_ALL);
-    });
+    actions.configure_all_styles([&surface](ui::Style& style) { style_demo_panel(style, surface.theme()); });
     actions.add_child<ui::TextWidget>("actions");
     auto& status = actions.add_child<ui::TextWidget>("no clicks yet");
     auto& button = actions.add_child<ui::ButtonWidget>(surface, "click me", ImVec2{140.0F, 44.0F});
 
-    // stores list content and the control that changes its layout direction.
     auto& list_section = add_child<ui::StackContainer>("list-section");
     list_section.fit_content_height().set_spacing(8.0F);
-    list_section.configure_all_styles([&surface](ui::Style& style) {
-        style.padding({12.0F, 12.0F})
-            .background_color(surface.theme().background_secondary_color)
-            .border_color(surface.theme().accent_color)
-            .border(ui::BORDER_ALL);
-    });
+    list_section.configure_all_styles([&surface](ui::Style& style) { style_demo_panel(style, surface.theme()); });
     list_section.add_child<ui::TextWidget>("dynamic stack layout");
-    m_text_list = &list_section.add_child<DemoTextListWidget>(std::vector<std::string>{"first item", "second item", "third item"});
+    m_text_list =
+        &list_section.add_child<DemoTextListWidget>(std::vector<std::string>{"first item", "second item", "third item"});
     m_text_list->configure_all_styles([&surface](ui::Style& style) {
         style.padding({8.0F, 8.0F})
-            .background_color(surface.theme().background_secondary_color)
-            .border_color(surface.theme().accent_color)
-            .border(ui::BORDER_ALL);
+            .background_color(surface.theme().background_tertiary_color)
+            .border(ui::BORDER_NONE)
+            .border_radius(6.0F);
     });
 
     auto& text_list_orientation =
@@ -171,10 +145,8 @@ void DemoScreen::setup_dynamic_nodes(ui::Node& parent) {
         .set_placement({.anchor = ui::Anchor::TopRight, .origin = ui::Origin::TopRight, .offset = {-20.0F, 72.0F}});
 
     dynamic_section.configure_all_styles([this](ui::Style& style) {
-        style.padding({12.0F, 12.0F})
-            .background_color(m_surface.theme().background_secondary_color)
-            .border_color(m_surface.theme().accent_color)
-            .border(ui::BORDER_ALL);
+        style_demo_panel(style, m_surface.theme());
+        style.border_color(m_surface.theme().accent_color).border(ui::BORDER_ALL);
     });
 
     auto& node_controls = dynamic_section.add_child<ui::StackContainer>("dynamic-node-controls", ui::StackDirection::Vertical);
@@ -192,8 +164,8 @@ void DemoScreen::setup_dynamic_nodes(ui::Node& parent) {
     m_dynamic_nodes->set_resize(ui::ResizeAxes::Both).set_spacing(8.0F).set_scrollable(true);
     m_dynamic_nodes->configure_all_styles([this](ui::Style& style) {
         style.background_color(m_surface.theme().background_tertiary_color)
-            .border_color(m_surface.theme().accent_color)
-            .border(ui::BORDER_ALL)
+            .border(ui::BORDER_NONE)
+            .border_radius(6.0F)
             .padding({20.0F, 20.0F})
             .cursor(ImGuiMouseCursor_ResizeNWSE);
     });
@@ -266,12 +238,7 @@ void setup_demo(UI& surface, std::string backend) {
     auto& overlay = surface.root().add_child<ui::OverlayNode>("##demo-overlay");
     auto& panel = overlay.add_child<ui::StackContainer>("overlay-panel");
 
-    panel.configure_all_styles([&surface](ui::Style& style) {
-        style.padding({14.0F, 14.0F})
-            .background_color(surface.theme().background_secondary_color)
-            .border_color(surface.theme().accent_color)
-            .border(ui::BORDER_ALL);
-    });
+    panel.configure_all_styles([&surface](ui::Style& style) { style_demo_panel(style, surface.theme()); });
 
     panel.fit_content();
     panel.set_placement(
@@ -318,12 +285,7 @@ void setup_demo(UI& surface, std::string backend) {
     blocker_panel.set_size({320.0F, 150.0F});
     blocker_panel.set_placement({.anchor = ui::Anchor::Center, .origin = ui::Origin::Center});
     blocker_panel.set_spacing(10.0F);
-    blocker_panel.configure_all_styles([&surface](ui::Style& style) {
-        style.padding({18.0F, 18.0F})
-            .background_color(surface.theme().background_secondary_color)
-            .border_color(surface.theme().accent_color)
-            .border(ui::BORDER_ALL);
-    });
+    blocker_panel.configure_all_styles([&surface](ui::Style& style) { style_demo_panel(style, surface.theme()); });
 
     blocker_panel.add_child<ui::TextWidget>("pointer input is blocked below this panel");
 

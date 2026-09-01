@@ -1,8 +1,9 @@
 #include "draw.hpp"
 
-#include "blur.hpp"
+#include "effects/blur/blur.hpp"
 
 #include "../style/style.hpp"
+#include "../widgets/text-value.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -200,27 +201,147 @@ static void stroke_dotted_path(ImDrawList& draw_list, const BorderPath& path, ui
     );
 }
 
+ImDrawList& ui::draw_list(DrawListTarget target) {
+    switch (target) {
+        case DrawListTarget::Background:
+            return *ImGui::GetBackgroundDrawList();
+        case DrawListTarget::Foreground:
+            return *ImGui::GetForegroundDrawList();
+        case DrawListTarget::Window:
+            return *ImGui::GetWindowDrawList();
+    }
+
+    return *ImGui::GetWindowDrawList();
+}
+
 void ui::draw_line(ImDrawList& draw_list, ImVec2 start, ImVec2 end, ImColor color, float thickness) {
     draw_list.AddLine(start, end, color, thickness);
 }
 
-void ui::draw_line(ImVec2 start, ImVec2 end, ImColor color, float thickness) {
-    draw_line(*ImGui::GetWindowDrawList(), start, end, color, thickness);
+void ui::draw_line(ImVec2 start, ImVec2 end, ImColor color, float thickness, DrawListTarget target) {
+    draw_line(ui::draw_list(target), start, end, color, thickness);
 }
 
-void ui::draw_circle(ImVec2 center, float radius, ImColor color) {
-    ImGui::GetWindowDrawList()->AddCircleFilled(center, radius, color);
+void ui::draw_circle(ImDrawList& draw_list, ImVec2 center, float radius, ImColor color) {
+    draw_list.AddCircleFilled(center, radius, color);
 }
 
-void ui::draw_circle_outline(ImVec2 center, float radius, ImColor color, float thickness) {
-    ImGui::GetWindowDrawList()->AddCircle(center, radius, color, 0, thickness);
+void ui::draw_circle(ImVec2 center, float radius, ImColor color, DrawListTarget target) {
+    draw_circle(draw_list(target), center, radius, color);
 }
 
-void ui::draw_text(ImVec2 position, ImColor color, std::string_view text) {
-    ImGui::GetWindowDrawList()->AddText(position, color, text.data(), text.data() + text.size());
+void ui::draw_circle_outline(ImDrawList& draw_list, ImVec2 center, float radius, ImColor color, float thickness) {
+    draw_list.AddCircle(center, radius, color, 0, thickness);
 }
 
-void ui::draw_triangle(ImVec2 center, ImVec2 size, ImColor color, TriangleDirection direction) {
+void ui::draw_circle_outline(ImVec2 center, float radius, ImColor color, float thickness, DrawListTarget target) {
+    draw_circle_outline(draw_list(target), center, radius, color, thickness);
+}
+
+void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, std::string_view text) {
+    draw_list.AddText(position, color, text.data(), text.data() + text.size());
+}
+
+void ui::draw_text(ImVec2 position, ImColor color, std::string_view text, DrawListTarget target) {
+    draw_text(draw_list(target), position, color, text);
+}
+
+void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, const GenericValue& text, const ImVec4* clip_rect) {
+    ImFont* font = text.font() != nullptr ? text.font() : ImGui::GetFont();
+    const float font_size = ImGui::GetFontSize();
+    const float wrap_width = std::max(0.0F, text.wrap_width());
+    if (text.line_height_multiplier() == 1.0F) {
+        draw_list.AddText(font, font_size, position, color, text.c_str(), nullptr, wrap_width, clip_rect);
+        return;
+    }
+
+    const char* const value = text.c_str();
+    const char* const value_end = value + std::char_traits<char>::length(value);
+    const float line_height = font_size * text.line_height_multiplier();
+    float y = position.y;
+
+    for (const char* paragraph = value;;) {
+        const char* const paragraph_end = std::find(paragraph, value_end, '\n');
+        const char* line = paragraph;
+
+        do {
+            const char* line_end = paragraph_end;
+            if (wrap_width > 0.0F && line < paragraph_end) {
+                line_end = font->CalcWordWrapPosition(font_size, line, paragraph_end, wrap_width);
+                if (line_end == line) {
+                    line_end = paragraph_end;
+                }
+            }
+
+            draw_list.AddText(font, font_size, {position.x, y}, color, line, line_end, 0.0F, clip_rect);
+            y += line_height;
+
+            if (line_end == paragraph_end) {
+                break;
+            }
+
+            line = line_end;
+            while (line < paragraph_end && (*line == ' ' || *line == '\t')) {
+                ++line;
+            }
+        } while (line < paragraph_end);
+
+        if (paragraph_end == value_end) {
+            break;
+        }
+
+        paragraph = paragraph_end + 1;
+    }
+}
+
+void ui::draw_text(ImVec2 position, ImColor color, const GenericValue& text, const ImVec4* clip_rect, DrawListTarget target) {
+    draw_text(draw_list(target), position, color, text, clip_rect);
+}
+
+void ui::draw_text_ellipsis(ImDrawList& draw_list, ImVec2 position, ImColor color, const GenericValue& text, ImVec4 clip_rect) {
+    ImFont* font = text.font() != nullptr ? text.font() : ImGui::GetFont();
+    const float font_size = ImGui::GetFontSize();
+    const char* const value = text.c_str();
+    const char* const value_end = value + std::char_traits<char>::length(value);
+    const float line_height = font_size * text.line_height_multiplier();
+    float y = position.y;
+
+    for (const char* line = value;;) {
+        const char* const line_end = std::find(line, value_end, '\n');
+        const float available_width = std::max(0.0F, clip_rect.z - position.x);
+        const ImVec2 text_size = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, line, line_end);
+        if (text_size.x <= available_width) {
+            draw_list.AddText(font, font_size, {position.x, y}, color, line, line_end, 0.0F, &clip_rect);
+        } else {
+            constexpr std::string_view ellipsis = "...";
+            const float ellipsis_width = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, ellipsis.data()).x;
+            const char* visible_end = line;
+            const float text_width = std::max(0.0F, available_width - ellipsis_width);
+            const ImVec2 visible_size = font->CalcTextSizeA(font_size, text_width, 0.0F, line, line_end, &visible_end);
+
+            if (visible_end != line) {
+                draw_list.AddText(font, font_size, {position.x, y}, color, line, visible_end, 0.0F, &clip_rect);
+            }
+
+            draw_list.AddText(
+                font, font_size, {position.x + visible_size.x, y}, color, ellipsis.data(), nullptr, 0.0F, &clip_rect
+            );
+        }
+
+        if (line_end == value_end) {
+            break;
+        }
+
+        line = line_end + 1;
+        y += line_height;
+    }
+}
+
+void ui::draw_text_ellipsis(ImVec2 position, ImColor color, const GenericValue& text, ImVec4 clip_rect, DrawListTarget target) {
+    draw_text_ellipsis(draw_list(target), position, color, text, clip_rect);
+}
+
+void ui::draw_triangle(ImDrawList& draw_list, ImVec2 center, ImVec2 size, ImColor color, TriangleDirection direction) {
     static constexpr std::array<std::array<ImVec2, 3>, 4> DIRECTION_OFFSETS = {{
         {{{-1.0F, 1.0F}, {0.0F, -1.0F}, {1.0F, 1.0F}}},  // up
         {{{-1.0F, -1.0F}, {1.0F, -1.0F}, {0.0F, 1.0F}}}, // down
@@ -234,11 +355,14 @@ void ui::draw_triangle(ImVec2 center, ImVec2 size, ImColor color, TriangleDirect
         return ImVec2{center.x + offsets[index].x * half_size.x, center.y + offsets[index].y * half_size.y};
     };
 
-    ImGui::GetWindowDrawList()->AddTriangleFilled(vertex(0), vertex(1), vertex(2), color);
+    draw_list.AddTriangleFilled(vertex(0), vertex(1), vertex(2), color);
 }
 
-static void draw_full_frame(Rect rect, const Style& style, ImColor background, ImColor border) {
-    ImDrawList& draw_list = *ImGui::GetWindowDrawList();
+void ui::draw_triangle(ImVec2 center, ImVec2 size, ImColor color, TriangleDirection direction, DrawListTarget target) {
+    draw_triangle(draw_list(target), center, size, color, direction);
+}
+
+static void draw_full_frame(ImDrawList& draw_list, Rect rect, const Style& style, ImColor background, ImColor border) {
     const float border_thickness = style.border_thickness();
 
     if (border_thickness <= 0.0F) {
@@ -260,42 +384,54 @@ static void draw_full_frame(Rect rect, const Style& style, ImColor background, I
     );
 }
 
-void ui::draw_frame(Rect rect, const Style& style) {
-    draw_frame(rect, style, 1.0F);
+void ui::draw_frame(ImDrawList& draw_list, Rect rect, const Style& style) {
+    draw_frame(draw_list, rect, style, 1.0F);
 }
 
-void ui::draw_frame(Rect rect, const Style& style, ImColor background) {
+void ui::draw_frame(Rect rect, const Style& style, DrawListTarget target) {
+    draw_frame(draw_list(target), rect, style);
+}
+
+void ui::draw_frame(ImDrawList& draw_list, Rect rect, const Style& style, ImColor background) {
     const float alpha = style.alpha();
     background.Value.w *= alpha;
 
     ImColor border = style.border_color().value;
     border.Value.w *= alpha;
 
-    draw_blur(rect, style.blur(), style.border_radius(), alpha);
+    draw_blur(draw_list, rect, style.blur(), style.border_radius(), alpha);
     if (style.border() == BORDER_ALL && style.border_style() == BorderStyle::Solid) {
-        draw_full_frame(rect, style, background, border);
+        draw_full_frame(draw_list, rect, style, background, border);
         return;
     }
 
-    ImGui::GetWindowDrawList()->AddRectFilled(rect.min, rect.max, background, style.border_radius());
-    draw_border(rect, style, border);
+    draw_list.AddRectFilled(rect.min, rect.max, background, style.border_radius());
+    draw_border(draw_list, rect, style, border);
 }
 
-void ui::draw_frame(Rect rect, const Style& style, float opacity) {
+void ui::draw_frame(Rect rect, const Style& style, ImColor background, DrawListTarget target) {
+    draw_frame(draw_list(target), rect, style, background);
+}
+
+void ui::draw_frame(ImDrawList& draw_list, Rect rect, const Style& style, float opacity) {
     ImColor background = style.background_color().value;
     ImColor border = style.border_color().value;
     const float alpha = std::clamp(opacity * style.alpha(), 0.0F, 1.0F);
     background.Value.w *= alpha;
     border.Value.w *= alpha;
 
-    draw_blur(rect, style.blur(), style.border_radius(), alpha);
+    draw_blur(draw_list, rect, style.blur(), style.border_radius(), alpha);
     if (style.border() == BORDER_ALL && style.border_style() == BorderStyle::Solid) {
-        draw_full_frame(rect, style, background, border);
+        draw_full_frame(draw_list, rect, style, background, border);
         return;
     }
 
-    ImGui::GetWindowDrawList()->AddRectFilled(rect.min, rect.max, background, style.border_radius());
-    draw_border(rect, style, border);
+    draw_list.AddRectFilled(rect.min, rect.max, background, style.border_radius());
+    draw_border(draw_list, rect, style, border);
+}
+
+void ui::draw_frame(Rect rect, const Style& style, float opacity, DrawListTarget target) {
+    draw_frame(draw_list(target), rect, style, opacity);
 }
 
 static BorderPathSegment line(ImVec2 start, ImVec2 end, uint8_t sides) {
@@ -392,15 +528,15 @@ void ui::draw_border_path(
 }
 
 void ui::draw_border_path(const BorderPath& path, uint8_t border, ImColor color, float thickness, BorderStyle style) {
-    draw_border_path(*ImGui::GetWindowDrawList(), path, border, color, thickness, style);
+    draw_border_path(draw_list(), path, border, color, thickness, style);
 }
 
-void ui::draw_border(Rect rect, const Style& style) {
-    draw_border(rect, style, style.border_color().value);
+void ui::draw_border(Rect rect, const Style& style, DrawListTarget target) {
+    draw_border(rect, style, style.border_color().value, target);
 }
 
-void ui::draw_border(Rect rect, const Style& style, ImColor color) {
-    draw_border(*ImGui::GetWindowDrawList(), rect, style, color);
+void ui::draw_border(Rect rect, const Style& style, ImColor color, DrawListTarget target) {
+    draw_border(draw_list(target), rect, style, color);
 }
 
 void ui::draw_border(ImDrawList& draw_list, Rect rect, const Style& style, ImColor color) {

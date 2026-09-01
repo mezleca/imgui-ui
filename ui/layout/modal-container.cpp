@@ -115,12 +115,12 @@ void ModalContainer::remove_pending_modal() {
     remove(*modal);
 }
 
-bool ModalContainer::paint_content() {
+bool ModalContainer::paint() {
     if (!has_open_modal()) {
         return false;
     }
 
-    return LayerContainer::paint_content();
+    return LayerContainer::paint();
 }
 
 void ModalContainer::draw_children() {

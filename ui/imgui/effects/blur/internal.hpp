@@ -1,8 +1,6 @@
 #pragma once
 
-#include "../layout/geometry.hpp"
-
-#include <imgui.h>
+#include "blur.hpp"
 
 namespace ui {
     struct BlurRegion {
@@ -12,7 +10,6 @@ namespace ui {
         float opacity = 1.0F;
     };
 
-    void begin_blur_frame();
     void set_blur_callback(ImDrawCallback callback);
-    void draw_blur(Rect rect, int strength, float rounding, float opacity = 1.0F);
+    void shutdown_blur();
 } // namespace ui

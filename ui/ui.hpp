@@ -122,8 +122,6 @@ public:
         return m_context;
     }
 
-    IconTexture* get_texture(std::string_view id);
-
     void set_frame_style(ImVec2 padding, float rounding, float border_thickness);
     void set_grab_style(float minimum_size, float rounding);
     void set_item_spacing(ImVec2 spacing, ImVec2 inner_spacing);

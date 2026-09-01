@@ -19,7 +19,7 @@ namespace ui {
 
     protected:
         /// opens the imgui child scope; on_draw_end() records its bounds and closes it after child nodes draw.
-        bool paint_content() override;
+        bool paint() override;
         void on_layout() override;
 
         /// records the outer rectangle and closes the ImGui child window.
@@ -32,9 +32,9 @@ namespace ui {
         ImVec2 content_alignment_factor() const;
 
     private:
+        Rect m_child_rect{};
         bool m_scrollable = false;
         bool m_center_content_horizontally = false;
         bool m_center_content_vertically = false;
-        Rect m_child_rect{};
     };
 } // namespace ui

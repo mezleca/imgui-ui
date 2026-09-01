@@ -142,8 +142,8 @@ namespace ui {
 
     protected:
         bool on_draw() final;
-        /// draws this styled node before Node draws its children.
-        virtual bool paint_content();
+        /// prepares this node's ImGui scope before its children are drawn.
+        virtual bool paint();
 
         void set_type_name(std::string_view type_name) {
             m_type_name = type_name;

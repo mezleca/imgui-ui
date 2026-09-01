@@ -64,7 +64,7 @@ namespace ui {
         }
 
     private:
-        bool paint_content() override;
+        bool paint() override;
         template <typename T>
         bool draw_value(T& value);
 

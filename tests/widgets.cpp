@@ -590,7 +590,7 @@ TEST_CASE("runtime owns shared theme and explicitly registered assets", "[Runtim
 
     REQUIRE(runtime.theme().content_padding == 20.0F);
     REQUIRE(font == runtime.find_font(ui::FontType::REGULAR));
-    REQUIRE(runtime.resource("default") == nullptr);
+    REQUIRE(runtime.find_resource("default") == nullptr);
 
     ui::Runtime other_runtime;
 
@@ -773,7 +773,7 @@ TEST_CASE("styled nodes apply their effective font during draw", "[Widget][style
         ImFont* observed_font = nullptr;
 
     private:
-        bool paint_content() override {
+        bool paint() override {
             observed_font = ImGui::GetFont();
             ImGui::Dummy({10.0F, 10.0F});
             return true;
@@ -811,7 +811,7 @@ TEST_CASE("styled nodes keep borders out of imgui style scope", "[Widget][style]
         ImVec4 observed_background{};
 
     private:
-        bool paint_content() override {
+        bool paint() override {
             const ImGuiStyle& imgui_style = ImGui::GetStyle();
             observed_padding = imgui_style.FramePadding;
             observed_rounding = imgui_style.FrameRounding;
@@ -865,7 +865,7 @@ TEST_CASE("widgets skip drawing after their fade becomes invisible", "[Widget][o
         int draws = 0;
 
     private:
-        bool paint_content() override {
+        bool paint() override {
             ++draws;
             ImGui::Dummy({10.0F, 10.0F});
             return true;

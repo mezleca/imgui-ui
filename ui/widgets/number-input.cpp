@@ -137,7 +137,7 @@ bool NumberInputWidget::draw_value(T& value) {
     return ImGui::DragScalar("##value", data_type, &value, m_speed, minimum_ptr, maximum_ptr, format);
 }
 
-bool NumberInputWidget::paint_content() {
+bool NumberInputWidget::paint() {
     const Style& current_style = style();
     ImVec2 frame_padding = current_style.padding();
     m_label.set_font(font());

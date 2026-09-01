@@ -1,7 +1,6 @@
 #include "assets.hpp"
 #include "svg.hpp"
 
-#include <iostream>
 #include <stdexcept>
 #include <utility>
 
@@ -69,16 +68,6 @@ namespace ui {
         auto resource = m_icon_loader->load_file(location, id);
         IconTexture* result = resource.get();
         m_textures.insert_or_assign(std::move(id), std::move(resource));
-        return result;
-    }
-
-    IconTexture* AssetRegistry::texture(std::string_view id) {
-        IconTexture* result = find_texture(id);
-        if (result == nullptr) {
-            std::cout << "[ui] failed to find " << id << " (returning default svg)\n";
-            return find_texture("default");
-        }
-
         return result;
     }
 

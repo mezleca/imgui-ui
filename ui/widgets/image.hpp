@@ -1,6 +1,6 @@
 #pragma once
 
-#include "draw-list-widget.hpp"
+#include "widget.hpp"
 
 #include <imgui.h>
 
@@ -23,7 +23,7 @@ namespace ui {
         }
 
     private:
-        void paint(ImDrawList& draw_list, Rect rect, const Style& style) override;
+        void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) override;
         IconTexture* m_texture = nullptr;
         float m_rotation = 0.0F;
     };

@@ -1,12 +1,13 @@
-#include "opengl-blur.hpp"
+#include "opengl.hpp"
 
-#include "blur.hpp"
+#include "internal.hpp"
 
 #include <glad/gl.h>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <unordered_map>
 
 using namespace ui;
 
@@ -24,7 +25,19 @@ struct BlurTextures {
     bool captured = false;
 };
 
-static BlurTextures textures;
+static std::unordered_map<ImGuiContext*, BlurTextures> texture_sets;
+static BlurTextures* textures = nullptr;
+
+static bool select_textures() {
+    ImGuiContext* context = ImGui::GetCurrentContext();
+    if (context == nullptr) {
+        textures = nullptr;
+        return false;
+    }
+
+    textures = &texture_sets[context];
+    return true;
+}
 
 static constexpr const char* VERTEX_SHADER = R"(#version 330 core
 void main() {
@@ -101,22 +114,22 @@ static bool create_program() {
         return false;
     }
 
-    textures.program = glCreateProgram();
+    textures->program = glCreateProgram();
 
-    glAttachShader(textures.program, vertex);
-    glAttachShader(textures.program, fragment);
-    glLinkProgram(textures.program);
+    glAttachShader(textures->program, vertex);
+    glAttachShader(textures->program, fragment);
+    glLinkProgram(textures->program);
     glDeleteShader(vertex);
     glDeleteShader(fragment);
 
     GLint linked = GL_FALSE;
-    glGetProgramiv(textures.program, GL_LINK_STATUS, &linked);
+    glGetProgramiv(textures->program, GL_LINK_STATUS, &linked);
     if (linked == GL_TRUE) {
         return true;
     }
 
-    glDeleteProgram(textures.program);
-    textures.program = 0;
+    glDeleteProgram(textures->program);
+    textures->program = 0;
     return false;
 }
 
@@ -131,44 +144,44 @@ static void create_texture(GLuint& texture, int width, int height) {
 }
 
 static bool ensure_textures(int width, int height) {
-    if (textures.program == 0 && !create_program()) {
+    if (textures->program == 0 && !create_program()) {
         return false;
     }
 
-    if (textures.width == width && textures.height == height) {
+    if (textures->width == width && textures->height == height) {
         return true;
     }
 
-    textures.width = width;
-    textures.height = height;
+    textures->width = width;
+    textures->height = height;
 
-    create_texture(textures.source, width, height);
-    create_texture(textures.ping, width, height);
-    create_texture(textures.pong, width, height);
+    create_texture(textures->source, width, height);
+    create_texture(textures->ping, width, height);
+    create_texture(textures->pong, width, height);
 
-    if (textures.framebuffer == 0) glGenFramebuffers(1, &textures.framebuffer);
-    if (textures.vertex_array == 0) glGenVertexArrays(1, &textures.vertex_array);
+    if (textures->framebuffer == 0) glGenFramebuffers(1, &textures->framebuffer);
+    if (textures->vertex_array == 0) glGenVertexArrays(1, &textures->vertex_array);
 
     return true;
 }
 
 static void blur_pass(GLuint input, GLuint output, int width, int height, int radius, float direction_x, float direction_y) {
-    glBindFramebuffer(GL_FRAMEBUFFER, textures.framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, textures->framebuffer);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, output, 0);
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) return;
     glViewport(0, 0, width, height);
     glDisable(GL_BLEND);
     glDisable(GL_SCISSOR_TEST);
-    glUseProgram(textures.program);
-    glUniform1i(glGetUniformLocation(textures.program, "image"), 0);
-    glUniform2f(glGetUniformLocation(textures.program, "texel"), 1.0F / width, 1.0F / height);
-    glUniform2f(glGetUniformLocation(textures.program, "direction"), direction_x, direction_y);
-    glUniform1i(glGetUniformLocation(textures.program, "radius"), radius);
-    glUniform1i(glGetUniformLocation(textures.program, "filtered"), GL_TRUE);
-    glUniform1i(glGetUniformLocation(textures.program, "clipped"), GL_FALSE);
+    glUseProgram(textures->program);
+    glUniform1i(glGetUniformLocation(textures->program, "image"), 0);
+    glUniform2f(glGetUniformLocation(textures->program, "texel"), 1.0F / width, 1.0F / height);
+    glUniform2f(glGetUniformLocation(textures->program, "direction"), direction_x, direction_y);
+    glUniform1i(glGetUniformLocation(textures->program, "radius"), radius);
+    glUniform1i(glGetUniformLocation(textures->program, "filtered"), GL_TRUE);
+    glUniform1i(glGetUniformLocation(textures->program, "clipped"), GL_FALSE);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, input);
-    glBindVertexArray(textures.vertex_array);
+    glBindVertexArray(textures->vertex_array);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
@@ -193,8 +206,8 @@ static std::array<int, 3> box_widths(int sigma) {
 
 static void blur(int width, int height, int sigma) {
     const std::array<int, 3> widths = box_widths(sigma);
-    GLuint input = textures.source;
-    GLuint output = textures.ping;
+    GLuint input = textures->source;
+    GLuint output = textures->ping;
 
     for (const int window : widths) {
         blur_pass(input, output, width, height, window / 2, 1.0F, 0.0F);
@@ -206,13 +219,13 @@ static void blur(int width, int height, int sigma) {
         std::swap(input, output);
     }
 
-    textures.result = input;
+    textures->result = input;
 }
 
 static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
     const auto* region = static_cast<const BlurRegion*>(command->UserCallbackData);
 
-    if (region == nullptr) {
+    if (region == nullptr || !select_textures()) {
         return;
     }
 
@@ -229,16 +242,16 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
         return;
     }
 
-    if (!textures.captured) {
-        glBindTexture(GL_TEXTURE_2D, textures.source);
+    if (!textures->captured) {
+        glBindTexture(GL_TEXTURE_2D, textures->source);
         glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
 
-        textures.captured = true;
+        textures->captured = true;
     }
 
-    if (textures.strength != region->strength) {
+    if (textures->strength != region->strength) {
         blur(width, height, region->strength);
-        textures.strength = region->strength;
+        textures->strength = region->strength;
     }
 
     const int left = std::clamp(static_cast<int>(std::floor(region->rect.min.x)), 0, width);
@@ -255,23 +268,23 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
     glEnable(GL_SCISSOR_TEST);
     glScissor(left, bottom, region_width, region_height);
     glDisable(GL_BLEND);
-    glUseProgram(textures.program);
-    glUniform1i(glGetUniformLocation(textures.program, "image"), 0);
-    glUniform2f(glGetUniformLocation(textures.program, "texel"), 1.0F / width, 1.0F / height);
+    glUseProgram(textures->program);
+    glUniform1i(glGetUniformLocation(textures->program, "image"), 0);
+    glUniform2f(glGetUniformLocation(textures->program, "texel"), 1.0F / width, 1.0F / height);
     glUniform4f(
-        glGetUniformLocation(textures.program, "region"), static_cast<float>(left), static_cast<float>(bottom),
+        glGetUniformLocation(textures->program, "region"), static_cast<float>(left), static_cast<float>(bottom),
         static_cast<float>(region_width), static_cast<float>(region_height)
     );
     glUniform1f(
-        glGetUniformLocation(textures.program, "rounding"),
+        glGetUniformLocation(textures->program, "rounding"),
         std::min(region->rounding, std::min(region_width, region_height) * 0.5F)
     );
-    glUniform1f(glGetUniformLocation(textures.program, "opacity"), region->opacity);
-    glUniform1i(glGetUniformLocation(textures.program, "clipped"), GL_TRUE);
-    glUniform1i(glGetUniformLocation(textures.program, "filtered"), GL_FALSE);
+    glUniform1f(glGetUniformLocation(textures->program, "opacity"), region->opacity);
+    glUniform1i(glGetUniformLocation(textures->program, "clipped"), GL_TRUE);
+    glUniform1i(glGetUniformLocation(textures->program, "filtered"), GL_FALSE);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, textures.result);
-    glBindVertexArray(textures.vertex_array);
+    glBindTexture(GL_TEXTURE_2D, textures->result);
+    glBindVertexArray(textures->vertex_array);
 
     if (region->opacity < 1.0F) {
         glEnable(GL_BLEND);
@@ -285,7 +298,7 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
 }
 
 bool ui::initialize_opengl_blur() {
-    if (!GLAD_GL_VERSION_3_3) {
+    if (!GLAD_GL_VERSION_3_3 || !select_textures()) {
         return false;
     }
 
@@ -294,19 +307,29 @@ bool ui::initialize_opengl_blur() {
 }
 
 void ui::begin_opengl_blur_frame() {
-    textures.captured = false;
-    textures.strength = -1;
+    if (!select_textures()) {
+        return;
+    }
+
+    textures->captured = false;
+    textures->strength = -1;
 }
 
 void ui::shutdown_opengl_blur() {
+    if (!select_textures()) {
+        return;
+    }
+
     set_blur_callback(nullptr);
 
-    if (textures.program != 0) glDeleteProgram(textures.program);
-    if (textures.vertex_array != 0) glDeleteVertexArrays(1, &textures.vertex_array);
-    if (textures.framebuffer != 0) glDeleteFramebuffers(1, &textures.framebuffer);
-    if (textures.source != 0) glDeleteTextures(1, &textures.source);
-    if (textures.ping != 0) glDeleteTextures(1, &textures.ping);
-    if (textures.pong != 0) glDeleteTextures(1, &textures.pong);
+    if (textures->program != 0) glDeleteProgram(textures->program);
+    if (textures->vertex_array != 0) glDeleteVertexArrays(1, &textures->vertex_array);
+    if (textures->framebuffer != 0) glDeleteFramebuffers(1, &textures->framebuffer);
+    if (textures->source != 0) glDeleteTextures(1, &textures->source);
+    if (textures->ping != 0) glDeleteTextures(1, &textures->ping);
+    if (textures->pong != 0) glDeleteTextures(1, &textures->pong);
 
-    textures = {};
+    texture_sets.erase(ImGui::GetCurrentContext());
+    textures = nullptr;
+    shutdown_blur();
 }

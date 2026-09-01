@@ -2,7 +2,7 @@
 #include "../imgui/draw.hpp"
 #include "../style/theme.hpp"
 #include "../ui.hpp"
-#include "draw-list-widget.hpp"
+#include "widget.hpp"
 #include "text.hpp"
 
 #include <algorithm>
@@ -19,7 +19,7 @@ public:
     }
 
 private:
-    void paint(ImDrawList&, Rect rect, const Style& current_style) override {
+    void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& current_style) override {
         if (m_fill && !*m_value) {
             return;
         }
@@ -35,12 +35,14 @@ private:
             const ImVec2 size = rect.size();
             const ImVec2 center = {(rect.min.x + rect.max.x) * 0.5F, (rect.min.y + rect.max.y) * 0.5F};
             const float radius = std::min(size.x, size.y) * (m_fill ? 1.0F / 3.0F : 0.5F);
-            draw_circle(center, radius, current_style.background_color().get_col());
+            draw_circle(draw_list, center, radius, current_style.background_color().get_col());
             if (!m_fill && (current_style.border() & BORDER_ALL) != 0 && current_style.border_thickness() > 0.0F) {
-                draw_circle_outline(center, radius, current_style.border_color().get_col(), current_style.border_thickness());
+                draw_circle_outline(
+                    draw_list, center, radius, current_style.border_color().get_col(), current_style.border_thickness()
+                );
             }
         } else {
-            draw_frame(rect, current_style);
+            draw_frame(draw_list, rect, current_style);
         }
     }
 
@@ -61,7 +63,9 @@ CheckboxWidget::CheckboxWidget(UI& ui, bool& value, std::string label, std::stri
 
     configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({4.0F, 4.0F}); });
 
-    m_frame_node->configure_all_styles([&theme](Style& style) { style.control(theme, {}).border_radius(theme.checkbox_rounding); });
+    m_frame_node->configure_all_styles([&theme](Style& style) {
+        style.control(theme, {}).border_radius(theme.checkbox_rounding);
+    });
 
     m_fill_node->configure_all_styles([&theme](Style& style) {
         style.background_color(theme.control_mark_color).border_radius(theme.checkbox_rounding);
@@ -159,7 +163,7 @@ void CheckboxWidget::on_measure() {
     });
 }
 
-bool CheckboxWidget::paint_content() {
+bool CheckboxWidget::paint() {
     ImGui::Dummy(layout().size());
 
     const InputState& state = input_state();

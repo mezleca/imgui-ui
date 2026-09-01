@@ -2,7 +2,7 @@
 
 #include "../../constants.hpp"
 #include "../../imgui/context-scope.hpp"
-#include "../../imgui/opengl-blur.hpp"
+#include "../../imgui/effects/blur/opengl.hpp"
 #include "../../ui.hpp"
 
 #include <external/glad.h>

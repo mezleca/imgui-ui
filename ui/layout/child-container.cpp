@@ -1,7 +1,7 @@
 #include "child-container.hpp"
 
 #include "../constants.hpp"
-#include "../imgui/blur.hpp"
+#include "../imgui/effects/blur/blur.hpp"
 #include "../imgui/draw.hpp"
 #include "../style/style.hpp"
 
@@ -36,14 +36,14 @@ void ChildContainer::on_layout() {
     resolve_size(resolve_layout_size(size, ImGui::GetContentRegionAvail()));
 }
 
-bool ChildContainer::paint_content() {
+bool ChildContainer::paint() {
     const Style& current_style = style();
     ImGuiChildFlags child_flags = ImGuiChildFlags_AlwaysUseWindowPadding;
     // this node draws the child background and border after beginchild.
     ImGuiWindowFlags window_flags = constants::WIDGET_WINDOW_FLAGS | ImGuiWindowFlags_NoBackground;
 
+    // imgui controls only receive input when no retained node owns this child.
     if (!accepts_imgui_input()) {
-        // imgui controls only receive input when no retained node owns this child.
         window_flags |= ImGuiWindowFlags_NoInputs;
     }
 
@@ -64,8 +64,8 @@ bool ChildContainer::paint_content() {
 
     const ImVec2 position = ImGui::GetCursorScreenPos();
     draw_blur(
-        {position, {position.x + layout().size().x, position.y + layout().size().y}}, current_style.blur(),
-        current_style.border_radius(), current_style.alpha()
+        *ImGui::GetWindowDrawList(), {position, {position.x + layout().size().x, position.y + layout().size().y}},
+        current_style.blur(), current_style.border_radius(), current_style.alpha()
     );
 
     if (id().empty()) {

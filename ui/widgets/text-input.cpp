@@ -26,7 +26,7 @@ public:
     }
 
 private:
-    bool paint_content() override {
+    bool paint() override {
         if (*m_focus_requested) {
             ImGui::SetKeyboardFocusHere();
             *m_focus_requested = false;

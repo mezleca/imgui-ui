@@ -13,7 +13,7 @@ void LayerContainer::on_layout() {
     resolve_size(ImGui::GetMainViewport()->WorkSize);
 }
 
-bool LayerContainer::paint_content() {
+bool LayerContainer::paint() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);

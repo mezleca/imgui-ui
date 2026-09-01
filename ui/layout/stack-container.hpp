@@ -21,7 +21,7 @@ namespace ui {
         StackContainer& fit_content_height(bool enabled = true);
 
     protected:
-        bool paint_content() override;
+        bool paint() override;
         void on_measure() override;
         void on_layout() override;
         ImVec2 requested_size_for_layout() const override;

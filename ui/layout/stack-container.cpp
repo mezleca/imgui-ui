@@ -70,9 +70,9 @@ StackContainer& StackContainer::fit_content_height(bool enabled) {
     return *this;
 }
 
-bool StackContainer::paint_content() {
+bool StackContainer::paint() {
     ImGui::SetNextWindowContentSize(m_content_size);
-    return ChildContainer::paint_content();
+    return ChildContainer::paint();
 }
 
 void StackContainer::on_measure() {

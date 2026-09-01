@@ -32,7 +32,7 @@ namespace ui {
         const StyledNode& fill() const;
 
     private:
-        bool paint_content() override;
+        bool paint() override;
         void on_measure() override;
         void on_layout() override;
 

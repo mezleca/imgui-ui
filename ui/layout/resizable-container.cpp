@@ -132,7 +132,7 @@ void ResizableContainer::draw_resize_indicator() {
     }
 
     const float border_thickness = style().border_thickness();
-    ImDrawList& draw_list = *ImGui::GetForegroundDrawList();
+    ImDrawList& draw_list = ui::draw_list(DrawListTarget::Foreground);
     const ImVec2 max = resize_handle().max;
 
     for (int i = 0; i < 3; ++i) {

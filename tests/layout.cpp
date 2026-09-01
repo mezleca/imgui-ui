@@ -765,9 +765,9 @@ TEST_CASE("node screen rectangles follow scrollable child windows") {
         float current_scroll_y = 0.0F;
 
     protected:
-        bool paint_content() override {
+        bool paint() override {
             ImGui::SetNextWindowContentSize({100.0F, 400.0F});
-            return ui::ChildContainer::paint_content();
+            return ui::ChildContainer::paint();
         }
 
         void on_draw_end() override {

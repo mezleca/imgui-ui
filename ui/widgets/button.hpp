@@ -1,7 +1,7 @@
 #pragma once
 
-#include "draw-list-widget.hpp"
 #include "text-value.hpp"
+#include "widget.hpp"
 
 #include <imgui.h>
 #include <functional>
@@ -22,7 +22,7 @@ namespace ui {
 
     private:
         void dispatch_event(UiEvent& event) override;
-        void paint(ImDrawList& draw_list, Rect rect, const Style& style) override;
+        void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) override;
 
         GenericValue m_text;
         std::function<void()> m_on_click;

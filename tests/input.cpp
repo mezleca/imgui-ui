@@ -601,6 +601,17 @@ TEST_CASE("debug tree includes passive containers") {
     REQUIRE(root.debug_node_at({10.0F, 10.0F}) == &root);
 }
 
+TEST_CASE("closed modal containers are skipped by debugger selection") {
+    ui::Runtime runtime;
+    ui::Config config;
+    UI surface(runtime, std::move(config));
+    ui::ModalContainer modal(surface);
+
+    REQUIRE_FALSE(modal.debug_selectable());
+    modal.open("panel");
+    REQUIRE(modal.debug_selectable());
+}
+
 TEST_CASE("input router prefers an overlapping child over its parent") {
     ui::InputRouter router;
     ui::Node parent("parent");

@@ -1,6 +1,6 @@
 #include "ui.hpp"
 
-#include "imgui/blur.hpp"
+#include "imgui/effects/blur/internal.hpp"
 #include "constants.hpp"
 #include "imgui/context-scope.hpp"
 #include "style/theme.hpp"
@@ -48,6 +48,7 @@ UI::~UI() {
 
     const ui::ImGuiContextScope scope(m_context);
 
+    ui::shutdown_blur();
     m_runtime.release_context(m_context);
     if (m_backend != nullptr) m_backend->shutdown_imgui();
     ImGui::DestroyContext(m_context);
@@ -191,10 +192,6 @@ void UI::apply_theme_colors() {
     colors[ImGuiCol_CheckMark] = theme.control_mark_color;
     colors[ImGuiCol_SliderGrab] = theme.control_mark_color;
     colors[ImGuiCol_SliderGrabActive] = theme.accent_hover_color;
-}
-
-IconTexture* UI::get_texture(std::string_view id) {
-    return m_runtime.resource(id);
 }
 
 IconTexture* UI::find_texture(std::string_view id) {

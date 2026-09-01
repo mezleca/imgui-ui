@@ -3,7 +3,7 @@
 #include "style.hpp"
 
 #include <algorithm>
-#include <memory>
+#include <optional>
 
 namespace ui {
     static constexpr float OPACITY_TRANSITION_DURATION = 0.15F;
@@ -37,7 +37,7 @@ namespace ui {
             for (Style& style : styles) {
                 style.set_change_callback(owner, callback);
             }
-            if (m_transition_style != nullptr) {
+            if (m_transition_style.has_value()) {
                 m_transition_style->set_change_callback(owner, callback);
             }
         }
@@ -89,12 +89,12 @@ namespace ui {
         }
 
         bool transitioning() const {
-            return current_opacity.value != m_opacity || m_transition_style != nullptr;
+            return current_opacity.value != m_opacity || m_transition_style.has_value();
         }
 
         /// advances opacity and style interpolation by one simulation frame.
         void update(float dt) {
-            if (!first_frame && current_opacity.value == m_opacity && m_transition_style == nullptr) {
+            if (!first_frame && current_opacity.value == m_opacity && !m_transition_style.has_value()) {
                 return;
             }
 
@@ -104,7 +104,7 @@ namespace ui {
                 current_opacity.value = m_opacity;
             }
 
-            if (m_transition_style != nullptr) {
+            if (m_transition_style.has_value()) {
                 const Style& target_style = styles[static_cast<size_t>(transition_data.to)];
                 Style::lerp(*m_transition_style, target_style, dt);
 
@@ -123,8 +123,8 @@ namespace ui {
                 return;
             }
 
-            if (m_transition_style == nullptr) {
-                m_transition_style = std::make_unique<Style>(styles[static_cast<size_t>(transition_data.to)]);
+            if (!m_transition_style.has_value()) {
+                m_transition_style.emplace(styles[static_cast<size_t>(transition_data.to)]);
             }
 
             transition_data.start(type);
@@ -166,7 +166,7 @@ namespace ui {
 
         /// resolved style currently used for drawing.
         Style& style() {
-            return m_transition_style != nullptr ? *m_transition_style : styles[static_cast<size_t>(transition_data.to)];
+            return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(transition_data.to)];
         }
 
         /// mutable named slot, independent from the current transition.
@@ -175,7 +175,7 @@ namespace ui {
         }
 
         const Style& style() const {
-            return m_transition_style != nullptr ? *m_transition_style : styles[static_cast<size_t>(transition_data.to)];
+            return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(transition_data.to)];
         }
 
         const Style& style(StyleType type) const {
@@ -186,7 +186,7 @@ namespace ui {
         StyleTransitionData transition_data;
         FloatValue current_opacity;
         Style styles[static_cast<size_t>(StyleType::_COUNT)];
-        std::unique_ptr<Style> m_transition_style;
+        std::optional<Style> m_transition_style;
         float m_opacity = 1.0f;
         bool visible = true;
         bool first_frame = true;
