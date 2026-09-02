@@ -47,6 +47,7 @@ gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
 
 static constexpr const char* FRAGMENT_SHADER = R"(#version 330 core
 uniform sampler2D image;
+uniform sampler2D original;
 uniform vec2 texel;
 uniform vec2 direction;
 uniform vec4 region;
@@ -55,6 +56,7 @@ uniform int radius;
 uniform bool filtered;
 uniform bool clipped;
 uniform float opacity;
+uniform float amount;
 out vec4 color;
 
 float rounded_box(vec2 point, vec2 size, float radius) {
@@ -84,6 +86,8 @@ if (!clipped) {
     color = blurred;
     return;
 }
+
+blurred = mix(texture(original, uv), blurred, amount);
 
 vec2 point = gl_FragCoord.xy - region.xy;
 if (rounded_box(point, region.zw, rounding) > 0.0) discard;
@@ -270,6 +274,7 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
     glDisable(GL_BLEND);
     glUseProgram(textures->program);
     glUniform1i(glGetUniformLocation(textures->program, "image"), 0);
+    glUniform1i(glGetUniformLocation(textures->program, "original"), 1);
     glUniform2f(glGetUniformLocation(textures->program, "texel"), 1.0F / width, 1.0F / height);
     glUniform4f(
         glGetUniformLocation(textures->program, "region"), static_cast<float>(left), static_cast<float>(bottom),
@@ -280,10 +285,16 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
         std::min(region->rounding, std::min(region_width, region_height) * 0.5F)
     );
     glUniform1f(glGetUniformLocation(textures->program, "opacity"), region->opacity);
+    glUniform1f(
+        glGetUniformLocation(textures->program, "amount"),
+        static_cast<float>(region->strength) / (static_cast<float>(region->strength) + 4.0F)
+    );
     glUniform1i(glGetUniformLocation(textures->program, "clipped"), GL_TRUE);
     glUniform1i(glGetUniformLocation(textures->program, "filtered"), GL_FALSE);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, textures->result);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, textures->source);
     glBindVertexArray(textures->vertex_array);
 
     if (region->opacity < 1.0F) {
