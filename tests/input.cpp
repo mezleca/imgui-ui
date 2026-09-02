@@ -4,6 +4,7 @@
 #include <ui/layout/modal-container.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/widget.hpp>
+#include "imgui-context.hpp"
 
 #include <memory>
 #include <string>
@@ -601,6 +602,34 @@ TEST_CASE("debug tree includes passive containers") {
     REQUIRE(root.debug_node_at({10.0F, 10.0F}) == &root);
 }
 
+TEST_CASE("debug tree selects layers outside their parent bounds") {
+    class DebugNode final : public ui::Node {
+    public:
+        explicit DebugNode(std::string id) : Node(std::move(id)) {}
+
+        bool debug_selectable() const override {
+            return true;
+        }
+
+        void set_rect(ui::Rect rect) {
+            set_screen_rect(rect);
+        }
+    };
+
+    DebugNode root("root");
+    root.set_rect({{0.0F, 0.0F}, {200.0F, 200.0F}});
+
+    auto parent = std::make_unique<DebugNode>("page");
+    parent->set_rect({{20.0F, 20.0F}, {80.0F, 80.0F}});
+    auto layer = std::make_unique<DebugNode>("modal");
+    DebugNode* layer_ptr = layer.get();
+    layer_ptr->set_rect({{90.0F, 90.0F}, {180.0F, 180.0F}});
+    parent->add(std::move(layer));
+    root.add(std::move(parent));
+
+    REQUIRE(root.debug_node_at({135.0F, 135.0F}) == layer_ptr);
+}
+
 TEST_CASE("closed modal containers are skipped by debugger selection") {
     ui::Runtime runtime;
     ui::Config config;
@@ -610,6 +639,52 @@ TEST_CASE("closed modal containers are skipped by debugger selection") {
     REQUIRE_FALSE(modal.debug_selectable());
     modal.open("panel");
     REQUIRE(modal.debug_selectable());
+}
+
+TEST_CASE("debug tree follows rendered layer order", "[debugger][regression]") {
+    class ModalHost final : public ui::ChildContainer {
+    public:
+        explicit ModalHost(UI& surface) : ChildContainer("host") {
+            m_modal = &add_child<ui::ModalContainer>(surface);
+            m_content = &add_child<ui::ChildContainer>("content");
+            m_content->set_size({0.0F, 0.0F});
+        }
+
+        ui::ModalPanel& open_modal() {
+            return m_modal->open("panel");
+        }
+
+    protected:
+        void draw_children() override {
+            m_content->draw();
+            m_modal->draw();
+        }
+
+    private:
+        ui::ModalContainer* m_modal = nullptr;
+        ui::ChildContainer* m_content = nullptr;
+    };
+
+    ui::Runtime runtime;
+    UI surface(runtime, {.size = {640.0F, 480.0F}});
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {640.0F, 480.0F};
+    ui_test::ImGuiContext::build_fonts();
+
+    auto& host = surface.root().add_child<ModalHost>(surface);
+    host.set_size({640.0F, 480.0F});
+    ui::ModalPanel& panel = host.open_modal();
+    panel.set_size({480.0F, 220.0F});
+
+    surface.begin_input_frame();
+    surface.begin_frame();
+    surface.root().update(ImGui::GetIO().DeltaTime);
+    surface.root().draw();
+    surface.end_frame();
+
+    const ui::Rect bounds = panel.layout().screen_rect();
+    const ImVec2 position = {(bounds.min.x + bounds.max.x) * 0.5F, bounds.max.y - 10.0F};
+    REQUIRE(surface.root().debug_node_at(position) == &panel);
 }
 
 TEST_CASE("input router prefers an overlapping child over its parent") {

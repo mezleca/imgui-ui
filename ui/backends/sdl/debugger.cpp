@@ -299,6 +299,7 @@ namespace ui {
             .shared_with = &m_target.backend(),
             .resizable = true,
             .visible = false,
+            .swap_interval = 0,
         };
 
         m_ui = std::make_unique<UI>(m_target.runtime(), config);

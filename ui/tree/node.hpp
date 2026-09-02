@@ -78,7 +78,7 @@ namespace ui {
         /// returns true when this node is the same as or contains the target.
         bool contains(const Node* node) const;
 
-        /// returns the deepest visible node whose final bounds contain position.
+        /// returns the topmost visible selectable node at position, using the current draw order.
         Node* debug_node_at(ImVec2 position);
 
         /// returns whether this node has visible content the debugger can select on the canvas.
@@ -322,6 +322,8 @@ namespace ui {
         // immutable runtime key
         // unlike id(), this does not need to be unique or user supplied.
         uint64_t m_identity = 0;
+        // custom containers may draw children in an order unrelated to storage order.
+        uint64_t m_draw_order = 0;
 
         Node* m_parent = nullptr;
         std::vector<std::unique_ptr<Node>> m_children;

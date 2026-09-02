@@ -213,6 +213,9 @@ namespace ui {
         }
 
         m_window->make_current();
+        if (!SDL_GL_SetSwapInterval(m_config.swap_interval)) {
+            SDL_Log("ui: failed to set OpenGL swap interval: %s", SDL_GetError());
+        }
         if (gladLoadGL(load_opengl) == 0 || !GLAD_GL_VERSION_3_3) {
             SDL_Log("ui: OpenGL 3.3 or newer is required");
             return false;

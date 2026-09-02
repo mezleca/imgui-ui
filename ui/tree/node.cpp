@@ -4,24 +4,39 @@
 #include "../input/router.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <utility>
 
 using namespace ui;
 
-static std::atomic<uint64_t> next_node_id = 1;
+static uint64_t next_node_id = 1;
+static uint64_t next_draw_order = 1;
 
-Node::Node(std::string id) : m_id(std::move(id)), m_identity(next_node_id.fetch_add(1)) {}
+Node::Node(std::string id) : m_id(std::move(id)), m_identity(next_node_id++) {}
 
 Node* Node::debug_node_at(ImVec2 position) {
-    if (!m_visible || !m_layout.screen_rect().contains(position)) {
+    if (!m_visible) {
         return nullptr;
     }
 
+    Node* topmost_child = nullptr;
     for (auto it = m_children.rbegin(); it != m_children.rend(); ++it) {
-        if (Node* child = (*it)->debug_node_at(position); child != nullptr) {
-            return child;
+        Node* child = it->get();
+        if (child->m_draw_order != 0 && m_draw_order != 0 && child->m_draw_order <= m_draw_order) {
+            continue;
         }
+
+        if (Node* candidate = child->debug_node_at(position); candidate != nullptr &&
+            (topmost_child == nullptr || candidate->m_draw_order > topmost_child->m_draw_order)) {
+            topmost_child = candidate;
+        }
+    }
+
+    if (topmost_child != nullptr) {
+        return topmost_child;
+    }
+
+    if (!m_layout.screen_rect().contains(position)) {
+        return nullptr;
     }
 
     return debug_selectable() ? this : nullptr;
@@ -384,6 +399,8 @@ void Node::draw() {
     if (!m_visible) {
         return;
     }
+
+    m_draw_order = next_draw_order++;
 
     if (m_parent == nullptr && m_measure_dirty) {
         measure_tree();

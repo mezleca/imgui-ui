@@ -36,6 +36,7 @@ namespace ui {
         Backend* shared_with = nullptr;
         bool resizable = false;
         bool visible = true;
+        int swap_interval = 1;
     };
 
     using BackendFactory = std::unique_ptr<Backend> (*)(const Config& config);

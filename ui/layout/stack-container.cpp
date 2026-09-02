@@ -170,37 +170,40 @@ void StackContainer::arrange_children(ImVec2 container_size) {
     const float flexible_main =
         flexible_count > 0 ? std::max(0.0F, available_main - fixed_main - spacing) / static_cast<float>(flexible_count) : 0.0F;
 
-    ImVec2 flow_size{};
-    for (const auto& child : children()) {
-        if (!child->visible() || !child->layout().in_flow()) {
-            continue;
-        }
-
-        ImVec2 child_size = requested_size_of(*child);
-        if (m_direction == StackDirection::Vertical) {
-            if (child_size.x <= 0.0F) child_size.x = content_size.x;
-            if (child_size.y <= 0.0F) child_size.y = flexible_main;
-            flow_size.x = std::max(flow_size.x, child_size.x);
-            flow_size.y += child_size.y;
-        } else {
-            if (child_size.x <= 0.0F) child_size.x = flexible_main;
-            if (child_size.y <= 0.0F) child_size.y = content_size.y;
-            flow_size.x += child_size.x;
-            flow_size.y = std::max(flow_size.y, child_size.y);
-        }
-    }
-
-    if (m_direction == StackDirection::Horizontal) {
-        flow_size.x += spacing;
-    } else {
-        flow_size.y += spacing;
-    }
-
     const ImVec2 alignment = content_alignment_factor();
-    ImVec2 cursor = {
-        (content_size.x - flow_size.x) * alignment.x,
-        (content_size.y - flow_size.y) * alignment.y,
-    };
+    ImVec2 cursor{};
+    if (alignment.x > 0.0F || alignment.y > 0.0F) {
+        ImVec2 flow_size{};
+        for (const auto& child : children()) {
+            if (!child->visible() || !child->layout().in_flow()) {
+                continue;
+            }
+
+            ImVec2 child_size = requested_size_of(*child);
+            if (m_direction == StackDirection::Vertical) {
+                if (child_size.x <= 0.0F) child_size.x = content_size.x;
+                if (child_size.y <= 0.0F) child_size.y = flexible_main;
+                flow_size.x = std::max(flow_size.x, child_size.x);
+                flow_size.y += child_size.y;
+            } else {
+                if (child_size.x <= 0.0F) child_size.x = flexible_main;
+                if (child_size.y <= 0.0F) child_size.y = content_size.y;
+                flow_size.x += child_size.x;
+                flow_size.y = std::max(flow_size.y, child_size.y);
+            }
+        }
+
+        if (m_direction == StackDirection::Horizontal) {
+            flow_size.x += spacing;
+        } else {
+            flow_size.y += spacing;
+        }
+
+        cursor = {
+            (content_size.x - flow_size.x) * alignment.x,
+            (content_size.y - flow_size.y) * alignment.y,
+        };
+    }
     m_content_size = content_size;
 
     for (const auto& child : children()) {
