@@ -6,23 +6,28 @@
 #include <filesystem>
 #include <span>
 #include <string_view>
+#include <unordered_map>
 
 namespace ui {
     struct ProfileEvent {
+        // timestamps and node identity for one recorded scope.
         std::string_view name;
         uint64_t start = 0;
         uint64_t end = 0;
         uint64_t node_identity = 0;
-        uint32_t thread_id = 0;
-        uint16_t depth = 0;
     };
 
     struct ProfileFrameMetrics {
-        std::size_t style_pushes = 0;
-        std::size_t style_pops = 0;
-        std::size_t active_transitions = 0;
+        // counters and inclusive phase times from the latest completed frame.
+        std::size_t nodes_drawn = 0;
+        std::size_t input_entries = 0;
+        std::size_t input_entry_checks = 0;
         double update_ms = 0.0;
+        double measure_ms = 0.0;
+        double layout_ms = 0.0;
         double draw_ms = 0.0;
+        double input_ms = 0.0;
+        double render_ms = 0.0;
     };
 
     class Profiler {
@@ -43,15 +48,15 @@ namespace ui {
         double latest_frame_ms() const;
         double node_duration_ms(uint64_t node_identity) const;
         uint32_t dropped_events() const;
+        void record_frame_metrics(std::size_t input_entries, std::size_t input_entry_checks);
         void clear_report();
-        void set_output_directory(std::filesystem::path output_directory);
         bool has_report() const;
         bool save_report() const;
         const std::filesystem::path& output_path() const;
 
     private:
         friend class ScopedProfileZone;
-        friend class StyledNode;
+        friend class Node;
 
         struct ZoneToken {
             std::size_t event_index = 0;
@@ -65,6 +70,8 @@ namespace ui {
             uint64_t end = 0;
             uint32_t dropped = 0;
             ProfileFrameMetrics metrics;
+            mutable std::unordered_map<uint64_t, double> node_durations;
+            mutable bool node_durations_ready = false;
         };
 
         struct MetricSummary {
@@ -80,18 +87,14 @@ namespace ui {
 
         ZoneToken begin_zone(std::string_view name, uint64_t node_identity);
         void end_zone(ZoneToken token);
-        void record_style_scope();
-        void record_active_transition();
+        void record_node_draw();
         void record_root_phase_times(FrameBuffer& frame);
 
         std::array<FrameBuffer, 2> m_frames;
         std::filesystem::path m_output_path;
         MetricSummary m_frame_metric;
-        MetricSummary m_memory_metric;
         std::size_t m_write_index = 0;
         std::size_t m_read_index = 1;
-        uint16_t m_depth = 0;
-        uint16_t m_memory_sample_counter = 0;
         uint64_t m_root_identity = 0;
         bool m_enabled = false;
         bool m_frame_open = false;

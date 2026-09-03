@@ -8,12 +8,14 @@
 
 namespace ui {
     struct Config;
+    class EffectRegistry;
 
     class Backend {
     public:
         virtual ~Backend() = default;
 
         virtual bool initialize() = 0;
+        virtual void register_effects(EffectRegistry&) {}
         virtual bool initialize_imgui() = 0;
         virtual void shutdown_imgui() = 0;
         virtual void make_current() = 0;

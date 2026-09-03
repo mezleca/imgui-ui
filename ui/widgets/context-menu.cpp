@@ -42,8 +42,8 @@ public:
         : DrawListWidget("item", "ContextMenuItem"), m_menu(menu), m_label(std::move(label)), m_callback(std::move(callback)) {
         const Theme& theme = m_menu.m_theme;
 
-        set_size({0.0F, MENU_ITEM_HEIGHT});
-        set_input_target({.priority = 2});
+        set_size({grow(), px(MENU_ITEM_HEIGHT)});
+        set_input_target();
 
         configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
@@ -131,10 +131,10 @@ ContextMenuWidget::ContextMenuWidget(UI& ui, ContextMenuItems items, IconTexture
 ContextMenuWidget::ContextMenuWidget(InputRouter& router, const Theme& theme, IconTexture* submenu_icon, ContextMenuItems items)
     : StackContainer({}, StackDirection::Vertical), m_router(router), m_theme(theme), m_submenu_icon(submenu_icon) {
     set_type_name("ContextMenu");
-    set_size({MENU_WIDTH, menu_height(0)});
+    set_size({px(MENU_WIDTH), px(menu_height(0))});
     set_visible(false);
     set_enabled(false);
-    set_input_target({.priority = 1});
+    set_input_target();
 
     _on_event = [this](UiEvent& event) {
         if (event.type == EventType::PointerMove) {
@@ -157,11 +157,11 @@ ContextMenuWidget::ContextMenuWidget(InputRouter& router, const Theme& theme, Ic
 ContextMenuWidget& ContextMenuWidget::set_items(ContextMenuItems items) {
     m_items.clear();
     clear();
-    set_size({MENU_WIDTH, menu_height(items.size())});
+    set_size({px(MENU_WIDTH), px(menu_height(items.size()))});
 
     for (ContextMenuItem& item : items) {
         const bool has_submenu = !item.children.empty();
-        auto& menu_item = add_child<ContextMenuItemNode>(*this, std::move(item.label), std::move(item.on_click));
+        auto& menu_item = add<ContextMenuItemNode>(*this, std::move(item.label), std::move(item.on_click));
         m_items.push_back(&menu_item);
 
         if (!has_submenu) {
@@ -174,7 +174,7 @@ ContextMenuWidget& ContextMenuWidget::set_items(ContextMenuItems items) {
         submenu->m_parent_menu = this;
         menu_item.m_submenu = submenu.get();
         menu_item.m_submenu_icon = m_submenu_icon;
-        add_child(std::move(submenu));
+        attach(std::move(submenu));
     }
 
     return *this;
@@ -233,12 +233,11 @@ void ContextMenuWidget::show(ImVec2 screen_position) {
     if (!work_area.valid()) {
         return;
     }
-    const ImVec2 position = clamp_position(work_area, requested_size(), screen_position);
-    set_placement({
-        .anchor = Anchor::TopLeft,
-        .origin = Origin::TopLeft,
-        .offset = {position.x - work_area.min.x, position.y - work_area.min.y},
-    });
+    const ImVec2 position = clamp_position(work_area, layout().intrinsic_size(), screen_position);
+    LayoutConfig config = layout().config();
+    config.placement.offset = {position.x - work_area.min.x, position.y - work_area.min.y};
+    config.in_flow = false;
+    set_layout(config);
     open();
 }
 
@@ -316,24 +315,16 @@ void ContextMenuWidget::on_draw_end() {
     if (!work_area.valid()) {
         return;
     }
-    m_router.register_blocker(
-        *this, {
-                   .rect = work_area,
-                   .events = EventMask::Pointer,
-                   .on_event =
-                       [this](UiEvent& event) {
-                           if (event.type == EventType::PointerMove) {
-                               update_pointer_hover(event.position);
-                               return;
-                           }
+    m_router.block(*this, work_area, [this](UiEvent& event) {
+        if (event.type == EventType::PointerMove) {
+            update_pointer_hover(event.position);
+            return;
+        }
 
-                           if (event.type == EventType::PointerDown) {
-                               hide();
-                           }
-                       },
-                   .priority = 1,
-               }
-    );
+        if (event.type == EventType::PointerDown) {
+            hide();
+        }
+    });
 }
 
 void ContextMenuWidget::activate_item(ContextMenuItemNode& item) {
@@ -380,8 +371,8 @@ void ContextMenuWidget::update_submenu_hover(ImVec2 position) {
             continue;
         }
 
-        const Rect item_rect = item->layout().screen_rect();
-        const Rect submenu_rect = submenu->layout().screen_rect();
+        const Rect item_rect = item->layout().visual_rect();
+        const Rect submenu_rect = submenu->layout().visual_rect();
         const Rect submenu_gap = {
             {std::min(item_rect.max.x, submenu_rect.max.x), std::max(item_rect.min.y, submenu_rect.min.y)},
             {std::max(item_rect.min.x, submenu_rect.min.x), std::min(item_rect.max.y, submenu_rect.max.y)},
@@ -395,9 +386,9 @@ void ContextMenuWidget::update_submenu_hover(ImVec2 position) {
 }
 
 void ContextMenuWidget::position_submenu(ContextMenuWidget& submenu, const ContextMenuItemNode& item) {
-    const Rect item_rect = item.layout().screen_rect();
+    const Rect item_rect = item.layout().visual_rect();
     const Rect work_area = menu_work_area();
-    const ImVec2 submenu_size = submenu.requested_size();
+    const ImVec2 submenu_size = submenu.layout().intrinsic_size();
 
     float screen_x = item_rect.max.x + MENU_GAP;
     if (screen_x + submenu_size.x > work_area.max.x) {
@@ -406,18 +397,17 @@ void ContextMenuWidget::position_submenu(ContextMenuWidget& submenu, const Conte
 
     const ImVec2 position = clamp_position(work_area, submenu_size, {screen_x, item_rect.min.y});
     const ImVec2 window_position = ImGui::GetWindowPos();
-    const ImVec2 content_offset = ImGui::GetWindowContentRegionMin();
+    const ImVec2 content_offset = ImGui::GetCursorStartPos();
     const ImVec2 content_origin = {window_position.x + content_offset.x, window_position.y + content_offset.y};
-    submenu.set_placement({
-        .anchor = Anchor::TopLeft,
-        .origin = Origin::TopLeft,
-        .offset = {position.x - content_origin.x, position.y - content_origin.y},
-    });
+    LayoutConfig config = submenu.layout().config();
+    config.placement.offset = {position.x - content_origin.x, position.y - content_origin.y};
+    config.in_flow = false;
+    submenu.set_layout(config);
     submenu.draw();
 }
 
 bool ContextMenuWidget::contains_open_menu(ImVec2 position) const {
-    if (layout().screen_rect().contains(position)) {
+    if (layout().visual_rect().contains(position)) {
         return true;
     }
 

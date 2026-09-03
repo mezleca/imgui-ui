@@ -1,19 +1,26 @@
 #pragma once
 
-#include "../widgets/widget.hpp"
+#include "container.hpp"
+
+#include <cstdint>
 
 namespace ui {
-    /// a full-viewport container rendered in its own imgui window above normal content.
-    class LayerContainer : public Widget {
+    enum class LayerMode : uint8_t {
+        Inline,
+        Window,
+    };
+
+    class LayerContainer : public Container {
     public:
-        explicit LayerContainer(std::string id, std::string_view type_name = "LayerContainer");
+        explicit LayerContainer(std::string id, LayerMode mode = LayerMode::Window);
 
     protected:
-        void on_layout() override;
+        LayerContainer(std::string id, LayerMode mode, std::string_view type_name);
+        void resolve_layout() override;
         bool paint() override;
         void on_draw_end() override;
 
     private:
-        Rect m_rect{};
+        LayerMode m_mode;
     };
 } // namespace ui

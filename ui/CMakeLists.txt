@@ -19,7 +19,6 @@ if(WIN32)
         NOMINMAX
         VC_EXTRALEAN
     )
-    target_link_libraries(imgui-ui-core PRIVATE psapi)
 endif()
 
 if(IMGUI_UI_BUILD_SDL)

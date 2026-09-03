@@ -7,7 +7,7 @@
 class IconTexture;
 
 namespace ui {
-    /// images are passive; call set_input_target() to route their pointer input.
+    /// images are passive. call set_input_target() to route their pointer input.
     class ImageWidget : public DrawListWidget {
     public:
         explicit ImageWidget(IconTexture* texture = nullptr);

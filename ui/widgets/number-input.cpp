@@ -88,17 +88,17 @@ void NumberInputWidget::sync_value() const {
 }
 
 void NumberInputWidget::on_measure() {
-    ImVec2 size = requested_size();
+    ImVec2 size = layout().intrinsic_size();
     const ImVec2 padding = style().padding();
     sync_value();
     m_value.set_font(font());
     m_label.set_font(font());
 
-    if (size.y <= 0.0F) {
+    if (layout().size_spec().height.mode != LayoutSizeMode::Fixed) {
         size.y = m_value.line_height() + padding.y * 2.0F;
     }
 
-    set_size(size);
+    set_measured_size(size, false, true);
 }
 
 template <typename T>

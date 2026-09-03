@@ -18,6 +18,56 @@
 #include <vector>
 
 namespace ui {
+    static Node* find_node_by_identity(Node& root, uint64_t identity) {
+        if (root.identity() == identity) {
+            return &root;
+        }
+
+        for (const auto& child : root.children()) {
+            if (Node* result = find_node_by_identity(*child, identity); result != nullptr) {
+                return result;
+            }
+        }
+
+        return nullptr;
+    }
+
+    static bool is_effectively_visible(const Node& node) {
+        for (const Node* current = &node; current != nullptr; current = current->parent()) {
+            if (!current->visible()) {
+                return false;
+            }
+
+            if (const auto* styled = dynamic_cast<const StyledNode*>(current); styled != nullptr && !styled->visually_visible()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    Node* Debugger::pick_node(Node& root, ImVec2 position) {
+        if (!is_effectively_visible(root)) {
+            return nullptr;
+        }
+
+        for (auto it = root.children().rbegin(); it != root.children().rend(); ++it) {
+            if (Node* candidate = pick_node(**it, position); candidate != nullptr) {
+                return candidate;
+            }
+        }
+
+        if (!root.layout().visual_rect().contains(position)) {
+            return nullptr;
+        }
+
+        if (dynamic_cast<const StyledNode*>(&root) == nullptr || !root.accepts_input()) {
+            return nullptr;
+        }
+
+        return &root;
+    }
+
     static constexpr const char* ALIGNMENT_NAMES[] = {
         "top-left",     "top-center",  "top-right",     "center-left",  "center",
         "center-right", "bottom-left", "bottom-center", "bottom-right", "custom",
@@ -25,6 +75,18 @@ namespace ui {
 
     static constexpr const char* STYLE_NAMES[] = {"default", "hover", "active", "focus"};
     static constexpr const char* BORDER_STYLE_NAMES[] = {"solid", "dashed", "dotted"};
+
+    static std::string_view size_mode_name(LayoutSizeMode mode) {
+        switch (mode) {
+            case LayoutSizeMode::Fixed:
+                return "fixed";
+            case LayoutSizeMode::Fit:
+                return "fit";
+            case LayoutSizeMode::Grow:
+                return "grow";
+        }
+        return "unknown";
+    }
 
     static constexpr ImVec2 ICON_SIZE = {16.0F, 16.0F};
     static constexpr float WINDOW_PADDING = 10.0F;
@@ -258,6 +320,12 @@ namespace ui {
         );
     }
 
+    static bool draw_slider(std::string_view label, float* value, float minimum, float maximum) {
+        return draw_labeled_input(label, [=] {
+            return ImGui::SliderFloat("##value", value, minimum, maximum, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+        });
+    }
+
     static bool draw_number_input(
         std::string_view label, int* values, int components = 1, float speed = 1.0F, int minimum = 0, int maximum = 0
     ) {
@@ -317,7 +385,7 @@ namespace ui {
 
         m_inspect_icon = make_sdl_icon_loader()->load_data(INSPECT_SVG, "debugger-inspect");
         m_icon.set_texture(m_inspect_icon.get());
-        m_icon.set_size(ICON_SIZE);
+        m_icon.set_size({px(ICON_SIZE.x), px(ICON_SIZE.y)});
         m_icon.configure_all_styles([this](Style& style) { style.color(m_ui->theme().text_secondary_color); });
 
         m_target.backend().make_current();
@@ -338,7 +406,7 @@ namespace ui {
 
         m_node_target = target;
         m_target_identity = target == nullptr ? 0 : target->identity();
-        m_target_was_flow_position = target != nullptr && !target->layout().has_explicit_position();
+        m_target_was_flow_position = target != nullptr && target->layout().in_flow();
         m_select_properties = target != nullptr;
 
         auto* styled = dynamic_cast<StyledNode*>(target);
@@ -350,6 +418,27 @@ namespace ui {
         }
 
         refresh_highlight();
+    }
+
+    void Debugger::synchronize_targets() {
+        if (m_target_identity != 0) {
+            Node* target = find_node_by_identity(m_target.root(), m_target_identity);
+            if (target != m_node_target) {
+                set_target(target);
+                if (target == nullptr) {
+                    m_scroll_to_target = false;
+                }
+            }
+        }
+
+        if (m_hover_identity != 0) {
+            m_hover_target = find_node_by_identity(m_target.root(), m_hover_identity);
+            if (m_hover_target == nullptr) {
+                m_hover_identity = 0;
+            }
+        } else {
+            m_hover_target = nullptr;
+        }
     }
 
     void Debugger::remove_target() {
@@ -426,20 +515,23 @@ namespace ui {
             return false;
         }
 
-        Node* focused_node = m_target.root().debug_node_at(mouse_event_position(event));
+        Node* focused_node = pick_node(m_target.root(), mouse_event_position(event));
 
         if (!focused_node) {
             m_hover_target = nullptr;
+            m_hover_identity = 0;
             return false;
         }
 
         if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
             set_target(focused_node);
             m_hover_target = nullptr;
+            m_hover_identity = 0;
             set_inspect_mode(false, true);
             m_scroll_to_target = true;
         } else {
             m_hover_target = focused_node;
+            m_hover_identity = focused_node->identity();
         }
 
         return true;
@@ -496,6 +588,7 @@ namespace ui {
 
         if (!enabled) {
             m_hover_target = nullptr;
+            m_hover_identity = 0;
         }
     }
 
@@ -517,12 +610,12 @@ namespace ui {
 
     void Debugger::refresh_highlight() {
         Node* target = m_inspect_mode ? m_hover_target : (m_highlight_selected ? m_node_target : nullptr);
-        if (!m_target.root().contains(target) || !target->visible()) {
+        if (!m_target.root().contains(target) || target == nullptr || !is_effectively_visible(*target)) {
             m_highlight_valid = false;
             return;
         }
 
-        const Rect rect = target->layout().screen_rect();
+        const Rect rect = target->layout().visual_rect();
         if (rect.max.x <= rect.min.x || rect.max.y <= rect.min.y) {
             m_highlight_valid = false;
             return;
@@ -537,12 +630,13 @@ namespace ui {
             return false;
         }
 
-        const NodeLayout& layout = m_node_target->layout();
-        return layout.anchor() == Anchor::TopLeft && layout.origin() == Origin::TopLeft && layout.offset().x == 0.0F &&
-               layout.offset().y == 0.0F;
+        const Placement& placement = m_node_target->layout().placement();
+        return placement.anchor == Anchor::TopLeft && placement.origin == Origin::TopLeft && placement.offset.x == 0.0F &&
+               placement.offset.y == 0.0F;
     }
 
     void Debugger::draw_highlight() {
+        synchronize_targets();
         refresh_highlight();
 
         if (!m_highlight_valid) {
@@ -554,9 +648,10 @@ namespace ui {
         );
     }
 
-    void Debugger::render_node_tree(Node& node, int depth, bool show_duration, Node*& selected_target, bool update_target) {
+    void Debugger::render_node_tree(Node& node, int depth, Node*& selected_target, bool update_target) {
+        const bool effectively_visible = is_effectively_visible(node);
         ImGui::PushID(&node);
-        ImGui::PushStyleColor(ImGuiCol_Text, node.visible() ? m_ui->theme().text_color : m_ui->theme().text_secondary_color);
+        ImGui::PushStyleColor(ImGuiCol_Text, effectively_visible ? m_ui->theme().text_color : m_ui->theme().text_secondary_color);
 
         ImGuiTreeNodeFlags flags = depth < 1 ? ImGuiTreeNodeFlags_DefaultOpen : 0;
         flags |= ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -594,9 +689,7 @@ namespace ui {
             node_label = node_id.empty() ? "Unknown" : std::string(node_id);
         }
 
-        const double duration = m_target.profiler().node_duration_ms(node.identity());
-        const bool expanded = show_duration ? ImGui::TreeNodeEx(&node, flags, "%s  %.3f ms", node_label.c_str(), duration)
-                                            : ImGui::TreeNodeEx(&node, flags, "%s", node_label.c_str());
+        const bool expanded = ImGui::TreeNodeEx(&node, flags, "%s", node_label.c_str());
         const bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
 
         if (&node == selected_target) {
@@ -626,7 +719,7 @@ namespace ui {
 
         if (expanded) {
             for (const auto& child : node.children()) {
-                render_node_tree(*child, depth + 1, show_duration, selected_target, update_target);
+                render_node_tree(*child, depth + 1, selected_target, update_target);
             }
 
             if (!node.children().empty()) {
@@ -653,14 +746,36 @@ namespace ui {
         draw_property_value("type", "{}", type);
     }
 
-    void Debugger::render_node_profiling() {
+    void Debugger::render_profiling() {
         const Profiler& profiler = m_target.profiler();
         if (!profiler.enabled()) {
+            ImGui::TextDisabled("enable frame time to collect profiling data");
             return;
         }
 
-        draw_property_section("profiling");
-        draw_property_value("total (update + draw)", "{:.3f} ms", profiler.node_duration_ms(m_node_target->identity()));
+        const ProfileFrameMetrics& metrics = profiler.latest_metrics();
+        draw_property_section("frame");
+        draw_property_value("frame", "{:.3f} ms", profiler.latest_frame_ms());
+        draw_property_value("update", "{:.3f} ms", metrics.update_ms);
+        draw_property_value("measure", "{:.3f} ms", metrics.measure_ms);
+        draw_property_value("layout", "{:.3f} ms", metrics.layout_ms);
+        draw_property_value("draw", "{:.3f} ms", metrics.draw_ms);
+        draw_property_value("input", "{:.3f} ms", metrics.input_ms);
+        draw_property_value("render", "{:.3f} ms", metrics.render_ms);
+        end_property_section();
+
+        draw_property_section("work");
+        draw_property_value("nodes", "{}", metrics.nodes_drawn);
+        draw_property_value("input work", "{} entries / {} checks", metrics.input_entries, metrics.input_entry_checks);
+        draw_property_value("dropped events", "{}", profiler.dropped_events());
+        end_property_section();
+
+        if (m_node_target == nullptr) {
+            return;
+        }
+
+        draw_property_section("selected node");
+        draw_property_value("node total", "{:.3f} ms", profiler.node_duration_ms(m_node_target->identity()));
 
         for (const ProfileEvent& event : profiler.latest_events()) {
             if (event.node_identity != m_node_target->identity()) {
@@ -669,51 +784,85 @@ namespace ui {
 
             draw_property_value(event.name, "{:.3f} ms", static_cast<double>(event.end - event.start) / 1'000'000.0);
         }
+        end_property_section();
     }
 
     void Debugger::render_layout_properties() {
         draw_property_section("layout");
 
         const NodeLayout& layout = m_node_target->layout();
-        draw_property_value("placement", "{}", layout.has_explicit_position() ? "explicit" : "flow");
+        const LayoutConfig& request = layout.config();
+        const auto update_request = [&](auto&& update) {
+            LayoutConfig config = request;
+            update(config);
+            m_node_target->set_layout(config);
+        };
+        draw_property_value("placement", "{}", request.in_flow ? "flow" : "explicit");
 
         ImVec2 size = layout.size();
         if (draw_number_input("size", &size.x, 2)) {
-            m_node_target->set_size(size);
+            m_node_target->set_size({px(size.x), px(size.y)});
         }
 
-        ImVec2 offset = layout.offset();
+        const ImVec2 measured = layout.measured_size();
+        const ImVec2 intrinsic = layout.intrinsic_size();
+        const ImVec2 available = layout.available_size();
+        const LayoutSize& size_spec = layout.size_spec();
+        draw_property_value("size rule", "{} / {}", size_mode_name(size_spec.width.mode), size_mode_name(size_spec.height.mode));
+        draw_property_value("measured", "{:.1f} x {:.1f}", measured.x, measured.y);
+        draw_property_value("intrinsic", "{:.1f} x {:.1f}", intrinsic.x, intrinsic.y);
+        draw_property_value("available", "{:.1f} x {:.1f}", available.x, available.y);
+
+        const Rect arranged = layout.layout_rect();
+        const Rect visual = layout.visual_rect();
+        draw_property_value(
+            "layout rect", "({:.1f}, {:.1f}) - ({:.1f}, {:.1f})", arranged.min.x, arranged.min.y, arranged.max.x, arranged.max.y
+        );
+        draw_property_value(
+            "visual rect", "({:.1f}, {:.1f}) - ({:.1f}, {:.1f})", visual.min.x, visual.min.y, visual.max.x, visual.max.y
+        );
+
+        ImVec2 offset = request.placement.offset;
         if (draw_number_input("offset", &offset.x, 2)) {
-            m_node_target->set_offset(offset);
+            update_request([&](LayoutConfig& config) {
+                config.placement.offset = offset;
+                config.in_flow = false;
+            });
         }
 
-        int anchor = static_cast<int>(layout.anchor());
+        int anchor = static_cast<int>(request.placement.anchor);
         if (draw_inline_combo("anchor (parent)", &anchor, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
-            m_node_target->set_anchor(static_cast<Anchor>(anchor));
-            if (should_restore_flow_position()) {
-                m_node_target->set_flow();
-            }
+            update_request([&](LayoutConfig& config) {
+                config.placement.anchor = static_cast<Anchor>(anchor);
+                config.in_flow = should_restore_flow_position();
+            });
         }
 
-        int origin = static_cast<int>(layout.origin());
+        int origin = static_cast<int>(request.placement.origin);
         if (draw_inline_combo("origin (node)", &origin, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
-            m_node_target->set_origin(static_cast<Origin>(origin));
-            if (should_restore_flow_position()) {
-                m_node_target->set_flow();
-            }
+            update_request([&](LayoutConfig& config) {
+                config.placement.origin = static_cast<Origin>(origin);
+                config.in_flow = should_restore_flow_position();
+            });
         }
 
-        if (layout.anchor() == Anchor::Custom) {
-            ImVec2 anchor_position = layout.anchor_factor();
+        if (request.placement.anchor == Anchor::Custom) {
+            ImVec2 anchor_position = request.placement.anchor_position;
             if (draw_number_input("anchor point", &anchor_position.x, 2, 0.01F)) {
-                m_node_target->set_anchor_position(anchor_position);
+                update_request([&](LayoutConfig& config) {
+                    config.placement.anchor_position = anchor_position;
+                    config.in_flow = false;
+                });
             }
         }
 
-        if (layout.origin() == Origin::Custom) {
-            ImVec2 origin_position = layout.origin_factor();
+        if (request.placement.origin == Origin::Custom) {
+            ImVec2 origin_position = request.placement.origin_position;
             if (draw_number_input("origin point", &origin_position.x, 2, 0.01F)) {
-                m_node_target->set_origin_position(origin_position);
+                update_request([&](LayoutConfig& config) {
+                    config.placement.origin_position = origin_position;
+                    config.in_flow = false;
+                });
             }
         }
     }
@@ -799,6 +948,25 @@ namespace ui {
                 style.blur(blur);
             }
 
+            BoxShadow shadow = style.box_shadow();
+            if (draw_number_input("shadow offset", &shadow.offset.x, 2, 0.1F)) {
+                style.box_shadow(shadow);
+            }
+
+            if (draw_slider("shadow blur", &shadow.blur, 0.0F, 256.0F)) {
+                style.box_shadow(shadow);
+            }
+
+            if (draw_slider("shadow spread", &shadow.spread, -128.0F, 256.0F)) {
+                style.box_shadow(shadow);
+            }
+
+            ImVec4 shadow_color = shadow.color.Value;
+            if (draw_color_input("shadow color", shadow_color)) {
+                shadow.color.Value = shadow_color;
+                style.box_shadow(shadow);
+            }
+
             float radius = style.border_radius();
             if (draw_number_input("border radius", &radius, 1, 0.1F, 0.0F, 64.0F)) {
                 style.border_radius(radius);
@@ -874,6 +1042,7 @@ namespace ui {
 
     void Debugger::render_properties() {
         if (m_node_target == nullptr) {
+            end_property_section();
             ImGui::TextUnformatted("select a node from the list");
             return;
         }
@@ -882,7 +1051,6 @@ namespace ui {
         render_node_properties();
         render_layout_properties();
         render_style_properties();
-        render_node_profiling();
         ImGui::PopStyleVar();
         end_property_section();
 
@@ -934,7 +1102,7 @@ namespace ui {
         ImGui::PopStyleVar();
 
         for (const auto& child : m_target.root().children()) {
-            render_node_tree(*child, 0, m_target.profiler().enabled(), m_node_target, true);
+            render_node_tree(*child, 0, m_node_target, true);
         }
 
         Profiler& profiler = m_target.profiler();
@@ -979,13 +1147,23 @@ namespace ui {
         if (ImGui::BeginTabBar("##debugger-sections-tabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
             const ImGuiTabItemFlags properties_flags =
                 m_select_properties ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
-            if (m_node_target != nullptr && ImGui::BeginTabItem("properties", nullptr, properties_flags)) {
+            if (ImGui::BeginTabItem("properties", nullptr, properties_flags)) {
                 m_select_properties = false;
                 ImGui::BeginChild(
                     "##debugger-properties-content", {0.0F, 0.0F}, ImGuiChildFlags_None,
                     ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar
                 );
                 render_properties();
+                ImGui::EndChild();
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("profiling")) {
+                ImGui::BeginChild(
+                    "##debugger-profiling-content", {0.0F, 0.0F}, ImGuiChildFlags_None,
+                    ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar
+                );
+                render_profiling();
                 ImGui::EndChild();
                 ImGui::EndTabItem();
             }
@@ -1001,16 +1179,9 @@ namespace ui {
             return;
         }
 
+        synchronize_targets();
         m_ui->begin_input_frame();
         m_ui->begin_frame();
-
-        if (m_node_target != nullptr && !m_target.root().contains(m_node_target)) {
-            set_target(nullptr);
-            m_scroll_to_target = false;
-        } else if (m_node_target != nullptr && m_node_target->identity() != m_target_identity) {
-            set_target(nullptr);
-            m_scroll_to_target = false;
-        }
 
         const ImVec2 display_size = m_ui->backend().display_size();
 

@@ -35,7 +35,7 @@ namespace ui {
         ImVec2 center{};
         float start_angle = 0.0F;
         float end_angle = 0.0F;
-        float length = 0.0F; // arc length; dash and dot placement uses this parameterization.
+        float length = 0.0F; // arc length. dash and dot placement uses this parameterization.
         uint8_t sides = BORDER_NONE;
     };
 
@@ -79,6 +79,7 @@ namespace ui {
     void draw_frame(Rect rect, const Style& style, ImColor background, DrawListTarget target = DrawListTarget::Window);
     void draw_frame(ImDrawList& draw_list, Rect rect, const Style& style, float opacity);
     void draw_frame(Rect rect, const Style& style, float opacity, DrawListTarget target = DrawListTarget::Window);
+    void draw_frame_surface(ImDrawList& draw_list, Rect rect, const Style& style, float opacity = 1.0F);
     BorderPath rounded_rect_border_path(Rect rect, float rounding);
     void draw_border_path(
         ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImColor color, float thickness, BorderStyle style

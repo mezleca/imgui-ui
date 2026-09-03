@@ -1,8 +1,6 @@
 #include "styled-node.hpp"
 
 #include "paint-slot.hpp"
-#include "../constants.hpp"
-#include "../diagnostics/profiler.hpp"
 
 using namespace ui;
 
@@ -48,11 +46,6 @@ void StyledNode::draw() {
 
     update_cursor();
     const Style::PushState push_state = style().push(opacity(), font());
-    if constexpr (constants::IS_DEBUG_BUILD) {
-        if (Profiler* active_profiler = profiler(); active_profiler != nullptr) {
-            active_profiler->record_style_scope();
-        }
-    }
 
     Node::draw();
     Style::pop(push_state);
@@ -68,13 +61,6 @@ bool StyledNode::paint() {
 
 void StyledNode::advance_frame_state(float dt) {
     m_state.update(dt);
-    if constexpr (constants::IS_DEBUG_BUILD) {
-        if (m_state.transitioning()) {
-            if (Profiler* active_profiler = profiler(); active_profiler != nullptr) {
-                active_profiler->record_active_transition();
-            }
-        }
-    }
 }
 
 void StyledNode::input_state_changed() {
@@ -103,14 +89,14 @@ void StyledNode::update_cursor() {
 
 void StyledNode::draw_before() {
     if (m_before != nullptr) {
-        const Rect rect = layout().screen_rect();
+        const Rect rect = layout().visual_rect();
         m_before->paint(rect, rect.inset(style().padding()));
     }
 }
 
 void StyledNode::draw_after() {
     if (m_after != nullptr) {
-        const Rect rect = layout().screen_rect();
+        const Rect rect = layout().visual_rect();
         m_after->paint(rect, rect.inset(style().padding()));
     }
 }

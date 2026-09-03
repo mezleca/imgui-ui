@@ -172,7 +172,7 @@ namespace ui {
             m_line_height = ImGui::GetTextLineHeight();
             m_text_size = ImGui::CalcTextSize(c_str(), nullptr, false, m_wrap_width);
 
-            // imgui measured wrapped and explicit lines with its native height; recover that line count before scaling it.
+            // imgui measured wrapped and explicit lines with its native height. recover that line count before scaling it.
             if (m_line_height > 0.0F) {
                 m_text_size.y = std::round(m_text_size.y / m_line_height) * m_line_height * m_line_height_multiplier;
             }

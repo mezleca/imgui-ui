@@ -8,6 +8,13 @@
 #include <variant>
 
 namespace ui {
+    struct BoxShadow {
+        ImVec2 offset{};
+        float blur = 0.0F;
+        float spread = 0.0F;
+        ImColor color = ImColor{0.0F, 0.0F, 0.0F, 0.0F};
+    };
+
     template <typename T>
     bool transition_values_equal(const T& left, const T& right) {
         return left == right;
@@ -20,6 +27,11 @@ namespace ui {
     inline bool transition_values_equal(const ImColor& left, const ImColor& right) {
         return left.Value.x == right.Value.x && left.Value.y == right.Value.y && left.Value.z == right.Value.z &&
                left.Value.w == right.Value.w;
+    }
+
+    inline bool transition_values_equal(const BoxShadow& left, const BoxShadow& right) {
+        return transition_values_equal(left.offset, right.offset) && left.blur == right.blur && left.spread == right.spread &&
+               transition_values_equal(left.color, right.color);
     }
 
     inline ImColor with_alpha(ImColor color, float alpha) {
@@ -121,6 +133,38 @@ namespace ui {
 
         ImU32 get_col() const {
             return ImGui::GetColorU32(value.Value);
+        }
+    };
+
+    struct BoxShadowValue : Value<BoxShadow> {
+        using Value::Value;
+
+        void tick(const BoxShadowValue& target, float dt) {
+            const float progress = transition_progress(target, dt);
+            const BoxShadow& start = transition_start();
+            value.offset = {
+                std::lerp(start.offset.x, target.value.offset.x, progress),
+                std::lerp(start.offset.y, target.value.offset.y, progress),
+            };
+            value.blur = std::lerp(start.blur, target.value.blur, progress);
+            value.spread = std::lerp(start.spread, target.value.spread, progress);
+            value.color.Value = {
+                std::lerp(start.color.Value.x, target.value.color.Value.x, progress),
+                std::lerp(start.color.Value.y, target.value.color.Value.y, progress),
+                std::lerp(start.color.Value.z, target.value.color.Value.z, progress),
+                std::lerp(start.color.Value.w, target.value.color.Value.w, progress),
+            };
+        }
+
+        bool is_close(const BoxShadowValue& target, float epsilon) const {
+            return std::fabs(value.offset.x - target.value.offset.x) <= epsilon &&
+                   std::fabs(value.offset.y - target.value.offset.y) <= epsilon &&
+                   std::fabs(value.blur - target.value.blur) <= epsilon &&
+                   std::fabs(value.spread - target.value.spread) <= epsilon &&
+                   std::fabs(value.color.Value.x - target.value.color.Value.x) <= epsilon &&
+                   std::fabs(value.color.Value.y - target.value.color.Value.y) <= epsilon &&
+                   std::fabs(value.color.Value.z - target.value.color.Value.z) <= epsilon &&
+                   std::fabs(value.color.Value.w - target.value.color.Value.w) <= epsilon;
         }
     };
 

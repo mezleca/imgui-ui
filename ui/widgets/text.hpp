@@ -33,8 +33,7 @@ namespace ui {
             return m_overflow;
         }
         bool empty() const;
-        TextWidget& set_size(ImVec2 size) {
-            m_has_explicit_size = true;
+        TextWidget& set_size(LayoutSize size) {
             StyledNode::set_size(size);
             return *this;
         }
@@ -47,7 +46,6 @@ namespace ui {
         GenericValue m_text;
         float m_wrap = -1.0F;
         TextOverflow m_overflow = TextOverflow::Clip;
-        bool m_has_explicit_size = false;
     };
 
 } // namespace ui

@@ -5,16 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
-#include <functional>
 #include <iomanip>
-#include <thread>
-
-#if defined(__linux__)
-#include <unistd.h>
-#else
-#include <windows.h>
-#include <psapi.h>
-#endif
 
 namespace ui {
     static uint64_t profile_timestamp() {
@@ -31,11 +22,6 @@ namespace ui {
         return static_cast<double>(end - start) / 1'000'000.0;
     }
 
-    static uint32_t profile_thread_id() {
-        thread_local const uint32_t id = static_cast<uint32_t>(std::hash<std::thread::id>{}(std::this_thread::get_id()));
-        return id;
-    }
-
     static std::filesystem::path default_profile_directory() {
         std::error_code error;
         const std::filesystem::path directory = std::filesystem::temp_directory_path(error);
@@ -46,27 +32,6 @@ namespace ui {
         return static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()
         );
-    }
-
-    static double process_memory_megabytes() {
-#if defined(__linux__)
-        std::ifstream statm("/proc/self/statm");
-        uint64_t total_pages = 0;
-        uint64_t resident_pages = 0;
-        if (!(statm >> total_pages >> resident_pages)) {
-            return 0.0;
-        }
-
-        const long page_size = sysconf(_SC_PAGESIZE);
-        return page_size > 0 ? static_cast<double>(resident_pages * static_cast<uint64_t>(page_size)) / (1024.0 * 1024.0) : 0.0;
-#else
-        PROCESS_MEMORY_COUNTERS counters{};
-        if (!GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters))) {
-            return 0.0;
-        }
-
-        return static_cast<double>(counters.WorkingSetSize) / (1024.0 * 1024.0);
-#endif
     }
 
     Profiler::Profiler(std::filesystem::path output_directory) {
@@ -107,7 +72,6 @@ namespace ui {
         m_enabled = enabled;
         if (!enabled) {
             m_frame_open = false;
-            m_depth = 0;
         }
     }
 
@@ -128,13 +92,15 @@ namespace ui {
             return;
         }
 
+        // reuse the inactive buffer and discard the previous frame's events and aggregates.
         FrameBuffer& frame = m_frames[m_write_index];
         frame.count = 0;
         frame.dropped = 0;
         frame.metrics = {};
+        frame.node_durations.clear();
+        frame.node_durations_ready = false;
         frame.start = profile_timestamp();
         frame.end = frame.start;
-        m_depth = 0;
         m_frame_open = true;
     }
 
@@ -147,21 +113,15 @@ namespace ui {
             return;
         }
 
+        // publish only a completed buffer so debugger reads never see a frame being written.
         FrameBuffer& frame = m_frames[m_write_index];
         frame.end = profile_timestamp();
         record_root_phase_times(frame);
         m_read_index = m_write_index;
         m_write_index = 1 - m_write_index;
-        m_depth = 0;
         m_frame_open = false;
 
         m_frame_metric.record(profile_milliseconds(frame.start, frame.end));
-        ++m_memory_sample_counter;
-        if (m_memory_metric.samples == 0 || m_memory_sample_counter >= 60) {
-            const double memory_megabytes = process_memory_megabytes();
-            if (memory_megabytes > 0.0) m_memory_metric.record(memory_megabytes);
-            m_memory_sample_counter = 0;
-        }
     }
 
     std::span<const ProfileEvent> Profiler::latest_events() const {
@@ -183,32 +143,38 @@ namespace ui {
             return 0.0;
         }
 
-        double duration = 0.0;
-        for (const ProfileEvent& event : latest_events()) {
-            if (event.node_identity == node_identity && (event.name == "Node::update" || event.name == "Node::draw")) {
-                duration += profile_milliseconds(event.start, event.end);
+        // build the node index once; each node total is the sum of its update and draw zones.
+        const FrameBuffer& frame = m_frames[m_read_index];
+        if (!frame.node_durations_ready) {
+            for (std::size_t index = 0; index < frame.count; ++index) {
+                const ProfileEvent& event = frame.events[index];
+                if (event.node_identity != 0 && (event.name == "Node::update" || event.name == "Node::draw")) {
+                    frame.node_durations[event.node_identity] += profile_milliseconds(event.start, event.end);
+                }
             }
+            frame.node_durations_ready = true;
         }
 
-        return duration;
+        const auto it = frame.node_durations.find(node_identity);
+        return it == frame.node_durations.end() ? 0.0 : it->second;
     }
 
     uint32_t Profiler::dropped_events() const {
         return m_frames[m_read_index].dropped;
     }
 
-    void Profiler::clear_report() {
-        m_frame_metric = {};
-        m_memory_metric = {};
-        m_memory_sample_counter = 0;
-    }
-
-    void Profiler::set_output_directory(std::filesystem::path output_directory) {
-        if (output_directory.empty()) {
-            output_directory = default_profile_directory();
+    void Profiler::record_frame_metrics(std::size_t input_entries, std::size_t input_entry_checks) {
+        if (!m_enabled || !m_frame_open) {
+            return;
         }
 
-        m_output_path = output_directory / m_output_path.filename();
+        ProfileFrameMetrics& metrics = m_frames[m_write_index].metrics;
+        metrics.input_entries = input_entries;
+        metrics.input_entry_checks = input_entry_checks;
+    }
+
+    void Profiler::clear_report() {
+        m_frame_metric = {};
     }
 
     bool Profiler::has_report() const {
@@ -220,6 +186,7 @@ namespace ui {
             return false;
         }
 
+        // persist aggregate frame timing and the latest frame snapshot; raw events stay in memory.
         std::error_code error;
         std::filesystem::create_directories(m_output_path.parent_path(), error);
         if (error) {
@@ -241,14 +208,17 @@ namespace ui {
         };
 
         write_metric("frame", m_frame_metric, "ms");
-        write_metric("memory", m_memory_metric, "mb");
 
         const ProfileFrameMetrics& metrics = latest_metrics();
-        output << "latest.style_pushes = " << metrics.style_pushes << '\n';
-        output << "latest.style_pops = " << metrics.style_pops << '\n';
-        output << "latest.active_transitions = " << metrics.active_transitions << '\n';
+        output << "latest.nodes_drawn = " << metrics.nodes_drawn << '\n';
+        output << "latest.input_entries = " << metrics.input_entries << '\n';
+        output << "latest.input_entry_checks = " << metrics.input_entry_checks << '\n';
         output << "latest.update_ms = " << metrics.update_ms << '\n';
+        output << "latest.measure_ms = " << metrics.measure_ms << '\n';
+        output << "latest.layout_ms = " << metrics.layout_ms << '\n';
         output << "latest.draw_ms = " << metrics.draw_ms << '\n';
+        output << "latest.input_ms = " << metrics.input_ms << '\n';
+        output << "latest.render_ms = " << metrics.render_ms << '\n';
 
         if (!output.good()) {
             return false;
@@ -271,8 +241,8 @@ namespace ui {
         }
 
         FrameBuffer& frame = m_frames[m_write_index];
-        const uint16_t depth = m_depth++;
         if (frame.count >= frame.events.size()) {
+            // keep the frame usable when instrumentation reaches the fixed event limit.
             ++frame.dropped;
             return {};
         }
@@ -282,8 +252,6 @@ namespace ui {
             .name = name,
             .start = profile_timestamp(),
             .node_identity = node_identity,
-            .thread_id = profile_thread_id(),
-            .depth = depth,
         };
         return {.event_index = index, .recorded = true};
     }
@@ -297,47 +265,40 @@ namespace ui {
             return;
         }
 
-        if (m_depth > 0) {
-            --m_depth;
-        }
-
         if (token.recorded) {
             m_frames[m_write_index].events[token.event_index].end = profile_timestamp();
         }
     }
 
-    void Profiler::record_style_scope() {
+    void Profiler::record_node_draw() {
         if (!m_enabled || !m_frame_open) {
             return;
         }
 
-        ++m_frames[m_write_index].metrics.style_pushes;
-        ++m_frames[m_write_index].metrics.style_pops;
-    }
-
-    void Profiler::record_active_transition() {
-        if (!m_enabled || !m_frame_open) {
-            return;
-        }
-
-        ++m_frames[m_write_index].metrics.active_transitions;
+        ++m_frames[m_write_index].metrics.nodes_drawn;
     }
 
     void Profiler::record_root_phase_times(FrameBuffer& frame) {
-        if (m_root_identity == 0) {
-            return;
-        }
-
+        // root phase times are inclusive; layout and input sum all node zones.
         for (std::size_t index = 0; index < frame.count; ++index) {
             const ProfileEvent& event = frame.events[index];
-            if (event.node_identity != m_root_identity) {
-                continue;
+            const double duration = profile_milliseconds(event.start, event.end);
+            if (event.name == "Node::layout") {
+                frame.metrics.layout_ms += duration;
             }
 
-            if (event.name == "Node::update") {
-                frame.metrics.update_ms = profile_milliseconds(event.start, event.end);
-            } else if (event.name == "Node::draw") {
-                frame.metrics.draw_ms = profile_milliseconds(event.start, event.end);
+            if (event.name == "Node::input") {
+                frame.metrics.input_ms += duration;
+            }
+
+            if (event.node_identity == m_root_identity && event.name == "Node::update") {
+                frame.metrics.update_ms = duration;
+            } else if (event.node_identity == m_root_identity && event.name == "Node::measure") {
+                frame.metrics.measure_ms = duration;
+            } else if (event.node_identity == m_root_identity && event.name == "Node::draw") {
+                frame.metrics.draw_ms = duration;
+            } else if (event.name == "UI::render") {
+                frame.metrics.render_ms = duration;
             }
         }
     }

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cmath>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 namespace ui {
@@ -123,7 +124,8 @@ namespace ui {
             return *this;
         }
 
-        /// cursor used while the mouse hovers a node in this style; none restores the arrow cursor.
+        /// cursor used while the mouse hovers a node in this style.
+        /// none restores the arrow cursor.
         ImGuiMouseCursor cursor() const {
             return m_cursor;
         }
@@ -182,6 +184,18 @@ namespace ui {
         Style& background_color(ImColor value, float transition_duration = -1.0F) {
             m_background_color.set(value);
             if (transition_duration >= 0.0F) m_background_color.set_duration(transition_duration);
+            return *this;
+        }
+
+        const BoxShadow& box_shadow() const {
+            return m_box_shadow.value;
+        }
+
+        Style& box_shadow(BoxShadow value, float transition_duration = -1.0F) {
+            value.blur = std::max(0.0F, value.blur);
+            value.color.Value.w = std::clamp(value.color.Value.w, 0.0F, 1.0F);
+            m_box_shadow.set(std::move(value));
+            if (transition_duration >= 0.0F) m_box_shadow.set_duration(transition_duration);
             return *this;
         }
 
@@ -253,6 +267,7 @@ namespace ui {
             style.m_border_radius = target.m_border_radius;
             style.m_border = target.m_border;
             style.m_border_style = target.m_border_style;
+            style.m_box_shadow.tick(target.m_box_shadow, dt);
             style.m_color.tick(target.m_color, dt);
             style.m_border_color.tick(target.m_border_color, dt);
             style.m_background_color.tick(target.m_background_color, dt);
@@ -290,7 +305,8 @@ namespace ui {
                 m_cursor != target.m_cursor || m_use_background_for_scrollbar != target.m_use_background_for_scrollbar ||
                 m_border != target.m_border || m_blur != target.m_blur ||
                 std::abs(m_border_thickness - target.m_border_thickness) > epsilon ||
-                std::abs(m_border_radius - target.m_border_radius) > epsilon || m_border_style != target.m_border_style) {
+                std::abs(m_border_radius - target.m_border_radius) > epsilon || m_border_style != target.m_border_style ||
+                !m_box_shadow.is_close(target.m_box_shadow, epsilon)) {
                 return false;
             }
 
@@ -344,6 +360,7 @@ namespace ui {
         int m_blur = 0;
         float m_border_thickness = 1.0F;
         float m_border_radius = 4.0F;
+        BoxShadowValue m_box_shadow;
         ColorValue m_color;
         ColorValue m_border_color;
         ColorValue m_background_color;

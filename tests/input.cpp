@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <ui/input/router.hpp>
-#include <ui/layout/modal-container.hpp>
+#include <ui/layout/layer-container.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/widget.hpp>
 #include "imgui-context.hpp"
@@ -107,7 +107,7 @@ TEST_CASE("ui events flows from target to parents") {
     auto parent = std::make_unique<EventNode>("parent", events);
     auto child = std::make_unique<EventNode>("child", events);
     EventNode* child_ptr = child.get();
-    parent->add(std::move(child));
+    parent->attach(std::move(child));
 
     ui::InputRouter router;
     ui::UiEvent event = click_event();
@@ -123,7 +123,7 @@ TEST_CASE("ui events can stop propagation") {
     auto child = std::make_unique<EventNode>("child", events);
     EventNode* child_ptr = child.get();
     child_ptr->stop_events = true;
-    parent->add(std::move(child));
+    parent->attach(std::move(child));
 
     ui::InputRouter router;
     ui::UiEvent event = click_event();
@@ -140,7 +140,7 @@ TEST_CASE("pointer capture keeps drag events on the original node") {
     std::vector<ui::EventType> events;
     PointerCaptureNode node(router, events);
 
-    router.register_region(node, {.rect = {{0.0F, 0.0F}, {10.0F, 10.0F}}});
+    router.target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
 
     auto down = event_of(ui::EventType::PointerDown, {5.0F, 5.0F});
     REQUIRE(router.dispatch(down));
@@ -168,7 +168,7 @@ TEST_CASE("input router synthesizes clicks from matching pointer presses") {
     std::vector<ui::EventType> events;
     PointerEventNode node("click", events);
     ui::InputRouter router;
-    router.register_region(node, {.rect = {{0.0F, 0.0F}, {10.0F, 10.0F}}});
+    router.target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
 
     auto left_down = event_of(ui::EventType::PointerDown, {5.0F, 5.0F});
     left_down.button = ui::PointerButton::Left;
@@ -205,18 +205,11 @@ TEST_CASE("input blocker consumes only its selected event mask") {
     PointerEventNode target("target", events);
     ui::InputRouter router;
     int target_events = 0;
-    router.register_region(
-        target, {
-                    .rect = {{0.0F, 0.0F}, {100.0F, 100.0F}},
-                    .on_event = [&target_events](ui::UiEvent&) { ++target_events; },
-                }
-    );
+    router.target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}}, [&target_events](ui::UiEvent&) { ++target_events; });
     int blocked_events = 0;
-    router.register_blocker({
-        .rect = {{25.0F, 25.0F}, {75.0F, 75.0F}},
-        .events = ui::EventMask::PointerDown,
-        .on_event = [&blocked_events](ui::UiEvent&) { ++blocked_events; },
-    });
+    router.block(
+        {{25.0F, 25.0F}, {75.0F, 75.0F}}, [&blocked_events](ui::UiEvent&) { ++blocked_events; }, ui::EventMask::PointerDown
+    );
 
     auto move = event_of(ui::EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
@@ -234,51 +227,51 @@ TEST_CASE("input router reports per-frame hit-test work") {
     std::vector<ui::EventType> events;
     PointerEventNode node("target", events);
     ui::InputRouter router;
-    router.register_region(node, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
-    router.register_blocker({.rect = {{200.0F, 200.0F}, {300.0F, 300.0F}}});
+    router.target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.block({{200.0F, 200.0F}, {300.0F, 300.0F}});
 
     auto move = event_of(ui::EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
 
     const ui::InputRouterStats stats = router.stats();
-    REQUIRE(stats.region_count == 2);
+    REQUIRE(stats.entry_count == 2);
     REQUIRE(stats.hit_test_count == 2);
-    REQUIRE(stats.region_checks == 4);
+    REQUIRE(stats.entry_checks == 4);
 
     router.begin_frame();
-    REQUIRE(router.stats().region_count == 0);
+    REQUIRE(router.stats().entry_count == 0);
     REQUIRE(router.stats().hit_test_count == 0);
-    REQUIRE(router.stats().region_checks == 0);
+    REQUIRE(router.stats().entry_checks == 0);
 }
 
 TEST_CASE("input router skips blocker hit testing when none are registered") {
     std::vector<ui::EventType> events;
     PointerEventNode node("target", events);
     ui::InputRouter router;
-    router.register_region(node, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
+    router.target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     auto move = event_of(ui::EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
 
     const ui::InputRouterStats stats = router.stats();
-    REQUIRE(stats.region_count == 1);
+    REQUIRE(stats.entry_count == 1);
     REQUIRE(stats.hit_test_count == 1);
-    REQUIRE(stats.region_checks == 1);
+    REQUIRE(stats.entry_checks == 1);
 }
 
 TEST_CASE("input router skips observer scans when none are registered") {
     std::vector<ui::EventType> events;
     PointerEventNode node("target", events);
     ui::InputRouter router;
-    router.register_region(node, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
+    router.target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     auto click = event_of(ui::EventType::Click, {50.0F, 50.0F});
     REQUIRE(router.dispatch(click));
 
     const ui::InputRouterStats stats = router.stats();
-    REQUIRE(stats.region_count == 1);
+    REQUIRE(stats.entry_count == 1);
     REQUIRE(stats.hit_test_count == 1);
-    REQUIRE(stats.region_checks == 1);
+    REQUIRE(stats.entry_checks == 1);
 }
 
 TEST_CASE("owner-scoped blockers leave their descendants interactive") {
@@ -286,11 +279,11 @@ TEST_CASE("owner-scoped blockers leave their descendants interactive") {
     ui::Node owner("overlay");
     auto child = std::make_unique<PointerEventNode>("child", events);
     auto* child_ptr = child.get();
-    owner.add(std::move(child));
+    owner.attach(std::move(child));
 
     ui::InputRouter router;
-    router.register_region(*child_ptr, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
-    router.register_blocker(owner, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
+    router.target(*child_ptr, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.block(owner, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     auto move = event_of(ui::EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
@@ -340,8 +333,8 @@ TEST_CASE("pointer down outside a focused node clears focus") {
     other.handle_events = true;
 
     ui::InputRouter router;
-    router.register_region(focused, {.rect = {{0.0F, 0.0F}, {40.0F, 40.0F}}});
-    router.register_region(other, {.rect = {{60.0F, 0.0F}, {100.0F, 40.0F}}});
+    router.target(focused, {{0.0F, 0.0F}, {40.0F, 40.0F}});
+    router.target(other, {{60.0F, 0.0F}, {100.0F, 40.0F}});
     REQUIRE(router.set_focus(focused));
     events.clear();
 
@@ -357,13 +350,13 @@ TEST_CASE("input router clears targets when a node is detached") {
     auto child = std::make_unique<EventNode>("child", events);
     EventNode* child_ptr = child.get();
     child_ptr->handle_events = true;
-    parent.add(std::move(child));
+    parent.attach(std::move(child));
 
     ui::InputRouter router;
     parent.set_input_router(&router);
     REQUIRE(router.set_focus(*child_ptr));
     REQUIRE(router.capture_pointer(*child_ptr));
-    router.register_region(*child_ptr, {.rect = {{0.0F, 0.0F}, {10.0F, 10.0F}}});
+    router.target(*child_ptr, {{0.0F, 0.0F}, {10.0F, 10.0F}});
     events.clear();
 
     auto detached = parent.remove(*child_ptr);
@@ -379,6 +372,27 @@ TEST_CASE("input router clears targets when a node is detached") {
     auto move = event_of(ui::EventType::PointerMove, {100.0F, 100.0F});
     REQUIRE_FALSE(router.dispatch(move));
     REQUIRE(events.empty());
+}
+
+TEST_CASE("node input attachment survives router destruction") {
+    ui::Node node("node");
+
+    {
+        ui::InputRouter router;
+        node.set_input_router(&router);
+        REQUIRE(router.set_focus(node));
+        REQUIRE(router.capture_pointer(node));
+        router.target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
+    }
+
+    node.set_visible(false);
+    node.set_input_target();
+    REQUIRE_FALSE(node.input_state().focused);
+    node.set_visible(true);
+
+    ui::InputRouter replacement;
+    node.set_input_router(&replacement);
+    REQUIRE(replacement.set_focus(node));
 }
 
 TEST_CASE("input routers isolate focus and pointer capture between surfaces") {
@@ -412,55 +426,48 @@ TEST_CASE("input routers isolate focus and pointer capture between surfaces") {
     REQUIRE(events.back() == "surface-b");
 }
 
-TEST_CASE("blocking region consumes empty space") {
+TEST_CASE("blocking entry consumes empty space") {
     ui::InputRouter router;
-    router.register_blocker({.rect = {{0.0F, 0.0F}, {200.0F, 200.0F}}});
+    router.block({{0.0F, 0.0F}, {200.0F, 200.0F}});
 
     ui::UiEvent move = event_of(ui::EventType::PointerMove, {100.0F, 100.0F});
     REQUIRE(router.dispatch(move));
     REQUIRE(move.handled);
 }
 
-TEST_CASE("blocking regions clear hover behind them") {
+TEST_CASE("blocking entries clear hover behind them") {
     ui::InputRouter router;
     ui::Node target("target");
-    router.register_region(target, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
+    router.target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     ui::UiEvent move = event_of(ui::EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE_FALSE(router.dispatch(move));
     REQUIRE(target.input_state().hovered);
 
-    router.register_blocker({.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
+    router.block({{0.0F, 0.0F}, {100.0F, 100.0F}});
     move = event_of(ui::EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
     REQUIRE_FALSE(target.input_state().hovered);
 }
 
-TEST_CASE("blocking regions consume pointer release without a retained press") {
+TEST_CASE("blocking entries consume pointer release without a retained press") {
     ui::InputRouter router;
-    router.register_blocker({.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
+    router.block({{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     ui::UiEvent release = event_of(ui::EventType::PointerUp, {50.0F, 50.0F});
     REQUIRE(router.dispatch(release));
     REQUIRE(release.handled);
 }
 
-TEST_CASE("observer regions do not block their target") {
+TEST_CASE("observer entries do not block their target") {
     std::vector<std::string> events;
     EventNode target("target", events);
     target.handle_events = true;
-    ui::Node observer_owner("observer");
     ui::InputRouter router;
     int observed = 0;
 
-    router.register_region(target, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
-    router.register_observer(
-        observer_owner, {
-                            .rect = {{0.0F, 0.0F}, {100.0F, 100.0F}},
-                            .events = ui::EventMask::Click,
-                            .on_event = [&observed](ui::UiEvent&) { ++observed; },
-                        }
-    );
+    router.target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.observe({{0.0F, 0.0F}, {100.0F, 100.0F}}, [&observed](ui::UiEvent&) { ++observed; }, ui::EventMask::Click);
 
     ui::UiEvent click = click_event({50.0F, 50.0F});
     REQUIRE(router.dispatch(click));
@@ -468,7 +475,7 @@ TEST_CASE("observer regions do not block their target") {
     REQUIRE(events == std::vector<std::string>{"target"});
 }
 
-TEST_CASE("higher-priority regions win over later paint") {
+TEST_CASE("later targets win over earlier paint") {
     std::vector<std::string> events;
     EventNode popup("popup", events);
     EventNode content("content", events);
@@ -476,29 +483,30 @@ TEST_CASE("higher-priority regions win over later paint") {
     content.handle_events = true;
     ui::InputRouter router;
 
-    router.register_region(popup, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}, .priority = 1});
-    router.register_region(content, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
+    router.target(content, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.target(popup, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     ui::UiEvent click = click_event({50.0F, 50.0F});
     REQUIRE(router.dispatch(click));
     REQUIRE(events == std::vector<std::string>{"popup"});
 }
 
-TEST_CASE("hidden modal panels release the modal input policy") {
+TEST_CASE("hidden layers release focus") {
     ui::Runtime runtime;
     ui::Config config;
     UI surface(runtime, std::move(config));
-    ui::ModalContainer modal(surface);
+    ui::LayerContainer layer("layer", ui::LayerMode::Inline);
+    layer.set_input_router(&surface.input_router());
 
-    ui::ModalPanel& panel = modal.open("panel");
-    REQUIRE(modal.has_open_modal());
+    REQUIRE(surface.input_router().set_focus(layer));
+    REQUIRE(surface.input_router().focused_node() == &layer);
 
-    panel.set_visible(false);
-    modal.update(0.0F);
+    layer.set_visible(false);
 
     ui::UiEvent key = event_of(ui::EventType::KeyDown);
     REQUIRE_FALSE(surface.input_router().dispatch(key));
     REQUIRE_FALSE(key.handled);
+    REQUIRE(surface.input_router().focused_node() == nullptr);
 }
 
 TEST_CASE("pointer blockers leave focused keyboard input available") {
@@ -510,8 +518,8 @@ TEST_CASE("pointer blockers leave focused keyboard input available") {
     REQUIRE(router.set_focus(content));
     events.clear();
 
-    router.register_region(content, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
-    router.register_blocker({.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
+    router.target(content, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.block({{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     ui::UiEvent click = click_event({10.0F, 10.0F});
     REQUIRE(router.dispatch(click));
@@ -522,40 +530,48 @@ TEST_CASE("pointer blockers leave focused keyboard input available") {
     REQUIRE(events == std::vector<std::string>{"content"});
 }
 
-TEST_CASE("input router resolves the topmost node at a position") {
+TEST_CASE("input router resolves overlapping targets") {
     ui::InputRouter router;
     ui::Node bottom("bottom");
     ui::Node top("top");
 
     router.begin_frame();
-    router.register_region(bottom, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
-    router.register_region(top, {.rect = {{25.0F, 25.0F}, {75.0F, 75.0F}}});
+    router.target(bottom, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.target(top, {{25.0F, 25.0F}, {75.0F, 75.0F}});
 
     REQUIRE(router.node_at({50.0F, 50.0F}) == &top);
     REQUIRE(router.node_at({10.0F, 10.0F}) == &bottom);
     REQUIRE(router.node_at({150.0F, 150.0F}) == nullptr);
-}
 
-TEST_CASE("input router uses registration order for overlapping unrelated nodes") {
-    ui::InputRouter router;
     ui::Node first("first");
     ui::Node second("second");
 
     router.begin_frame();
-    router.register_region(first, {.rect = {{0.0F, 0.0F}, {20.0F, 20.0F}}});
-    router.register_region(second, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
+    router.target(first, {{0.0F, 0.0F}, {20.0F, 20.0F}});
+    router.target(second, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     REQUIRE(router.node_at({10.0F, 10.0F}) == &second);
+
+    ui::Node parent("parent");
+    auto child = std::make_unique<ui::Node>("child");
+    ui::Node* child_ptr = child.get();
+    parent.attach(std::move(child));
+
+    router.begin_frame();
+    router.target(*child_ptr, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.target(parent, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+
+    REQUIRE(router.node_at({50.0F, 50.0F}) == child_ptr);
 }
 
-TEST_CASE("input router ignores disabled and stale regions") {
+TEST_CASE("input router ignores disabled and stale entries") {
     ui::InputRouter router;
     ui::Node disabled("disabled");
     ui::Node hidden("hidden");
 
     router.begin_frame();
-    router.register_region(disabled, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
-    router.register_region(hidden, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
+    router.target(disabled, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.target(hidden, {{0.0F, 0.0F}, {100.0F, 100.0F}});
     disabled.set_enabled(false);
     hidden.set_visible(false);
 
@@ -563,142 +579,6 @@ TEST_CASE("input router ignores disabled and stale regions") {
 
     router.begin_frame();
     REQUIRE(router.node_at({50.0F, 50.0F}) == nullptr);
-}
-
-TEST_CASE("debug tree includes passive containers") {
-    class DebugNode final : public ui::Node {
-    public:
-        explicit DebugNode(std::string id) : Node(std::move(id)) {}
-
-        bool debug_selectable() const override {
-            return true;
-        }
-
-        void set_rect(ui::Rect rect) {
-            set_screen_rect(rect);
-        }
-    };
-
-    class TransparentNode final : public ui::Node {
-    public:
-        explicit TransparentNode(std::string id) : Node(std::move(id)) {}
-
-        void set_rect(ui::Rect rect) {
-            set_screen_rect(rect);
-        }
-    };
-
-    DebugNode root("root");
-    root.set_rect({{0.0F, 0.0F}, {200.0F, 200.0F}});
-    auto overlay = std::make_unique<TransparentNode>("overlay");
-    overlay->set_rect({{0.0F, 0.0F}, {200.0F, 200.0F}});
-    auto child = std::make_unique<DebugNode>("container");
-    DebugNode* child_ptr = child.get();
-    child_ptr->set_rect({{20.0F, 20.0F}, {180.0F, 180.0F}});
-    overlay->add(std::move(child));
-    root.add(std::move(overlay));
-
-    REQUIRE(root.debug_node_at({100.0F, 100.0F}) == child_ptr);
-    REQUIRE(root.debug_node_at({10.0F, 10.0F}) == &root);
-}
-
-TEST_CASE("debug tree selects layers outside their parent bounds") {
-    class DebugNode final : public ui::Node {
-    public:
-        explicit DebugNode(std::string id) : Node(std::move(id)) {}
-
-        bool debug_selectable() const override {
-            return true;
-        }
-
-        void set_rect(ui::Rect rect) {
-            set_screen_rect(rect);
-        }
-    };
-
-    DebugNode root("root");
-    root.set_rect({{0.0F, 0.0F}, {200.0F, 200.0F}});
-
-    auto parent = std::make_unique<DebugNode>("page");
-    parent->set_rect({{20.0F, 20.0F}, {80.0F, 80.0F}});
-    auto layer = std::make_unique<DebugNode>("modal");
-    DebugNode* layer_ptr = layer.get();
-    layer_ptr->set_rect({{90.0F, 90.0F}, {180.0F, 180.0F}});
-    parent->add(std::move(layer));
-    root.add(std::move(parent));
-
-    REQUIRE(root.debug_node_at({135.0F, 135.0F}) == layer_ptr);
-}
-
-TEST_CASE("closed modal containers are skipped by debugger selection") {
-    ui::Runtime runtime;
-    ui::Config config;
-    UI surface(runtime, std::move(config));
-    ui::ModalContainer modal(surface);
-
-    REQUIRE_FALSE(modal.debug_selectable());
-    modal.open("panel");
-    REQUIRE(modal.debug_selectable());
-}
-
-TEST_CASE("debug tree follows rendered layer order", "[debugger][regression]") {
-    class ModalHost final : public ui::ChildContainer {
-    public:
-        explicit ModalHost(UI& surface) : ChildContainer("host") {
-            m_modal = &add_child<ui::ModalContainer>(surface);
-            m_content = &add_child<ui::ChildContainer>("content");
-            m_content->set_size({0.0F, 0.0F});
-        }
-
-        ui::ModalPanel& open_modal() {
-            return m_modal->open("panel");
-        }
-
-    protected:
-        void draw_children() override {
-            m_content->draw();
-            m_modal->draw();
-        }
-
-    private:
-        ui::ModalContainer* m_modal = nullptr;
-        ui::ChildContainer* m_content = nullptr;
-    };
-
-    ui::Runtime runtime;
-    UI surface(runtime, {.size = {640.0F, 480.0F}});
-    ImGui::SetCurrentContext(surface.imgui_context());
-    ImGui::GetIO().DisplaySize = {640.0F, 480.0F};
-    ui_test::ImGuiContext::build_fonts();
-
-    auto& host = surface.root().add_child<ModalHost>(surface);
-    host.set_size({640.0F, 480.0F});
-    ui::ModalPanel& panel = host.open_modal();
-    panel.set_size({480.0F, 220.0F});
-
-    surface.begin_input_frame();
-    surface.begin_frame();
-    surface.root().update(ImGui::GetIO().DeltaTime);
-    surface.root().draw();
-    surface.end_frame();
-
-    const ui::Rect bounds = panel.layout().screen_rect();
-    const ImVec2 position = {(bounds.min.x + bounds.max.x) * 0.5F, bounds.max.y - 10.0F};
-    REQUIRE(surface.root().debug_node_at(position) == &panel);
-}
-
-TEST_CASE("input router prefers an overlapping child over its parent") {
-    ui::InputRouter router;
-    ui::Node parent("parent");
-    auto child = std::make_unique<ui::Node>("child");
-    ui::Node* child_ptr = child.get();
-    parent.add(std::move(child));
-
-    router.begin_frame();
-    router.register_region(*child_ptr, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
-    router.register_region(parent, {.rect = {{0.0F, 0.0F}, {100.0F, 100.0F}}});
-
-    REQUIRE(router.node_at({50.0F, 50.0F}) == child_ptr);
 }
 
 TEST_CASE("focused node receives keyboard events") {

@@ -22,10 +22,6 @@ namespace ui {
             return m_type_name;
         }
 
-        bool debug_selectable() const override {
-            return true;
-        }
-
         /// effective values for the current transition.
         Style& style() {
             return m_state.style();

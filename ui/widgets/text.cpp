@@ -37,9 +37,7 @@ void TextWidget::on_measure() {
     m_text.set_line_height(style().line_height());
     const ImVec2 padding = style().padding();
     const ImVec2 text_size = m_text.text_size();
-    if (!m_has_explicit_size) {
-        StyledNode::set_size({text_size.x + padding.x * 2.0F, text_size.y + padding.y * 2.0F});
-    }
+    set_measured_size({text_size.x + padding.x * 2.0F, text_size.y + padding.y * 2.0F}, true, true);
 }
 
 bool TextWidget::paint() {
@@ -52,6 +50,7 @@ bool TextWidget::paint() {
 
     ImGui::Dummy(layout().size());
     const ImVec4 clip_rect = {content.min.x, content.min.y, content.max.x, content.max.y};
+
     if (m_wrap < 0.0F && m_overflow == TextOverflow::Ellipsis) {
         draw_text_ellipsis(content.min, current_style.color().get_col(), m_text, clip_rect);
     } else {

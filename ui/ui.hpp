@@ -3,6 +3,7 @@
 #include "backend.hpp"
 #include "style/theme.hpp"
 #include "diagnostics/profiler.hpp"
+#include "imgui/effects/effects.hpp"
 #include "runtime.hpp"
 #include "input/router.hpp"
 #include "resources/assets.hpp"
@@ -17,7 +18,8 @@ namespace ui {
     class Node;
 } // namespace ui
 
-/// assets and theme remain owned by Runtime; imgui context, root and router are surface-local.
+/// assets and theme remain owned by Runtime.
+/// imgui context, root and router are surface-local.
 class UI {
 public:
     UI(ui::Runtime& runtime, const ui::Config& config);
@@ -99,6 +101,14 @@ public:
         return m_profiler;
     }
 
+    ui::EffectRegistry& effects() {
+        return m_effects;
+    }
+
+    const ui::EffectRegistry& effects() const {
+        return m_effects;
+    }
+
     const ui::Theme& theme() const {
         return m_runtime.theme();
     }
@@ -137,6 +147,7 @@ private:
     std::unique_ptr<ui::Backend> m_backend;
     std::unique_ptr<ui::Node> m_container;
     ui::InputRouter m_input_router;
+    ui::EffectRegistry m_effects;
     ui::Profiler m_profiler;
     ui::Font* m_primary_font = nullptr;
     ui::Font* m_secondary_font = nullptr;

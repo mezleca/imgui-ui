@@ -18,6 +18,7 @@ namespace ui {
         ~SdlBackend() override;
 
         bool initialize() override;
+        void register_effects(EffectRegistry& effects) override;
         bool initialize_imgui() override;
         void shutdown_imgui() override;
         void make_current() override;

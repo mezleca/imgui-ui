@@ -32,10 +32,86 @@ namespace ui {
 
     using Origin = Anchor;
 
+    enum class LayoutSizeMode : uint8_t {
+        Fixed,
+        Fit,
+        Grow,
+    };
+
+    struct LayoutAxis {
+        static constexpr LayoutAxis grow(float weight = 1.0F) {
+            return {LayoutSizeMode::Grow, weight > 0.0F ? weight : 1.0F};
+        }
+
+        static constexpr LayoutAxis fixed(float value) {
+            return {LayoutSizeMode::Fixed, std::max(0.0F, value)};
+        }
+
+        static constexpr LayoutAxis fit() {
+            return {LayoutSizeMode::Fit, 0.0F};
+        }
+
+        float intrinsic(float measured) const {
+            if (mode == LayoutSizeMode::Fixed) {
+                return value;
+            }
+
+            return mode == LayoutSizeMode::Fit ? std::max(0.0F, measured) : 0.0F;
+        }
+
+        float resolve(float measured, float available) const {
+            if (mode == LayoutSizeMode::Grow) {
+                return std::max(0.0F, available);
+            }
+
+            return intrinsic(measured);
+        }
+
+        LayoutSizeMode mode = LayoutSizeMode::Grow;
+        float value = 1.0F;
+
+        constexpr bool operator==(const LayoutAxis&) const = default;
+    };
+
+    struct LayoutSize {
+        LayoutAxis width{};
+        LayoutAxis height{};
+
+        ImVec2 intrinsic(ImVec2 measured) const {
+            return {width.intrinsic(measured.x), height.intrinsic(measured.y)};
+        }
+
+        ImVec2 resolve(ImVec2 measured, ImVec2 available) const {
+            return {width.resolve(measured.x, available.x), height.resolve(measured.y, available.y)};
+        }
+
+        constexpr bool operator==(const LayoutSize&) const = default;
+    };
+
+    constexpr LayoutAxis px(float value) {
+        return LayoutAxis::fixed(value);
+    }
+
+    constexpr LayoutAxis grow(float weight = 1.0F) {
+        return LayoutAxis::grow(weight);
+    }
+
+    constexpr LayoutAxis fit() {
+        return LayoutAxis::fit();
+    }
+
     struct Placement {
         Anchor anchor = Anchor::TopLeft;
         Origin origin = Origin::TopLeft;
         ImVec2 offset{};
+        ImVec2 anchor_position{};
+        ImVec2 origin_position{};
+    };
+
+    struct LayoutConfig {
+        LayoutSize size{};
+        Placement placement{};
+        bool in_flow = true;
     };
 
     /// axis-aligned bounds in one coordinate space.
@@ -119,18 +195,17 @@ namespace ui {
         return Rect::from_position_size({parent.min.x + position.x, parent.min.y + position.y}, child_size);
     }
 
+    /// resolves child bounds from a placement request.
+    inline Rect resolve_layout_rect(Rect parent, ImVec2 child_size, const Placement& placement) {
+        const ImVec2 anchor = placement.anchor == Anchor::Custom ? placement.anchor_position : alignment_factor(placement.anchor);
+        const ImVec2 origin = placement.origin == Origin::Custom ? placement.origin_position : alignment_factor(placement.origin);
+        return resolve_layout_rect(parent, child_size, anchor, origin, placement.offset);
+    }
+
     inline ImVec2 clamp_position(Rect bounds, ImVec2 size, ImVec2 position) {
         return {
             std::clamp(position.x, bounds.min.x, std::max(bounds.min.x, bounds.max.x - size.x)),
             std::clamp(position.y, bounds.min.y, std::max(bounds.min.y, bounds.max.y - size.y)),
-        };
-    }
-
-    /// non-positive requested dimensions consume the corresponding available dimension.
-    inline ImVec2 resolve_layout_size(ImVec2 requested_size, ImVec2 available_size) {
-        return {
-            requested_size.x > 0.0F ? requested_size.x : std::max(0.0F, available_size.x),
-            requested_size.y > 0.0F ? requested_size.y : std::max(0.0F, available_size.y),
         };
     }
 
@@ -141,171 +216,162 @@ namespace ui {
 
     class NodeLayout {
     public:
-        /// outer size resolved for the current frame.
+        /// returns the final size assigned by the parent layout.
         const ImVec2& size() const {
             return m_size;
         }
 
-        /// whether placement overrides the current ImGui flow cursor.
-        bool has_explicit_position() const {
-            return m_has_explicit_position;
+        /// returns the node's requested size and placement.
+        const LayoutConfig& config() const {
+            return m_config;
         }
 
-        /// whether a parent layout should assign this node's position.
+        /// returns the width and height sizing rules.
+        const LayoutSize& size_spec() const {
+            return m_config.size;
+        }
+
+        /// returns the placement before a container arranges the node.
+        const Placement& placement() const {
+            return m_config.placement;
+        }
+
+        /// returns whether the node participates in its parent's flow.
         bool in_flow() const {
-            return m_in_flow;
+            return m_config.in_flow;
         }
 
-        /// parent reference point used by explicit placement.
-        Anchor anchor() const {
-            return m_anchor;
+        /// returns the measured size before grow allocation.
+        ImVec2 measured_size() const {
+            return m_measured_size;
         }
 
-        /// child reference point aligned with the anchor.
-        Origin origin() const {
-            return m_origin;
+        /// returns fixed and fit size without grow allocation.
+        ImVec2 intrinsic_size() const {
+            return m_config.size.intrinsic(m_measured_size);
         }
 
-        /// normalized parent point resolved from anchor or custom coordinates.
-        ImVec2 anchor_factor() const {
-            return m_anchor == Anchor::Custom ? m_anchor_position : alignment_factor(m_anchor);
+        /// returns the arranged bounds passed to the imgui cursor.
+        Rect local_rect() const {
+            return m_local_rect;
         }
 
-        /// normalized child point resolved from origin or custom coordinates.
-        ImVec2 origin_factor() const {
-            return m_origin == Origin::Custom ? m_origin_position : alignment_factor(m_origin);
+        /// returns the arranged bounds in screen coordinates.
+        Rect layout_rect() const {
+            return m_layout_rect;
         }
 
-        /// translation added after anchor and origin alignment.
-        const ImVec2& offset() const {
-            return m_offset;
+        /// returns the bounds emitted by the node's paint operation.
+        Rect visual_rect() const {
+            return m_visual_rect;
         }
 
-        /// top-left position in the current ImGui window's local coordinates.
-        ImVec2 arranged_position() const {
-            return m_arranged_rect.min;
-        }
-
-        /// arranged outer bounds in the current ImGui window's local coordinates.
-        Rect arranged_rect() const {
-            return m_arranged_rect;
-        }
-
-        /// latest outer bounds in absolute screen coordinates.
-        ///
-        /// Node::draw initializes this from the arranged position. Leaf nodes may
-        /// replace it with the actual ImGui item bounds, and containers may set
-        /// it to the outer bounds of their child window or custom drawing.
-        Rect screen_rect() const {
-            return m_screen_rect;
-        }
-
-        /// parent content bounds, in window-local coordinates, used for explicit placement.
+        /// unscrolled content bounds in window-local coordinates.
         const Rect& parent_content_rect() const {
             return m_parent_content_rect;
+        }
+
+        /// returns the remaining content space at the node's layout cursor.
+        const ImVec2& available_size() const {
+            return m_available_size;
         }
 
     private:
         friend class Node;
 
-        void set_size(ImVec2 size) {
-            m_requested_size = size;
+        void set_size(LayoutSize size) {
+            m_config.size = size;
+            m_has_explicit_size_request = true;
+            m_size = intrinsic_size();
+            m_has_size = false;
+            m_size_assigned_by_parent = false;
+        }
+
+        void set_config(LayoutConfig config) {
+            const bool size_changed = m_config.size != config.size;
+            m_config = config;
+            m_has_explicit_size_request = m_has_explicit_size_request || size_changed;
+            m_has_arranged_position = false;
+            m_size = intrinsic_size();
+            m_has_size = false;
+            m_size_assigned_by_parent = false;
+        }
+
+        void set_measured_size(ImVec2 size, bool measured_width, bool measured_height) {
+            m_measured_size = size;
+            if (!m_has_explicit_size_request) {
+                if (measured_width) {
+                    m_config.size.width = LayoutAxis::fit();
+                }
+                if (measured_height) {
+                    m_config.size.height = LayoutAxis::fit();
+                }
+            }
+
+            m_size = intrinsic_size();
+            m_has_size = false;
+            m_size_assigned_by_parent = false;
+        }
+
+        void set_arranged_placement(Placement placement) {
+            m_arranged_placement = placement;
+            m_has_arranged_position = true;
+        }
+
+        bool has_position() const {
+            return !m_config.in_flow || m_has_arranged_position;
+        }
+
+        void set_arranged_rects(Rect local_rect, Rect layout_rect) {
+            m_local_rect = local_rect;
+            m_layout_rect = layout_rect;
+            m_visual_rect = layout_rect;
+        }
+
+        void set_layout_rect(Rect rect) {
+            m_layout_rect = rect;
+        }
+
+        void assign_size(ImVec2 size, bool assigned_by_parent = false) {
             m_size = size;
-            m_has_size_request = true;
-            m_size_resolved = false;
+            m_has_size = true;
+            m_size_assigned_by_parent = assigned_by_parent;
         }
 
-        void set_anchor(Anchor anchor) {
-            m_anchor = anchor;
-            m_has_explicit_position = true;
-            m_in_flow = false;
+        void clear_size_assignment() {
+            m_has_size = false;
         }
 
-        void set_anchor_position(ImVec2 position) {
-            m_anchor = Anchor::Custom;
-            m_anchor_position = position;
-            m_has_explicit_position = true;
-            m_in_flow = false;
+        void clear_parent_size_assignment() {
+            m_size_assigned_by_parent = false;
         }
 
-        void set_origin(Origin origin) {
-            m_origin = origin;
-            m_has_explicit_position = true;
-            m_in_flow = false;
+        void set_visual_rect(Rect rect) {
+            m_visual_rect = rect;
         }
 
-        void set_origin_position(ImVec2 position) {
-            m_origin = Origin::Custom;
-            m_origin_position = position;
-            m_has_explicit_position = true;
-            m_in_flow = false;
-        }
-
-        void set_offset(ImVec2 offset) {
-            m_offset = offset;
-            m_has_explicit_position = true;
-            m_in_flow = false;
-        }
-
-        void set_placement(Placement placement) {
-            m_anchor = placement.anchor;
-            m_origin = placement.origin;
-            m_offset = placement.offset;
-            m_has_explicit_position = true;
-            m_in_flow = false;
-        }
-
-        void set_arranged_placement(Anchor anchor, Origin origin, ImVec2 offset) {
-            m_anchor = anchor;
-            m_origin = origin;
-            m_offset = offset;
-            m_has_explicit_position = true;
-        }
-
-        void clear_explicit_position() {
-            m_has_explicit_position = false;
-            m_in_flow = true;
-        }
-
-        void set_arranged_rect(Rect rect) {
-            m_arranged_rect = rect;
-        }
-
-        void set_resolved_size(ImVec2 size) {
-            m_size = size;
-            m_size_resolved = true;
-        }
-
-        const ImVec2& requested_size() const {
-            return m_requested_size;
-        }
-
-        void clear_size_resolution() {
-            m_size_resolved = false;
-        }
-
-        void set_screen_rect(Rect rect) {
-            m_screen_rect = rect;
-        }
-
-        void set_parent_content_rect(Rect rect) {
+        void set_parent_content_rect(Rect rect, ImVec2 available_size = {}) {
             m_parent_content_rect = rect;
+            m_available_size = available_size;
         }
 
-        ImVec2 m_requested_size = {};
+        const Placement& active_placement() const {
+            return m_has_arranged_position ? m_arranged_placement : m_config.placement;
+        }
+
+        LayoutConfig m_config{};
+        ImVec2 m_measured_size{};
         ImVec2 m_size = {};
-        ImVec2 m_offset = {};
-        ImVec2 m_anchor_position = {};
-        ImVec2 m_origin_position = {};
-        Rect m_arranged_rect{};
-        Rect m_screen_rect{};
+        Rect m_local_rect{};
+        Rect m_layout_rect{};
+        Rect m_visual_rect{};
         Rect m_parent_content_rect{};
-        Anchor m_anchor = Anchor::TopLeft;
-        Origin m_origin = Origin::TopLeft;
-        bool m_has_size_request = false;
-        bool m_size_resolved = false;
-        bool m_has_explicit_position = false;
-        bool m_in_flow = true;
+        ImVec2 m_available_size{};
+        Placement m_arranged_placement{};
+        bool m_has_explicit_size_request = false;
+        bool m_has_size = false;
+        bool m_size_assigned_by_parent = false;
+        bool m_has_arranged_position = false;
     };
 
 } // namespace ui

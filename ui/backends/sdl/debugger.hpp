@@ -43,10 +43,10 @@ namespace ui {
         void render_toolbar();
         void render_node_list();
         void render_sections();
-        void render_node_tree(Node& node, int depth, bool show_duration, Node*& selected_target, bool update_target);
+        void render_node_tree(Node& node, int depth, Node*& selected_target, bool update_target);
         void render_properties();
         void render_node_properties();
-        void render_node_profiling();
+        void render_profiling();
         void render_layout_properties();
         void render_style_properties();
         void render_style_controls(Style& style, bool is_line = false);
@@ -54,10 +54,12 @@ namespace ui {
         void render_style_variables(Style& style);
         bool handle_inspect_event(const SDL_Event& event, bool mouse_event, SDL_WindowID main_window_id);
         void refresh_highlight();
+        void synchronize_targets();
         void set_inspect_mode(bool enabled, bool wait_for_release = false);
         void set_target(Node* target);
         void remove_target();
         bool should_restore_flow_position() const;
+        static Node* pick_node(Node& root, ImVec2 position);
 
         UI& m_target;
         std::unique_ptr<UI> m_ui;
@@ -72,6 +74,7 @@ namespace ui {
         std::vector<std::unique_ptr<Node>> m_detached_nodes;
         std::vector<std::string> m_variable_names;
         uint64_t m_target_identity = 0;
+        uint64_t m_hover_identity = 0;
         StyleType m_inspected_style = StyleType::DEFAULT;
         ImGuiKeyChord m_hotkey = ImGuiMod_Shift | ImGuiKey_D;
         bool m_enabled = false;

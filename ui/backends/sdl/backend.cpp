@@ -4,6 +4,7 @@
 #include "../../constants.hpp"
 #include "../../imgui/context-scope.hpp"
 #include "../../imgui/effects/blur/opengl.hpp"
+#include "../../imgui/effects/shadow/opengl.hpp"
 #include "../../ui.hpp"
 
 #include <glad/gl.h>
@@ -223,6 +224,11 @@ namespace ui {
         return true;
     }
 
+    void SdlBackend::register_effects(EffectRegistry& effects) {
+        register_opengl_blur(effects);
+        register_opengl_box_shadow(effects);
+    }
+
     bool SdlBackend::initialize_imgui() {
         if (!ImGui_ImplSDL3_InitForOpenGL(m_window->handle(), m_window->context())) {
             return false;
@@ -234,12 +240,6 @@ namespace ui {
         }
 
         m_imgui_initialized = true;
-        if (!initialize_opengl_blur()) {
-            ImGui_ImplOpenGL3_Shutdown();
-            ImGui_ImplSDL3_Shutdown();
-            m_imgui_initialized = false;
-            return false;
-        }
         return true;
     }
 
@@ -248,7 +248,6 @@ namespace ui {
             return;
         }
 
-        shutdown_opengl_blur();
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplSDL3_Shutdown();
         m_imgui_initialized = false;
@@ -259,7 +258,6 @@ namespace ui {
     }
 
     void SdlBackend::begin_frame(ImVec4 clear_color) {
-        begin_opengl_blur_frame();
         const ImVec2 size = display_size();
         if (!m_attached) {
             glViewport(0, 0, static_cast<int>(size.x), static_cast<int>(size.y));

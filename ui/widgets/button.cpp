@@ -5,7 +5,7 @@
 
 using namespace ui;
 
-ButtonWidget::ButtonWidget(UI& ui, std::string text, ImVec2 size) : DrawListWidget({}, "Button"), m_text(text) {
+ButtonWidget::ButtonWidget(UI& ui, std::string text, LayoutSize size) : DrawListWidget({}, "Button"), m_text(text) {
     set_size(size);
     set_font(ui.get_primary_font(16));
 

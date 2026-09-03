@@ -1,6 +1,7 @@
 #include "opengl.hpp"
 
-#include "internal.hpp"
+#include "blur.hpp"
+#include "../effects.hpp"
 
 #include <glad/gl.h>
 
@@ -258,11 +259,22 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
         textures->strength = region->strength;
     }
 
-    const int left = std::clamp(static_cast<int>(std::floor(region->rect.min.x)), 0, width);
-    const int bottom = std::clamp(static_cast<int>(std::floor(height - region->rect.max.y)), 0, height);
-    const int region_width = std::clamp(static_cast<int>(std::ceil(region->rect.max.x - region->rect.min.x)), 0, width - left);
-    const int region_height =
-        std::clamp(static_cast<int>(std::ceil(region->rect.max.y - region->rect.min.y)), 0, height - bottom);
+    const ImDrawData* draw_data = ImGui::GetDrawData();
+    const ImVec2 display_position = draw_data == nullptr ? ImVec2{} : draw_data->DisplayPos;
+    const ImVec2 scale = draw_data == nullptr ? ImVec2{1.0F, 1.0F} : draw_data->FramebufferScale;
+    const ImVec2 minimum = {
+        (region->rect.min.x - display_position.x) * scale.x,
+        (region->rect.min.y - display_position.y) * scale.y,
+    };
+    const ImVec2 maximum = {
+        (region->rect.max.x - display_position.x) * scale.x,
+        (region->rect.max.y - display_position.y) * scale.y,
+    };
+
+    const int left = std::clamp(static_cast<int>(std::floor(minimum.x)), 0, width);
+    const int bottom = std::clamp(static_cast<int>(std::floor(height - maximum.y)), 0, height);
+    const int region_width = std::clamp(static_cast<int>(std::ceil(maximum.x - minimum.x)), 0, width - left);
+    const int region_height = std::clamp(static_cast<int>(std::ceil(maximum.y - minimum.y)), 0, height - bottom);
     if (region_width <= 0 || region_height <= 0) {
         return;
     }
@@ -282,7 +294,7 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
     );
     glUniform1f(
         glGetUniformLocation(textures->program, "rounding"),
-        std::min(region->rounding, std::min(region_width, region_height) * 0.5F)
+        std::min(region->rounding * std::min(scale.x, scale.y), std::min(region_width, region_height) * 0.5F)
     );
     glUniform1f(glGetUniformLocation(textures->program, "opacity"), region->opacity);
     glUniform1f(
@@ -306,9 +318,10 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
 
     glDrawArrays(GL_TRIANGLES, 0, 3);
     glDisable(GL_SCISSOR_TEST);
+    glActiveTexture(GL_TEXTURE0);
 }
 
-bool ui::initialize_opengl_blur() {
+static bool initialize_blur_effect(void*) {
     if (!GLAD_GL_VERSION_3_3 || !select_textures()) {
         return false;
     }
@@ -317,7 +330,7 @@ bool ui::initialize_opengl_blur() {
     return true;
 }
 
-void ui::begin_opengl_blur_frame() {
+static void begin_blur_effect(void*) {
     if (!select_textures()) {
         return;
     }
@@ -326,8 +339,9 @@ void ui::begin_opengl_blur_frame() {
     textures->strength = -1;
 }
 
-void ui::shutdown_opengl_blur() {
+static void shutdown_blur_effect(void*) {
     if (!select_textures()) {
+        shutdown_blur();
         return;
     }
 
@@ -343,4 +357,8 @@ void ui::shutdown_opengl_blur() {
     texture_sets.erase(ImGui::GetCurrentContext());
     textures = nullptr;
     shutdown_blur();
+}
+
+void ui::register_opengl_blur(EffectRegistry& effects) {
+    effects.register_effect({render_blur, initialize_blur_effect, begin_blur_effect, shutdown_blur_effect, nullptr});
 }

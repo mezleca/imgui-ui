@@ -56,9 +56,9 @@ CheckboxWidget::CheckboxWidget(UI& ui, bool& value, std::string label, std::stri
     const Theme& theme = ui.theme();
     set_font(ui.get_primary_font(16));
 
-    m_frame_node = &add_child<CheckboxVisualNode>("frame", nullptr, false, m_type);
-    m_fill_node = &add_child<CheckboxVisualNode>("fill", &value, true, m_type);
-    m_label_node = &add_child<TextWidget>(std::move(label));
+    m_frame_node = &add<CheckboxVisualNode>("frame", nullptr, false, m_type);
+    m_fill_node = &add<CheckboxVisualNode>("fill", &value, true, m_type);
+    m_label_node = &add<TextWidget>(std::move(label));
     m_label_node->configure_all_styles([&theme](Style& style) { style.color(theme.text_color); });
 
     configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({4.0F, 4.0F}); });
@@ -114,12 +114,12 @@ CheckboxWidget& CheckboxWidget::set_type(CheckboxType type) {
 }
 
 CheckboxWidget& CheckboxWidget::set_box_size(float size) {
-    const float resolved_size = std::max(1.0F, size);
-    if (m_box_size == resolved_size) {
+    const float resolved = std::max(1.0F, size);
+    if (m_box_size == resolved) {
         return *this;
     }
 
-    m_box_size = resolved_size;
+    m_box_size = resolved;
     invalidate_measure();
     return *this;
 }
@@ -149,18 +149,21 @@ void CheckboxWidget::on_measure() {
     ImFont* current_font = font();
     if (current_font == nullptr || ImGui::GetCurrentContext() == nullptr) {
         const ImVec2 padding = style().padding();
-        set_size({m_box_size + padding.x * 2.0F, m_box_size + padding.y * 2.0F});
+        set_measured_size({m_box_size + padding.x * 2.0F, m_box_size + padding.y * 2.0F}, true, true);
         return;
     }
 
     const ImVec2 padding = style().padding();
-    const ImVec2 label_size = requested_size_of(*m_label_node);
+    const ImVec2 label_size = m_label_node->layout().intrinsic_size();
     const float label_spacing = label_size.x > 0.0F ? ImGui::GetStyle().ItemInnerSpacing.x : 0.0F;
 
-    set_size({
-        m_box_size + label_spacing + label_size.x + padding.x * 2.0F,
-        std::max(m_box_size, label_size.y) + padding.y * 2.0F,
-    });
+    set_measured_size(
+        {
+            m_box_size + label_spacing + label_size.x + padding.x * 2.0F,
+            std::max(m_box_size, label_size.y) + padding.y * 2.0F,
+        },
+        true, true
+    );
 }
 
 bool CheckboxWidget::paint() {
@@ -177,8 +180,8 @@ void CheckboxWidget::on_layout() {
     const ImVec2 frame_size = {m_box_size, m_box_size};
     const Rect& parent_content = layout().parent_content_rect();
     const ImVec2 frame_offset = {
-        layout().arranged_rect().min.x - parent_content.min.x + widget_padding.x,
-        layout().arranged_rect().min.y - parent_content.min.y + widget_padding.y,
+        layout().local_rect().min.x - parent_content.min.x + widget_padding.x,
+        layout().local_rect().min.y - parent_content.min.y + widget_padding.y,
     };
     const ImVec2 frame_padding = m_frame_node->style().padding();
     const float border_inset = m_frame_node->style().border() == BORDER_NONE ? 0.0F : m_frame_node->style().border_thickness();
@@ -188,19 +191,19 @@ void CheckboxWidget::on_layout() {
         std::max(0.0F, frame_size.y - fill_inset.y * 2.0F),
     };
 
-    arrange_child(*m_frame_node, frame_size, Anchor::TopLeft, Origin::TopLeft, frame_offset);
+    arrange_child(*m_frame_node, frame_size, {.offset = frame_offset});
     arrange_child(
-        *m_fill_node, fill_size, Anchor::TopLeft, Origin::TopLeft,
-        {
-            frame_offset.x + fill_inset.x,
-            frame_offset.y + fill_inset.y,
-        }
+        *m_fill_node, fill_size,
+        {.offset = {
+             frame_offset.x + fill_inset.x,
+             frame_offset.y + fill_inset.y,
+         }}
     );
 
-    const ImVec2 label_size = requested_size_of(*m_label_node);
+    const ImVec2 label_size = m_label_node->layout().intrinsic_size();
     const float label_spacing = label_size.x > 0.0F ? ImGui::GetStyle().ItemInnerSpacing.x : 0.0F;
     arrange_child(
-        *m_label_node, label_size, Anchor::TopLeft, Origin::TopLeft,
-        {frame_offset.x + frame_size.x + label_spacing, frame_offset.y + (frame_size.y - label_size.y) * 0.5F}
+        *m_label_node, label_size,
+        {.offset = {frame_offset.x + frame_size.x + label_spacing, frame_offset.y + (frame_size.y - label_size.y) * 0.5F}}
     );
 }

@@ -3,6 +3,7 @@
 #include "../../constants.hpp"
 #include "../../imgui/context-scope.hpp"
 #include "../../imgui/effects/blur/opengl.hpp"
+#include "../../imgui/effects/shadow/opengl.hpp"
 #include "../../ui.hpp"
 
 #include <external/glad.h>
@@ -241,6 +242,11 @@ namespace ui {
         return m_owns_window;
     }
 
+    void RaylibBackend::register_effects(EffectRegistry& effects) {
+        register_opengl_blur(effects);
+        register_opengl_box_shadow(effects);
+    }
+
     bool RaylibBackend::initialize_imgui() {
         if (!GLAD_GL_VERSION_3_3) {
             TraceLog(LOG_ERROR, "ui: OpenGL 3.3 or newer is required");
@@ -248,16 +254,11 @@ namespace ui {
         }
 
         m_imgui_initialized = ImGui_ImplOpenGL3_Init(nullptr);
-        if (m_imgui_initialized && !initialize_opengl_blur()) {
-            ImGui_ImplOpenGL3_Shutdown();
-            m_imgui_initialized = false;
-        }
         return m_imgui_initialized;
     }
 
     void RaylibBackend::shutdown_imgui() {
         if (!m_imgui_initialized) return;
-        shutdown_opengl_blur();
         ImGui_ImplOpenGL3_Shutdown();
         m_imgui_initialized = false;
     }
@@ -265,7 +266,6 @@ namespace ui {
     void RaylibBackend::make_current() {}
 
     void RaylibBackend::begin_frame(ImVec4 clear_color) {
-        begin_opengl_blur_frame();
         if (!m_attached) {
             BeginDrawing();
             ClearBackground(raylib_color(clear_color));

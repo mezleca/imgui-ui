@@ -12,8 +12,6 @@ class UI;
 class DemoTextListWidget final : public ui::StackContainer {
 public:
     explicit DemoTextListWidget(std::vector<std::string> items);
-
-    /// replaces the rendered text items.
     DemoTextListWidget& set_items(std::vector<std::string> items);
 };
 

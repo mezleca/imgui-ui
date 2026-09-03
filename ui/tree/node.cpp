@@ -7,39 +7,27 @@
 #include <utility>
 
 using namespace ui;
-
 static uint64_t next_node_id = 1;
-static uint64_t next_draw_order = 1;
+
+template <typename NodeType>
+static NodeType* find_node(NodeType& root, std::string_view id) {
+    if (root.id() == id) {
+        return &root;
+    }
+
+    for (const auto& child : root.children()) {
+        if (NodeType* result = find_node(*child, id); result != nullptr) {
+            return result;
+        }
+    }
+
+    return nullptr;
+}
 
 Node::Node(std::string id) : m_id(std::move(id)), m_identity(next_node_id++) {}
 
-Node* Node::debug_node_at(ImVec2 position) {
-    if (!m_visible) {
-        return nullptr;
-    }
-
-    Node* topmost_child = nullptr;
-    for (auto it = m_children.rbegin(); it != m_children.rend(); ++it) {
-        Node* child = it->get();
-        if (child->m_draw_order != 0 && m_draw_order != 0 && child->m_draw_order <= m_draw_order) {
-            continue;
-        }
-
-        if (Node* candidate = child->debug_node_at(position); candidate != nullptr &&
-            (topmost_child == nullptr || candidate->m_draw_order > topmost_child->m_draw_order)) {
-            topmost_child = candidate;
-        }
-    }
-
-    if (topmost_child != nullptr) {
-        return topmost_child;
-    }
-
-    if (!m_layout.screen_rect().contains(position)) {
-        return nullptr;
-    }
-
-    return debug_selectable() ? this : nullptr;
+Node::~Node() {
+    if (m_input_router != nullptr) m_input_router->detach(*this);
 }
 
 void Node::set_input_state(InputState state) {
@@ -52,75 +40,96 @@ void Node::set_input_state(InputState state) {
     input_state_changed();
 }
 
-Node& Node::set_input_target(RegionConfig config) {
-    return configure_region(false, std::move(config));
-}
+Node& Node::set_input_policy(InputPolicy policy, Rect area) {
+    if (m_input_router != nullptr) m_input_router->erase_entries(*this);
 
-Node& Node::set_input_blocker(RegionConfig config) {
-    return configure_region(true, std::move(config));
-}
-
-Node& Node::configure_region(bool blocks_input, RegionConfig config) {
-    if (m_input_router != nullptr) {
-        m_input_router->clear_region(*this);
-    }
-
-    m_region = NodeRegion{blocks_input, std::move(config)};
+    m_input_area = area;
+    m_input_policy = policy;
     return *this;
 }
 
-Node& Node::clear_input_target() {
-    if (m_input_router != nullptr) {
-        m_input_router->clear_region(*this);
-    }
+Node& Node::set_input_target(Rect area) {
+    return set_input_policy(InputPolicy::Target, area);
+}
 
-    m_region.reset();
-    return *this;
+Node& Node::set_input_blocker(Rect area) {
+    return set_input_policy(InputPolicy::Blocker, area);
+}
+
+Node& Node::clear_input() {
+    return set_input_policy(InputPolicy::None, {});
 }
 
 void Node::dispatch_event(UiEvent& event) {
-    if (_on_event) {
-        _on_event(event);
-    }
+    if (_on_event) _on_event(event);
 }
 
 void Node::resolve_position() {
+    const ImVec2 size = m_layout.size();
+
+    // without an imgui context, use the requested offset as the local origin.
     if (ImGui::GetCurrentContext() == nullptr) {
-        m_layout.set_arranged_rect(Rect::from_position_size(m_layout.offset(), m_layout.size()));
-        m_layout.set_screen_rect(m_layout.arranged_rect());
+        const Rect rect = Rect::from_position_size(m_layout.active_placement().offset, size);
+        m_layout.set_arranged_rects(rect, rect);
         return;
     }
 
-    // imgui reports these bounds with scrolling applied, but setcursorpos requires window-local coordinates before scrolling.
-    const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
-    const ImVec2 content_min = ImGui::GetWindowContentRegionMin();
-    const ImVec2 content_max = ImGui::GetWindowContentRegionMax();
-    const Rect parent_content = {
-        {content_min.x + scroll.x, content_min.y + scroll.y},
-        {content_max.x + scroll.x, content_max.y + scroll.y},
-    };
-    m_layout.set_parent_content_rect(parent_content);
-
-    ImVec2 window_position = ImGui::GetCursorPos();
-    if (m_layout.has_explicit_position()) {
-        const Rect arranged_rect = resolve_layout_rect(
-            parent_content, m_layout.size(), m_layout.anchor_factor(), m_layout.origin_factor(), m_layout.offset()
-        );
-        window_position = arranged_rect.min;
-        ImGui::SetCursorPos(window_position);
+    // flow nodes keep the current cursor; absolute and arranged nodes resolve their anchor in parent content.
+    ImVec2 local_position = ImGui::GetCursorPos();
+    if (m_layout.has_position()) {
+        const Rect arranged_rect = resolve_layout_rect(m_layout.parent_content_rect(), size, m_layout.active_placement());
+        local_position = arranged_rect.min;
+        ImGui::SetCursorPos(local_position);
     }
 
-    const ImVec2 screen_position = ImGui::GetCursorScreenPos();
+    // local_rect is the cursor-local box; layout_rect is the same box in screen coordinates.
+    m_layout.set_arranged_rects(
+        Rect::from_position_size(local_position, size), Rect::from_position_size(ImGui::GetCursorScreenPos(), size)
+    );
+}
 
-    m_layout.set_arranged_rect(Rect::from_position_size(window_position, m_layout.size()));
-    m_layout.set_screen_rect(Rect::from_position_size(screen_position, m_layout.size()));
+void Node::capture_parent_content() {
+    if (ImGui::GetCurrentContext() == nullptr) {
+        m_layout.set_parent_content_rect({});
+        return;
+    }
+
+    // cursor start is unscrolled; the logical cursor already includes the window scroll offset.
+    const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
+    const ImVec2 cursor = ImGui::GetCursorPos();
+    const ImVec2 start = ImGui::GetCursorStartPos();
+    const ImVec2 available = ImGui::GetContentRegionAvail();
+
+    // express both content edges in the same local space before a container arranges its children.
+    m_layout.set_parent_content_rect(
+        {{start.x + scroll.x, start.y + scroll.y}, {cursor.x + available.x, cursor.y + available.y}}, available
+    );
 }
 
 void Node::set_input_router(InputRouter* router) {
+    if (m_input_router == router) {
+        return;
+    }
+
+    if (m_input_router != nullptr) {
+        clear_input_state();
+        m_input_router->detach_node(*this);
+    }
+
     m_input_router = router;
+    if (m_input_router != nullptr) {
+        m_input_router->attach_node(*this);
+    }
+
     for (const auto& child : m_children) {
         child->set_input_router(router);
     }
+}
+
+void Node::detach_input_router(InputRouter& router) {
+    if (m_input_router != &router) return;
+    m_input_router = nullptr;
+    m_input_state = {};
 }
 
 void Node::set_visible(bool visible) {
@@ -129,9 +138,10 @@ void Node::set_visible(bool visible) {
     }
 
     m_visible = visible;
-    if (!visible && m_input_router != nullptr) {
-        m_input_router->clear_regions(*this);
+    if (!visible) {
+        if (m_input_router != nullptr) m_input_router->clear_subtree_entries(*this);
     }
+
     invalidate_measure();
 }
 
@@ -142,47 +152,52 @@ void Node::set_profiler(Profiler* profiler) {
     }
 }
 
-bool Node::add(std::unique_ptr<Node> child) {
+bool Node::attach(std::unique_ptr<Node> child) {
     if (child == nullptr || child.get() == this || child->m_parent != nullptr || child->contains(this)) {
         return false;
     }
 
     child->m_parent = this;
-
     child->set_input_router(m_input_router);
     child->set_profiler(m_profiler);
+
     m_children.emplace_back(std::move(child));
     invalidate_measure();
+
     return true;
 }
 
-bool Node::has_size_request() const {
-    return m_layout.m_has_size_request;
+void Node::clear_input_state() {
+    if (m_input_router == nullptr) return;
+
+    m_input_router->clear_focus(*this);
+    m_input_router->release_pointer(*this);
+    m_input_router->clear_subtree_entries(*this);
 }
 
-bool Node::size_was_resolved() const {
-    return m_layout.m_size_resolved;
+bool Node::has_size() const {
+    return m_layout.m_has_size;
 }
 
-ImVec2 Node::requested_size() const {
-    return m_layout.requested_size();
+void Node::assign_size(ImVec2 size) {
+    m_layout.assign_size(size);
 }
 
-ImVec2 Node::requested_size_of(const Node& child) const {
-    return child.requested_size_for_layout();
+void Node::set_measured_size(ImVec2 size, bool measured_width, bool measured_height) {
+    m_layout.set_measured_size(size, measured_width, measured_height);
 }
 
-void Node::resolve_size(ImVec2 size) {
-    m_layout.set_resolved_size(size);
+void Node::set_visual_rect(Rect rect) {
+    m_layout.set_visual_rect(rect);
 }
 
-void Node::set_screen_rect(Rect rect) {
-    m_layout.set_screen_rect(rect);
+void Node::set_layout_rect(Rect rect) {
+    m_layout.set_layout_rect(rect);
 }
 
-void Node::arrange_child(Node& child, ImVec2 size, Anchor anchor, Origin origin, ImVec2 offset) {
-    child.m_layout.set_resolved_size(size);
-    child.m_layout.set_arranged_placement(anchor, origin, offset);
+void Node::arrange_child(Node& child, ImVec2 size, Placement placement) {
+    child.m_layout.assign_size(size, true);
+    child.m_layout.set_arranged_placement(placement);
 }
 
 bool Node::capture_pointer() {
@@ -190,9 +205,7 @@ bool Node::capture_pointer() {
 }
 
 void Node::release_pointer() {
-    if (m_input_router != nullptr) {
-        m_input_router->release_pointer();
-    }
+    if (m_input_router != nullptr) m_input_router->release_pointer();
 }
 
 std::unique_ptr<Node> Node::remove(Node& child) {
@@ -202,13 +215,6 @@ std::unique_ptr<Node> Node::remove(Node& child) {
 
     if (it == m_children.end()) {
         return nullptr;
-    }
-
-    if (m_input_router != nullptr) {
-        // the router retains raw node pointers across frames, so clear every target that would outlive this detached subtree.
-        m_input_router->clear_focus(child);
-        m_input_router->release_pointer(child);
-        m_input_router->clear_regions(child);
     }
 
     std::unique_ptr<Node> result = std::move(*it);
@@ -225,52 +231,21 @@ void Node::clear() {
         return;
     }
 
-    // clear every raw router reference before destroying the subtree.
-    if (m_input_router != nullptr) {
-        m_input_router->clear_focus(*this);
-        m_input_router->release_pointer(*this);
-        m_input_router->clear_regions(*this);
-    }
-
     m_children.clear();
     invalidate_measure();
 }
 
 Node* Node::find(std::string_view searched_id) {
-    if (m_id == searched_id) {
-        return this;
-    }
-
-    for (const auto& child : m_children) {
-        if (Node* result = child->find(searched_id); result != nullptr) {
-            return result;
-        }
-    }
-
-    return nullptr;
+    return find_node(*this, searched_id);
 }
 
 const Node* Node::find(std::string_view searched_id) const {
-    if (m_id == searched_id) {
-        return this;
-    }
-
-    for (const auto& child : m_children) {
-        if (const Node* result = child->find(searched_id); result != nullptr) {
-            return result;
-        }
-    }
-
-    return nullptr;
+    return find_node(*this, searched_id);
 }
 
 bool Node::contains(const Node* node) const {
-    if (node == this) {
-        return true;
-    }
-
-    for (const auto& child : m_children) {
-        if (child->contains(node)) {
+    for (const Node* current = node; current != nullptr; current = current->m_parent) {
+        if (current == this) {
             return true;
         }
     }
@@ -287,6 +262,7 @@ void Node::update(float dt) {
 
     advance_frame_state(dt);
     on_update(dt);
+
     for (const auto& child : m_children) {
         child->update(dt);
     }
@@ -294,9 +270,7 @@ void Node::update(float dt) {
 
 void Node::invalidate_measure() {
     m_measure_dirty = true;
-    if (m_parent != nullptr && !m_parent->m_measure_dirty) {
-        m_parent->invalidate_measure();
-    }
+    if (m_parent != nullptr && !m_parent->m_measure_dirty) m_parent->invalidate_measure();
 }
 
 void Node::invalidate_measure_subtree() {
@@ -310,73 +284,6 @@ void Node::invalidate_measure_subtree() {
     }
 }
 
-void Node::capture_leaf_rect(ImGuiID previous_item_id, Rect previous_item_rect) {
-    if (!m_children.empty() || ImGui::GetCurrentContext() == nullptr) {
-        return;
-    }
-    const Rect item_rect{ImGui::GetItemRectMin(), ImGui::GetItemRectMax()};
-    // compare id and bounds because many imgui items use id zero; a node that draws nothing must not inherit the previous item.
-    const bool same_item = ImGui::GetItemID() == previous_item_id && item_rect.min.x == previous_item_rect.min.x &&
-                           item_rect.min.y == previous_item_rect.min.y && item_rect.max.x == previous_item_rect.max.x &&
-                           item_rect.max.y == previous_item_rect.max.y;
-    if (same_item) {
-        return;
-    }
-
-    if (item_rect.valid()) {
-        m_layout.set_screen_rect(item_rect);
-    }
-}
-
-void Node::register_input_target() {
-    if (m_input_router == nullptr || !m_region.has_value()) {
-        return;
-    }
-
-    const Rect screen_rect = m_layout.screen_rect();
-    if (!screen_rect.valid()) {
-        return;
-    }
-
-    RegionConfig region = m_region->config;
-    if (!region.rect.valid()) {
-        region.rect = input_target_rect(screen_rect);
-    } else {
-        region.rect.min.x += screen_rect.min.x;
-        region.rect.min.y += screen_rect.min.y;
-        region.rect.max.x += screen_rect.min.x;
-        region.rect.max.y += screen_rect.min.y;
-    }
-
-    if (ImGui::GetCurrentContext() != nullptr) {
-        const ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        const ImVec2 clip_min = draw_list->GetClipRectMin();
-        const ImVec2 clip_max = draw_list->GetClipRectMax();
-        region.rect.min.x = std::max(region.rect.min.x, clip_min.x);
-        region.rect.min.y = std::max(region.rect.min.y, clip_min.y);
-        region.rect.max.x = std::min(region.rect.max.x, clip_max.x);
-        region.rect.max.y = std::min(region.rect.max.y, clip_max.y);
-    }
-
-    if (!region.rect.valid()) {
-        return;
-    }
-
-    if (m_region->blocks_input) {
-        m_input_router->register_blocker(*this, std::move(region));
-    } else {
-        m_input_router->register_region(*this, std::move(region));
-    }
-}
-
-void Node::refresh_root_hover() {
-    if (m_parent != nullptr || m_input_router == nullptr || ImGui::GetCurrentContext() == nullptr) {
-        return;
-    }
-
-    m_input_router->refresh_pointer_state(ImGui::GetIO().MousePos);
-}
-
 void Node::measure_tree() {
     UI_PROFILE_NODE(m_profiler, "Node::measure", m_identity);
 
@@ -384,7 +291,7 @@ void Node::measure_tree() {
         return;
     }
 
-    // measure children first because container size can depend on child sizes resolved in this frame.
+    // measure children first so containers use measurements from this frame.
     for (const auto& child : m_children) {
         child->measure_tree();
     }
@@ -400,40 +307,53 @@ void Node::draw() {
         return;
     }
 
-    m_draw_order = next_draw_order++;
-
-    if (m_parent == nullptr && m_measure_dirty) {
-        measure_tree();
+    if (m_profiler != nullptr) {
+        m_profiler->record_node_draw();
     }
 
-    // resolve layout before painting so every widget receives final local and screen rectangles from the active parent window.
-    on_layout();
-    m_layout.clear_size_resolution();
-    resolve_position();
-
-    // only registered input leaves need the final rect reported by imgui; passive leaves keep their resolved layout rect.
-    const bool captures_item_rect = m_region.has_value() && m_children.empty() && ImGui::GetCurrentContext() != nullptr;
-    const ImGuiID previous_item_id = captures_item_rect ? ImGui::GetItemID() : 0;
-    const Rect previous_item_rect = captures_item_rect ? Rect{ImGui::GetItemRectMin(), ImGui::GetItemRectMax()} : Rect{};
-
+    // resolve layout, paint the subtree, then register input against the final visual rect.
+    prepare_layout();
     draw_before();
     if (!on_draw()) {
-        if (m_layout.has_explicit_position() && ImGui::GetCurrentContext() != nullptr) {
-            ImGui::Dummy({});
-        }
+        // add a zero-size item so imgui records an explicitly positioned node in the parent bounds.
+        if (m_layout.has_position() && ImGui::GetCurrentContext() != nullptr) ImGui::Dummy({});
         return;
-    }
-
-    if (captures_item_rect) {
-        capture_leaf_rect(previous_item_id, previous_item_rect);
     }
 
     draw_children();
     draw_after();
     on_draw_end();
 
-    register_input_target();
-    refresh_root_hover();
+    if (m_input_router != nullptr) {
+        UI_PROFILE_NODE(m_profiler, "Node::input", m_identity);
+        if (m_input_policy != InputPolicy::None) {
+            m_input_router->register_node(*this, m_input_policy == InputPolicy::Blocker, m_input_area, m_layout.visual_rect());
+        }
+
+        if (m_parent == nullptr && ImGui::GetCurrentContext() != nullptr) {
+            m_input_router->refresh_pointer_state(ImGui::GetIO().MousePos);
+        }
+    }
+}
+
+void Node::prepare_layout() {
+    UI_PROFILE_NODE(m_profiler, "Node::layout", m_identity);
+
+    if (m_parent == nullptr && m_measure_dirty) {
+        measure_tree();
+    }
+
+    // keep the size assigned by the parent while the node resolves its own placement.
+    const bool size_assigned_by_parent = m_layout.m_size_assigned_by_parent;
+    if (!size_assigned_by_parent) {
+        m_layout.clear_size_assignment();
+    }
+
+    capture_parent_content();
+    on_layout();
+    m_layout.clear_parent_size_assignment();
+    resolve_position();
+    m_layout.clear_size_assignment();
 }
 
 void Node::draw_children() {

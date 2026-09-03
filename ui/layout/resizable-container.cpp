@@ -21,20 +21,10 @@ ResizableContainer& ResizableContainer::set_resize(ResizeAxes resize) {
     return *this;
 }
 
-ResizeAxes ResizableContainer::resize_axes() const {
-    return m_resize;
-}
-
 ImGuiMouseCursor ResizableContainer::resize_cursor() const {
-    if (m_resize == ResizeAxes::X) {
-        return ImGuiMouseCursor_ResizeEW;
-    }
-    if (m_resize == ResizeAxes::Y) {
-        return ImGuiMouseCursor_ResizeNS;
-    }
-    if (m_resize == ResizeAxes::Both) {
-        return ImGuiMouseCursor_ResizeNWSE;
-    }
+    if (m_resize == ResizeAxes::X) return ImGuiMouseCursor_ResizeEW;
+    if (m_resize == ResizeAxes::Y) return ImGuiMouseCursor_ResizeNS;
+    if (m_resize == ResizeAxes::Both) return ImGuiMouseCursor_ResizeNWSE;
     return ImGuiMouseCursor_Arrow;
 }
 
@@ -43,7 +33,7 @@ void ResizableContainer::update_resize_cursor() const {
 }
 
 void ResizableContainer::on_draw_end() {
-    set_screen_rect(Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize()));
+    set_visual_rect(Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize()));
     draw_resize_indicator();
     StackContainer::on_draw_end();
 
@@ -51,24 +41,21 @@ void ResizableContainer::on_draw_end() {
         update_resize_cursor();
     }
 
-    const ImVec2 parent_window_position = ImGui::GetWindowPos();
-    const ImVec2 parent_content_max = ImGui::GetWindowContentRegionMax();
-    m_parent_content_max = {
-        parent_window_position.x + parent_content_max.x,
-        parent_window_position.y + parent_content_max.y,
-    };
+    const ImVec2 cursor = ImGui::GetCursorScreenPos();
+    const ImVec2 available = ImGui::GetContentRegionAvail();
+    m_parent_content_max = {cursor.x + available.x, cursor.y + available.y};
 }
 
-Rect ResizableContainer::input_target_rect(Rect screen_rect) const {
+Rect ResizableContainer::hit_rect(Rect visual_rect) const {
     if (m_resize == ResizeAxes::None) {
-        return screen_rect;
+        return visual_rect;
     }
 
     return resize_handle();
 }
 
 Rect ResizableContainer::resize_handle() const {
-    const ImVec2 max = layout().screen_rect().max;
+    const ImVec2 max = layout().visual_rect().max;
     return Rect::from_position_size(
         {max.x - CHILD_RESIZE_HANDLE_SIZE - CHILD_RESIZE_HANDLE_INSET,
          max.y - CHILD_RESIZE_HANDLE_SIZE - CHILD_RESIZE_HANDLE_INSET},
@@ -90,6 +77,7 @@ void ResizableContainer::handle_resize(UiEvent& event) {
     }
 
     if (event.type == EventType::PointerDown && event.button == PointerButton::Left && resize_handle().contains(event.position)) {
+        // capture only after the pointer enters the handle; later moves use the original size and pointer position.
         m_dragging = capture_pointer();
         if (!m_dragging) {
             return;
@@ -107,11 +95,13 @@ void ResizableContainer::handle_resize(UiEvent& event) {
         return;
     }
 
-    const ImVec2 child_min = layout().screen_rect().min;
+    // clamp the dragged size to the parent content bounds and the minimum widget size.
+    const ImVec2 child_min = layout().visual_rect().min;
     const ImVec2 max_size = {
         std::max(MIN_CHILD_SIZE, m_parent_content_max.x - child_min.x),
         std::max(MIN_CHILD_SIZE, m_parent_content_max.y - child_min.y),
     };
+
     ImVec2 size = layout().size();
 
     if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) {
@@ -122,7 +112,7 @@ void ResizableContainer::handle_resize(UiEvent& event) {
         size.y = std::clamp(m_previous_size.y + event.position.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y);
     }
 
-    set_size(size);
+    set_size({px(size.x), px(size.y)});
     event.stop_propagation();
 }
 

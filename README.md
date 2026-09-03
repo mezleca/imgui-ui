@@ -25,9 +25,7 @@ ui::set_backend(ui::create_sdl_backend);
 
 ui::Runtime runtime;
 UI surface(runtime, {.title = "example", .size = {900.0F, 600.0F}});
-surface.root().add_child<ui::ButtonWidget>(surface, "hello");
+surface.root().add<ui::ButtonWidget>(surface, "hello");
 ```
 
-the application selects a backend, forwards its platform events, and calls
-`begin_input_frame`, `begin_frame`, updates and draws the root, then finishes
-with `end_frame`. see `examples/` for a complete demo.
+see `examples/` for a complete demo.

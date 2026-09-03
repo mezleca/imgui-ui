@@ -1,6 +1,7 @@
 #include "draw.hpp"
 
 #include "effects/blur/blur.hpp"
+#include "effects/shadow/shadow.hpp"
 
 #include "../style/style.hpp"
 #include "../widgets/text-value.hpp"
@@ -106,6 +107,32 @@ static void walk_selected_segments(const BorderPath& path, uint8_t border, OnSeg
     on_run_break();
 }
 
+template <typename OnSegment>
+static bool walk_side_segments(const BorderPath& path, uint8_t side, OnSegment&& on_segment) {
+    // visits one side, including the two half-corner arcs assigned to it.
+    const std::size_t first = first_selected_run_segment(path, side);
+    bool started = false;
+
+    for (std::size_t offset = 0; offset < path.segments.size(); ++offset) {
+        const BorderPathSegment& segment = path.segments[(first + offset) % path.segments.size()];
+        if (segment.length <= 0.0F) {
+            continue;
+        }
+
+        if (!is_selected(segment, side)) {
+            if (started) {
+                break;
+            }
+            continue;
+        }
+
+        started = true;
+        on_segment(segment);
+    }
+
+    return started;
+}
+
 static void stroke_solid_path(ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImU32 color, float thickness) {
     bool has_path = false;
 
@@ -127,12 +154,29 @@ static void stroke_solid_path(ImDrawList& draw_list, const BorderPath& path, uin
     );
 }
 
-static void stroke_dashed_path(ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImU32 color, float thickness) {
-    const float dash_length = std::max(6.0F, thickness * 4.0F);
-    const float gap_length = std::max(3.0F, thickness * 2.0F);
+static constexpr uint8_t BORDER_SIDES[] = {BORDER_TOP, BORDER_RIGHT, BORDER_BOTTOM, BORDER_LEFT};
 
-    float remaining = dash_length;
-    bool drawing = true;
+static void stroke_dashed_side(ImDrawList& draw_list, const BorderPath& path, uint8_t side, ImU32 color, float thickness) {
+    // fit complete dash and gap periods to the side so both ends have equal spacing.
+    const float preferred_dash = std::max(6.0F, thickness * 4.0F);
+    const float preferred_gap = std::max(3.0F, thickness * 2.0F);
+    const float preferred_period = preferred_dash + preferred_gap;
+    float side_length = 0.0F;
+    if (!walk_side_segments(path, side, [&](const BorderPathSegment& segment) { side_length += segment.length; })) {
+        return;
+    }
+
+    const int dash_count = std::max(1, static_cast<int>(std::floor(side_length / preferred_period)));
+    const float period = side_length / static_cast<float>(dash_count);
+    if (dash_count == 1 && side_length <= preferred_dash) {
+        stroke_solid_path(draw_list, path, side, color, thickness);
+        return;
+    }
+
+    const float dash_length = std::min(preferred_dash, period);
+    const float gap_length = period - dash_length;
+    float remaining = gap_length * 0.5F;
+    bool drawing = false;
     bool has_path = false;
 
     const auto flush = [&]() {
@@ -142,63 +186,103 @@ static void stroke_dashed_path(ImDrawList& draw_list, const BorderPath& path, ui
         }
     };
 
-    walk_selected_segments(
-        path, border,
-        [&](const BorderPathSegment& segment) {
-            const float max_step = segment.type == BorderPathSegmentType::Arc ? arc_max_step(segment) : 0.0F;
-            float distance = 0.0F;
-            while (distance < segment.length) {
-                const float length = std::min(remaining, segment.length - distance);
+    walk_side_segments(path, side, [&](const BorderPathSegment& segment) {
+        const float max_step = segment.type == BorderPathSegmentType::Arc ? arc_max_step(segment) : 0.0F;
+        float distance = 0.0F;
+        while (distance < segment.length) {
+            const float length = std::min(remaining, segment.length - distance);
 
-                if (drawing) {
-                    if (!has_path) {
-                        draw_list.PathLineTo(point_at(segment, distance));
-                        has_path = true;
-                    }
-                    append_segment_range(draw_list, segment, distance, distance + length, max_step);
+            if (drawing) {
+                if (!has_path) {
+                    draw_list.PathLineTo(point_at(segment, distance));
+                    has_path = true;
                 }
+                append_segment_range(draw_list, segment, distance, distance + length, max_step);
+            }
 
-                distance += length;
-                remaining -= length;
+            distance += length;
+            remaining -= length;
 
-                if (remaining <= 0.0001F) {
-                    drawing = !drawing;
-                    remaining = drawing ? dash_length : gap_length;
-                    if (!drawing) {
-                        flush();
-                    }
+            if (remaining <= 0.0001F) {
+                drawing = !drawing;
+                remaining = drawing ? dash_length : gap_length;
+                if (!drawing) {
+                    flush();
                 }
             }
-        },
-        [&]() {
-            flush();
-            // a broken run always restarts on a fresh dash
-            remaining = dash_length;
-            drawing = true;
         }
-    );
+    });
+    flush();
+}
+
+static void stroke_dashed_path(ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImU32 color, float thickness) {
+    for (const uint8_t side : BORDER_SIDES) {
+        if ((border & side) != 0) {
+            stroke_dashed_side(draw_list, path, side, color, thickness);
+        }
+    }
+}
+
+static void stroke_dotted_side(ImDrawList& draw_list, const BorderPath& path, uint8_t side, ImU32 color, float thickness) {
+    // center dots over the side instead of restarting the pattern at each path segment.
+    const float radius = std::max(0.5F, thickness * 0.5F);
+    const float spacing = std::max(3.0F, thickness * 3.0F);
+    static const auto unit_circle = [] {
+        std::array<ImVec2, 24> points{};
+        for (std::size_t index = 0; index < points.size(); ++index) {
+            const float angle = std::numbers::pi_v<float> * 2.0F * static_cast<float>(index) / static_cast<float>(points.size());
+            points[index] = {std::cos(angle), std::sin(angle)};
+        }
+        return points;
+    }();
+
+    const int segments = radius <= 1.5F ? 8 : radius <= 2.5F ? 12 : radius <= 5.0F ? 12 : 24;
+    const int stride = static_cast<int>(unit_circle.size()) / segments;
+    std::array<ImVec2, 24> points{};
+    const auto draw_dot = [&](ImVec2 center) {
+        if (radius <= 0.75F) {
+            draw_list.AddRectFilled({center.x - radius, center.y - radius}, {center.x + radius, center.y + radius}, color);
+            return;
+        }
+
+        for (int index = 0; index < segments; ++index) {
+            const ImVec2 unit = unit_circle[static_cast<std::size_t>(index * stride)];
+            points[static_cast<std::size_t>(index)] = {center.x + unit.x * radius, center.y + unit.y * radius};
+        }
+        draw_list.AddConvexPolyFilled(points.data(), segments, color);
+    };
+
+    std::array<const BorderPathSegment*, 12> run{};
+    std::size_t run_count = 0;
+    float run_length = 0.0F;
+    if (!walk_side_segments(path, side, [&](const BorderPathSegment& segment) {
+            run[run_count++] = &segment;
+            run_length += segment.length;
+        })) {
+        return;
+    }
+
+    const int dot_count = std::max(1, static_cast<int>(std::floor(run_length / spacing)));
+    const float pitch = run_length / static_cast<float>(dot_count);
+    for (int dot = 0; dot < dot_count; ++dot) {
+        float distance = pitch * (static_cast<float>(dot) + 0.5F);
+        for (std::size_t index = 0; index < run_count; ++index) {
+            const BorderPathSegment& segment = *run[index];
+            if (distance <= segment.length || index + 1 == run_count) {
+                draw_dot(point_at(segment, distance));
+                break;
+            }
+            distance -= segment.length;
+        }
+    }
 }
 
 static void stroke_dotted_path(ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImU32 color, float thickness) {
-    const float radius = std::max(0.5F, thickness * 0.5F);
-    const float spacing = std::max(3.0F, thickness * 3.0F);
-    const int segments = std::clamp(static_cast<int>(std::ceil(std::numbers::pi_v<float> * radius)), 8, 512);
-    float distance = spacing * 0.5F;
-
-    walk_selected_segments(
-        path, border,
-        [&](const BorderPathSegment& segment) {
-            while (distance < segment.length) {
-                draw_list.AddCircleFilled(point_at(segment, distance), radius, color, segments);
-                distance += spacing;
-            }
-            distance -= segment.length;
-        },
-        [&]() {
-            // a broken run always restarts half a spacing in, same as the very first run
-            distance = spacing * 0.5F;
+    for (const uint8_t side : BORDER_SIDES) {
+        if ((border & side) != 0) {
+            stroke_dotted_side(draw_list, path, side, color, thickness);
         }
-    );
+    }
 }
 
 ImDrawList& ui::draw_list(DrawListTarget target) {
@@ -384,6 +468,27 @@ static void draw_full_frame(ImDrawList& draw_list, Rect rect, const Style& style
     );
 }
 
+static void draw_frame_surface_impl(ImDrawList& draw_list, Rect rect, const Style& style, ImColor background, float alpha) {
+    background.Value.w *= alpha;
+
+    ImColor border = style.border_color().value;
+    border.Value.w *= alpha;
+
+    if (style.border() == BORDER_ALL && style.border_style() == BorderStyle::Solid) {
+        draw_full_frame(draw_list, rect, style, background, border);
+        return;
+    }
+
+    draw_list.AddRectFilled(rect.min, rect.max, background, style.border_radius());
+    draw_border(draw_list, rect, style, border);
+}
+
+static void draw_frame_impl(ImDrawList& draw_list, Rect rect, const Style& style, ImColor background, float alpha) {
+    draw_box_shadow(draw_list, rect, style.box_shadow(), style.border_radius(), alpha);
+    draw_blur(draw_list, rect, style.blur(), style.border_radius(), alpha);
+    draw_frame_surface_impl(draw_list, rect, style, background, alpha);
+}
+
 void ui::draw_frame(ImDrawList& draw_list, Rect rect, const Style& style) {
     draw_frame(draw_list, rect, style, 1.0F);
 }
@@ -393,20 +498,7 @@ void ui::draw_frame(Rect rect, const Style& style, DrawListTarget target) {
 }
 
 void ui::draw_frame(ImDrawList& draw_list, Rect rect, const Style& style, ImColor background) {
-    const float alpha = style.alpha();
-    background.Value.w *= alpha;
-
-    ImColor border = style.border_color().value;
-    border.Value.w *= alpha;
-
-    draw_blur(draw_list, rect, style.blur(), style.border_radius(), alpha);
-    if (style.border() == BORDER_ALL && style.border_style() == BorderStyle::Solid) {
-        draw_full_frame(draw_list, rect, style, background, border);
-        return;
-    }
-
-    draw_list.AddRectFilled(rect.min, rect.max, background, style.border_radius());
-    draw_border(draw_list, rect, style, border);
+    draw_frame_impl(draw_list, rect, style, background, style.alpha());
 }
 
 void ui::draw_frame(Rect rect, const Style& style, ImColor background, DrawListTarget target) {
@@ -414,24 +506,17 @@ void ui::draw_frame(Rect rect, const Style& style, ImColor background, DrawListT
 }
 
 void ui::draw_frame(ImDrawList& draw_list, Rect rect, const Style& style, float opacity) {
-    ImColor background = style.background_color().value;
-    ImColor border = style.border_color().value;
     const float alpha = std::clamp(opacity * style.alpha(), 0.0F, 1.0F);
-    background.Value.w *= alpha;
-    border.Value.w *= alpha;
-
-    draw_blur(draw_list, rect, style.blur(), style.border_radius(), alpha);
-    if (style.border() == BORDER_ALL && style.border_style() == BorderStyle::Solid) {
-        draw_full_frame(draw_list, rect, style, background, border);
-        return;
-    }
-
-    draw_list.AddRectFilled(rect.min, rect.max, background, style.border_radius());
-    draw_border(draw_list, rect, style, border);
+    draw_frame_impl(draw_list, rect, style, style.background_color().value, alpha);
 }
 
 void ui::draw_frame(Rect rect, const Style& style, float opacity, DrawListTarget target) {
     draw_frame(draw_list(target), rect, style, opacity);
+}
+
+void ui::draw_frame_surface(ImDrawList& draw_list, Rect rect, const Style& style, float opacity) {
+    const float alpha = std::clamp(opacity * style.alpha(), 0.0F, 1.0F);
+    draw_frame_surface_impl(draw_list, rect, style, style.background_color().value, alpha);
 }
 
 static BorderPathSegment line(ImVec2 start, ImVec2 end, uint8_t sides) {
@@ -482,7 +567,7 @@ BorderPath ui::rounded_rect_border_path(Rect rect, float rounding) {
 }
 
 static const BorderPath& border_path(Rect rect, float rounding) {
-    static std::array<BorderEntry, 16> paths;
+    static std::array<BorderEntry, 64> paths;
 
     const uint32_t min_x = std::bit_cast<uint32_t>(rect.min.x);
     const uint32_t min_y = std::bit_cast<uint32_t>(rect.min.y);
@@ -514,6 +599,10 @@ void ui::draw_border_path(
     }
 
     const ImU32 draw_color = color;
+    if ((draw_color & IM_COL32_A_MASK) == 0) {
+        return;
+    }
+
     switch (style) {
         case BorderStyle::Solid:
             stroke_solid_path(draw_list, path, border, draw_color, thickness);

@@ -75,7 +75,7 @@ public:
     }
 
     void place_below(const Node& trigger) {
-        const Rect rect = trigger.layout().screen_rect();
+        const Rect rect = trigger.layout().visual_rect();
         m_popup_position = {rect.min.x, rect.max.y + 4.0F};
         m_popup_width = rect.size().x;
     }
@@ -118,8 +118,8 @@ public:
 
         if (ImGui::BeginPopup("body", ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
             const Rect body_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
-            set_screen_rect(body_rect);
-            m_router.register_blocker(body_rect);
+            set_visual_rect(body_rect);
+            m_router.block(body_rect);
 
             const ImU32 selected_background = m_trigger.style(StyleType::ACTIVE).background_color().get_col();
             const ImU32 hovered_text = ImColor(m_theme.accent_color);
@@ -217,9 +217,9 @@ void DropdownWidget::State::close() {
 
 DropdownWidget::DropdownWidget(UI& ui, std::string& value, std::vector<DropdownOption> options, std::string id)
     : Widget(std::move(id), "Dropdown"), m_state{.value = &value, .options = std::move(options)} {
-    m_label_node = &add_child<TextWidget>("");
-    m_trigger = &add_child<DropdownTriggerNode>(ui.theme(), m_state);
-    m_body = &add_child<DropdownBodyNode>(ui.input_router(), m_state, *m_trigger, ui.theme());
+    m_label_node = &add<TextWidget>("");
+    m_trigger = &add<DropdownTriggerNode>(ui.theme(), m_state);
+    m_body = &add<DropdownBodyNode>(ui.input_router(), m_state, *m_trigger, ui.theme());
     m_state.body = m_body;
     m_body->set_enabled(false);
     configure_default_styles(ui.theme());
@@ -283,13 +283,13 @@ DropdownWidget& DropdownWidget::set_options(std::vector<DropdownOption> options)
 }
 
 void DropdownWidget::on_measure() {
-    ImVec2 size = requested_size();
-    if (size.y <= 0.0F) {
+    ImVec2 size = layout().intrinsic_size();
+    if (layout().size_spec().height.mode != LayoutSizeMode::Fixed) {
         size.y = ImGui::GetFrameHeight();
         if (has_label()) size.y += m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y;
     }
 
-    set_size(size);
+    set_measured_size(size, false, true);
 }
 
 Widget& DropdownWidget::trigger() {
@@ -308,7 +308,7 @@ void DropdownWidget::on_layout() {
         std::max(0.0F, outer_size.y - label_height),
     };
 
-    m_trigger->set_size(trigger_size);
+    m_trigger->set_size({px(trigger_size.x), px(trigger_size.y)});
 }
 
 void DropdownWidget::draw_children() {

@@ -8,80 +8,41 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <optional>
 #include <vector>
 
 namespace ui {
     class Debugger;
     class Node;
 
-    enum class RegionKind : unsigned char {
-        Target,
-        Blocker,
-        Observer,
-    };
-
-    struct RegionConfig {
-        /// manual router calls read this rect in screen coordinates; node calls offset it from the node's top-left.
-        Rect rect{};
-
-        /// defaults to pointer events; this config never gives keyboard focus to a node.
-        EventMask events = EventMask::Pointer;
-
-        /// runs after this target, blocker, or observer matches the event position and type.
-        std::function<void(UiEvent&)> on_event;
-
-        /// a larger value selects this target before overlapping targets with lower values.
-        int priority = 0;
-    };
-
-    struct Region {
-        /// null targets absorb matching events; other targets dispatch to this node.
-        Node* node = nullptr;
-
-        /// descendants of a blocker owner remain eligible targets.
-        Node* owner = nullptr;
-
-        /// screen-space bounds used by hit testing.
-        Rect rect;
-
-        /// event families accepted by this region.
-        EventMask events = EventMask::Pointer;
-
-        /// runs when this region wins hit testing.
-        std::function<void(UiEvent&)> on_event;
-
-        RegionKind kind = RegionKind::Target;
-        int priority = 0;
-    };
+    using InputCallback = std::function<void(UiEvent&)>;
 
     inline constexpr std::size_t POINTER_BUTTON_COUNT = 3;
 
     struct InputRouterStats {
-        std::size_t region_count = 0;
+        std::size_t entry_count = 0;
         std::size_t hit_test_count = 0;
-        std::size_t region_checks = 0;
+        std::size_t entry_checks = 0;
     };
 
     class InputRouter {
     public:
-        /// removes every manual registration from the last frame; call register_* again before dispatching input.
+        /// disconnects nodes before the router is destroyed.
+        ~InputRouter();
+
+        /// clears the transient input entries from the previous frame.
         void begin_frame();
 
-        /// advanced: sends input inside config.rect to node; normal widgets call Node::set_input_target().
-        void register_region(Node& node, RegionConfig config);
+        /// advanced target outside the node tree. normal widgets use Node::set_input_target().
+        void target(Node& node, Rect rect, InputCallback callback = {});
 
-        /// advanced: consumes matching pointer events inside config.rect without dispatching to a node.
-        void register_blocker(RegionConfig config);
+        /// consumes events inside a screen-space rectangle for the current frame.
+        void block(Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
-        /// consumes pointer events inside rect without dispatching them to a node.
-        void register_blocker(Rect rect);
+        /// consumes events outside owner's descendants while the owner remains visible.
+        void block(Node& owner, Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
-        /// advanced: consumes matching pointer events unless their target is owner or one of its descendants.
-        void register_blocker(Node& owner, RegionConfig config);
-
-        /// advanced: runs config.on_event for matching clicks without changing the selected input target.
-        void register_observer(Node& owner, RegionConfig config);
+        /// observes matching events without changing their target.
+        void observe(Rect rect, InputCallback callback, EventMask events = EventMask::Pointer);
 
         /// captures subsequent pointer moves and releases for a node.
         bool capture_pointer(Node& node);
@@ -119,7 +80,7 @@ namespace ui {
         /// returns the normal input node at a screen position.
         Node* node_at(ImVec2 position) const;
 
-        /// returns debug-only region and hit-test counters accumulated since begin_frame().
+        /// returns debug-only entry and hit-test counters accumulated since begin_frame().
         InputRouterStats stats() const;
 
     private:
@@ -150,18 +111,39 @@ namespace ui {
             return m_debug_inspect_mode || m_debug_inspect_release_pending;
         }
 
-        void clear_region(Node& node);
-        void clear_regions(Node& subtree);
+        enum class InputKind : unsigned char {
+            Target,
+            Blocker,
+            Observer,
+        };
+
+        struct InputEntry {
+            Node* node = nullptr;
+            Node* owner = nullptr;
+            Rect rect;
+            EventMask events = EventMask::Pointer;
+            InputCallback callback;
+            InputKind kind = InputKind::Target;
+        };
+
+        void erase_entries(Node& node);
+        void clear_subtree_entries(Node& subtree);
+        void detach(Node& subtree);
+        void attach_node(Node& node);
+        void detach_node(Node& node);
+        void clear_input_flag(Node& subtree, Node*& current, InputFlag flag);
+        void add_entry(Node* node, Node* owner, InputKind kind, Rect rect, EventMask events, InputCallback callback);
+        void register_node(Node& node, bool blocker, Rect input_rect, Rect visual_rect);
         void clear_inactive_targets();
         void refresh_pointer_state(ImVec2 position);
         void set_input_flag(Node*& current, Node* next, InputFlag flag);
-        const Region* pointer_target(UiEvent& event, bool& blocked);
-        const Region* target_at(ImVec2 position, bool include_non_input, EventType type = EventType::PointerMove) const;
-        const Region* blocking_region_at(ImVec2 position, EventType type, const Node* target = nullptr) const;
+        const InputEntry* pointer_target(UiEvent& event, bool& blocked);
+        const InputEntry* target_at(ImVec2 position, EventType type = EventType::PointerMove) const;
+        const InputEntry* blocking_entry_at(ImVec2 position, EventType type, const Node* target = nullptr) const;
         void notify_observers(UiEvent& event);
-        bool dispatch_target(const Region& target, UiEvent& event);
+        bool dispatch_target(const InputEntry& target, UiEvent& event);
 
-        std::vector<Region> m_regions;
+        std::vector<InputEntry> m_entries;
         Node* m_focused_node = nullptr;
         bool m_debug_inspect_mode = false;
         bool m_debug_inspect_release_pending = false;
@@ -172,6 +154,7 @@ namespace ui {
         bool m_has_observers = false;
         std::array<PressedPointer, POINTER_BUTTON_COUNT> m_pressed{};
         mutable InputRouterStats m_stats;
+        std::vector<Node*> m_attached_nodes;
     };
 
 } // namespace ui

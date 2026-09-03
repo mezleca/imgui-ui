@@ -9,10 +9,9 @@ namespace ui {
 
         /// enables resizing along the selected axes from the bottom-right handle.
         ResizableContainer& set_resize(ResizeAxes resize);
-        ResizeAxes resize_axes() const;
 
     protected:
-        Rect input_target_rect(Rect screen_rect) const override;
+        Rect hit_rect(Rect visual_rect) const override;
         void on_draw_end() override;
 
     private:

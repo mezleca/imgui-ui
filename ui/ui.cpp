@@ -1,6 +1,5 @@
 #include "ui.hpp"
 
-#include "imgui/effects/blur/internal.hpp"
 #include "constants.hpp"
 #include "imgui/context-scope.hpp"
 #include "style/theme.hpp"
@@ -23,8 +22,10 @@ namespace ui {
 
             const ImVec2 position = ImGui::GetWindowPos();
             const ImVec2 size = ImGui::GetWindowSize();
-            resolve_size(size);
-            set_screen_rect(Rect::from_position_size(position, size));
+            assign_size(size);
+            const Rect rect = Rect::from_position_size(position, size);
+            set_layout_rect(rect);
+            set_visual_rect(rect);
             return true;
         }
 
@@ -48,7 +49,7 @@ UI::~UI() {
 
     const ui::ImGuiContextScope scope(m_context);
 
-    ui::shutdown_blur();
+    m_effects.shutdown();
     m_runtime.release_context(m_context);
     if (m_backend != nullptr) m_backend->shutdown_imgui();
     ImGui::DestroyContext(m_context);
@@ -76,7 +77,19 @@ void UI::initialize() {
 
     configure_style(m_backend == nullptr ? 1.0F : m_backend->content_scale());
 
+    if (m_backend != nullptr) m_backend->register_effects(m_effects);
+
     if (m_backend != nullptr && !m_backend->initialize_imgui()) {
+        m_effects.shutdown();
+        ImGui::DestroyContext(m_context);
+        m_context = nullptr;
+        return;
+    }
+
+    if (!m_effects.initialize()) {
+        if (m_backend != nullptr) {
+            m_backend->shutdown_imgui();
+        }
         ImGui::DestroyContext(m_context);
         m_context = nullptr;
         return;
@@ -213,7 +226,7 @@ void UI::begin_frame() {
 
     m_profiler.begin_frame();
 
-    ui::begin_blur_frame();
+    m_effects.begin_frame();
 
     if (m_backend != nullptr) m_backend->begin_frame(m_runtime.theme().background_color);
     ImGui::NewFrame();
@@ -226,8 +239,16 @@ void UI::end_frame() {
 
     if (m_backend != nullptr) m_backend->set_mouse_cursor(ImGui::GetMouseCursor());
     ImGui::Render();
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    if (m_profiler.enabled()) {
+        const ui::InputRouterStats input_stats = m_input_router.stats();
+        m_profiler.record_frame_metrics(input_stats.entry_count, input_stats.entry_checks);
+    }
+    if (m_backend != nullptr) {
+        UI_PROFILE_SCOPE(&m_profiler, "UI::render");
+        m_backend->render(draw_data);
+    }
     m_profiler.end_frame();
-    if (m_backend != nullptr) m_backend->render(ImGui::GetDrawData());
 
     ImGui::SetCurrentContext(m_previous_context);
     m_previous_context = nullptr;

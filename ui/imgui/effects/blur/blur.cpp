@@ -1,4 +1,4 @@
-#include "internal.hpp"
+#include "blur.hpp"
 
 #include <algorithm>
 #include <deque>

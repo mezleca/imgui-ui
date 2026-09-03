@@ -3,15 +3,17 @@
 
 #include "imgui-context.hpp"
 #include <ui/imgui/draw.hpp>
-#include <ui/layout/child-container.hpp>
+#include <ui/imgui/effects/shadow/shadow.hpp>
+#include <ui/layout/container.hpp>
 #include <ui/layout/geometry.hpp>
-#include <ui/layout/overlay-container.hpp>
+#include <ui/layout/layer-container.hpp>
 #include <ui/tree/node.hpp>
 #include <ui/ui.hpp>
 
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <limits>
 #include <numbers>
@@ -19,6 +21,8 @@
 #include <vector>
 
 using namespace ui;
+
+static void collect_shadow_callback(const ImDrawList*, const ImDrawCmd*) {}
 
 TEST_CASE("rounded border paths split corners between adjacent sides") {
     const BorderPath path = rounded_rect_border_path({{10.0F, 20.0F}, {110.0F, 80.0F}}, 12.0F);
@@ -75,7 +79,48 @@ TEST_CASE("partial borders keep every draw style inside its selected side") {
     ImGui::EndFrame();
 }
 
-TEST_CASE("border style is preserved by style updates") {
+TEST_CASE("patterned borders keep every side visible") {
+    const Rect rect = {{20.0F, 20.0F}, {180.0F, 100.0F}};
+    const BorderPath path = rounded_rect_border_path(rect, 12.0F);
+    ui_test::ImGuiContext context({220.0F, 140.0F});
+    ImGui::NewFrame();
+    ImGui::Begin("patterned-border-test");
+
+    const auto require_sides = [&](BorderStyle style) {
+        const int first_vertex = ImGui::GetWindowDrawList()->VtxBuffer.Size;
+        draw_border_path(path, BORDER_ALL, ImColor{255, 255, 255, 255}, 2.0F, style);
+        const auto& vertices = ImGui::GetWindowDrawList()->VtxBuffer;
+        const auto has_side = [&](auto&& predicate) {
+            for (int index = first_vertex; index < vertices.Size; ++index) {
+                if (predicate(vertices[index].pos)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        REQUIRE(has_side([&](ImVec2 point) {
+            return point.x > 35.0F && point.x < 165.0F && std::abs(point.y - rect.min.y) < 3.0F;
+        }));
+        REQUIRE(has_side([&](ImVec2 point) {
+            return point.y > 35.0F && point.y < 85.0F && std::abs(point.x - rect.max.x) < 3.0F;
+        }));
+        REQUIRE(has_side([&](ImVec2 point) {
+            return point.x > 35.0F && point.x < 165.0F && std::abs(point.y - rect.max.y) < 3.0F;
+        }));
+        REQUIRE(has_side([&](ImVec2 point) {
+            return point.y > 35.0F && point.y < 85.0F && std::abs(point.x - rect.min.x) < 3.0F;
+        }));
+    };
+
+    require_sides(BorderStyle::Dashed);
+    require_sides(BorderStyle::Dotted);
+
+    ImGui::End();
+    ImGui::EndFrame();
+}
+
+TEST_CASE("style updates preserve and normalize non-visual fields") {
     Style style;
     style.border(BORDER_LEFT | BORDER_BOTTOM | 0x80).border_style(BorderStyle::Dashed);
 
@@ -88,24 +133,102 @@ TEST_CASE("border style is preserved by style updates") {
 
     Style::lerp(style, target, 0.0F);
     REQUIRE(style.border_style() == BorderStyle::Dotted);
-}
 
-TEST_CASE("blur style is preserved by style updates") {
-    Style style;
     style.blur(8);
     REQUIRE(style.blur() == 8);
 
-    Style target;
-    target.blur(14);
-    Style::lerp(style, target, 0.0F);
+    Style blur_target;
+    blur_target.blur(14);
+    Style::lerp(style, blur_target, 0.0F);
     REQUIRE(style.blur() == 14);
 
     style.blur(-1);
     REQUIRE(style.blur() == 0);
+
+    Style shadow_target;
+    shadow_target.box_shadow(
+        {
+            .offset = {8.0F, 4.0F},
+            .blur = 12.0F,
+            .spread = 2.0F,
+            .color = ImColor{0.1F, 0.2F, 0.3F, 1.4F},
+        },
+        0.2F
+    );
+    Style shadow_current;
+    Style::lerp(shadow_current, shadow_target, 0.1F);
+    REQUIRE(shadow_current.box_shadow().offset.x == Catch::Approx(4.0F));
+    REQUIRE(shadow_current.box_shadow().offset.y == Catch::Approx(2.0F));
+    REQUIRE(shadow_current.box_shadow().blur == Catch::Approx(6.0F));
+    REQUIRE(shadow_current.box_shadow().spread == Catch::Approx(1.0F));
+    REQUIRE(shadow_current.box_shadow().color.Value.w == Catch::Approx(0.5F));
+
+    Style normalized;
+    normalized.box_shadow({.blur = -4.0F, .color = ImColor{0.0F, 0.0F, 0.0F, -1.0F}});
+    REQUIRE(normalized.box_shadow().blur == 0.0F);
+    REQUIRE(normalized.box_shadow().color.Value.w == 0.0F);
+}
+
+TEST_CASE("container shadows use the parent draw list and keep their spread") {
+    ui_test::ImGuiContext context({320.0F, 240.0F});
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos({0.0F, 0.0F});
+    ImGui::SetNextWindowSize({320.0F, 240.0F});
+    ImGui::Begin("container-shadow-test");
+
+    begin_box_shadow_frame();
+    set_box_shadow_callback(collect_shadow_callback);
+
+    Container node("container");
+    node.set_size({px(100.0F), px(60.0F)});
+    node.configure_all_styles([](Style& style) {
+        style.background_color(ImColor{0.2F, 0.2F, 0.2F, 1.0F})
+            .box_shadow({
+                .offset = {4.0F, 6.0F},
+                .blur = 12.0F,
+                .spread = 40.0F,
+                .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F},
+            });
+    });
+    node.update(1.0F);
+    node.draw();
+
+    const BoxShadowRegion* queued_region = nullptr;
+    for (const ImDrawCmd& command : ImGui::GetWindowDrawList()->CmdBuffer) {
+        if (command.UserCallback == collect_shadow_callback) {
+            queued_region = static_cast<const BoxShadowRegion*>(command.UserCallbackData);
+            break;
+        }
+    }
+    REQUIRE(queued_region != nullptr);
+    REQUIRE(queued_region->shape.size().x == Catch::Approx(180.0F));
+    REQUIRE(queued_region->shape.size().y == Catch::Approx(140.0F));
+
+    ImGui::End();
+    ImGui::EndFrame();
+    ImGui::Render();
+
+    const ImDrawData* draw_data = ImGui::GetDrawData();
+    REQUIRE(draw_data != nullptr);
+    int callback_list = -1;
+    for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
+        for (const ImDrawCmd& command : draw_data->CmdLists[list_index]->CmdBuffer) {
+            if (command.UserCallback != collect_shadow_callback) {
+                continue;
+            }
+
+            callback_list = list_index;
+            break;
+        }
+    }
+
+    REQUIRE(callback_list == 0);
+
+    shutdown_box_shadow();
 }
 
 TEST_CASE("styled nodes create paint slots only when requested") {
-    ChildContainer node("node");
+    Container node("node");
     REQUIRE_FALSE(node.has_before());
     REQUIRE_FALSE(node.has_after());
 
@@ -127,7 +250,7 @@ TEST_CASE("styled paint slots render in before and after order") {
     ImGui::Begin("decoration-test");
 
     StyledNode node("node");
-    node.set_size({80.0F, 40.0F});
+    node.set_size({px(80.0F), px(40.0F)});
     node.before().style().background_color(ImColor{255, 0, 0, 255});
     node.after().style().border(BORDER_ALL).border_color(ImColor{255, 255, 255, 255});
     node.update(1.0F);
@@ -163,7 +286,7 @@ TEST_CASE("styled paint slots receive the owner rect and support custom drawing"
     ImGui::Begin("decoration-callback-test");
 
     StyledNode node("node");
-    node.set_size({80.0F, 40.0F});
+    node.set_size({px(80.0F), px(40.0F)});
     node.configure_all_styles([](Style& style) { style.padding({8.0F, 6.0F}); });
     Rect before_rect{};
     Rect after_rect{};
@@ -229,7 +352,7 @@ TEST_CASE("ui nodes draw children and after hooks before end hooks") {
 
     std::vector<std::string> events;
     DrawNode root("root", events);
-    root.add(std::make_unique<DrawNode>("child", events));
+    root.attach(std::make_unique<DrawNode>("child", events));
 
     root.draw();
     REQUIRE(
@@ -241,7 +364,7 @@ TEST_CASE("ui nodes draw children and after hooks before end hooks") {
 
     events.clear();
     DrawNode hidden_root("hidden", events, true);
-    hidden_root.add(std::make_unique<DrawNode>("child", events));
+    hidden_root.attach(std::make_unique<DrawNode>("child", events));
 
     hidden_root.draw();
     REQUIRE(events == std::vector<std::string>{"hidden:layout", "hidden:begin"});
@@ -263,7 +386,7 @@ TEST_CASE("node measurement only reruns after invalidation") {
     int root_measurements = 0;
     int child_measurements = 0;
     MeasureNode root(root_measurements);
-    auto& child = root.add_child<MeasureNode>(child_measurements);
+    auto& child = root.add<MeasureNode>(child_measurements);
 
     root.draw();
     root.draw();
@@ -291,8 +414,8 @@ TEST_CASE("clearing children destroys the subtree and clears input targets") {
     };
 
     ui::Node parent("parent");
-    auto& child = parent.add_child<LifetimeNode>(destructions);
-    child.add_child<LifetimeNode>(destructions);
+    auto& child = parent.add<LifetimeNode>(destructions);
+    child.add<LifetimeNode>(destructions);
 
     ui::InputRouter router;
     parent.set_input_router(&router);
@@ -307,7 +430,7 @@ TEST_CASE("clearing children destroys the subtree and clears input targets") {
     router.release_pointer();
 }
 
-TEST_CASE("only input leaves capture their final imgui item rectangle") {
+TEST_CASE("visual bounds stay on layout unless paint overrides them") {
     class NoItemNode final : public ui::Node {
     public:
         using ui::Node::Node;
@@ -316,7 +439,7 @@ TEST_CASE("only input leaves capture their final imgui item rectangle") {
     class ItemNode final : public ui::Node {
     public:
         ItemNode(std::string id, bool input) : Node(std::move(id)) {
-            set_size({10.0F, 10.0F});
+            set_size({px(10.0F), px(10.0F)});
             if (input) {
                 set_input_target();
             }
@@ -335,7 +458,7 @@ TEST_CASE("only input leaves capture their final imgui item rectangle") {
 
     private:
         bool on_draw() override {
-            set_screen_rect({{40.0F, 50.0F}, {70.0F, 80.0F}});
+            set_visual_rect({{40.0F, 50.0F}, {70.0F, 80.0F}});
             return true;
         }
     };
@@ -361,30 +484,35 @@ TEST_CASE("only input leaves capture their final imgui item rectangle") {
     ImGui::End();
     ImGui::EndFrame();
 
-    const ui::Rect no_item_rect = no_item.layout().screen_rect();
-    const ui::Rect passive_item_rect = passive_item.layout().screen_rect();
-    const ui::Rect input_item_rect = input_item.layout().screen_rect();
-    const ui::Rect manual_rect = manual.layout().screen_rect();
+    const ui::Rect no_item_rect = no_item.layout().visual_rect();
+    const ui::Rect passive_item_rect = passive_item.layout().visual_rect();
+    const ui::Rect input_item_rect = input_item.layout().visual_rect();
+    const ui::Rect manual_rect = manual.layout().visual_rect();
 
     REQUIRE_FALSE(no_item_rect.valid());
     REQUIRE(passive_item_rect.size().x == 10.0F);
     REQUIRE(passive_item_rect.size().y == 10.0F);
-    REQUIRE(input_item_rect.size().x == 40.0F);
-    REQUIRE(input_item_rect.size().y == 30.0F);
+    REQUIRE(input_item.layout().layout_rect().size().x == 10.0F);
+    REQUIRE(input_item.layout().layout_rect().size().y == 10.0F);
+    REQUIRE(input_item_rect.size().x == 10.0F);
+    REQUIRE(input_item_rect.size().y == 10.0F);
     REQUIRE(manual_rect.min.x == 40.0F);
     REQUIRE(manual_rect.min.y == 50.0F);
     REQUIRE(manual_rect.max.x == 70.0F);
     REQUIRE(manual_rect.max.y == 80.0F);
 }
 
-TEST_CASE("nodes register only explicitly configured local input regions") {
+TEST_CASE("nodes register only explicitly configured local input entries") {
     class RectNode final : public ui::Node {
     public:
-        RectNode(std::string id, ui::Rect rect) : Node(std::move(id)), m_rect(rect) {}
+        RectNode(std::string id, ui::Rect rect, std::function<void(ui::UiEvent&)> callback = {})
+            : Node(std::move(id)), m_rect(rect) {
+            _on_event = std::move(callback);
+        }
 
     private:
         bool on_draw() override {
-            set_screen_rect(m_rect);
+            set_visual_rect(m_rect);
             return true;
         }
 
@@ -393,13 +521,11 @@ TEST_CASE("nodes register only explicitly configured local input regions") {
 
     ui::InputRouter router;
     ui::Node root("root");
-    auto& passive = root.add_child<RectNode>("passive", ui::Rect{{100.0F, 20.0F}, {200.0F, 120.0F}});
-    auto& target = root.add_child<RectNode>("target", ui::Rect{{100.0F, 20.0F}, {200.0F, 120.0F}});
     int callbacks = 0;
-    target.set_input_target({
-        .rect = {{10.0F, 20.0F}, {50.0F, 60.0F}},
-        .on_event = [&callbacks](ui::UiEvent&) { ++callbacks; },
-    });
+    auto& passive = root.add<RectNode>("passive", ui::Rect{{100.0F, 20.0F}, {200.0F, 120.0F}});
+    auto& target =
+        root.add<RectNode>("target", ui::Rect{{100.0F, 20.0F}, {200.0F, 120.0F}}, [&callbacks](ui::UiEvent&) { ++callbacks; });
+    target.set_input_target({{10.0F, 20.0F}, {50.0F, 60.0F}});
     root.set_input_router(&router);
 
     root.draw();
@@ -424,10 +550,10 @@ TEST_CASE("skipped explicitly placed nodes keep imgui child boundaries valid") {
     };
 
     ui_test::ImGuiContext context({200.0F, 120.0F});
-    ui::ChildContainer container("container");
-    container.set_size({100.0F, 80.0F});
-    auto& skipped = container.add_child<SkippedNode>();
-    skipped.set_placement({.anchor = ui::Anchor::TopLeft, .origin = ui::Origin::TopLeft, .offset = {120.0F, 0.0F}});
+    ui::Container container("container");
+    container.set_size({px(100.0F), px(80.0F)});
+    auto& skipped = container.add<SkippedNode>();
+    skipped.set_layout({.placement = {.offset = {120.0F, 0.0F}}, .in_flow = false});
 
     ImGui::NewFrame();
     ImGui::Begin("skipped-placement-test");
@@ -435,7 +561,7 @@ TEST_CASE("skipped explicitly placed nodes keep imgui child boundaries valid") {
     ImGui::End();
     ImGui::EndFrame();
 
-    REQUIRE(skipped.layout().arranged_position().x == container.style().padding().x + 120.0F);
+    REQUIRE(skipped.layout().local_rect().min.x == container.style().padding().x + 120.0F);
 }
 
 TEST_CASE("overlay children stay in the surface window") {
@@ -451,8 +577,8 @@ TEST_CASE("overlay children stay in the surface window") {
     };
 
     ui_test::ImGuiContext context({200.0F, 120.0F});
-    ui::OverlayNode overlay("overlay");
-    auto& child = overlay.add_child<WindowNameNode>();
+    ui::LayerContainer overlay("overlay", ui::LayerMode::Inline);
+    auto& child = overlay.add<WindowNameNode>();
 
     ImGui::NewFrame();
     ImGui::Begin("surface");
@@ -461,4 +587,8 @@ TEST_CASE("overlay children stay in the surface window") {
     ImGui::EndFrame();
 
     REQUIRE(child.window_name == "surface");
+    REQUIRE(overlay.layout().layout_rect().min.x == Catch::Approx(0.0F));
+    REQUIRE(overlay.layout().layout_rect().min.y == Catch::Approx(0.0F));
+    REQUIRE(overlay.layout().layout_rect().size().x == Catch::Approx(200.0F));
+    REQUIRE(overlay.layout().layout_rect().size().y == Catch::Approx(120.0F));
 }

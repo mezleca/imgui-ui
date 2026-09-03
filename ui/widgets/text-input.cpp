@@ -54,8 +54,7 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
 
     set_type_name("TextInput");
     set_spacing(INPUT_ICON_SPACING);
-    set_accepts_focus(true);
-    set_center_content(false, true);
+    set_content_alignment(Anchor::CenterLeft);
     set_font(ui.get_primary_font(18));
     configure_all_styles([&theme](Style& style) {
         style.border_color(theme.border_color, 0.15F)
@@ -65,9 +64,9 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
             .border_radius(theme.box_rounding);
     });
 
-    m_icon_node = &add_child<ImageWidget>();
+    m_icon_node = &add<ImageWidget>();
     m_icon_node->set_id("icon");
-    m_icon_node->set_size(INPUT_ICON_SIZE);
+    m_icon_node->set_size({px(INPUT_ICON_SIZE.x), px(INPUT_ICON_SIZE.y)});
     m_icon_node->set_enabled(false);
     m_icon_node->set_visible(false);
 
@@ -75,8 +74,8 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
     configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
     configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_color); });
 
-    m_field_node = &add_child<FieldNode>(value, m_focus_requested);
-    m_field_node->set_size({0.0F, INPUT_ICON_SIZE.y});
+    m_field_node = &add<FieldNode>(value, m_focus_requested);
+    m_field_node->set_size({grow(), px(INPUT_ICON_SIZE.y)});
     m_field_node->configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BORDER_NONE);
     });
@@ -110,14 +109,14 @@ bool TextInputWidget::set_value(std::string value) {
 }
 
 void TextInputWidget::on_measure() {
-    ImVec2 size = requested_size();
-    if (size.y <= 0.0F && font() != nullptr && ImGui::GetCurrentContext() != nullptr) {
+    ImVec2 size = layout().intrinsic_size();
+    if (layout().size_spec().height.mode != LayoutSizeMode::Fixed && font() != nullptr && ImGui::GetCurrentContext() != nullptr) {
         ImGui::PushFont(font());
         size.y = ImGui::GetTextLineHeight() + style().padding().y * 2.0F;
         ImGui::PopFont();
     }
 
-    set_size(size);
+    set_measured_size(size, false, true);
 }
 
 void TextInputWidget::on_draw_end() {
@@ -131,5 +130,5 @@ void TextInputWidget::on_draw_end() {
         notify_change();
     }
 
-    ChildContainer::on_draw_end();
+    Container::on_draw_end();
 }

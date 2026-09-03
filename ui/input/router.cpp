@@ -1,22 +1,20 @@
 #include "router.hpp"
 #include "../tree/node.hpp"
 
+#include <algorithm>
+#include <optional>
 #include <utility>
 
 using namespace ui;
 
-static bool is_pointer_event(EventType type) {
-    return contains(EventMask::Pointer, event_mask(type));
+InputRouter::~InputRouter() {
+    for (Node* node : m_attached_nodes) {
+        if (node != nullptr) node->detach_input_router(*this);
+    }
 }
 
-static bool belongs_to(const Node* node, const Node* ancestor) {
-    for (const Node* current = node; current != nullptr; current = current->parent()) {
-        if (current == ancestor) {
-            return true;
-        }
-    }
-
-    return false;
+static bool is_pointer_event(EventType type) {
+    return contains(EventMask::Pointer, event_mask(type));
 }
 
 static bool is_keyboard_event(EventType type) {
@@ -57,9 +55,13 @@ static bool is_input_target(const Node* node) {
 }
 
 void InputRouter::begin_frame() {
-    m_regions.clear();
+    m_entries.clear();
     m_has_blockers = false;
     m_has_observers = false;
+
+    if (m_entries.capacity() < m_attached_nodes.size() + 8) {
+        m_entries.reserve(m_attached_nodes.size() + 8);
+    }
 
     if constexpr (constants::IS_DEBUG_BUILD) m_stats = {};
     clear_inactive_targets();
@@ -84,22 +86,51 @@ void InputRouter::clear_debug_inspect_mode() {
     m_debug_inspect_release_pending = false;
 }
 
-void InputRouter::clear_region(Node& node) {
-    std::erase_if(m_regions, [&node](const Region& region) { return region.node == &node || region.owner == &node; });
+void InputRouter::erase_entries(Node& node) {
+    std::erase_if(m_entries, [&node](const InputEntry& entry) { return entry.node == &node || entry.owner == &node; });
 }
 
-void InputRouter::clear_regions(Node& subtree) {
-    std::erase_if(m_regions, [&subtree](const Region& region) {
-        return belongs_to(region.node, &subtree) || belongs_to(region.owner, &subtree);
+void InputRouter::clear_input_flag(Node& subtree, Node*& current, InputFlag flag) {
+    if (subtree.contains(current)) {
+        set_input_flag(current, nullptr, flag);
+    }
+}
+
+void InputRouter::clear_subtree_entries(Node& subtree) {
+    std::erase_if(m_entries, [&subtree](const InputEntry& entry) {
+        return subtree.contains(entry.node) || subtree.contains(entry.owner);
     });
-    if (subtree.contains(m_hovered_node)) set_input_flag(m_hovered_node, nullptr, InputFlag::Hovered);
-    if (subtree.contains(m_active_node)) set_input_flag(m_active_node, nullptr, InputFlag::Active);
+    clear_input_flag(subtree, m_hovered_node, InputFlag::Hovered);
+    clear_input_flag(subtree, m_active_node, InputFlag::Active);
+}
+
+void InputRouter::attach_node(Node& node) {
+    m_attached_nodes.push_back(&node);
+}
+
+void InputRouter::detach_node(Node& node) {
+    const auto it = std::find(m_attached_nodes.begin(), m_attached_nodes.end(), &node);
+    if (it != m_attached_nodes.end()) m_attached_nodes.erase(it);
+}
+
+void InputRouter::detach(Node& subtree) {
+    clear_subtree_entries(subtree);
+    clear_input_flag(subtree, m_focused_node, InputFlag::Focused);
+    if (subtree.contains(m_pointer_capture)) {
+        m_pointer_capture = nullptr;
+    }
+    for (PressedPointer& pressed : m_pressed) {
+        if (subtree.contains(pressed.target)) {
+            pressed = {};
+        }
+    }
+    std::erase_if(m_attached_nodes, [&subtree](Node* node) { return subtree.contains(node); });
 }
 
 void InputRouter::refresh_pointer_state(ImVec2 position) {
-    const Region* target = target_at(position, false, EventType::PointerMove);
+    const InputEntry* target = target_at(position, EventType::PointerMove);
     if (m_has_blockers &&
-        blocking_region_at(position, EventType::PointerMove, target == nullptr ? nullptr : target->node) != nullptr) {
+        blocking_entry_at(position, EventType::PointerMove, target == nullptr ? nullptr : target->node) != nullptr) {
         target = nullptr;
     }
     set_input_flag(m_hovered_node, target == nullptr ? nullptr : target->node, InputFlag::Hovered);
@@ -126,37 +157,62 @@ void InputRouter::set_input_flag(Node*& current, Node* next, InputFlag flag) {
     }
 }
 
-void InputRouter::register_region(Node& node, RegionConfig config) {
-    m_regions.push_back(
-        Region{&node, nullptr, config.rect, config.events, std::move(config.on_event), RegionKind::Target, config.priority}
-    );
+void InputRouter::target(Node& node, Rect rect, InputCallback callback) {
+    add_entry(&node, nullptr, InputKind::Target, rect, EventMask::Pointer, std::move(callback));
 }
 
-void InputRouter::register_blocker(RegionConfig config) {
-    m_has_blockers = true;
-    m_regions.push_back(
-        Region{nullptr, nullptr, config.rect, config.events, std::move(config.on_event), RegionKind::Blocker, config.priority}
-    );
+void InputRouter::add_entry(Node* node, Node* owner, InputKind kind, Rect rect, EventMask events, InputCallback callback) {
+    if (kind == InputKind::Blocker) {
+        m_has_blockers = true;
+    } else if (kind == InputKind::Observer) {
+        m_has_observers = true;
+    }
+
+    m_entries.push_back(InputEntry{node, owner, rect, events, std::move(callback), kind});
 }
 
-void InputRouter::register_blocker(Rect rect) {
-    RegionConfig config;
-    config.rect = rect;
-    register_blocker(std::move(config));
+void InputRouter::register_node(Node& node, bool blocker, Rect input_rect, Rect visual_rect) {
+    if (!visual_rect.valid()) {
+        return;
+    }
+
+    if (!input_rect.valid()) {
+        input_rect = node.hit_rect(visual_rect);
+    } else {
+        input_rect.min.x += visual_rect.min.x;
+        input_rect.min.y += visual_rect.min.y;
+        input_rect.max.x += visual_rect.min.x;
+        input_rect.max.y += visual_rect.min.y;
+    }
+
+    if (ImGui::GetCurrentContext() != nullptr) {
+        const ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        const ImVec2 clip_min = draw_list->GetClipRectMin();
+        const ImVec2 clip_max = draw_list->GetClipRectMax();
+        input_rect.min.x = std::max(input_rect.min.x, clip_min.x);
+        input_rect.min.y = std::max(input_rect.min.y, clip_min.y);
+        input_rect.max.x = std::min(input_rect.max.x, clip_max.x);
+        input_rect.max.y = std::min(input_rect.max.y, clip_max.y);
+    }
+
+    if (!input_rect.valid()) {
+        return;
+    }
+
+    const InputKind kind = blocker ? InputKind::Blocker : InputKind::Target;
+    add_entry(blocker ? nullptr : &node, blocker ? &node : nullptr, kind, input_rect, EventMask::Pointer, {});
 }
 
-void InputRouter::register_blocker(Node& owner, RegionConfig config) {
-    m_has_blockers = true;
-    m_regions.push_back(
-        Region{nullptr, &owner, config.rect, config.events, std::move(config.on_event), RegionKind::Blocker, config.priority}
-    );
+void InputRouter::block(Rect rect, InputCallback callback, EventMask events) {
+    add_entry(nullptr, nullptr, InputKind::Blocker, rect, events, std::move(callback));
 }
 
-void InputRouter::register_observer(Node& owner, RegionConfig config) {
-    m_has_observers = true;
-    m_regions.push_back(
-        Region{nullptr, &owner, config.rect, config.events, std::move(config.on_event), RegionKind::Observer, config.priority}
-    );
+void InputRouter::block(Node& owner, Rect rect, InputCallback callback, EventMask events) {
+    add_entry(nullptr, &owner, InputKind::Blocker, rect, events, std::move(callback));
+}
+
+void InputRouter::observe(Rect rect, InputCallback callback, EventMask events) {
+    add_entry(nullptr, nullptr, InputKind::Observer, rect, events, std::move(callback));
 }
 
 bool InputRouter::capture_pointer(Node& node) {
@@ -245,14 +301,14 @@ bool InputRouter::dispatch(UiEvent& event) {
         notify_observers(event);
     }
 
-    // captured moves stay with the drag origin even after the pointer leaves its region.
+    // captured moves stay with the drag origin even after the pointer leaves its entry.
     if (event.type == EventType::PointerMove) {
         if (m_pointer_capture != nullptr) {
             return dispatch(*m_pointer_capture, event);
         }
 
         bool blocked = false;
-        const Region* target = pointer_target(event, blocked);
+        const InputEntry* target = pointer_target(event, blocked);
 
         if (blocked) return true;
         if (target != nullptr) return dispatch_target(*target, event);
@@ -279,7 +335,7 @@ bool InputRouter::dispatch(UiEvent& event) {
         const bool default_prevented = pressed.prevent_click || event.default_prevented;
 
         bool blocked = false;
-        const Region* released = pointer_target(event, blocked);
+        const InputEntry* released = pointer_target(event, blocked);
         set_input_flag(m_active_node, nullptr, InputFlag::Active);
 
         if (blocked) return true;
@@ -305,7 +361,7 @@ bool InputRouter::dispatch(UiEvent& event) {
 
     // resolve hover, target, and blockers once before dispatching down or scroll input.
     bool blocked = false;
-    const Region* target = pointer_target(event, blocked);
+    const InputEntry* target = pointer_target(event, blocked);
     if (event.type == EventType::PointerDown && m_focused_node != nullptr &&
         (target == nullptr || !m_focused_node->contains(target->node))) {
         clear_focus();
@@ -352,7 +408,7 @@ bool InputRouter::dispatch(Node& target, UiEvent& event) {
 }
 
 Node* InputRouter::node_at(ImVec2 position) const {
-    const Region* target = target_at(position, false);
+    const InputEntry* target = target_at(position);
     return target == nullptr ? nullptr : target->node;
 }
 
@@ -360,7 +416,7 @@ InputRouterStats InputRouter::stats() const {
     if constexpr (!constants::IS_DEBUG_BUILD) return {};
 
     InputRouterStats result = m_stats;
-    result.region_count = m_regions.size();
+    result.entry_count = m_entries.size();
     return result;
 }
 
@@ -383,15 +439,17 @@ void InputRouter::clear_inactive_targets() {
     }
 }
 
-const Region* InputRouter::pointer_target(UiEvent& event, bool& blocked) {
+const InputRouter::InputEntry* InputRouter::pointer_target(UiEvent& event, bool& blocked) {
     // blockers consume matching pointer input before the target receives it and clear hover behind them.
-    const Region* target = target_at(event.position, false, event.type);
+    const InputEntry* target = target_at(event.position, event.type);
     if (m_has_blockers) {
-        const Region* blocker = blocking_region_at(event.position, event.type, target == nullptr ? nullptr : target->node);
+        const InputEntry* blocker = blocking_entry_at(event.position, event.type, target == nullptr ? nullptr : target->node);
         if (blocker != nullptr) {
             set_input_flag(m_hovered_node, nullptr, InputFlag::Hovered);
-            if (blocker->on_event) {
-                blocker->on_event(event);
+            if (blocker->callback) {
+                blocker->callback(event);
+            } else if (blocker->owner != nullptr) {
+                dispatch(*blocker->owner, event);
             }
             event.mark_handled();
             blocked = true;
@@ -404,32 +462,30 @@ const Region* InputRouter::pointer_target(UiEvent& event, bool& blocked) {
     return target;
 }
 
-const Region* InputRouter::target_at(ImVec2 position, bool include_non_input, EventType type) const {
-    const Region* target = nullptr;
+const InputRouter::InputEntry* InputRouter::target_at(ImVec2 position, EventType type) const {
+    const InputEntry* target = nullptr;
     if constexpr (constants::IS_DEBUG_BUILD) ++m_stats.hit_test_count;
 
-    for (auto it = m_regions.rbegin(); it != m_regions.rend(); ++it) {
-        if constexpr (constants::IS_DEBUG_BUILD) ++m_stats.region_checks;
+    for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
+        if constexpr (constants::IS_DEBUG_BUILD) ++m_stats.entry_checks;
 
-        if (it->kind != RegionKind::Target || it->node == nullptr || !it->rect.contains(position) ||
+        if (it->kind != InputKind::Target || it->node == nullptr || !it->rect.contains(position) ||
             !contains(it->events, event_mask(type))) {
             continue;
         }
 
-        if (!it->node->visible() || (!include_non_input && !it->node->accepts_input())) {
+        if (!it->node->visible() || !it->node->accepts_input()) {
             continue;
         }
 
-        if (target == nullptr || it->priority > target->priority) {
+        if (target == nullptr) {
             target = &*it;
             continue;
         }
 
-        if (it->priority < target->priority) continue;
-
         // node::draw registers parents after children, so a child must win
-        // even when its region was registered earlier.
-        if (belongs_to(it->node, target->node)) {
+        // even when its entry was registered earlier.
+        if (target->node->contains(it->node)) {
             target = &*it;
         }
     }
@@ -437,7 +493,7 @@ const Region* InputRouter::target_at(ImVec2 position, bool include_non_input, Ev
     return target;
 }
 
-const Region* InputRouter::blocking_region_at(ImVec2 position, EventType type, const Node* target) const {
+const InputRouter::InputEntry* InputRouter::blocking_entry_at(ImVec2 position, EventType type, const Node* target) const {
     const EventMask mask = event_mask(type);
     if (mask == EventMask::None) {
         return nullptr;
@@ -445,10 +501,10 @@ const Region* InputRouter::blocking_region_at(ImVec2 position, EventType type, c
 
     if constexpr (constants::IS_DEBUG_BUILD) ++m_stats.hit_test_count;
 
-    for (auto it = m_regions.rbegin(); it != m_regions.rend(); ++it) {
-        if constexpr (constants::IS_DEBUG_BUILD) ++m_stats.region_checks;
-        if (it->kind == RegionKind::Blocker && it->rect.contains(position) && contains(it->events, mask) &&
-            (it->owner == nullptr || (it->owner->visible() && it->owner->enabled() && !belongs_to(target, it->owner)))) {
+    for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
+        if constexpr (constants::IS_DEBUG_BUILD) ++m_stats.entry_checks;
+        if (it->kind == InputKind::Blocker && it->rect.contains(position) && contains(it->events, mask) &&
+            (it->owner == nullptr || (it->owner->visible() && it->owner->enabled() && !it->owner->contains(target)))) {
             return &*it;
         }
     }
@@ -462,19 +518,19 @@ void InputRouter::notify_observers(UiEvent& event) {
     }
 
     const EventMask mask = event_mask(event.type);
-    for (auto it = m_regions.rbegin(); it != m_regions.rend(); ++it) {
-        if constexpr (constants::IS_DEBUG_BUILD) ++m_stats.region_checks;
-        if (it->kind != RegionKind::Observer || !it->rect.contains(event.position) || !contains(it->events, mask) ||
-            it->owner == nullptr || !it->owner->visible() || !it->owner->enabled() || !it->on_event) {
+    for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
+        if constexpr (constants::IS_DEBUG_BUILD) ++m_stats.entry_checks;
+        if (it->kind != InputKind::Observer || !it->rect.contains(event.position) || !contains(it->events, mask) ||
+            !it->callback) {
             continue;
         }
 
-        it->on_event(event);
+        it->callback(event);
     }
 }
 
-bool InputRouter::dispatch_target(const Region& target, UiEvent& event) {
-    // run the region callback before node behavior, then bubble through the node's parents.
-    if (target.on_event) target.on_event(event);
+bool InputRouter::dispatch_target(const InputEntry& target, UiEvent& event) {
+    // run the entry callback before node behavior, then bubble through the node's parents.
+    if (target.callback) target.callback(event);
     return dispatch(*target.node, event);
 }
