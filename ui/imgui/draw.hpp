@@ -54,6 +54,9 @@ namespace ui {
     void draw_circle_outline(
         ImVec2 center, float radius, ImColor color, float thickness, DrawListTarget target = DrawListTarget::Window
     );
+    void draw_rect_filled(
+        ImDrawList& draw_list, Rect rect, ImColor color, float rounding = 0.0F, ImDrawFlags flags = ImDrawFlags_RoundCornersAll
+    );
     void draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, std::string_view text);
     void draw_text(ImVec2 position, ImColor color, std::string_view text, DrawListTarget target = DrawListTarget::Window);
     void

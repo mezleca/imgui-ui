@@ -1,17 +1,16 @@
 #include <ui/backends/sdl/backend.hpp>
 #include <ui/backends/sdl/debugger.hpp>
-#include <ui/backends/opengl/texture-loader.hpp>
 #include <ui/ui.hpp>
 
 #include "../demo.hpp"
 
 #include <SDL3/SDL.h>
 
-#include <filesystem>
 #include <memory>
 #include <utility>
 
 int main() {
+    // the framework does not initialize sdl, so the application must start its video subsystem first.
     if (!SDL_Init(SDL_INIT_VIDEO)) return 1;
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -21,17 +20,12 @@ int main() {
 
     int result = 0;
     {
+        // configure the demo before runtime construction because runtime owns the theme and asset registries.
         ui::RuntimeConfig runtime_config;
-        runtime_config.theme.accent_color = {0.35F, 0.65F, 1.0F, 1.0F};
-        runtime_config.theme.accent_hover_color = {0.55F, 0.78F, 1.0F, 1.0F};
-        runtime_config.texture_loader = std::make_unique<ui::OpenGLTextureLoader>();
+        configure_demo_runtime(runtime_config);
         ui::Runtime runtime(std::move(runtime_config));
-        const std::filesystem::path font = std::filesystem::path{IMGUI_UI_ASSETS_DIR} / "fonts/Inter.ttf";
-        runtime.fonts().add("Inter Regular", font);
-        runtime.fonts().add("Inter SemiBold", font);
-        runtime.fonts().add("Inter Bold", font);
 
-        // standalone: the backend creates and owns its sdl window and opengl context.
+        // create the backend & window
         auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
             .title = "imgui-ui sdl",
             .size = {1120.0F, 920.0F},
@@ -39,14 +33,12 @@ int main() {
         });
         UI surface(runtime, std::move(backend));
 
-        // attached: use an existing sdl window and opengl context instead.
+        // or just the backend
         // auto backend = std::make_unique<ui::SdlBackend>(existing_window, existing_gl_context);
-        // UI surface(runtime, std::move(backend));
+        // ui surface(runtime, std::move(backend));
         if (!surface.ready()) {
             result = 1;
         } else {
-            surface.set_primary_font(runtime.fonts().find("Inter Regular"));
-            surface.set_secondary_font(runtime.fonts().find("Inter SemiBold"));
             setup_demo(surface, "sdl");
 
             ui::Debugger debugger(surface);
@@ -56,7 +48,9 @@ int main() {
             SDL_GL_SetSwapInterval(1);
 
             while (!surface.is_done()) {
+                // the debugger gets first refusal so its shortcuts and controls do not reach the app surface.
                 SDL_Event event;
+
                 while (SDL_PollEvent(&event)) {
                     if (!debugger.process_sdl_event(&event)) ui::process_sdl_event(surface, event);
                 }
@@ -69,6 +63,7 @@ int main() {
                 surface.root().draw();
                 debugger.draw_highlight();
                 surface.end_frame();
+                // render the debugger after the app because it uses a separate imgui context and window.
                 debugger.render();
             }
         }

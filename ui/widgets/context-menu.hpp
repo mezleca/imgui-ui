@@ -55,6 +55,9 @@ namespace ui {
             return m_open && Widget::accepts_input();
         }
 
+    protected:
+        void apply_theme_defaults(const Theme& theme) override;
+
     private:
         friend class ContextMenuItemNode;
 

@@ -8,6 +8,7 @@
 #include <iomanip>
 
 using namespace ui;
+
 static uint64_t profile_timestamp() {
     return static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()
@@ -92,7 +93,7 @@ void Profiler::begin_frame() {
         return;
     }
 
-        // reuse the inactive buffer and discard the previous frame's events and aggregates.
+    // reuse the inactive buffer and discard the previous frame's events and aggregates.
     FrameBuffer& frame = m_frames[m_write_index];
     frame.count = 0;
     frame.dropped = 0;
@@ -113,7 +114,7 @@ void Profiler::end_frame() {
         return;
     }
 
-        // publish only a completed buffer so debugger reads never see a frame being written.
+    // publish only a completed buffer so debugger reads never see a frame being written.
     FrameBuffer& frame = m_frames[m_write_index];
     frame.end = profile_timestamp();
     record_root_phase_times(frame);
@@ -143,7 +144,7 @@ double Profiler::node_duration_ms(uint64_t node_identity) const {
         return 0.0;
     }
 
-        // build the node index once; each node total is the sum of its update and draw zones.
+    // build the node index once; each node total is the sum of its update and draw zones.
     const FrameBuffer& frame = m_frames[m_read_index];
     if (!frame.node_durations_ready) {
         for (std::size_t index = 0; index < frame.count; ++index) {
@@ -186,7 +187,7 @@ bool Profiler::save_report() const {
         return false;
     }
 
-        // persist aggregate frame timing and the latest frame snapshot; raw events stay in memory.
+    // persist aggregate frame timing and the latest frame snapshot; raw events stay in memory.
     std::error_code error;
     std::filesystem::create_directories(m_output_path.parent_path(), error);
     if (error) {
@@ -242,7 +243,7 @@ Profiler::ZoneToken Profiler::begin_zone(std::string_view name, uint64_t node_id
 
     FrameBuffer& frame = m_frames[m_write_index];
     if (frame.count >= frame.events.size()) {
-            // keep the frame usable when instrumentation reaches the fixed event limit.
+        // keep the frame usable when instrumentation reaches the fixed event limit.
         ++frame.dropped;
         return {};
     }
@@ -279,7 +280,7 @@ void Profiler::record_node_draw() {
 }
 
 void Profiler::record_root_phase_times(FrameBuffer& frame) {
-        // root phase times are inclusive; layout and input sum all node zones.
+    // root phase times are inclusive; layout and input sum all node zones.
     for (std::size_t index = 0; index < frame.count; ++index) {
         const ProfileEvent& event = frame.events[index];
         const double duration = profile_milliseconds(event.start, event.end);

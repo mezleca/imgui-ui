@@ -62,8 +62,7 @@ private:
 
 class PointerCaptureNode final : public Node {
 public:
-    PointerCaptureNode(InputRouter& router, std::vector<EventType>& events)
-        : Node("drag"), m_router(router), m_events(events) {
+    PointerCaptureNode(InputRouter& router, std::vector<EventType>& events) : Node("drag"), m_router(router), m_events(events) {
         _on_event = [this](UiEvent& event) {
             m_events.push_back(event.type);
             if (event.type == EventType::PointerDown) {
@@ -207,9 +206,7 @@ TEST_CASE("input blocker consumes only its selected event mask") {
     int target_events = 0;
     router.target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}}, [&target_events](UiEvent&) { ++target_events; });
     int blocked_events = 0;
-    router.block(
-        {{25.0F, 25.0F}, {75.0F, 75.0F}}, [&blocked_events](UiEvent&) { ++blocked_events; }, EventMask::PointerDown
-    );
+    router.block({{25.0F, 25.0F}, {75.0F, 75.0F}}, [&blocked_events](UiEvent&) { ++blocked_events; }, EventMask::PointerDown);
 
     auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));

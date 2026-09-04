@@ -3,6 +3,8 @@
 #include "../diagnostics/profiler.hpp"
 #include "../input/router.hpp"
 
+#include <imgui_internal.h>
+
 #include <algorithm>
 #include <utility>
 
@@ -268,6 +270,13 @@ void Node::update(float dt) {
     }
 }
 
+void Node::apply_theme(const Theme& theme) {
+    apply_theme_defaults(theme);
+    for (const auto& child : m_children) {
+        child->apply_theme(theme);
+    }
+}
+
 void Node::invalidate_measure() {
     m_measure_dirty = true;
     if (m_parent != nullptr && !m_parent->m_measure_dirty) m_parent->invalidate_measure();
@@ -315,14 +324,14 @@ void Node::draw() {
     prepare_layout();
     draw_before();
     if (!on_draw()) {
-        // add a zero-size item so imgui records an explicitly positioned node in the parent bounds.
-        if (m_layout.has_position() && ImGui::GetCurrentContext() != nullptr) ImGui::Dummy({});
+        submit_positioned_item();
         return;
     }
 
     draw_children();
     draw_after();
     on_draw_end();
+    submit_positioned_item();
 
     if (m_input_router != nullptr) {
         UI_PROFILE_NODE(m_profiler, "Node::input", m_identity);
@@ -334,6 +343,20 @@ void Node::draw() {
             m_input_router->refresh_pointer_state(ImGui::GetIO().MousePos);
         }
     }
+}
+
+void Node::submit_positioned_item() {
+    if (!m_layout.has_position()) {
+        return;
+    }
+
+    ImGuiContext* context = ImGui::GetCurrentContext();
+    if (context == nullptr || context->CurrentWindow == nullptr || !context->CurrentWindow->DC.IsSetPos) {
+        return;
+    }
+
+    // imgui requires an item after SetCursorPos when the position extends the parent bounds.
+    ImGui::Dummy({});
 }
 
 void Node::prepare_layout() {

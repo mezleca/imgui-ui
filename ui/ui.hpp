@@ -106,6 +106,9 @@ public:
         return m_runtime.theme();
     }
 
+    /// updates imgui colors and reapplies theme defaults across the retained tree.
+    void set_theme(ui::Theme theme);
+
     ui::Runtime& runtime() {
         return m_runtime;
     }

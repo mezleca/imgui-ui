@@ -185,7 +185,7 @@ TEST_CASE("style updates preserve and normalize non-visual fields") {
     REQUIRE(normalized.box_shadow().color.Value.w == 0.0F);
 }
 
-TEST_CASE("container shadows use the parent draw list and keep their spread") {
+TEST_CASE("container shadows use the child draw list and keep their spread") {
     ui_test::ImGuiContext context({320.0F, 240.0F});
     ImGui::NewFrame();
     ImGui::SetNextWindowPos({0.0F, 0.0F});
@@ -209,23 +209,13 @@ TEST_CASE("container shadows use the parent draw list and keep their spread") {
     node.update(1.0F);
     node.draw();
 
-    const BoxShadowRegion* queued_region = nullptr;
-    for (const ImDrawCmd& command : ImGui::GetWindowDrawList()->CmdBuffer) {
-        if (command.UserCallback == collect_shadow_callback) {
-            queued_region = static_cast<const BoxShadowRegion*>(command.UserCallbackData);
-            break;
-        }
-    }
-    REQUIRE(queued_region != nullptr);
-    REQUIRE(queued_region->shape.size().x == Catch::Approx(180.0F));
-    REQUIRE(queued_region->shape.size().y == Catch::Approx(140.0F));
-
     ImGui::End();
     ImGui::EndFrame();
     ImGui::Render();
 
     const ImDrawData* draw_data = ImGui::GetDrawData();
     REQUIRE(draw_data != nullptr);
+    const BoxShadowRegion* queued_region = nullptr;
     int callback_list = -1;
     for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
         for (const ImDrawCmd& command : draw_data->CmdLists[list_index]->CmdBuffer) {
@@ -234,11 +224,15 @@ TEST_CASE("container shadows use the parent draw list and keep their spread") {
             }
 
             callback_list = list_index;
+            queued_region = static_cast<const BoxShadowRegion*>(command.UserCallbackData);
             break;
         }
     }
 
-    REQUIRE(callback_list == 0);
+    REQUIRE(queued_region != nullptr);
+    REQUIRE(queued_region->shape.size().x == Catch::Approx(180.0F));
+    REQUIRE(queued_region->shape.size().y == Catch::Approx(140.0F));
+    REQUIRE(callback_list > 0);
 
     shutdown_box_shadow();
 }
@@ -521,8 +515,7 @@ TEST_CASE("visual bounds stay on layout unless paint overrides them") {
 TEST_CASE("nodes register only explicitly configured local input entries") {
     class RectNode final : public Node {
     public:
-        RectNode(std::string id, Rect rect, std::function<void(UiEvent&)> callback = {})
-            : Node(std::move(id)), m_rect(rect) {
+        RectNode(std::string id, Rect rect, std::function<void(UiEvent&)> callback = {}) : Node(std::move(id)), m_rect(rect) {
             _on_event = std::move(callback);
         }
 
@@ -539,8 +532,7 @@ TEST_CASE("nodes register only explicitly configured local input entries") {
     Node root("root");
     int callbacks = 0;
     auto& passive = root.add<RectNode>("passive", Rect{{100.0F, 20.0F}, {200.0F, 120.0F}});
-    auto& target =
-        root.add<RectNode>("target", Rect{{100.0F, 20.0F}, {200.0F, 120.0F}}, [&callbacks](UiEvent&) { ++callbacks; });
+    auto& target = root.add<RectNode>("target", Rect{{100.0F, 20.0F}, {200.0F, 120.0F}}, [&callbacks](UiEvent&) { ++callbacks; });
     target.set_input_target({{10.0F, 20.0F}, {50.0F, 60.0F}});
     root.set_input_router(&router);
 
@@ -557,7 +549,7 @@ TEST_CASE("nodes register only explicitly configured local input entries") {
     REQUIRE(callbacks == 1);
 }
 
-TEST_CASE("skipped explicitly placed nodes keep imgui child boundaries valid") {
+TEST_CASE("positioned nodes keep imgui child boundaries valid") {
     class SkippedNode final : public Node {
     private:
         bool on_draw() override {
@@ -565,11 +557,18 @@ TEST_CASE("skipped explicitly placed nodes keep imgui child boundaries valid") {
         }
     };
 
+    class EmptyNode final : public Node {
+    public:
+        using Node::Node;
+    };
+
     ui_test::ImGuiContext context({200.0F, 120.0F});
     Container container("container");
     container.set_size({px(100.0F), px(80.0F)});
     auto& skipped = container.add<SkippedNode>();
     skipped.set_layout({.placement = {.offset = {120.0F, 0.0F}}, .in_flow = false});
+    auto& empty = container.add<EmptyNode>();
+    empty.set_layout({.placement = {.offset = {140.0F, 20.0F}}, .in_flow = false});
 
     ImGui::NewFrame();
     ImGui::Begin("skipped-placement-test");

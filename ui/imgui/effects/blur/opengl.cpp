@@ -271,27 +271,44 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
         (region->rect.max.y - display_position.y) * scale.y,
     };
 
-    const int left = std::clamp(static_cast<int>(std::floor(minimum.x)), 0, width);
-    const int bottom = std::clamp(static_cast<int>(std::floor(height - maximum.y)), 0, height);
-    const int region_width = std::clamp(static_cast<int>(std::ceil(maximum.x - minimum.x)), 0, width - left);
-    const int region_height = std::clamp(static_cast<int>(std::ceil(maximum.y - minimum.y)), 0, height - bottom);
-    if (region_width <= 0 || region_height <= 0) {
+    const float region_left = minimum.x;
+    const float region_bottom = height - maximum.y;
+    const float region_width = maximum.x - minimum.x;
+    const float region_height = maximum.y - minimum.y;
+    const int left = std::clamp(static_cast<int>(std::floor(region_left)), 0, width);
+    const int right = std::clamp(static_cast<int>(std::ceil(region_left + region_width)), 0, width);
+    const int bottom = std::clamp(static_cast<int>(std::floor(region_bottom)), 0, height);
+    const int top = std::clamp(static_cast<int>(std::ceil(region_bottom + region_height)), 0, height);
+    if (right <= left || top <= bottom) {
+        return;
+    }
+
+    const int clip_left =
+        std::clamp(static_cast<int>(std::floor((command->ClipRect.x - display_position.x) * scale.x)), 0, width);
+    const int clip_right =
+        std::clamp(static_cast<int>(std::ceil((command->ClipRect.z - display_position.x) * scale.x)), 0, width);
+    const int clip_bottom =
+        std::clamp(static_cast<int>(std::floor(height - (command->ClipRect.w - display_position.y) * scale.y)), 0, height);
+    const int clip_top =
+        std::clamp(static_cast<int>(std::ceil(height - (command->ClipRect.y - display_position.y) * scale.y)), 0, height);
+    const int clipped_left = std::max(left, clip_left);
+    const int clipped_right = std::min(right, clip_right);
+    const int clipped_bottom = std::max(bottom, clip_bottom);
+    const int clipped_top = std::min(top, clip_top);
+    if (clipped_right <= clipped_left || clipped_top <= clipped_bottom) {
         return;
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(framebuffer));
     glViewport(0, 0, width, height);
     glEnable(GL_SCISSOR_TEST);
-    glScissor(left, bottom, region_width, region_height);
+    glScissor(clipped_left, clipped_bottom, clipped_right - clipped_left, clipped_top - clipped_bottom);
     glDisable(GL_BLEND);
     glUseProgram(textures->program);
     glUniform1i(glGetUniformLocation(textures->program, "image"), 0);
     glUniform1i(glGetUniformLocation(textures->program, "original"), 1);
     glUniform2f(glGetUniformLocation(textures->program, "texel"), 1.0F / width, 1.0F / height);
-    glUniform4f(
-        glGetUniformLocation(textures->program, "region"), static_cast<float>(left), static_cast<float>(bottom),
-        static_cast<float>(region_width), static_cast<float>(region_height)
-    );
+    glUniform4f(glGetUniformLocation(textures->program, "region"), region_left, region_bottom, region_width, region_height);
     glUniform1f(
         glGetUniformLocation(textures->program, "rounding"),
         std::min(region->rounding * std::min(scale.x, scale.y), std::min(region_width, region_height) * 0.5F)

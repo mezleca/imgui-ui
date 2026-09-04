@@ -20,6 +20,9 @@ namespace ui {
         ButtonWidget& set_text(std::string text);
         ButtonWidget& on_click(std::function<void()> callback);
 
+    protected:
+        void apply_theme_defaults(const Theme& theme) override;
+
     private:
         void dispatch_event(UiEvent& event) override;
         void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) override;

@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <utility>
 
 class UI;
 
@@ -50,6 +51,10 @@ namespace ui {
 
     private:
         friend class ::UI;
+
+        void set_theme(Theme theme) {
+            m_theme = std::move(theme);
+        }
 
         void release_context(ImGuiContext* context);
 

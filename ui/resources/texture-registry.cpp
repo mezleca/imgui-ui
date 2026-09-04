@@ -27,6 +27,19 @@ Texture* TextureRegistry::add(std::string id, std::filesystem::path location) {
     return add_asset(std::move(id), std::move(texture));
 }
 
+Texture* TextureRegistry::add(std::string id, std::string_view content) {
+    if (Texture* existing = find(id); existing != nullptr) {
+        return existing;
+    }
+
+    if (m_loader == nullptr) {
+        return nullptr;
+    }
+
+    auto texture = m_loader->load(content, id);
+    return add_asset(std::move(id), std::move(texture));
+}
+
 Texture* TextureRegistry::find(std::string_view id) {
     return find_asset<Texture>(id);
 }

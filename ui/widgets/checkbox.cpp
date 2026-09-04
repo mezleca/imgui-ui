@@ -53,12 +53,24 @@ private:
 
 CheckboxWidget::CheckboxWidget(UI& ui, bool& value, std::string label, std::string id)
     : Widget(std::move(id), "Checkbox"), m_value(&value) {
-    const Theme& theme = ui.theme();
     set_font(ui.get_primary_font(16));
 
     m_frame_node = &add<CheckboxVisualNode>("frame", nullptr, false, m_type);
     m_fill_node = &add<CheckboxVisualNode>("fill", &value, true, m_type);
     m_label_node = &add<TextWidget>(std::move(label));
+    apply_theme_defaults(ui.theme());
+
+    _on_event = [this](UiEvent& event) {
+        if (event.type != EventType::Click || event.button != PointerButton::Left) {
+            return;
+        }
+
+        *m_value = m_type == CheckboxType::Radio || !*m_value;
+        notify_change();
+    };
+}
+
+void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
     m_label_node->configure_all_styles([&theme](Style& style) { style.color(theme.text_color); });
 
     configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({4.0F, 4.0F}); });
@@ -78,15 +90,6 @@ CheckboxWidget::CheckboxWidget(UI& ui, bool& value, std::string label, std::stri
     m_frame_node->configure_style(StyleType::ACTIVE, [&theme](Style& style) {
         style.background_color(theme.control_active_color).border_color(theme.accent_color);
     });
-
-    _on_event = [this](UiEvent& event) {
-        if (event.type != EventType::Click || event.button != PointerButton::Left) {
-            return;
-        }
-
-        *m_value = m_type == CheckboxType::Radio || !*m_value;
-        notify_change();
-    };
 }
 
 CheckboxWidget& CheckboxWidget::set_label(std::string label) {

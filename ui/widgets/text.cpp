@@ -5,6 +5,10 @@
 
 using namespace ui;
 
+void TextWidget::apply_theme_defaults(const Theme& theme) {
+    configure_all_styles([&theme](Style& style) { style.color(theme.text_color); });
+}
+
 TextWidget& TextWidget::set_wrap(float width) {
     if (m_wrap != width) {
         m_wrap = width;

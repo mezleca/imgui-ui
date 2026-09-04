@@ -39,6 +39,9 @@ namespace ui {
         }
         TextWidget& set_text(std::string text);
 
+    protected:
+        void apply_theme_defaults(const Theme& theme) override;
+
     private:
         bool paint() override;
         void on_measure() override;

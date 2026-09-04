@@ -366,6 +366,7 @@ bool InputRouter::dispatch(UiEvent& event) {
         (target == nullptr || !m_focused_node->contains(target->node))) {
         clear_focus();
     }
+
     if (blocked) {
         return true;
     }

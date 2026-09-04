@@ -179,9 +179,8 @@ TEST_CASE("dropdown opens from a nested container without extending its parent",
     page.set_size({px(360.0F), px(200.0F)});
     auto& section = page.add<Container>("section");
     auto& form = section.add<StackContainer>("form");
-    auto& dropdown = form.add<DropdownWidget>(
-        surface, value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "theme"
-    );
+    auto& dropdown =
+        form.add<DropdownWidget>(surface, value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "theme");
     dropdown.set_size({px(180.0F), px(32.0F)});
     bool checked = false;
     auto& checkbox = surface.root().add<CheckboxWidget>(surface, checked, "enabled");
@@ -670,6 +669,26 @@ TEST_CASE("dropdown opens after fading out and fades after selection", "[Dropdow
         (body_rect.min.x + body_rect.max.x) * 0.5F,
         body_rect.min.y + item_height * 1.5F,
     };
+    const ImU32 hover_background = static_cast<ImU32>(dropdown.trigger().style(StyleType::HOVER).background_color().value);
+    const auto count_color = [](const ImDrawData* draw_data, ImU32 color) {
+        int count = 0;
+        if (draw_data == nullptr) {
+            return count;
+        }
+
+        for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
+            const ImDrawList* draw_list = draw_data->CmdLists[list_index];
+            for (const ImDrawVert& vertex : draw_list->VtxBuffer) {
+                count += vertex.col == color;
+            }
+        }
+
+        return count;
+    };
+    const int unhovered_background_vertices = count_color(ImGui::GetDrawData(), hover_background);
+    REQUIRE(draw_frame(second_option, false));
+    REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
+    REQUIRE(count_color(ImGui::GetDrawData(), hover_background) > unhovered_background_vertices);
     REQUIRE(draw_frame(second_option, true));
     REQUIRE_FALSE(draw_frame(second_option, false));
     REQUIRE(value == "contrast");

@@ -40,22 +40,9 @@ class ui::ContextMenuItemNode final : public DrawListWidget {
 public:
     ContextMenuItemNode(ContextMenuWidget& menu, std::string label, ContextMenuCallback callback)
         : DrawListWidget("item", "ContextMenuItem"), m_menu(menu), m_label(std::move(label)), m_callback(std::move(callback)) {
-        const Theme& theme = m_menu.m_theme;
-
         set_size({grow(), px(MENU_ITEM_HEIGHT)});
         set_input_target();
-
-        configure_all_styles([&theme](Style& style) {
-            style.color(theme.text_color)
-                .background_color(theme.transparent)
-                .padding({8.0F, 4.0F})
-                .border(BORDER_NONE)
-                .border_radius(2.0F)
-                .cursor(ImGuiMouseCursor_Hand);
-        });
-
-        configure_style(StyleType::HOVER, [&theme](Style& style) { style.background_color(theme.control_hover_color); });
-        configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.background_color(theme.control_active_color); });
+        apply_theme_defaults(m_menu.m_theme);
 
         _on_event = [this](UiEvent& event) {
             if (event.type == EventType::PointerMove && m_submenu != nullptr) {
@@ -74,6 +61,21 @@ public:
 
     bool accepts_input() const override {
         return m_menu.is_open() && Widget::accepts_input();
+    }
+
+protected:
+    void apply_theme_defaults(const Theme& theme) override {
+        configure_all_styles([&theme](Style& style) {
+            style.color(theme.text_color)
+                .background_color(theme.transparent)
+                .padding({8.0F, 4.0F})
+                .border(BORDER_NONE)
+                .border_radius(2.0F)
+                .cursor(ImGuiMouseCursor_Hand);
+        });
+
+        configure_style(StyleType::HOVER, [&theme](Style& style) { style.background_color(theme.control_hover_color); });
+        configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.background_color(theme.control_active_color); });
     }
 
 private:
@@ -142,6 +144,11 @@ ContextMenuWidget::ContextMenuWidget(InputRouter& router, const Theme& theme, Te
         }
     };
 
+    set_items(std::move(items));
+    apply_theme_defaults(theme);
+}
+
+void ContextMenuWidget::apply_theme_defaults(const Theme& theme) {
     configure_all_styles([&theme](Style& style) {
         style.padding({MENU_PADDING, MENU_PADDING})
             .background_color(theme.background_secondary_color)
@@ -150,8 +157,6 @@ ContextMenuWidget::ContextMenuWidget(InputRouter& router, const Theme& theme, Te
             .border_radius(theme.box_rounding)
             .border_color(theme.border_color);
     });
-
-    set_items(std::move(items));
 }
 
 ContextMenuWidget& ContextMenuWidget::set_items(ContextMenuItems items) {

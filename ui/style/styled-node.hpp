@@ -138,6 +138,8 @@ namespace ui {
 
     protected:
         bool on_draw() final;
+        /// lets each styled node rebuild its theme-owned style slots.
+        void apply_theme_defaults(const Theme&) override {}
         /// prepares this node's ImGui scope before its children are drawn.
         virtual bool paint();
 

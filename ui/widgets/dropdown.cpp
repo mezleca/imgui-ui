@@ -14,8 +14,7 @@ using namespace ui;
 
 class ui::DropdownTriggerNode final : public DrawListWidget {
 public:
-    DropdownTriggerNode(const Theme& theme, DropdownWidget::State& state)
-        : DrawListWidget("trigger", "Dropdown"), m_theme(theme), m_state(state) {
+    explicit DropdownTriggerNode(DropdownWidget::State& state) : DrawListWidget("trigger", "Dropdown"), m_state(state) {
         _on_event = [this](UiEvent& event) {
             if (event.type != EventType::Click || event.button != PointerButton::Left) {
                 return;
@@ -37,13 +36,15 @@ private:
 
         const std::string_view preview = selected == m_state.options.end() ? m_state.placeholder : selected->label;
 
-        draw_contents(draw_list, rect, preview, m_state.is_open(), current_style);
+        const ImColor background =
+            m_state.is_open() ? style(StyleType::ACTIVE).background_color().value : current_style.background_color().value;
+        draw_contents(draw_list, rect, preview, m_state.is_open(), current_style, background);
     }
 
-    void draw_contents(ImDrawList& draw_list, Rect rect, std::string_view preview, bool open, const Style& current_style) const {
-        draw_frame(
-            draw_list, rect, current_style, open ? ImColor(m_theme.control_active_color) : current_style.background_color().value
-        );
+    void draw_contents(
+        ImDrawList& draw_list, Rect rect, std::string_view preview, bool open, const Style& current_style, ImColor background
+    ) const {
+        draw_frame(draw_list, rect, current_style, background);
 
         const ImVec2 text_size = ImGui::CalcTextSize(preview.data(), preview.data() + preview.size());
 
@@ -58,14 +59,13 @@ private:
         );
     }
 
-    const Theme& m_theme;
     DropdownWidget::State& m_state;
 };
 
 class ui::DropdownBodyNode final : public StackContainer {
 public:
-    DropdownBodyNode(InputRouter& router, DropdownWidget::State& state, const Widget& trigger, const Theme& theme)
-        : StackContainer("body"), m_router(router), m_state(state), m_trigger(trigger), m_theme(theme) {
+    DropdownBodyNode(InputRouter& router, DropdownWidget::State& state, const Widget& trigger)
+        : StackContainer("body"), m_router(router), m_state(state), m_trigger(trigger) {
         set_type_name("DropdownBody");
         fade_out();
     }
@@ -121,8 +121,11 @@ public:
             set_visual_rect(body_rect);
             m_router.block(body_rect);
 
-            const ImU32 selected_background = m_trigger.style(StyleType::ACTIVE).background_color().get_col();
-            const ImU32 hovered_text = ImColor(m_theme.accent_color);
+            const Style& hover_style = m_trigger.style(StyleType::HOVER);
+            const ImColor selected_background = m_trigger.style(StyleType::ACTIVE).background_color().value;
+            const ImColor hovered_background = hover_style.background_color().value;
+            const ImColor hovered_text = hover_style.color().value;
+            const ImGuiMouseCursor hover_cursor = hover_style.cursor();
             for (std::size_t index = 0; index < m_state.options.size(); ++index) {
                 const DropdownOption& option = m_state.options[index];
                 const ImVec2 item_position = ImGui::GetCursorScreenPos();
@@ -133,7 +136,11 @@ public:
                 const bool hovered = ImGui::IsItemHovered();
                 ImGui::PopID();
 
-                if (selected) {
+                if (hovered) {
+                    ImGui::SetMouseCursor(hover_cursor == ImGuiMouseCursor_None ? ImGuiMouseCursor_Arrow : hover_cursor);
+                }
+
+                if (selected || hovered) {
                     ImDrawFlags corners = ImDrawFlags_None;
                     if (index == 0) {
                         corners |= ImDrawFlags_RoundCornersTop;
@@ -141,16 +148,17 @@ public:
                     if (index + 1 == m_state.options.size()) {
                         corners |= ImDrawFlags_RoundCornersBottom;
                     }
-                    ImGui::GetWindowDrawList()->AddRectFilled(
-                        item_position, {item_position.x + m_popup_width, item_position.y + item_height}, selected_background,
-                        current_style.border_radius(), corners
+                    draw_rect_filled(
+                        *ImGui::GetWindowDrawList(), Rect::from_position_size(item_position, {m_popup_width, item_height}),
+                        hovered ? hovered_background : selected_background, current_style.border_radius(), corners
                     );
                 }
 
                 const ImVec2 text_size = ImGui::CalcTextSize(option.label.c_str());
-                ImGui::GetWindowDrawList()->AddText(
+                draw_text(
+                    *ImGui::GetWindowDrawList(),
                     {item_position.x + item_padding.x, item_position.y + (item_height - text_size.y) * 0.5F},
-                    hovered ? hovered_text : current_style.color().get_col(), option.label.c_str()
+                    hovered ? hovered_text : current_style.color().value, option.label
                 );
 
                 if (pressed) {
@@ -184,7 +192,6 @@ protected:
     InputRouter& m_router;
     DropdownWidget::State& m_state;
     const Widget& m_trigger;
-    const Theme& m_theme;
     ImVec2 m_popup_position{};
     float m_popup_width = 0.0F;
     bool m_popup_opened = false;
@@ -218,14 +225,14 @@ void DropdownWidget::State::close() {
 DropdownWidget::DropdownWidget(UI& ui, std::string& value, std::vector<DropdownOption> options, std::string id)
     : Widget(std::move(id), "Dropdown"), m_state{.value = &value, .options = std::move(options)} {
     m_label_node = &add<TextWidget>("");
-    m_trigger = &add<DropdownTriggerNode>(ui.theme(), m_state);
-    m_body = &add<DropdownBodyNode>(ui.input_router(), m_state, *m_trigger, ui.theme());
+    m_trigger = &add<DropdownTriggerNode>(m_state);
+    m_body = &add<DropdownBodyNode>(ui.input_router(), m_state, *m_trigger);
     m_state.body = m_body;
     m_body->set_enabled(false);
-    configure_default_styles(ui.theme());
+    apply_theme_defaults(ui.theme());
 }
 
-void DropdownWidget::configure_default_styles(const Theme& theme) {
+void DropdownWidget::apply_theme_defaults(const Theme& theme) {
     const auto configure = [&theme](Widget& widget) {
         widget.configure_all_styles([&theme](Style& style) { style.control(theme).cursor(ImGuiMouseCursor_Hand); });
     };

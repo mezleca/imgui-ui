@@ -43,6 +43,9 @@ namespace ui {
         Widget& trigger();
         Widget& body();
 
+    protected:
+        void apply_theme_defaults(const Theme& theme) override;
+
     private:
         struct State {
             bool is_open() const {
@@ -81,7 +84,6 @@ namespace ui {
         friend class DropdownBodyNode;
         friend class DropdownTriggerNode;
 
-        void configure_default_styles(const Theme& theme);
         void draw_children() override;
         void on_measure() override;
         void on_layout() override;

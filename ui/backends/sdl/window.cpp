@@ -15,7 +15,7 @@ Window::Window(std::string title, ImVec2 size, SDL_WindowFlags flags, Window* sh
         return;
     }
 
-        // sdl shares resources with the context current at window creation.
+    // sdl shares resources with the context current at window creation.
     if (sharing_context) {
         shared_with->make_current();
     }

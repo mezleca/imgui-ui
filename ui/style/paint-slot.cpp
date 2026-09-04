@@ -32,5 +32,5 @@ void PaintSlot::paint(Rect rect, Rect content_rect) {
         return;
     }
 
-    draw_frame(context.rect, context.style, context.opacity);
+    draw_frame(context.rect, context.style, context.opacity * context.style.alpha());
 }

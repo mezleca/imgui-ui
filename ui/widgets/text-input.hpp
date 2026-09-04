@@ -18,6 +18,9 @@ namespace ui {
         TextInputWidget& set_icon(Texture* icon);
         bool set_value(std::string value);
 
+    protected:
+        void apply_theme_defaults(const Theme& theme) override;
+
     private:
         class FieldNode;
 

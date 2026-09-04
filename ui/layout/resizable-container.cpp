@@ -128,11 +128,12 @@ void ResizableContainer::draw_resize_indicator() {
     for (int i = 0; i < 3; ++i) {
         const float distance = 3.0F + static_cast<float>(i) * 4.0F;
         draw_line(
-            foreground_draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, ImColor(160, 160, 160, 255), border_thickness
+            foreground_draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, ImColor(160, 160, 160, 255),
+            border_thickness
         );
         draw_line(
-            foreground_draw_list, {max.x - distance + border_thickness + 0.5f, max.y}, {max.x, max.y - distance + border_thickness + 0.5f},
-            ImColor{20, 20, 20, 255}, border_thickness
+            foreground_draw_list, {max.x - distance + border_thickness + 0.5f, max.y},
+            {max.x, max.y - distance + border_thickness + 0.5f}, ImColor{20, 20, 20, 255}, border_thickness
         );
     }
 }

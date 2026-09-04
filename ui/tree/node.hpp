@@ -15,6 +15,7 @@
 namespace ui {
     class InputRouter;
     class Profiler;
+    struct Theme;
 
     struct InputState {
         bool hovered = false;
@@ -54,6 +55,9 @@ namespace ui {
 
         /// updates this node and its visible descendants.
         void update(float dt);
+
+        /// reapplies theme defaults to this node and every descendant.
+        void apply_theme(const Theme& theme);
 
         /// resolves, paints, and registers this visible subtree.
         virtual void draw();
@@ -213,6 +217,9 @@ namespace ui {
         virtual void on_update(float dt);
         virtual void advance_frame_state(float dt);
 
+        /// resets built-in appearance values for the supplied theme.
+        virtual void apply_theme_defaults(const Theme&) {}
+
         /// computes intrinsic size after children are measured.
         virtual void on_measure();
 
@@ -252,6 +259,7 @@ namespace ui {
         void clear_input_state();
         void capture_parent_content();
         void prepare_layout();
+        void submit_positioned_item();
 
         std::string m_id;
 

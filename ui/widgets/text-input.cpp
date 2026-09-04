@@ -50,19 +50,11 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value) : TextInputWidget(u
 TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
     : StackContainer(std::move(label), StackDirection::Horizontal), m_ui(ui), m_value(&value) {
     set_input_target();
-    const Theme& theme = m_ui.theme();
 
     set_type_name("TextInput");
     set_spacing(INPUT_ICON_SPACING);
     set_content_alignment(Anchor::CenterLeft);
     set_font(ui.get_primary_font(18));
-    configure_all_styles([&theme](Style& style) {
-        style.border_color(theme.border_color, 0.15F)
-            .padding({12.0F, 14.0F})
-            .background_color(theme.background_secondary_color)
-            .border(BORDER_ALL)
-            .border_radius(theme.box_rounding);
-    });
 
     m_icon_node = &add<ImageWidget>();
     m_icon_node->set_id("icon");
@@ -70,15 +62,9 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
     m_icon_node->set_enabled(false);
     m_icon_node->set_visible(false);
 
-    configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color); });
-    configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
-    configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_color); });
-
     m_field_node = &add<FieldNode>(value, m_focus_requested);
     m_field_node->set_size({grow(), px(INPUT_ICON_SIZE.y)});
-    m_field_node->configure_all_styles([&theme](Style& style) {
-        style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BORDER_NONE);
-    });
+    apply_theme_defaults(ui.theme());
 
     _on_event = [this](UiEvent& event) {
         if (event.type == EventType::PointerDown && event.button == PointerButton::Left) {
@@ -90,6 +76,24 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
             event.stop_propagation();
         }
     };
+}
+
+void TextInputWidget::apply_theme_defaults(const Theme& theme) {
+    configure_all_styles([&theme](Style& style) {
+        style.border_color(theme.border_color, 0.15F)
+            .padding({12.0F, 14.0F})
+            .background_color(theme.background_secondary_color)
+            .border(BORDER_ALL)
+            .border_radius(theme.box_rounding);
+    });
+
+    configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color); });
+    configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
+    configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_color); });
+
+    m_field_node->configure_all_styles([&theme](Style& style) {
+        style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BORDER_NONE);
+    });
 }
 
 TextInputWidget& TextInputWidget::set_icon(Texture* icon) {

@@ -25,6 +25,19 @@ UI::~UI() {
     ImGui::DestroyContext(m_context);
 }
 
+void UI::set_theme(ui::Theme theme) {
+    m_runtime.set_theme(std::move(theme));
+    if (!m_ready || m_context == nullptr) {
+        return;
+    }
+
+    const ui::ImGuiContextScope scope(m_context);
+    apply_theme_colors();
+    if (m_root != nullptr) {
+        m_root->apply_theme(m_runtime.theme());
+    }
+}
+
 ImFont* UI::get_font(std::string_view id, int size) const {
     if (m_context == nullptr) {
         return nullptr;
@@ -153,6 +166,7 @@ void UI::apply_theme_colors() {
     colors[ImGuiCol_FrameBg] = theme.control_background_color;
     colors[ImGuiCol_FrameBgHovered] = theme.control_hover_color;
     colors[ImGuiCol_FrameBgActive] = theme.control_active_color;
+    colors[ImGuiCol_PopupBg] = theme.control_background_color;
     colors[ImGuiCol_ScrollbarBg] = theme.scrollbar_background_color;
     colors[ImGuiCol_CheckboxSelectedBg] = theme.control_background_color;
     colors[ImGuiCol_TitleBg] = theme.background_secondary_color;

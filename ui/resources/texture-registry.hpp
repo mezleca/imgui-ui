@@ -28,6 +28,7 @@ namespace ui {
         explicit TextureRegistry(std::unique_ptr<TextureLoader> loader = nullptr);
 
         Texture* add(std::string id, std::filesystem::path location);
+        Texture* add(std::string id, std::string_view content);
         Texture* find(std::string_view id);
         const Texture* find(std::string_view id) const;
 

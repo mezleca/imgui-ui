@@ -33,6 +33,20 @@ static Node* find_node_by_identity(Node& root, uint64_t identity) {
     return nullptr;
 }
 
+static bool contains_identity(const Node& root, uint64_t identity) {
+    if (root.identity() == identity) {
+        return true;
+    }
+
+    for (const auto& child : root.children()) {
+        if (contains_identity(*child, identity)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool is_effectively_visible(const Node& node) {
     for (const Node* current = &node; current != nullptr; current = current->parent()) {
         if (!current->visible()) {
@@ -418,13 +432,11 @@ void Debugger::set_target(Node* target) {
 }
 
 void Debugger::synchronize_targets() {
-    if (m_target_identity != 0) {
-        Node* target = find_node_by_identity(m_target.root(), m_target_identity);
-        if (target != m_node_target) {
-            set_target(target);
-            if (target == nullptr) {
-                m_scroll_to_target = false;
-            }
+    Node* target = m_target_identity == 0 ? nullptr : find_node_by_identity(m_target.root(), m_target_identity);
+    if (target != m_node_target) {
+        set_target(target);
+        if (target == nullptr) {
+            m_scroll_to_target = false;
         }
     }
 
@@ -606,8 +618,9 @@ void Debugger::update(float dt) {
 }
 
 void Debugger::refresh_highlight() {
-    Node* target = m_inspect_mode ? m_hover_target : (m_highlight_selected ? m_node_target : nullptr);
-    if (!m_target.root().contains(target) || target == nullptr || !is_effectively_visible(*target)) {
+    const uint64_t target_identity = m_inspect_mode ? m_hover_identity : (m_highlight_selected ? m_target_identity : 0);
+    Node* target = target_identity == 0 ? nullptr : find_node_by_identity(m_target.root(), target_identity);
+    if (target == nullptr || !is_effectively_visible(*target)) {
         m_highlight_valid = false;
         return;
     }
@@ -653,11 +666,11 @@ void Debugger::render_node_tree(Node& node, int depth, Node*& selected_target, b
     ImGuiTreeNodeFlags flags = depth < 1 ? ImGuiTreeNodeFlags_DefaultOpen : 0;
     flags |= ImGuiTreeNodeFlags_SpanAvailWidth;
 
-    if (selected_target != nullptr && &node != selected_target && node.contains(selected_target)) {
+    if (m_target_identity != 0 && node.identity() != m_target_identity && contains_identity(node, m_target_identity)) {
         ImGui::SetNextItemOpen(true, ImGuiCond_Always);
     }
 
-    if (&node == selected_target) {
+    if (m_target_identity != 0 && node.identity() == m_target_identity) {
         flags |= ImGuiTreeNodeFlags_Selected;
         ImGui::PushStyleColor(ImGuiCol_Header, m_ui->theme().accent_color);
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, m_ui->theme().accent_hover_color);
@@ -689,7 +702,7 @@ void Debugger::render_node_tree(Node& node, int depth, Node*& selected_target, b
     const bool expanded = ImGui::TreeNodeEx(&node, flags, "%s", node_label.c_str());
     const bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
 
-    if (&node == selected_target) {
+    if (m_target_identity != 0 && node.identity() == m_target_identity) {
         ImGui::PopStyleColor(3);
     }
 
@@ -1102,14 +1115,16 @@ void Debugger::render_node_list() {
     }
 
     Profiler& profiler = m_target.profiler();
+
     const bool frame_time_enabled = profiler.enabled();
-    const ImVec2 button_padding = {2.0F, 0.0F};
+    const ImVec2 button_padding = {6.0F, 6.0F};
     const ImVec2 label_size = ImGui::CalcTextSize("frame time");
     const ImVec2 button_size = {label_size.x + button_padding.x * 2.0F, label_size.y + button_padding.y * 2.0F};
     const ImVec2 position = {
         ImGui::GetWindowPos().x + ImGui::GetWindowSize().x - button_size.x - 6.0F,
         ImGui::GetWindowPos().y + ImGui::GetWindowSize().y - button_size.y - 6.0F,
     };
+
     ImGui::SetCursorScreenPos(position);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{});
     ImGui::BeginChild(
@@ -1118,15 +1133,19 @@ void Debugger::render_node_list() {
     );
     ImGui::PopStyleVar();
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, button_padding);
+
     if (frame_time_enabled) {
         ImGui::PushStyleColor(ImGuiCol_Button, m_ui->theme().accent_color);
     }
+
     if (ImGui::Button("frame time##toggle", button_size)) {
         profiler.set_enabled(!frame_time_enabled);
     }
+
     if (frame_time_enabled) {
         ImGui::PopStyleColor();
     }
+
     ImGui::PopStyleVar();
     ImGui::EndChild();
 
