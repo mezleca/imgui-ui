@@ -122,16 +122,16 @@ void ResizableContainer::draw_resize_indicator() {
     }
 
     const float border_thickness = style().border_thickness();
-    ImDrawList& draw_list = ui::draw_list(DrawListTarget::Foreground);
+    ImDrawList& foreground_draw_list = draw_list(DrawListTarget::Foreground);
     const ImVec2 max = resize_handle().max;
 
     for (int i = 0; i < 3; ++i) {
         const float distance = 3.0F + static_cast<float>(i) * 4.0F;
         draw_line(
-            draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, ImColor(160, 160, 160, 255), border_thickness
+            foreground_draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, ImColor(160, 160, 160, 255), border_thickness
         );
         draw_line(
-            draw_list, {max.x - distance + border_thickness + 0.5f, max.y}, {max.x, max.y - distance + border_thickness + 0.5f},
+            foreground_draw_list, {max.x - distance + border_thickness + 0.5f, max.y}, {max.x, max.y - distance + border_thickness + 0.5f},
             ImColor{20, 20, 20, 255}, border_thickness
         );
     }

@@ -303,7 +303,7 @@ void ui::draw_line(ImDrawList& draw_list, ImVec2 start, ImVec2 end, ImColor colo
 }
 
 void ui::draw_line(ImVec2 start, ImVec2 end, ImColor color, float thickness, DrawListTarget target) {
-    draw_line(ui::draw_list(target), start, end, color, thickness);
+    draw_line(draw_list(target), start, end, color, thickness);
 }
 
 void ui::draw_circle(ImDrawList& draw_list, ImVec2 center, float radius, ImColor color) {

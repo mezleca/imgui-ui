@@ -200,9 +200,17 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
         const auto center = [](const ui::Rect& rect) {
             return ImVec2{(rect.min.x + rect.max.x) * 0.5F, (rect.min.y + rect.max.y) * 0.5F};
         };
-        const ImVec2 content_position = center(content_checkbox.layout().visual_rect());
+        const auto checkbox_center = [&center](const ui::CheckboxWidget& checkbox) {
+            const ui::Rect widget_rect = checkbox.layout().visual_rect();
+            const ImVec2 padding = checkbox.style().padding();
+            const ui::Rect box_rect = ui::Rect::from_position_size(
+                {widget_rect.min.x + padding.x, widget_rect.min.y + padding.y}, checkbox.frame().layout().size()
+            );
+            return center(box_rect);
+        };
+        const ImVec2 content_position = checkbox_center(content_checkbox);
         const ImVec2 dropdown_position = center(content_dropdown.layout().visual_rect());
-        const ImVec2 overlay_position = center(overlay_checkbox.layout().visual_rect());
+        const ImVec2 overlay_position = checkbox_center(overlay_checkbox);
         const SDL_WindowID window_id = surface.backend().window_id();
 
         const auto click = [&](ImVec2 position, bool expected_handled) {

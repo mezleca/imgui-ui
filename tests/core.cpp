@@ -25,7 +25,7 @@ using namespace ui;
 static void collect_shadow_callback(const ImDrawList*, const ImDrawCmd*) {}
 
 TEST_CASE("surface root does not write to imgui's fallback window") {
-    ui::Runtime runtime;
+    Runtime runtime;
     UI surface(runtime);
 
     ImGui::SetCurrentContext(surface.imgui_context());
@@ -335,10 +335,10 @@ TEST_CASE("styled paint slots receive the owner rect and support custom drawing"
 }
 
 TEST_CASE("ui nodes draw children and after hooks before end hooks") {
-    class DrawNode final : public ui::Node {
+    class DrawNode final : public Node {
     public:
         DrawNode(std::string id, std::vector<std::string>& events, bool skip = false)
-            : ui::Node(std::move(id)), m_events(events), m_skip(skip) {}
+            : Node(std::move(id)), m_events(events), m_skip(skip) {}
 
     private:
         void on_layout() override {
@@ -387,7 +387,7 @@ TEST_CASE("ui nodes draw children and after hooks before end hooks") {
 }
 
 TEST_CASE("node measurement only reruns after invalidation") {
-    class MeasureNode final : public ui::Node {
+    class MeasureNode final : public Node {
     public:
         explicit MeasureNode(int& count) : m_count(count) {}
 
@@ -418,7 +418,7 @@ TEST_CASE("node measurement only reruns after invalidation") {
 TEST_CASE("clearing children destroys the subtree and clears input targets") {
     int destructions = 0;
 
-    class LifetimeNode final : public ui::Node {
+    class LifetimeNode final : public Node {
     public:
         explicit LifetimeNode(int& destructions) : m_destructions(destructions) {}
         ~LifetimeNode() override {
@@ -429,11 +429,11 @@ TEST_CASE("clearing children destroys the subtree and clears input targets") {
         int& m_destructions;
     };
 
-    ui::Node parent("parent");
+    Node parent("parent");
     auto& child = parent.add<LifetimeNode>(destructions);
     child.add<LifetimeNode>(destructions);
 
-    ui::InputRouter router;
+    InputRouter router;
     parent.set_input_router(&router);
     REQUIRE(router.set_focus(child));
     REQUIRE(router.capture_pointer(child));
@@ -447,12 +447,12 @@ TEST_CASE("clearing children destroys the subtree and clears input targets") {
 }
 
 TEST_CASE("visual bounds stay on layout unless paint overrides them") {
-    class NoItemNode final : public ui::Node {
+    class NoItemNode final : public Node {
     public:
-        using ui::Node::Node;
+        using Node::Node;
     };
 
-    class ItemNode final : public ui::Node {
+    class ItemNode final : public Node {
     public:
         ItemNode(std::string id, bool input) : Node(std::move(id)) {
             set_size({px(10.0F), px(10.0F)});
@@ -468,9 +468,9 @@ TEST_CASE("visual bounds stay on layout unless paint overrides them") {
         }
     };
 
-    class ManualRectNode final : public ui::Node {
+    class ManualRectNode final : public Node {
     public:
-        ManualRectNode() : ui::Node("manual") {}
+        ManualRectNode() : Node("manual") {}
 
     private:
         bool on_draw() override {
@@ -500,10 +500,10 @@ TEST_CASE("visual bounds stay on layout unless paint overrides them") {
     ImGui::End();
     ImGui::EndFrame();
 
-    const ui::Rect no_item_rect = no_item.layout().visual_rect();
-    const ui::Rect passive_item_rect = passive_item.layout().visual_rect();
-    const ui::Rect input_item_rect = input_item.layout().visual_rect();
-    const ui::Rect manual_rect = manual.layout().visual_rect();
+    const Rect no_item_rect = no_item.layout().visual_rect();
+    const Rect passive_item_rect = passive_item.layout().visual_rect();
+    const Rect input_item_rect = input_item.layout().visual_rect();
+    const Rect manual_rect = manual.layout().visual_rect();
 
     REQUIRE_FALSE(no_item_rect.valid());
     REQUIRE(passive_item_rect.size().x == 10.0F);
@@ -519,9 +519,9 @@ TEST_CASE("visual bounds stay on layout unless paint overrides them") {
 }
 
 TEST_CASE("nodes register only explicitly configured local input entries") {
-    class RectNode final : public ui::Node {
+    class RectNode final : public Node {
     public:
-        RectNode(std::string id, ui::Rect rect, std::function<void(ui::UiEvent&)> callback = {})
+        RectNode(std::string id, Rect rect, std::function<void(UiEvent&)> callback = {})
             : Node(std::move(id)), m_rect(rect) {
             _on_event = std::move(callback);
         }
@@ -532,15 +532,15 @@ TEST_CASE("nodes register only explicitly configured local input entries") {
             return true;
         }
 
-        ui::Rect m_rect;
+        Rect m_rect;
     };
 
-    ui::InputRouter router;
-    ui::Node root("root");
+    InputRouter router;
+    Node root("root");
     int callbacks = 0;
-    auto& passive = root.add<RectNode>("passive", ui::Rect{{100.0F, 20.0F}, {200.0F, 120.0F}});
+    auto& passive = root.add<RectNode>("passive", Rect{{100.0F, 20.0F}, {200.0F, 120.0F}});
     auto& target =
-        root.add<RectNode>("target", ui::Rect{{100.0F, 20.0F}, {200.0F, 120.0F}}, [&callbacks](ui::UiEvent&) { ++callbacks; });
+        root.add<RectNode>("target", Rect{{100.0F, 20.0F}, {200.0F, 120.0F}}, [&callbacks](UiEvent&) { ++callbacks; });
     target.set_input_target({{10.0F, 20.0F}, {50.0F, 60.0F}});
     root.set_input_router(&router);
 
@@ -550,15 +550,15 @@ TEST_CASE("nodes register only explicitly configured local input entries") {
     REQUIRE(router.node_at({180.0F, 100.0F}) == nullptr);
     REQUIRE(router.node_at({120.0F, 50.0F}) != &passive);
 
-    ui::UiEvent event = ui::UiEvent::make(ui::EventType::PointerDown);
+    UiEvent event = UiEvent::make(EventType::PointerDown);
     event.position = {120.0F, 50.0F};
-    event.button = ui::PointerButton::Left;
+    event.button = PointerButton::Left;
     REQUIRE_FALSE(router.dispatch(event));
     REQUIRE(callbacks == 1);
 }
 
 TEST_CASE("skipped explicitly placed nodes keep imgui child boundaries valid") {
-    class SkippedNode final : public ui::Node {
+    class SkippedNode final : public Node {
     private:
         bool on_draw() override {
             return false;
@@ -566,7 +566,7 @@ TEST_CASE("skipped explicitly placed nodes keep imgui child boundaries valid") {
     };
 
     ui_test::ImGuiContext context({200.0F, 120.0F});
-    ui::Container container("container");
+    Container container("container");
     container.set_size({px(100.0F), px(80.0F)});
     auto& skipped = container.add<SkippedNode>();
     skipped.set_layout({.placement = {.offset = {120.0F, 0.0F}}, .in_flow = false});
@@ -581,7 +581,7 @@ TEST_CASE("skipped explicitly placed nodes keep imgui child boundaries valid") {
 }
 
 TEST_CASE("overlay children stay in the surface window") {
-    class WindowNameNode final : public ui::Node {
+    class WindowNameNode final : public Node {
     public:
         std::string window_name;
 
@@ -593,7 +593,7 @@ TEST_CASE("overlay children stay in the surface window") {
     };
 
     ui_test::ImGuiContext context({200.0F, 120.0F});
-    ui::LayerContainer overlay("overlay", ui::LayerMode::Inline);
+    LayerContainer overlay("overlay", LayerMode::Inline);
     auto& child = overlay.add<WindowNameNode>();
 
     ImGui::NewFrame();

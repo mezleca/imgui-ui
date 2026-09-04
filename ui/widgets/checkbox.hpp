@@ -34,7 +34,8 @@ namespace ui {
     private:
         bool paint() override;
         void on_measure() override;
-        void on_layout() override;
+        void arrange_children();
+        Rect hit_rect(Rect visual_rect) const override;
 
         bool* m_value;
         CheckboxVisualNode* m_frame_node = nullptr;

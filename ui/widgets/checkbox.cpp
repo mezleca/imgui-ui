@@ -167,6 +167,7 @@ void CheckboxWidget::on_measure() {
 }
 
 bool CheckboxWidget::paint() {
+    arrange_children();
     ImGui::Dummy(layout().size());
 
     const InputState& state = input_state();
@@ -175,7 +176,7 @@ bool CheckboxWidget::paint() {
     return true;
 }
 
-void CheckboxWidget::on_layout() {
+void CheckboxWidget::arrange_children() {
     const ImVec2 widget_padding = style().padding();
     const ImVec2 frame_size = {m_box_size, m_box_size};
     const Rect& parent_content = layout().parent_content_rect();
@@ -206,4 +207,14 @@ void CheckboxWidget::on_layout() {
         *m_label_node, label_size,
         {.offset = {frame_offset.x + frame_size.x + label_spacing, frame_offset.y + (frame_size.y - label_size.y) * 0.5F}}
     );
+}
+
+Rect CheckboxWidget::hit_rect(Rect visual_rect) const {
+    const ImVec2 padding = style().padding();
+    const ImVec2 available = visual_rect.size();
+    const ImVec2 box_size = {
+        std::min(m_box_size, std::max(0.0F, available.x - padding.x * 2.0F)),
+        std::min(m_box_size, std::max(0.0F, available.y - padding.y * 2.0F)),
+    };
+    return Rect::from_position_size({visual_rect.min.x + padding.x, visual_rect.min.y + padding.y}, box_size);
 }
