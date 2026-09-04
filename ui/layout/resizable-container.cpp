@@ -28,17 +28,13 @@ ImGuiMouseCursor ResizableContainer::resize_cursor() const {
     return ImGuiMouseCursor_Arrow;
 }
 
-void ResizableContainer::update_resize_cursor() const {
-    ImGui::SetMouseCursor(resize_cursor());
-}
-
 void ResizableContainer::on_draw_end() {
     set_visual_rect(Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize()));
     draw_resize_indicator();
     StackContainer::on_draw_end();
 
     if (m_dragging) {
-        update_resize_cursor();
+        ImGui::SetMouseCursor(resize_cursor());
     }
 
     const ImVec2 cursor = ImGui::GetCursorScreenPos();
@@ -77,7 +73,7 @@ void ResizableContainer::handle_resize(UiEvent& event) {
     }
 
     if (event.type == EventType::PointerDown && event.button == PointerButton::Left && resize_handle().contains(event.position)) {
-        // capture only after the pointer enters the handle; later moves use the original size and pointer position.
+        // capture after the pointer enters the handle. later moves use the original size and pointer position.
         m_dragging = capture_pointer();
         if (!m_dragging) {
             return;
@@ -122,17 +118,17 @@ void ResizableContainer::draw_resize_indicator() {
     }
 
     const float border_thickness = style().border_thickness();
-    ImDrawList& foreground_draw_list = draw_list(DrawListTarget::Foreground);
+    ImDrawList& window_draw_list = draw_list(DrawListTarget::Window);
     const ImVec2 max = resize_handle().max;
 
     for (int i = 0; i < 3; ++i) {
         const float distance = 3.0F + static_cast<float>(i) * 4.0F;
         draw_line(
-            foreground_draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, ImColor(160, 160, 160, 255),
+            window_draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, ImColor(160, 160, 160, 255),
             border_thickness
         );
         draw_line(
-            foreground_draw_list, {max.x - distance + border_thickness + 0.5f, max.y},
+            window_draw_list, {max.x - distance + border_thickness + 0.5f, max.y},
             {max.x, max.y - distance + border_thickness + 0.5f}, ImColor{20, 20, 20, 255}, border_thickness
         );
     }

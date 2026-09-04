@@ -12,7 +12,7 @@ class UI;
 
 namespace ui {
     struct RuntimeConfig {
-        Theme theme = Theme::defaults();
+        Theme theme{};
         std::filesystem::path performance_directory;
         std::unique_ptr<TextureLoader> texture_loader;
     };

@@ -6,8 +6,8 @@
 
 class UI;
 
-// prepares shared assets before either example constructs its runtime.
+// fills the runtime config before runtime takes ownership of its assets.
 void configure_demo_runtime(ui::RuntimeConfig& config);
 
-// attaches the retained demo tree after the surface owns an active imgui context.
+// attaches the demo tree after ui creates its imgui context.
 void setup_demo(UI& surface, std::string backend);

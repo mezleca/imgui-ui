@@ -17,18 +17,23 @@ int main() {
 
     SetConfigFlags(FLAG_VSYNC_HINT);
 
-    // create the backend & window
+    // let the backend create and own the raylib window.
     auto backend = std::make_unique<ui::RaylibBackend>(ui::BackendConfig{
         .title = "imgui-ui raylib",
         .size = {1120.0F, 920.0F},
         .resizable = true,
     });
 
-    UI surface(runtime, std::move(backend));
+    UI surface(
+        runtime, {
+                     .backend = std::move(backend),
+                     .enable_debugger = true,
+                 }
+    );
 
-    // or just the backend
+    // use the attached constructor when raylib was initialized by the application.
     // auto backend = std::make_unique<ui::RaylibBackend>();
-    // ui surface(runtime, std::move(backend));
+    // UI surface(runtime, {.backend = std::move(backend)});
     if (!surface.ready()) return 1;
 
     setup_demo(surface, "raylib");
@@ -36,9 +41,9 @@ int main() {
         // raylib input is not polled by the framework automatically, so forward it before update and draw each frame.
         ui::process_raylib_events(surface);
 
-        surface.begin_input_frame();
         surface.begin_frame();
-        surface.root().update(ImGui::GetIO().DeltaTime);
+        const float dt = ImGui::GetIO().DeltaTime;
+        surface.root().update(dt);
         surface.root().draw();
         surface.end_frame();
     }

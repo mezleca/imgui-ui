@@ -116,6 +116,9 @@ namespace ui {
         /// pointer release will not synthesize a click from this press.
         bool default_prevented = false;
 
+        /// platform backends must not forward this event to imgui.
+        bool native_input_blocked = false;
+
         EventType type;
         PointerButton button = PointerButton::None;
         Key key = Key::Unknown;
@@ -128,6 +131,7 @@ namespace ui {
                 .handled = false,
                 .propagation_stopped = false,
                 .default_prevented = false,
+                .native_input_blocked = false,
                 .type = type,
                 .button = PointerButton::None,
                 .key = Key::Unknown,
@@ -148,6 +152,10 @@ namespace ui {
         /// prevents the router's default action for this event.
         void prevent_default() {
             default_prevented = true;
+        }
+
+        void block_native_input() {
+            native_input_blocked = true;
         }
     };
 

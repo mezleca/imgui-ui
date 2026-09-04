@@ -25,7 +25,7 @@ namespace ui {
         NumberInputWidget(UI& ui, T& value, std::string id = {})
             : Widget(std::move(id), "NumberInput"), m_value(value), m_number(&value),
               m_format(std::floating_point<T> ? "%.3f" : ""), m_speed(std::floating_point<T> ? 0.1F : 1.0F) {
-            apply_theme_defaults(ui.theme());
+            initialize(ui);
         }
 
         NumberInputWidget& set_label(std::string label);
@@ -69,6 +69,7 @@ namespace ui {
         bool draw_value(T& value);
 
         void sync_value() const;
+        void initialize(UI& ui);
         void on_measure() override;
 
     protected:

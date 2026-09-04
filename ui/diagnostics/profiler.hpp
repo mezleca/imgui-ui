@@ -117,7 +117,11 @@ namespace ui {
 #define UI_PROFILE_JOIN_INNER(left, right) left##right
 #define UI_PROFILE_JOIN(left, right) UI_PROFILE_JOIN_INNER(left, right)
 
-#if OSU_STUFF_ENABLE_PROFILING
+#ifndef IMGUI_UI_ENABLE_PROFILING
+#define IMGUI_UI_ENABLE_PROFILING 1
+#endif
+
+#if IMGUI_UI_ENABLE_PROFILING
 #define UI_PROFILE_SCOPE(profiler, name)                                                                                         \
     ::ui::ScopedProfileZone UI_PROFILE_JOIN(profile_scope_, __LINE__) {                                                          \
         profiler, name                                                                                                           \

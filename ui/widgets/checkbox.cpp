@@ -2,7 +2,6 @@
 #include "../imgui/draw.hpp"
 #include "../style/theme.hpp"
 #include "../ui.hpp"
-#include "widget.hpp"
 #include "text.hpp"
 
 #include <algorithm>

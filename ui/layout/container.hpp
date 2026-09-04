@@ -2,14 +2,13 @@
 
 #include "../widgets/widget.hpp"
 
-#include <imgui.h>
 #include <string>
 #include <string_view>
 
 namespace ui {
     class Container : public Widget {
     public:
-        explicit Container(std::string id, std::string_view type_name = "Container", bool input_target = false);
+        explicit Container(std::string id, std::string_view type_name = "Container");
 
         Container& set_scrollable(bool scrollable);
 
@@ -21,10 +20,6 @@ namespace ui {
 
         bool paint() override;
         void on_draw_end() override;
-
-        virtual bool accepts_imgui_input() const {
-            return true;
-        }
 
     private:
         bool m_scrollable = false;

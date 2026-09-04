@@ -10,20 +10,6 @@ namespace ui {
     static constexpr float TRANSITION_SETTLE_EPSILON = 0.003f;
     static constexpr float VISIBILITY_OPACITY_THRESHOLD = 0.002f;
 
-    struct StyleTransitionData {
-        StyleType to = StyleType::DEFAULT;
-        bool done = true;
-
-        void start(StyleType new_to) {
-            to = new_to;
-            done = false;
-        }
-
-        void end() {
-            done = true;
-        }
-    };
-
     /// owns style slots and interpolates the selected slot and opacity.
     /// widgets use it as the single source for appearance and visual input acceptance.
     class VisualState {
@@ -44,8 +30,7 @@ namespace ui {
 
         /// selects a slot without running a style transition.
         void snap_to_style(StyleType type) {
-            transition_data.to = type;
-            transition_data.done = true;
+            m_target_style = type;
             m_transition_style.reset();
         }
 
@@ -105,11 +90,10 @@ namespace ui {
             }
 
             if (m_transition_style.has_value()) {
-                const Style& target_style = styles[static_cast<size_t>(transition_data.to)];
+                const Style& target_style = styles[static_cast<size_t>(m_target_style)];
                 Style::lerp(*m_transition_style, target_style, dt);
 
                 if (m_transition_style->is_close_to(target_style, TRANSITION_SETTLE_EPSILON)) {
-                    transition_data.end();
                     m_transition_style.reset();
                 }
             }
@@ -119,15 +103,15 @@ namespace ui {
 
         /// selects a style slot and begins interpolation when necessary.
         void set_style(StyleType type) {
-            if (transition_data.to == type) {
+            if (m_target_style == type) {
                 return;
             }
 
             if (!m_transition_style.has_value()) {
-                m_transition_style.emplace(styles[static_cast<size_t>(transition_data.to)]);
+                m_transition_style.emplace(styles[static_cast<size_t>(m_target_style)]);
             }
 
-            transition_data.start(type);
+            m_target_style = type;
         }
 
         /// interaction precedence is active, focus, hover, then default.
@@ -161,12 +145,12 @@ namespace ui {
         }
 
         StyleType style_type() const {
-            return transition_data.to;
+            return m_target_style;
         }
 
         /// resolved style currently used for drawing.
         Style& style() {
-            return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(transition_data.to)];
+            return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(m_target_style)];
         }
 
         /// mutable named slot, independent from the current transition.
@@ -175,7 +159,7 @@ namespace ui {
         }
 
         const Style& style() const {
-            return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(transition_data.to)];
+            return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(m_target_style)];
         }
 
         const Style& style(StyleType type) const {
@@ -183,7 +167,7 @@ namespace ui {
         }
 
     private:
-        StyleTransitionData transition_data;
+        StyleType m_target_style = StyleType::DEFAULT;
         FloatValue current_opacity;
         Style styles[static_cast<size_t>(StyleType::_COUNT)];
         std::optional<Style> m_transition_style;

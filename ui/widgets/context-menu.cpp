@@ -4,7 +4,6 @@
 #include "../ui.hpp"
 #include "../imgui/draw.hpp"
 #include "../resources/texture-registry.hpp"
-#include "widget.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -41,7 +40,6 @@ public:
     ContextMenuItemNode(ContextMenuWidget& menu, std::string label, ContextMenuCallback callback)
         : DrawListWidget("item", "ContextMenuItem"), m_menu(menu), m_label(std::move(label)), m_callback(std::move(callback)) {
         set_size({grow(), px(MENU_ITEM_HEIGHT)});
-        set_input_target();
         apply_theme_defaults(m_menu.m_theme);
 
         _on_event = [this](UiEvent& event) {
@@ -195,9 +193,6 @@ ContextMenuWidget& ContextMenuWidget::set_submenu_icon(Texture* icon) {
     for (ContextMenuItemNode* item : m_items) {
         if (item->m_submenu != nullptr) {
             item->m_submenu_icon = icon;
-        }
-
-        if (item->m_submenu != nullptr) {
             item->m_submenu->set_submenu_icon(icon);
         }
     }

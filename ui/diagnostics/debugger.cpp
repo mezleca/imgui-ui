@@ -1,15 +1,14 @@
 #include "debugger.hpp"
-#include "backend.hpp"
-#include "../../ui.hpp"
-#include "../opengl/texture-loader.hpp"
-#include "../../resources/svg.hpp"
-#include "../../style/styled-node.hpp"
-#include "../../style/theme.hpp"
-#include "../../imgui/context-scope.hpp"
+#include "../imgui/context-scope.hpp"
+#include "../resources/svg.hpp"
+#include "../resources/texture-registry.hpp"
+#include "../style/styled-node.hpp"
+#include "../style/theme.hpp"
+#include "../tree/node.hpp"
+#include "../ui.hpp"
 
-#include <SDL3/SDL_keyboard.h>
-#include <SDL3/SDL_log.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_stdlib.h>
 
 #include <algorithm>
@@ -31,20 +30,6 @@ static Node* find_node_by_identity(Node& root, uint64_t identity) {
     }
 
     return nullptr;
-}
-
-static bool contains_identity(const Node& root, uint64_t identity) {
-    if (root.identity() == identity) {
-        return true;
-    }
-
-    for (const auto& child : root.children()) {
-        if (contains_identity(*child, identity)) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 static bool is_effectively_visible(const Node& node) {
@@ -103,15 +88,14 @@ static std::string_view size_mode_name(LayoutSizeMode mode) {
     return "unknown";
 }
 
-static constexpr ImVec2 ICON_SIZE = {16.0F, 16.0F};
-static constexpr float WINDOW_PADDING = 10.0F;
+static constexpr float WINDOW_PADDING = 8.0F;
+static constexpr ImVec2 INSPECT_ICON_SIZE = {18.0F, 18.0F};
+static constexpr ImVec2 CLOSE_ICON_SIZE = {18.0F, 18.0F};
+static constexpr float OVERLAY_ACTIVE_DURATION = 1.0F;
 static constexpr float ITEM_SPACING = 12.0F;
 static constexpr float INPUT_MAX_WIDTH = 180.0F;
 static constexpr ImVec2 INPUT_PADDING = {0.0F, 0.0F};
 static constexpr ImVec2 SECTION_PADDING = {10.0F, 8.0F};
-
-static bool property_section_open = false;
-static bool property_section_indented = false;
 
 template <typename... Args>
 static void draw_property_value(std::string_view label, std::string_view format, Args&&... args) {
@@ -121,22 +105,18 @@ static void draw_property_value(std::string_view label, std::string_view format,
     ImGui::TextDisabled("%s", value.c_str());
 }
 
-static void end_property_section() {
-    if (!property_section_open) {
+void Debugger::end_property_section() {
+    if (!m_property_section_open) {
         return;
     }
 
-    if (property_section_indented) {
-        ImGui::Unindent(SECTION_PADDING.x);
-        ImGui::Dummy({0.0F, SECTION_PADDING.y});
-        property_section_indented = false;
-    }
-
+    ImGui::Unindent(SECTION_PADDING.x);
+    ImGui::Dummy({0.0F, SECTION_PADDING.y});
     ImGui::EndChild();
-    property_section_open = false;
+    m_property_section_open = false;
 }
 
-static void draw_property_section(std::string_view label) {
+void Debugger::draw_property_section(std::string_view label) {
     end_property_section();
 
     ImGui::Spacing();
@@ -150,7 +130,7 @@ static void draw_property_section(std::string_view label) {
     );
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
-    property_section_open = true;
+    m_property_section_open = true;
 
     const ImVec2 item_spacing = ImGui::GetStyle().ItemSpacing;
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {item_spacing.x, 2.0F});
@@ -162,7 +142,6 @@ static void draw_property_section(std::string_view label) {
     ImGui::Separator();
     ImGui::PopStyleVar();
     ImGui::Indent(SECTION_PADDING.x);
-    property_section_indented = true;
 }
 
 template <typename DrawInput>
@@ -261,26 +240,6 @@ static bool draw_border_flags(std::string_view label, uint8_t* value) {
     });
 }
 
-static SDL_WindowID mouse_event_window_id(const SDL_Event& event) {
-    switch (event.type) {
-        case SDL_EVENT_MOUSE_MOTION:
-            return event.motion.windowID;
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        case SDL_EVENT_MOUSE_BUTTON_UP:
-            return event.button.windowID;
-        default:
-            return 0;
-    }
-}
-
-static ImVec2 mouse_event_position(const SDL_Event& event) {
-    if (event.type == SDL_EVENT_MOUSE_MOTION) {
-        return {event.motion.x, event.motion.y};
-    }
-
-    return {event.button.x, event.button.y};
-}
-
 static bool draw_number_input(
     std::string_view label, ImGuiDataType type, void* values, int components, float speed, const void* minimum,
     const void* maximum, const char* format
@@ -304,9 +263,10 @@ static bool draw_number_input(
                 ImGui::SameLine(0.0F, 2.0F);
                 ImGui::SetNextItemWidth(component_width);
                 void* component = raw_values + value_size * static_cast<size_t>(index);
-                changed = (minimum != nullptr && maximum != nullptr
-                               ? ImGui::DragScalar("##component", type, component, speed, minimum, maximum, format)
-                               : ImGui::DragScalar("##component", type, component, speed, nullptr, nullptr, format)) ||
+                changed = ImGui::DragScalar(
+                              "##component", type, component, speed, minimum != nullptr && maximum != nullptr ? minimum : nullptr,
+                              minimum != nullptr && maximum != nullptr ? maximum : nullptr, format
+                          ) ||
                           changed;
                 ImGui::PopID();
             }
@@ -337,6 +297,24 @@ static bool draw_slider(std::string_view label, float* value, float minimum, flo
     });
 }
 
+static void draw_fallback_inspect_icon(ImDrawList& draw_list, ImVec2 min, ImVec2 max, ImU32 color) {
+    const float scale = std::min(max.x - min.x, max.y - min.y) / 24.0F;
+    const auto point = [min, scale](float x, float y) { return ImVec2{min.x + x * scale, min.y + y * scale}; };
+
+    draw_list.AddRect(point(2.0F, 2.0F), point(19.0F, 19.0F), color, 2.0F * scale, 0, 1.8F * scale);
+    draw_list.AddLine(point(12.0F, 12.0F), point(16.2F, 22.0F), color, 1.8F * scale);
+    draw_list.AddLine(point(16.2F, 22.0F), point(17.7F, 17.6F), color, 1.8F * scale);
+    draw_list.AddLine(point(17.7F, 17.6F), point(22.0F, 16.2F), color, 1.8F * scale);
+    draw_list.AddLine(point(22.0F, 16.2F), point(12.0F, 12.0F), color, 1.8F * scale);
+    draw_list.AddLine(point(18.0F, 18.0F), point(21.0F, 21.0F), color, 1.8F * scale);
+}
+
+static void draw_fallback_close_icon(ImDrawList& draw_list, ImVec2 min, ImVec2 max, ImU32 color) {
+    const float inset = std::min(max.x - min.x, max.y - min.y) * 0.28F;
+    draw_list.AddLine({min.x + inset, min.y + inset}, {max.x - inset, max.y - inset}, color, 1.8F);
+    draw_list.AddLine({max.x - inset, min.y + inset}, {min.x + inset, max.y - inset}, color, 1.8F);
+}
+
 static bool
 draw_number_input(std::string_view label, int* values, int components = 1, float speed = 1.0F, int minimum = 0, int maximum = 0) {
     const bool limited = maximum > minimum;
@@ -345,65 +323,15 @@ draw_number_input(std::string_view label, int* values, int components = 1, float
     );
 }
 
-Debugger::Debugger(UI& target) : m_target(target) {}
-
-Debugger::~Debugger() {
-    shutdown();
+Debugger::Debugger(UI& target) : m_target(target) {
+    m_inspect_icon = m_target.runtime().textures().add("debugger-inspect", INSPECT_SVG);
+    m_close_icon = m_target.runtime().textures().add("debugger-close", CLOSE_SVG);
 }
 
-void Debugger::shutdown() {
+Debugger::~Debugger() {
     if (m_target.profiler().enabled() && m_target.profiler().has_report()) {
         m_target.profiler().save_report();
     }
-
-    if (m_ui == nullptr) {
-        return;
-    }
-
-    if (m_inspect_icon != nullptr) {
-        m_inspect_icon->release_context(m_ui->imgui_context());
-        m_inspect_icon.reset();
-    }
-
-    m_ui.reset();
-
-    m_target.backend().make_current();
-}
-
-void Debugger::setup() {
-    BackendConfig config{
-        .title = "debugger",
-        .size = {560.0F, 720.0F},
-        .shared_with = &m_target.backend(),
-        .resizable = true,
-        .visible = false,
-        .swap_interval = 0,
-    };
-
-    m_ui = std::make_unique<UI>(m_target.runtime(), std::make_unique<SdlBackend>(std::move(config)));
-
-    if (!m_ui->ready()) {
-        SDL_Log("Debugger: failed to initialize debugger UI");
-        m_ui.reset();
-        m_target.backend().make_current();
-        return;
-    }
-
-    m_ui->backend().position_next_to(m_target.backend(), 16.0F);
-
-    const ImGuiContextScope scope(m_ui->imgui_context());
-
-    OpenGLTextureLoader loader;
-    m_inspect_icon = loader.load(INSPECT_SVG, "debugger-inspect");
-    m_icon.set_texture(m_inspect_icon.get());
-    m_icon.set_size({px(ICON_SIZE.x), px(ICON_SIZE.y)});
-    m_icon.configure_all_styles([this](Style& style) { style.color(m_ui->theme().text_secondary_color); });
-
-    m_target.backend().make_current();
-}
-
-void Debugger::set_icon(Texture* icon) {
-    m_icon.set_texture(icon != nullptr ? icon : m_inspect_icon.get());
 }
 
 void Debugger::set_hotkey(ImGuiKeyChord hotkey) {
@@ -468,75 +396,121 @@ void Debugger::remove_target() {
     }
 }
 
-bool Debugger::ready() const {
-    return m_ui != nullptr && m_ui->ready();
-}
-
 void Debugger::set_enabled(bool enabled) {
     if (m_enabled == enabled) {
         return;
     }
 
     m_enabled = enabled;
-    if (!enabled) {
-        m_target.profiler().set_enabled(false);
-        m_target.profiler().save_report();
-    }
-
-    if (m_ui == nullptr) {
+    if (enabled) {
+        m_overlay_focused = true;
+        m_overlay_idle_time = 0.0F;
         return;
     }
 
-    if (m_enabled) {
-        m_ui->backend().show();
-        m_ui->backend().raise();
-        return;
-    }
+    m_target.profiler().set_enabled(false);
+    m_target.profiler().save_report();
 
-    m_ui->backend().hide();
+    m_overlay_rect = {};
+    m_overlay_focused = false;
+    m_overlay_idle_time = 0.0F;
+    m_overlay_pointer_capture = false;
+    m_inspect_pointer_capture = false;
     set_inspect_mode(false);
 }
 
 void Debugger::set_style(const ImGuiStyle& style) {
-    if (!ready()) {
+    if (m_target.imgui_context() == nullptr) {
         return;
     }
 
-    const ImGuiContextScope scope(m_ui->imgui_context());
+    const ImGuiContextScope scope(m_target.imgui_context());
     ImGui::GetStyle() = style;
 }
 
 void Debugger::set_font(std::string_view id, int size) {
-    if (!ready()) {
+    if (m_target.imgui_context() == nullptr) {
         return;
     }
 
-    const ImGuiContextScope scope(m_ui->imgui_context());
-    m_font = m_ui->get_font(id, size);
-
-    if (m_font == nullptr) {
-        SDL_Log("failed to load debugger font '%.*s' variation %d", static_cast<int>(id.size()), id.data(), size);
-    }
+    m_font = m_target.get_font(id, size);
 }
 
-bool Debugger::handle_inspect_event(const SDL_Event& event, bool mouse_event, SDL_WindowID main_window_id) {
-    if (!m_inspect_mode || !mouse_event || mouse_event_window_id(event) != main_window_id) {
+bool Debugger::overlay_contains(ImVec2 position) const {
+    return m_enabled && m_overlay_rect.valid() && m_overlay_rect.contains(position);
+}
+
+bool Debugger::handle_inspect_event(UiEvent& event) {
+    const bool pointer_event = contains(EventMask::Pointer, event_mask(event.type));
+    const bool keyboard_event = contains(EventMask::Keyboard, event_mask(event.type));
+
+    if (m_inspect_mode && keyboard_event) {
+        event.mark_handled();
+        return true;
+    }
+
+    if (!pointer_event) {
         return false;
     }
 
-    Node* focused_node = pick_node(m_target.root(), mouse_event_position(event));
+    if (m_inspect_pointer_capture) {
+        event.block_native_input();
+        event.mark_handled();
+        if (event.type == EventType::PointerUp) {
+            m_inspect_pointer_capture = false;
+        }
+        return true;
+    }
 
-    if (!focused_node) {
+    if (m_overlay_pointer_capture) {
+        event.mark_handled();
+        if (event.type == EventType::PointerUp) {
+            m_overlay_pointer_capture = false;
+        }
+        return true;
+    }
+
+    if (m_overlay_focused && ImGui::GetCurrentContext() != nullptr && ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup)) {
+        event.mark_handled();
+        if (event.type == EventType::PointerDown) {
+            m_overlay_pointer_capture = true;
+        } else if (event.type == EventType::PointerUp) {
+            m_overlay_pointer_capture = false;
+        }
+        return true;
+    }
+
+    if (overlay_contains(event.position)) {
+        if (event.type == EventType::PointerDown) {
+            m_overlay_focused = true;
+            m_overlay_idle_time = 0.0F;
+            m_overlay_pointer_capture = true;
+            m_target.input_router().clear_focus();
+        }
+        event.mark_handled();
+        return true;
+    }
+
+    if (!m_inspect_mode) {
+        return false;
+    }
+
+    event.block_native_input();
+    event.mark_handled();
+    if (event.type != EventType::PointerMove && event.type != EventType::PointerDown) {
+        return true;
+    }
+
+    Node* focused_node = pick_node(m_target.root(), event.position);
+    if (focused_node == nullptr) {
         m_hover_target = nullptr;
         m_hover_identity = 0;
-        return false;
-    }
-
-    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+    } else if (event.type == EventType::PointerDown && event.button == PointerButton::Left) {
+        m_inspect_pointer_capture = true;
         set_target(focused_node);
         m_hover_target = nullptr;
         m_hover_identity = 0;
-        set_inspect_mode(false, true);
+        set_inspect_mode(false);
         m_scroll_to_target = true;
     } else {
         m_hover_target = focused_node;
@@ -546,54 +520,38 @@ bool Debugger::handle_inspect_event(const SDL_Event& event, bool mouse_event, SD
     return true;
 }
 
-bool Debugger::process_sdl_event(const SDL_Event* event) {
-    if (event == nullptr || !ready()) {
+bool Debugger::handle_input(UiEvent& event) {
+    if (!m_enabled) {
         return false;
     }
 
-    const SDL_WindowID debug_window_id = static_cast<SDL_WindowID>(m_ui->backend().window_id());
-    const SDL_WindowID main_window_id = static_cast<SDL_WindowID>(m_target.backend().window_id());
-    SDL_WindowID event_window_id = mouse_event_window_id(*event);
-    const bool mouse_event = event_window_id != 0;
-
-    if (event->type == SDL_EVENT_MOUSE_WHEEL) {
-        event_window_id = event->wheel.windowID;
-    }
-
-    if (handle_inspect_event(*event, mouse_event, main_window_id)) {
+    if (handle_inspect_event(event)) {
         return true;
     }
 
-    if (mouse_event && event_window_id == main_window_id && event->type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-        event->button.button == SDL_BUTTON_LEFT && !m_inspect_mode && m_highlight_selected) {
+    if (m_overlay_focused && contains(EventMask::Keyboard, event_mask(event.type))) {
+        event.mark_handled();
+        return true;
+    }
+
+    if (event.type == EventType::PointerDown && event.button == PointerButton::Left && m_highlight_selected) {
         m_highlight_selected = false;
         m_highlight_valid = false;
     }
 
-        // inspect mode belongs to the main application window.
-        // debugger controls will not receive mouse input.
-    if (mouse_event && event_window_id != debug_window_id) {
-        return false;
+    if (event.type == EventType::PointerDown) {
+        if (m_overlay_focused) {
+            m_overlay_idle_time = 0.0F;
+        }
+        m_overlay_focused = false;
     }
 
-    if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event->window.windowID == debug_window_id) {
-        set_enabled(false);
-        return true;
-    }
-
-    return ui::process_sdl_event(*m_ui, *event);
+    return false;
 }
 
-void Debugger::set_inspect_mode(bool enabled, bool wait_for_release) {
+void Debugger::set_inspect_mode(bool enabled) {
     m_inspect_mode = enabled;
-
-    if (enabled) {
-        m_target.input_router().set_debug_inspect_mode(true);
-    } else if (wait_for_release) {
-        m_target.input_router().finish_debug_inspect_mode();
-    } else {
-        m_target.input_router().clear_debug_inspect_mode();
-    }
+    m_target.input_router().set_debug_inspect_mode(enabled);
 
     if (!enabled) {
         m_hover_target = nullptr;
@@ -601,20 +559,25 @@ void Debugger::set_inspect_mode(bool enabled, bool wait_for_release) {
     }
 }
 
-void Debugger::update(float dt) {
-    if (!ready()) {
+void Debugger::update() {
+    if (m_target.imgui_context() == nullptr) {
         return;
     }
 
-    m_icon.update(dt);
-
-    const bool focused = m_target.backend().focused();
-
-    if (focused && ImGui::IsKeyChordPressed(m_hotkey)) {
-        set_enabled(!m_enabled);
+    const ImGuiContextScope scope(m_target.imgui_context());
+    if (ImGui::IsKeyChordPressed(m_hotkey)) {
+        toggle();
     }
 
-    m_target.input_router().set_debug_inspect_mode(m_inspect_mode);
+    if (!m_enabled) {
+        return;
+    }
+
+    if (m_overlay_focused) {
+        m_overlay_idle_time = 0.0F;
+    } else {
+        m_overlay_idle_time += std::max(0.0F, ImGui::GetIO().DeltaTime);
+    }
 }
 
 void Debugger::refresh_highlight() {
@@ -641,7 +604,7 @@ bool Debugger::should_restore_flow_position() const {
     }
 
     const Placement& placement = m_node_target->layout().placement();
-    return placement.anchor == Anchor::TopLeft && placement.origin == Origin::TopLeft && placement.offset.x == 0.0F &&
+    return placement.anchor == Anchor::TopLeft && placement.origin == Anchor::TopLeft && placement.offset.x == 0.0F &&
            placement.offset.y == 0.0F;
 }
 
@@ -658,23 +621,25 @@ void Debugger::draw_highlight() {
     );
 }
 
-void Debugger::render_node_tree(Node& node, int depth, Node*& selected_target, bool update_target) {
+void Debugger::render_node_tree(Node& node, int depth) {
     const bool effectively_visible = is_effectively_visible(node);
     ImGui::PushID(&node);
-    ImGui::PushStyleColor(ImGuiCol_Text, effectively_visible ? m_ui->theme().text_color : m_ui->theme().text_secondary_color);
+    ImGui::PushStyleColor(
+        ImGuiCol_Text, effectively_visible ? m_target.theme().text_color : m_target.theme().text_secondary_color
+    );
 
     ImGuiTreeNodeFlags flags = depth < 1 ? ImGuiTreeNodeFlags_DefaultOpen : 0;
     flags |= ImGuiTreeNodeFlags_SpanAvailWidth;
 
-    if (m_target_identity != 0 && node.identity() != m_target_identity && contains_identity(node, m_target_identity)) {
+    if (m_node_target != nullptr && m_node_target != &node && node.contains(m_node_target)) {
         ImGui::SetNextItemOpen(true, ImGuiCond_Always);
     }
 
     if (m_target_identity != 0 && node.identity() == m_target_identity) {
         flags |= ImGuiTreeNodeFlags_Selected;
-        ImGui::PushStyleColor(ImGuiCol_Header, m_ui->theme().accent_color);
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, m_ui->theme().accent_hover_color);
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive, m_ui->theme().accent_color);
+        ImGui::PushStyleColor(ImGuiCol_Header, m_target.theme().accent_color);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, m_target.theme().accent_hover_color);
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, m_target.theme().accent_color);
     }
 
     if (node.children().empty()) {
@@ -710,18 +675,14 @@ void Debugger::render_node_tree(Node& node, int depth, Node*& selected_target, b
     ImGui::PopID();
 
     if (clicked) {
-        if (update_target) {
-            if (selected_target == &node) {
-                m_highlight_selected = !m_highlight_selected;
-            }
-            set_target(&node);
-            m_scroll_to_target = true;
-        } else {
-            selected_target = &node;
+        if (m_node_target == &node) {
+            m_highlight_selected = !m_highlight_selected;
         }
+        set_target(&node);
+        m_scroll_to_target = true;
     }
 
-    if (update_target && &node == selected_target && m_scroll_to_target) {
+    if (&node == m_node_target && m_scroll_to_target) {
         const ImVec2 item_min = ImGui::GetItemRectMin();
         const ImVec2 item_max = ImGui::GetItemRectMax();
         if (!ImGui::IsRectVisible(item_min, item_max)) ImGui::SetScrollHereY(0.5F);
@@ -729,7 +690,7 @@ void Debugger::render_node_tree(Node& node, int depth, Node*& selected_target, b
 
     if (expanded) {
         for (const auto& child : node.children()) {
-            render_node_tree(*child, depth + 1, selected_target, update_target);
+            render_node_tree(*child, depth + 1);
         }
 
         if (!node.children().empty()) {
@@ -851,7 +812,7 @@ void Debugger::render_layout_properties() {
     int origin = static_cast<int>(request.placement.origin);
     if (draw_inline_combo("origin (node)", &origin, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
         update_request([&](LayoutConfig& config) {
-            config.placement.origin = static_cast<Origin>(origin);
+            config.placement.origin = static_cast<Anchor>(origin);
             config.in_flow = should_restore_flow_position();
         });
     }
@@ -866,7 +827,7 @@ void Debugger::render_layout_properties() {
         }
     }
 
-    if (request.placement.origin == Origin::Custom) {
+    if (request.placement.origin == Anchor::Custom) {
         ImVec2 origin_position = request.placement.origin_position;
         if (draw_number_input("origin point", &origin_position.x, 2, 0.01F)) {
             update_request([&](LayoutConfig& config) {
@@ -1035,10 +996,6 @@ void Debugger::render_style_properties() {
 
     draw_property_section("style");
 
-    if (m_target.backend().focused()) {
-        m_inspected_style = styled->style_type();
-    }
-
     int style_index = static_cast<int>(m_inspected_style);
     if (draw_inline_combo("state", &style_index, STYLE_NAMES, IM_ARRAYSIZE(STYLE_NAMES))) {
         m_inspected_style = static_cast<StyleType>(style_index);
@@ -1084,98 +1041,109 @@ void Debugger::render_properties() {
     }
 }
 
-void Debugger::render_toolbar() {
-    const ImVec2 icon_position = ImGui::GetCursorScreenPos();
-    const bool inspect_clicked = ImGui::InvisibleButton("##debug-inspect-mode", ICON_SIZE);
+static bool draw_icon_button(
+    const char* id, Texture* texture, ImVec2 icon_size, ImU32 icon_color,
+    void (*draw_fallback)(ImDrawList&, ImVec2, ImVec2, ImU32)
+) {
+    const float button_size = ImGui::GetFrameHeight();
+    const bool clicked = ImGui::InvisibleButton(id, {button_size, button_size});
+    const ImVec2 button_min = ImGui::GetItemRectMin();
+    const ImVec2 button_max = ImGui::GetItemRectMax();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-    ImGui::SetCursorScreenPos(icon_position);
-    m_icon.style().color().set(ImColor(m_inspect_mode ? m_ui->theme().accent_color : m_ui->theme().text_secondary_color));
-    m_icon.draw();
-
-    if (inspect_clicked) {
-        set_inspect_mode(!m_inspect_mode, m_inspect_mode);
+    if (ImGui::IsItemHovered()) {
+        draw_list->AddRectFilled(
+            button_min, button_max, ImGui::GetColorU32(ImGuiCol_FrameBgHovered), ImGui::GetStyle().FrameRounding
+        );
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     }
 
-    ImGui::SameLine(0.0F, ITEM_SPACING);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ICON_SIZE.y - ImGui::GetTextLineHeight()) * 0.5F);
-    ImGui::TextUnformatted("inspect");
+    const ImVec2 center = {(button_min.x + button_max.x) * 0.5F, (button_min.y + button_max.y) * 0.5F};
+    const ImVec2 icon_min = {center.x - icon_size.x * 0.5F, center.y - icon_size.y * 0.5F};
+    const ImVec2 icon_max = {icon_min.x + icon_size.x, icon_min.y + icon_size.y};
+    if (texture != nullptr) {
+        draw_list->AddImage(texture->get(icon_size), icon_min, icon_max, {0.0F, 0.0F}, {1.0F, 1.0F}, icon_color);
+    } else if (draw_fallback != nullptr) {
+        draw_fallback(*draw_list, icon_min, icon_max, icon_color);
+    }
+
+    return clicked;
+}
+
+void Debugger::render_toolbar() {
+    const bool inspect_clicked = draw_icon_button(
+        "##debug-inspect", m_inspect_icon, INSPECT_ICON_SIZE,
+        ImGui::GetColorU32(m_inspect_mode ? m_target.theme().accent_color : m_target.theme().text_secondary_color),
+        draw_fallback_inspect_icon
+    );
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(m_inspect_mode ? "stop inspect" : "inspect");
+    }
+
+    if (inspect_clicked) {
+        set_inspect_mode(!m_inspect_mode);
+    }
+
+    ImGui::SameLine(0.0F, 6.0F);
+    Profiler& profiler = m_target.profiler();
+    if (profiler.enabled()) {
+        ImGui::PushStyleColor(ImGuiCol_Button, m_target.theme().accent_color);
+    }
+    const bool profiling_clicked = ImGui::Button("frame time");
+    if (profiler.enabled()) {
+        ImGui::PopStyleColor();
+    }
+    if (profiling_clicked) {
+        profiler.set_enabled(!profiler.enabled());
+    }
+
+    ImGui::SameLine(0.0F, 10.0F);
+    ImGui::TextDisabled("%zu nodes", m_target.root().children().size());
+
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - ImGui::GetFrameHeight());
+    const bool close_clicked = draw_icon_button(
+        "##debug-close", m_close_icon, CLOSE_ICON_SIZE, ImGui::GetColorU32(m_target.theme().text_secondary_color),
+        draw_fallback_close_icon
+    );
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("close debugger");
+    }
+    if (close_clicked) {
+        set_enabled(false);
+    }
 
     ImGui::Separator();
 }
 
 void Debugger::render_node_list() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {WINDOW_PADDING, 4.0F});
-    ImGui::BeginChild(
-        "##debugger-nodes", {0.0F, 340.0F}, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar
-    );
+    ImGui::BeginChild("##debugger-nodes", {0.0F, 180.0F}, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoBackground);
     ImGui::PopStyleVar();
 
     for (const auto& child : m_target.root().children()) {
-        render_node_tree(*child, 0, m_node_target, true);
+        render_node_tree(*child, 0);
     }
-
-    Profiler& profiler = m_target.profiler();
-
-    const bool frame_time_enabled = profiler.enabled();
-    const ImVec2 button_padding = {6.0F, 6.0F};
-    const ImVec2 label_size = ImGui::CalcTextSize("frame time");
-    const ImVec2 button_size = {label_size.x + button_padding.x * 2.0F, label_size.y + button_padding.y * 2.0F};
-    const ImVec2 position = {
-        ImGui::GetWindowPos().x + ImGui::GetWindowSize().x - button_size.x - 6.0F,
-        ImGui::GetWindowPos().y + ImGui::GetWindowSize().y - button_size.y - 6.0F,
-    };
-
-    ImGui::SetCursorScreenPos(position);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{});
-    ImGui::BeginChild(
-        "##debugger-frame-time", button_size, ImGuiChildFlags_None,
-        ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
-    );
-    ImGui::PopStyleVar();
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, button_padding);
-
-    if (frame_time_enabled) {
-        ImGui::PushStyleColor(ImGuiCol_Button, m_ui->theme().accent_color);
-    }
-
-    if (ImGui::Button("frame time##toggle", button_size)) {
-        profiler.set_enabled(!frame_time_enabled);
-    }
-
-    if (frame_time_enabled) {
-        ImGui::PopStyleColor();
-    }
-
-    ImGui::PopStyleVar();
-    ImGui::EndChild();
 
     m_scroll_to_target = false;
     ImGui::EndChild();
 }
 
 void Debugger::render_sections() {
-    ImGui::BeginChild(
-        "##debugger-sections", {0.0F, 0.0F}, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar
-    );
+    ImGui::BeginChild("##debugger-sections", {0.0F, 0.0F}, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoBackground);
 
     if (ImGui::BeginTabBar("##debugger-sections-tabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
         const ImGuiTabItemFlags properties_flags = m_select_properties ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
         if (ImGui::BeginTabItem("properties", nullptr, properties_flags)) {
             m_select_properties = false;
-            ImGui::BeginChild(
-                "##debugger-properties-content", {0.0F, 0.0F}, ImGuiChildFlags_None,
-                ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar
-            );
+            ImGui::BeginChild("##debugger-properties-content", {0.0F, 0.0F}, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
             render_properties();
             ImGui::EndChild();
             ImGui::EndTabItem();
         }
 
         if (ImGui::BeginTabItem("profiling")) {
-            ImGui::BeginChild(
-                "##debugger-profiling-content", {0.0F, 0.0F}, ImGuiChildFlags_None,
-                ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar
-            );
+            ImGui::BeginChild("##debugger-profiling-content", {0.0F, 0.0F}, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
             render_profiling();
             ImGui::EndChild();
             ImGui::EndTabItem();
@@ -1188,25 +1156,27 @@ void Debugger::render_sections() {
 }
 
 void Debugger::render() {
-    if (!m_enabled || !ready()) {
+    if (!m_enabled || m_target.imgui_context() == nullptr) {
         return;
     }
 
-    synchronize_targets();
-    m_ui->begin_input_frame();
-    m_ui->begin_frame();
+    const ImGuiContextScope scope(m_target.imgui_context());
+    draw_highlight();
 
-    const ImVec2 display_size = m_ui->backend().display_size();
-
-    ImGui::SetNextWindowPos({0.0F, 0.0F}, ImGuiCond_Always);
-    ImGui::SetNextWindowSize(display_size, ImGuiCond_Always);
+    const ImVec2 display_size = ImGui::GetIO().DisplaySize;
+    const ImVec2 window_size = {std::min(440.0F, std::max(320.0F, display_size.x - 2.0F * WINDOW_PADDING)), 500.0F};
+    ImGui::SetNextWindowPos({display_size.x - WINDOW_PADDING, WINDOW_PADDING}, ImGuiCond_FirstUseEver, {1.0F, 0.0F});
+    ImGui::SetNextWindowSize(window_size, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints({300.0F, 220.0F}, {600.0F, std::max(300.0F, display_size.y - 2.0F * WINDOW_PADDING)});
+    const bool overlay_active = m_overlay_focused || m_overlay_idle_time < OVERLAY_ACTIVE_DURATION;
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, overlay_active ? 1.0F : 0.75F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {WINDOW_PADDING, WINDOW_PADDING});
 
-    const bool debugger_visible = ImGui::Begin(
-        "##ui-debugger", nullptr,
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings
-    );
+    const bool debugger_visible =
+        ImGui::Begin("ui debugger", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
+    // keep diagnostics above app layers without stealing keyboard focus.
+    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    m_overlay_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
     if (debugger_visible) {
         const bool has_font = m_font != nullptr;
 
@@ -1214,9 +1184,7 @@ void Debugger::render() {
             ImGui::PushFont(m_font);
         }
 
-        ImGui::BeginChild(
-            "##debugger-content", {0.0F, 0.0F}, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar
-        );
+        ImGui::BeginChild("##debugger-content", {0.0F, 0.0F}, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {ITEM_SPACING, 4.0F});
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {6.0F, 4.0F});
@@ -1233,7 +1201,5 @@ void Debugger::render() {
     }
 
     ImGui::End();
-    ImGui::PopStyleVar();
-
-    m_ui->end_frame();
+    ImGui::PopStyleVar(2);
 }

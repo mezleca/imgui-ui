@@ -27,7 +27,7 @@ auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
     .size = {900.0F, 600.0F},
 });
 
-UI surface(runtime, std::move(backend));
+UI surface(runtime, {.backend = std::move(backend)});
 surface.root().add<ui::ButtonWidget>(surface, "hello");
 ```
 

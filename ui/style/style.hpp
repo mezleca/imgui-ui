@@ -47,8 +47,8 @@ namespace ui {
             int colors = 0;
         };
 
-        Style() : m_padding({}) {
-            const Theme theme = Theme::defaults();
+        Style() {
+            const Theme theme{};
             m_color.set(theme.text_color);
             m_border_color.set(theme.border_color);
             m_background_color.set(theme.transparent);

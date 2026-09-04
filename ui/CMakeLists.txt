@@ -6,7 +6,6 @@ add_library(imgui-ui::core ALIAS imgui-ui-core)
 imgui_ui_enable_sanitizers(imgui-ui-core)
 
 target_compile_features(imgui-ui-core PUBLIC cxx_std_20)
-target_compile_definitions(imgui-ui-core PRIVATE "$<$<CONFIG:Debug>:OSU_STUFF_ENABLE_PROFILING=1>")
 target_include_directories(imgui-ui-core
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/.."
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glad/include"

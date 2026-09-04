@@ -10,8 +10,6 @@ namespace ui {
     class AssetRegistry {
     public:
         AssetRegistry() = default;
-        ~AssetRegistry() = default;
-
         AssetRegistry(const AssetRegistry&) = delete;
         AssetRegistry& operator=(const AssetRegistry&) = delete;
 
@@ -41,13 +39,7 @@ namespace ui {
 
         template <typename T>
         T* find_asset(std::string_view id) {
-            const auto result = m_assets.find(std::string{id});
-            if (result == m_assets.end()) {
-                return nullptr;
-            }
-
-            auto* typed = dynamic_cast<AssetEntry<T>*>(result->second.get());
-            return typed == nullptr ? nullptr : typed->value.get();
+            return const_cast<T*>(static_cast<const AssetRegistry&>(*this).find_asset<T>(id));
         }
 
         template <typename T>

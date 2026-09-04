@@ -14,7 +14,7 @@ namespace ui {
     struct EffectDefinition {
         /// called by the renderer for each command submitted with this effect.
         ImDrawCallback render = nullptr;
-        /// called after the backend context is ready; return false when setup fails.
+        /// called after the backend context is ready. return false when setup fails.
         EffectInitialize initialize = nullptr;
         /// called once at the start of each ui frame.
         EffectFrame begin_frame = nullptr;
@@ -26,7 +26,6 @@ namespace ui {
     class EffectRegistry {
     public:
         EffectRegistry() = default;
-        ~EffectRegistry() = default;
 
         EffectRegistry(const EffectRegistry&) = delete;
         EffectRegistry& operator=(const EffectRegistry&) = delete;
@@ -38,7 +37,7 @@ namespace ui {
         void begin_frame();
         void shutdown();
 
-        /// queues a callback and a render-state reset; payload must live through rendering.
+        /// queues a callback and a render-state reset. payload must live through rendering.
         bool submit(ImDrawList& draw_list, EffectId id, void* payload) const;
 
         bool initialized() const {

@@ -220,7 +220,7 @@ TEST_CASE("input blocker consumes only its selected event mask") {
     REQUIRE(target_events == 1);
 }
 
-TEST_CASE("input router reports per-frame hit-test work") {
+TEST_CASE("input router reports per-frame entry work") {
     std::vector<EventType> events;
     PointerEventNode node("target", events);
     InputRouter router;
@@ -232,12 +232,10 @@ TEST_CASE("input router reports per-frame hit-test work") {
 
     const InputRouterStats stats = router.stats();
     REQUIRE(stats.entry_count == 2);
-    REQUIRE(stats.hit_test_count == 2);
     REQUIRE(stats.entry_checks == 4);
 
     router.begin_frame();
     REQUIRE(router.stats().entry_count == 0);
-    REQUIRE(router.stats().hit_test_count == 0);
     REQUIRE(router.stats().entry_checks == 0);
 }
 
@@ -252,7 +250,6 @@ TEST_CASE("input router skips blocker hit testing when none are registered") {
 
     const InputRouterStats stats = router.stats();
     REQUIRE(stats.entry_count == 1);
-    REQUIRE(stats.hit_test_count == 1);
     REQUIRE(stats.entry_checks == 1);
 }
 
@@ -267,7 +264,6 @@ TEST_CASE("input router skips observer scans when none are registered") {
 
     const InputRouterStats stats = router.stats();
     REQUIRE(stats.entry_count == 1);
-    REQUIRE(stats.hit_test_count == 1);
     REQUIRE(stats.entry_checks == 1);
 }
 

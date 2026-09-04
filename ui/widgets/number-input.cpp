@@ -1,11 +1,16 @@
 #include "number-input.hpp"
 #include "../imgui/draw.hpp"
 #include "../style/theme.hpp"
+#include "../ui.hpp"
 
 #include <imgui.h>
 #include <algorithm>
 
 using namespace ui;
+
+void NumberInputWidget::initialize(UI& ui) {
+    apply_theme_defaults(ui.theme());
+}
 
 void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
     m_thumb_color = theme.control_mark_color;

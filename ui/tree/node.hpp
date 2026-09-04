@@ -21,15 +21,11 @@ namespace ui {
         bool hovered = false;
         bool active = false;
         bool focused = false;
+
+        constexpr bool operator==(const InputState&) const = default;
     };
 
-    /**
-     * retained tree node with owned children.
-     *
-     * update() advances visible state. draw() resolves layout, paints the
-     * subtree, and registers its input policy. layout() exposes requested and
-     * resolved geometry.
-     */
+    /** owns children and runs their update, layout, paint, and input passes. */
     class Node {
     public:
         explicit Node(std::string id = {});
@@ -68,10 +64,10 @@ namespace ui {
         /// destroys all children and invalidates measurement.
         void clear();
 
-        /// connects this subtree. the router clears the links before it is destroyed.
+        /// connects this subtree to a router.
         void set_input_router(InputRouter* router);
 
-        /// sets the profiler for this subtree.
+        /// records update and draw zones for this subtree.
         void set_profiler(Profiler* profiler);
 
         /// returns the first depth-first node with this id.
@@ -118,7 +114,7 @@ namespace ui {
             return m_visible;
         }
 
-        /// controls subtree visibility and hit testing.
+        /// hides this subtree and removes it from hit testing.
         void set_visible(bool visible);
 
         bool enabled() const {
@@ -138,12 +134,10 @@ namespace ui {
             return m_input_state;
         }
 
-        /// makes this node a pointer target.
-        /// area is local to visual_rect(). empty uses the full box.
+        /// routes pointer events from this area. an empty area uses the visual box.
         Node& set_input_target(Rect area = {});
 
-        /// blocks pointer events in this node's area.
-        /// descendants can still receive events.
+        /// blocks pointer events in area while keeping descendants interactive.
         Node& set_input_blocker(Rect area = {});
 
         /// removes this node's input policy.
@@ -182,7 +176,7 @@ namespace ui {
         /// dispatches an event to this node.
         virtual void dispatch_event(UiEvent& event);
 
-        /// applies placement and stores local and screen bounds.
+        /// resolves placement and stores local and screen bounds.
         void resolve_position();
 
         /// returns hit bounds for visual_rect().

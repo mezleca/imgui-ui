@@ -204,11 +204,13 @@ static Color raylib_color(ImVec4 color) {
     };
 }
 
-static bool dispatch_pointer(UI& surface, EventType type, ImVec2 position, PointerButton button = PointerButton::None) {
+static bool dispatch_pointer(UI& surface, EventType type, ImVec2 position, PointerButton button, bool& native_input_blocked) {
     UiEvent event = UiEvent::make(type);
     event.position = position;
     event.button = button;
-    return surface.dispatch(event);
+    const bool handled = surface.dispatch(event);
+    native_input_blocked |= event.native_input_blocked;
+    return handled;
 }
 
 RaylibBackend::RaylibBackend(BackendConfig config) : Backend(std::move(config)) {}
@@ -221,11 +223,6 @@ RaylibBackend::~RaylibBackend() {
 bool RaylibBackend::initialize() {
     if (m_attached) {
         return IsWindowReady();
-    }
-
-    if (config().shared_with != nullptr) {
-        TraceLog(LOG_ERROR, "ui: raylib does not support shared secondary windows");
-        return false;
     }
 
     if (IsWindowReady()) {
@@ -262,8 +259,6 @@ void RaylibBackend::shutdown_imgui() {
     ImGui_ImplOpenGL3_Shutdown();
     m_imgui_initialized = false;
 }
-
-void RaylibBackend::make_current() {}
 
 void RaylibBackend::begin_frame(ImVec4 clear_color) {
     if (!m_attached) {
@@ -314,30 +309,6 @@ ImVec2 RaylibBackend::display_size() const {
     return IsWindowReady() ? ImVec2{static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())} : ImVec2{};
 }
 
-bool RaylibBackend::focused() const {
-    return IsWindowReady() && IsWindowFocused();
-}
-
-void RaylibBackend::position_next_to(const Backend& target, float gap) {
-    if (m_attached || dynamic_cast<const RaylibBackend*>(&target) == nullptr || !IsWindowReady()) return;
-    const Vector2 position = GetWindowPosition();
-    SetWindowPosition(static_cast<int>(position.x + target.display_size().x + gap), static_cast<int>(position.y));
-}
-
-void RaylibBackend::show() {
-    if (!m_attached && IsWindowReady()) ClearWindowState(FLAG_WINDOW_HIDDEN);
-}
-
-void RaylibBackend::hide() {
-    if (!m_attached && IsWindowReady()) SetWindowState(FLAG_WINDOW_HIDDEN);
-}
-
-void RaylibBackend::raise() {
-    if (m_attached || !IsWindowReady()) return;
-    ClearWindowState(FLAG_WINDOW_MINIMIZED);
-    SetWindowFocused();
-}
-
 bool RaylibBackend::process_events(UI& surface) {
     if (WindowShouldClose()) {
         surface.exit();
@@ -354,15 +325,20 @@ bool RaylibBackend::process_events(UI& surface) {
     ImGuiIO& io = ImGui::GetIO();
     bool handled = false;
 
-    if (!m_has_pointer_position || mouse_position.x != m_pointer_position.x || mouse_position.y != m_pointer_position.y) {
-        // node drawing refreshes hover after registering current-frame regions, so stationary pointers need no synthetic
-        // move.
-        handled = dispatch_pointer(surface, EventType::PointerMove, input_position);
+    bool native_input_blocked = false;
+    if (surface.debugger_blocks_pointer_input() || !m_has_pointer_position || mouse_position.x != m_pointer_position.x ||
+        mouse_position.y != m_pointer_position.y) {
+        // stationary pointers need no synthetic move unless the debugger is tracking them.
+        handled = dispatch_pointer(surface, EventType::PointerMove, input_position, PointerButton::None, native_input_blocked);
         m_pointer_position = mouse_position;
         m_has_pointer_position = true;
     }
 
-    io.AddMousePosEvent(input_position.x, input_position.y);
+    if (native_input_blocked) {
+        io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+    } else {
+        io.AddMousePosEvent(input_position.x, input_position.y);
+    }
 
     constexpr std::array mouse_buttons = {
         std::pair{MOUSE_BUTTON_LEFT, PointerButton::Left},
@@ -374,14 +350,16 @@ bool RaylibBackend::process_events(UI& surface) {
         const auto [raylib_button, core_button] = mouse_buttons[index];
 
         if (IsMouseButtonPressed(raylib_button)) {
-            handled = dispatch_pointer(surface, EventType::PointerDown, mouse_position, core_button) || handled;
+            handled =
+                dispatch_pointer(surface, EventType::PointerDown, mouse_position, core_button, native_input_blocked) || handled;
         }
 
         if (IsMouseButtonReleased(raylib_button)) {
-            handled = dispatch_pointer(surface, EventType::PointerUp, mouse_position, core_button) || handled;
+            handled =
+                dispatch_pointer(surface, EventType::PointerUp, mouse_position, core_button, native_input_blocked) || handled;
         }
 
-        io.AddMouseButtonEvent(static_cast<int>(index), IsMouseButtonDown(raylib_button));
+        if (!native_input_blocked) io.AddMouseButtonEvent(static_cast<int>(index), IsMouseButtonDown(raylib_button));
     }
 
     const Vector2 wheel = GetMouseWheelMoveV();
@@ -390,7 +368,9 @@ bool RaylibBackend::process_events(UI& surface) {
         event.position = mouse_position;
         event.scroll = {wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE};
         handled = surface.dispatch(event) || handled;
-        io.AddMouseWheelEvent(wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE);
+        native_input_blocked |= event.native_input_blocked;
+        if (!native_input_blocked)
+            io.AddMouseWheelEvent(wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE);
     }
 
     io.AddKeyEvent(ImGuiMod_Ctrl, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));

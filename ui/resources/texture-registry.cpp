@@ -15,29 +15,11 @@ TextureRegistry::TextureRegistry(std::unique_ptr<TextureLoader> loader) : m_load
 }
 
 Texture* TextureRegistry::add(std::string id, std::filesystem::path location) {
-    if (Texture* existing = find(id); existing != nullptr) {
-        return existing;
-    }
-
-    if (m_loader == nullptr) {
-        return nullptr;
-    }
-
-    auto texture = m_loader->load(location, id);
-    return add_asset(std::move(id), std::move(texture));
+    return load_asset(std::move(id), std::move(location));
 }
 
 Texture* TextureRegistry::add(std::string id, std::string_view content) {
-    if (Texture* existing = find(id); existing != nullptr) {
-        return existing;
-    }
-
-    if (m_loader == nullptr) {
-        return nullptr;
-    }
-
-    auto texture = m_loader->load(content, id);
-    return add_asset(std::move(id), std::move(texture));
+    return load_asset(std::move(id), content);
 }
 
 Texture* TextureRegistry::find(std::string_view id) {

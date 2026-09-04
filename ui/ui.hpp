@@ -14,14 +14,21 @@
 class UI;
 
 namespace ui {
+    class Debugger;
     class Node;
+
+    struct UIConfig {
+        std::unique_ptr<Backend> backend;
+        /// creates debugger support. the overlay stays hidden until its hotkey opens it.
+        bool enable_debugger = false;
+    };
 } // namespace ui
 
 /// assets and theme remain owned by runtime.
 /// imgui context, root and router are surface-local.
 class UI {
 public:
-    explicit UI(ui::Runtime& runtime, std::unique_ptr<ui::Backend> backend = nullptr);
+    explicit UI(ui::Runtime& runtime, ui::UIConfig config = {});
     ~UI();
 
     UI(const UI&) = delete;
@@ -31,14 +38,12 @@ public:
         m_done = true;
     }
 
-    /// clears this surface's per-frame input state before the next render pass.
-    void begin_input_frame();
-
-    /// makes this surface current and starts its imgui frame.
-    /// call once before updating and drawing the root node.
+    /// clears the previous frame's input entries and starts imgui.
+    /// call after forwarding platform events and before updating the root.
+    /// the configured debugger hotkey is processed here.
     void begin_frame();
 
-    /// presents the imgui frame, then restores the previous context.
+    /// draws the configured debugger, presents the imgui frame, then restores the previous context.
     void end_frame();
 
     bool dispatch(ui::UiEvent& event);
@@ -59,13 +64,7 @@ public:
     }
 
     ImFont* get_primary_font(int size) const {
-        if (m_primary_font != nullptr) {
-            if (ImFont* font = m_primary_font->get(size); font != nullptr) {
-                return font;
-            }
-        }
-
-        return ImGui::GetCurrentContext() == nullptr ? nullptr : ImGui::GetFont();
+        return resolve_font(m_primary_font, size);
     }
 
     void set_secondary_font(ui::Font* font) {
@@ -73,13 +72,7 @@ public:
     }
 
     ImFont* get_secondary_font(int size) const {
-        if (m_secondary_font != nullptr) {
-            if (ImFont* font = m_secondary_font->get(size); font != nullptr) {
-                return font;
-            }
-        }
-
-        return ImGui::GetCurrentContext() == nullptr ? nullptr : ImGui::GetFont();
+        return resolve_font(m_secondary_font, size);
     }
 
     ui::InputRouter& input_router() {
@@ -93,6 +86,17 @@ public:
     const ui::Profiler& profiler() const {
         return m_profiler;
     }
+
+    /// returns the debugger when diagnostic support was configured, or nullptr otherwise.
+    ui::Debugger* debugger() {
+        return m_debugger.get();
+    }
+
+    const ui::Debugger* debugger() const {
+        return m_debugger.get();
+    }
+
+    bool debugger_blocks_pointer_input() const;
 
     ui::EffectRegistry& effects() {
         return m_effects;
@@ -113,7 +117,7 @@ public:
         return m_runtime;
     }
 
-    /// application nodes should normally be owned below this retained root.
+    /// returns the retained root that owns application nodes.
     ui::Node& root() {
         return *m_root;
     }
@@ -127,6 +131,7 @@ public:
     }
 
 private:
+    ImFont* resolve_font(ui::Font* font, int size) const;
     void initialize();
     void configure_style(float main_scale);
     void apply_theme_colors();
@@ -139,6 +144,7 @@ private:
     ui::InputRouter m_input_router;
     ui::EffectRegistry m_effects;
     ui::Profiler m_profiler;
+    std::unique_ptr<ui::Debugger> m_debugger;
     ui::Font* m_primary_font = nullptr;
     ui::Font* m_secondary_font = nullptr;
     bool m_done = false;

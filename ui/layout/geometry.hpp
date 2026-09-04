@@ -30,8 +30,6 @@ namespace ui {
         Both = static_cast<uint8_t>(X) | static_cast<uint8_t>(Y),
     };
 
-    using Origin = Anchor;
-
     enum class LayoutSizeMode : uint8_t {
         Fixed,
         Fit,
@@ -102,7 +100,7 @@ namespace ui {
 
     struct Placement {
         Anchor anchor = Anchor::TopLeft;
-        Origin origin = Origin::TopLeft;
+        Anchor origin = Anchor::TopLeft;
         ImVec2 offset{};
         ImVec2 anchor_position{};
         ImVec2 origin_position{};
@@ -184,7 +182,7 @@ namespace ui {
 
     /// resolves a child top-left position from named anchor and origin points.
     inline ImVec2
-    resolve_layout_position(ImVec2 parent_size, ImVec2 child_size, Anchor anchor, Origin origin, ImVec2 offset = {}) {
+    resolve_layout_position(ImVec2 parent_size, ImVec2 child_size, Anchor anchor, Anchor origin, ImVec2 offset = {}) {
         return resolve_layout_position(parent_size, child_size, alignment_factor(anchor), alignment_factor(origin), offset);
     }
 
@@ -198,7 +196,7 @@ namespace ui {
     /// resolves child bounds from a placement request.
     inline Rect resolve_layout_rect(Rect parent, ImVec2 child_size, const Placement& placement) {
         const ImVec2 anchor = placement.anchor == Anchor::Custom ? placement.anchor_position : alignment_factor(placement.anchor);
-        const ImVec2 origin = placement.origin == Origin::Custom ? placement.origin_position : alignment_factor(placement.origin);
+        const ImVec2 origin = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
         return resolve_layout_rect(parent, child_size, anchor, origin, placement.offset);
     }
 
@@ -282,9 +280,7 @@ namespace ui {
         void set_size(LayoutSize size) {
             m_config.size = size;
             m_has_explicit_size_request = true;
-            m_size = intrinsic_size();
-            m_has_size = false;
-            m_size_assigned_by_parent = false;
+            invalidate_resolved_size();
         }
 
         void set_config(LayoutConfig config) {
@@ -292,9 +288,7 @@ namespace ui {
             m_config = config;
             m_has_explicit_size_request = m_has_explicit_size_request || size_changed;
             m_has_arranged_position = false;
-            m_size = intrinsic_size();
-            m_has_size = false;
-            m_size_assigned_by_parent = false;
+            invalidate_resolved_size();
         }
 
         void set_measured_size(ImVec2 size, bool measured_width, bool measured_height) {
@@ -308,9 +302,7 @@ namespace ui {
                 }
             }
 
-            m_size = intrinsic_size();
-            m_has_size = false;
-            m_size_assigned_by_parent = false;
+            invalidate_resolved_size();
         }
 
         void set_arranged_placement(Placement placement) {
@@ -340,6 +332,12 @@ namespace ui {
 
         void clear_size_assignment() {
             m_has_size = false;
+        }
+
+        void invalidate_resolved_size() {
+            m_size = intrinsic_size();
+            m_has_size = false;
+            m_size_assigned_by_parent = false;
         }
 
         void clear_parent_size_assignment() {

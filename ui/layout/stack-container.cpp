@@ -26,13 +26,6 @@ static bool has_fit_axis(const LayoutSize& size) {
 StackContainer::StackContainer(std::string id, StackDirection direction)
     : Container(std::move(id), "StackContainer"), m_direction(direction) {}
 
-StackContainer::StackContainer(std::string id, StackConfig config) : StackContainer(std::move(id), config.direction) {
-    set_size(config.size);
-    set_spacing(config.spacing);
-    set_content_alignment(config.content_alignment);
-    configure_all_styles([padding = config.padding](Style& style) { style.padding(padding); });
-}
-
 StackContainer& StackContainer::set_direction(StackDirection direction) {
     if (m_direction == direction) {
         return *this;

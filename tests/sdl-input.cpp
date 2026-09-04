@@ -9,6 +9,7 @@
 #include "../ui/widgets/checkbox.hpp"
 #include "../ui/widgets/dropdown.hpp"
 #include "imgui-context.hpp"
+#include <ui/diagnostics/debugger.hpp>
 
 #include <SDL3/SDL.h>
 #include <glad/gl.h>
@@ -28,7 +29,7 @@ TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regre
             .visible = false,
             .swap_interval = 0,
         });
-        UI surface(runtime, std::move(backend));
+        UI surface(runtime, {.backend = std::move(backend)});
         REQUIRE(surface.ready());
 
         auto& panel = surface.root().add<ui::Container>("shadow-panel");
@@ -46,7 +47,6 @@ TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regre
                 });
         });
 
-        surface.begin_input_frame();
         surface.begin_frame();
         surface.root().update(ImGui::GetIO().DeltaTime);
         surface.root().draw();
@@ -87,7 +87,7 @@ TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regr
             .size = {320.0F, 240.0F},
             .visible = false,
         });
-        UI surface(runtime, std::move(backend));
+        UI surface(runtime, {.backend = std::move(backend)});
         REQUIRE(surface.ready());
         ImGui::SetCurrentContext(surface.imgui_context());
         ui_test::ImGuiContext::build_fonts();
@@ -103,7 +103,6 @@ TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regr
         };
 
         const auto draw_frame = [&surface] {
-            surface.begin_input_frame();
             surface.begin_frame();
             surface.root().update(ImGui::GetIO().DeltaTime);
             surface.root().draw();
@@ -147,6 +146,48 @@ TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regr
     SDL_Quit();
 }
 
+TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regression]") {
+    REQUIRE(SDL_Init(SDL_INIT_VIDEO));
+    {
+        ui::Runtime runtime;
+        auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
+            .size = {320.0F, 240.0F},
+            .visible = false,
+        });
+        UI surface(
+            runtime, {
+                         .backend = std::move(backend),
+                         .enable_debugger = true,
+                     }
+        );
+        REQUIRE(surface.ready());
+        REQUIRE(surface.debugger() != nullptr);
+        surface.debugger()->set_enabled(false);
+        ImGui::SetCurrentContext(surface.imgui_context());
+        ui_test::ImGuiContext::build_fonts();
+
+        const SDL_WindowID window_id = surface.backend().window_id();
+        SDL_Event shift_down{};
+        shift_down.type = SDL_EVENT_KEY_DOWN;
+        shift_down.key.windowID = window_id;
+        shift_down.key.key = SDLK_LSHIFT;
+        shift_down.key.scancode = SDL_SCANCODE_LSHIFT;
+        shift_down.key.mod = SDL_KMOD_SHIFT;
+        REQUIRE_FALSE(ui::process_sdl_event(surface, shift_down));
+
+        SDL_Event d_down = shift_down;
+        d_down.key.key = SDLK_D;
+        d_down.key.scancode = SDL_SCANCODE_D;
+        REQUIRE_FALSE(ui::process_sdl_event(surface, d_down));
+
+        surface.begin_frame();
+        REQUIRE(surface.debugger()->enabled());
+        surface.end_frame();
+    }
+
+    SDL_Quit();
+}
+
 TEST_CASE("pointer blocker prevents native content mutation but keeps descendants interactive", "[input][regression]") {
     REQUIRE(SDL_Init(SDL_INIT_VIDEO));
     {
@@ -155,7 +196,7 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
             .size = {320.0F, 240.0F},
             .visible = false,
         });
-        UI surface(runtime, std::move(backend));
+        UI surface(runtime, {.backend = std::move(backend)});
         REQUIRE(surface.ready());
         ImGui::SetCurrentContext(surface.imgui_context());
         ui_test::ImGuiContext::build_fonts();
@@ -189,7 +230,6 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
         });
 
         const auto draw_frame = [&surface] {
-            surface.begin_input_frame();
             surface.begin_frame();
             surface.root().update(ImGui::GetIO().DeltaTime);
             surface.root().draw();

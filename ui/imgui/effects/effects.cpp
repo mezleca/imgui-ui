@@ -3,8 +3,7 @@
 #include <algorithm>
 
 ui::EffectRegistry::Entry* ui::EffectRegistry::find(EffectId id) {
-    const auto iterator = std::find_if(m_entries.begin(), m_entries.end(), [id](const Entry& entry) { return entry.id == id; });
-    return iterator == m_entries.end() ? nullptr : &*iterator;
+    return const_cast<Entry*>(static_cast<const EffectRegistry&>(*this).find(id));
 }
 
 const ui::EffectRegistry::Entry* ui::EffectRegistry::find(EffectId id) const {

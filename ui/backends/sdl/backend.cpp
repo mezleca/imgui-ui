@@ -12,6 +12,7 @@
 #include <imgui_impl_sdl3.h>
 #include <SDL3/SDL_log.h>
 
+#include <cfloat>
 #include <optional>
 #include <utility>
 
@@ -190,24 +191,19 @@ void SdlBackend::set_mouse_cursor(ImGuiMouseCursor cursor) {
 
 bool SdlBackend::initialize() {
     if (m_attached) {
-        return m_window != nullptr && m_window->valid();
-    }
-
-    Window* shared_window = nullptr;
-    if (config().shared_with != nullptr) {
-        auto* shared_backend = dynamic_cast<SdlBackend*>(config().shared_with);
-        if (shared_backend == nullptr || shared_backend->m_window == nullptr) {
-            SDL_Log("ui: cannot share a context with a different backend");
+        if (m_window == nullptr || !m_window->valid()) {
             return false;
         }
-        shared_window = shared_backend->m_window.get();
+
+        m_window->make_current();
+        return true;
     }
 
     SDL_WindowFlags flags = SDL_WINDOW_OPENGL;
     if (config().resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (!config().visible) flags |= SDL_WINDOW_HIDDEN;
 
-    m_window = std::make_unique<Window>(config().title, config().size, flags, shared_window);
+    m_window = std::make_unique<Window>(config().title, config().size, flags);
     if (!m_window->valid()) {
         SDL_Log("ui: failed to create window '%s'", config().title.c_str());
         return false;
@@ -253,11 +249,8 @@ void SdlBackend::shutdown_imgui() {
     m_imgui_initialized = false;
 }
 
-void SdlBackend::make_current() {
-    if (m_window != nullptr) m_window->make_current();
-}
-
 void SdlBackend::begin_frame(ImVec4 clear_color) {
+    if (m_window != nullptr) m_window->make_current();
     const ImVec2 size = display_size();
     if (!m_attached) {
         glViewport(0, 0, static_cast<int>(size.x), static_cast<int>(size.y));
@@ -289,40 +282,6 @@ ImVec2 SdlBackend::display_size() const {
     return m_window == nullptr ? ImVec2{} : m_window->display_size();
 }
 
-bool SdlBackend::focused() const {
-    return m_window != nullptr && SDL_GetKeyboardFocus() == m_window->handle();
-}
-
-void SdlBackend::position_next_to(const Backend& target, float gap) {
-    if (m_attached) {
-        return;
-    }
-
-    const auto* target_backend = dynamic_cast<const SdlBackend*>(&target);
-    if (m_window == nullptr || target_backend == nullptr || target_backend->m_window == nullptr) {
-        return;
-    }
-
-    int target_x = 0;
-    int target_y = 0;
-    int target_width = 0;
-    SDL_GetWindowPosition(target_backend->m_window->handle(), &target_x, &target_y);
-    SDL_GetWindowSize(target_backend->m_window->handle(), &target_width, nullptr);
-    m_window->set_position(target_x + target_width + static_cast<int>(gap), target_y);
-}
-
-void SdlBackend::show() {
-    if (!m_attached && m_window != nullptr) m_window->show();
-}
-
-void SdlBackend::hide() {
-    if (!m_attached && m_window != nullptr) m_window->hide();
-}
-
-void SdlBackend::raise() {
-    if (!m_attached && m_window != nullptr) m_window->raise();
-}
-
 bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
     if (event.type == SDL_EVENT_QUIT) {
         surface.exit();
@@ -342,25 +301,30 @@ bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
     const ImGuiContextScope scope(surface.imgui_context());
     const std::optional<UiEvent> translated = event_from_sdl(event);
 
-    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-        ImGui::GetIO().AddMousePosEvent(event.button.x, event.button.y);
-    }
-
     bool handled = false;
+    bool native_input_blocked = false;
     if (translated.has_value()) {
         UiEvent dispatched = *translated;
         handled = surface.dispatch(dispatched);
+        native_input_blocked = dispatched.native_input_blocked;
     }
 
-        // imGui remains a drawing/input implementation detail for controls that
-        // still need its text and scalar editing primitives.
+    if (!native_input_blocked && (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP)) {
+        ImGui::GetIO().AddMousePosEvent(event.button.x, event.button.y);
+    }
+
+    if (native_input_blocked && translated.has_value() && contains(EventMask::Pointer, event_mask(translated->type))) {
+        ImGui::GetIO().AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+    }
+
+    // imgui still receives unhandled events for its text and scalar controls.
     SDL_Event imgui_event = event;
     if (imgui_event.type == SDL_EVENT_MOUSE_WHEEL) {
         imgui_event.wheel.x *= constants::SCROLL_WHEEL_SCALE;
         imgui_event.wheel.y *= constants::SCROLL_WHEEL_SCALE;
     }
 
-    ImGui_ImplSDL3_ProcessEvent(&imgui_event);
+    if (!native_input_blocked) ImGui_ImplSDL3_ProcessEvent(&imgui_event);
     return handled;
 }
 

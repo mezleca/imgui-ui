@@ -2,7 +2,6 @@
 
 #include "asset-registry.hpp"
 
-#include <cstdint>
 #include <filesystem>
 #include <imgui.h>
 #include <string>
@@ -10,25 +9,15 @@
 #include <unordered_map>
 
 namespace ui {
-    enum FontVariant : int32_t {
-        FONT_EXTRA_SMALL = 10,
-        FONT_SMALL = 14,
-        FONT_MEDIUM = 20,
-        FONT_LARGE = 26,
-        FONT_EXTRA_LARGE = 32
-    };
-
     class Font final {
     public:
         explicit Font(std::filesystem::path location);
 
         ImFont* get(int size);
-        bool load(int size);
         void release_context(ImGuiContext* context);
 
     private:
         struct ContextFonts {
-            ImGuiIO* io = nullptr;
             std::unordered_map<int, ImFont*> fonts;
         };
 

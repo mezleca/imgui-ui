@@ -33,8 +33,7 @@ Node::~Node() {
 }
 
 void Node::set_input_state(InputState state) {
-    if (m_input_state.hovered == state.hovered && m_input_state.active == state.active &&
-        m_input_state.focused == state.focused) {
+    if (m_input_state == state) {
         return;
     }
 
@@ -69,14 +68,13 @@ void Node::dispatch_event(UiEvent& event) {
 void Node::resolve_position() {
     const ImVec2 size = m_layout.size();
 
-    // without an imgui context, use the requested offset as the local origin.
     if (ImGui::GetCurrentContext() == nullptr) {
         const Rect rect = Rect::from_position_size(m_layout.active_placement().offset, size);
         m_layout.set_arranged_rects(rect, rect);
         return;
     }
 
-    // flow nodes keep the current cursor; absolute and arranged nodes resolve their anchor in parent content.
+    // flow nodes keep imgui's cursor. arranged nodes resolve their anchor in the parent's content box.
     ImVec2 local_position = ImGui::GetCursorPos();
     if (m_layout.has_position()) {
         const Rect arranged_rect = resolve_layout_rect(m_layout.parent_content_rect(), size, m_layout.active_placement());
@@ -84,7 +82,7 @@ void Node::resolve_position() {
         ImGui::SetCursorPos(local_position);
     }
 
-    // local_rect is the cursor-local box; layout_rect is the same box in screen coordinates.
+    // local bounds drive imgui. screen bounds drive painting and input hit testing.
     m_layout.set_arranged_rects(
         Rect::from_position_size(local_position, size), Rect::from_position_size(ImGui::GetCursorScreenPos(), size)
     );
@@ -96,7 +94,7 @@ void Node::capture_parent_content() {
         return;
     }
 
-    // cursor start is unscrolled; the logical cursor already includes the window scroll offset.
+    // cursor start is unscrolled. the logical cursor already includes the window scroll offset.
     const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
     const ImVec2 cursor = ImGui::GetCursorPos();
     const ImVec2 start = ImGui::GetCursorStartPos();
@@ -323,15 +321,15 @@ void Node::draw() {
     // resolve layout, paint the subtree, then register input against the final visual rect.
     prepare_layout();
     draw_before();
-    if (!on_draw()) {
-        submit_positioned_item();
-        return;
+    const bool draw_content = on_draw();
+    if (draw_content) {
+        draw_children();
+        draw_after();
+        on_draw_end();
     }
-
-    draw_children();
-    draw_after();
-    on_draw_end();
     submit_positioned_item();
+
+    if (!draw_content) return;
 
     if (m_input_router != nullptr) {
         UI_PROFILE_NODE(m_profiler, "Node::input", m_identity);

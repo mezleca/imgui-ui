@@ -1,7 +1,6 @@
 #pragma once
 
 #include "event.hpp"
-#include "../constants.hpp"
 #include "../layout/geometry.hpp"
 
 #include <array>
@@ -20,40 +19,39 @@ namespace ui {
 
     struct InputRouterStats {
         std::size_t entry_count = 0;
-        std::size_t hit_test_count = 0;
         std::size_t entry_checks = 0;
     };
 
     class InputRouter {
     public:
-        /// disconnects nodes before the router is destroyed.
+        /// detaches every connected node.
         ~InputRouter();
 
-        /// clears the transient input entries from the previous frame.
+        /// clears entries registered during the previous frame.
         void begin_frame();
 
-        /// advanced target outside the node tree. normal widgets use Node::set_input_target().
+        /// adds a target outside the node tree.
         void target(Node& node, Rect rect, InputCallback callback = {});
 
-        /// consumes events inside a screen-space rectangle for the current frame.
+        /// consumes selected events inside a screen-space rectangle.
         void block(Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
-        /// consumes events outside owner's descendants while the owner remains visible.
+        /// blocks outside the visible owner's descendants.
         void block(Node& owner, Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
-        /// observes matching events without changing their target.
+        /// observes matching events without taking their target.
         void observe(Rect rect, InputCallback callback, EventMask events = EventMask::Pointer);
 
-        /// captures subsequent pointer moves and releases for a node.
+        /// captures later pointer moves and releases for a node.
         bool capture_pointer(Node& node);
 
         /// releases the current pointer capture.
         void release_pointer();
 
-        /// releases pointer state pointing into a subtree.
+        /// releases capture and presses pointing into a subtree.
         void release_pointer(Node& subtree);
 
-        /// gives keyboard events to a visible input node.
+        /// sends keyboard events to a visible input node.
         bool set_focus(Node& node);
 
         /// sends a focus-lost event and clears the current focus.
@@ -80,7 +78,7 @@ namespace ui {
         /// returns the normal input node at a screen position.
         Node* node_at(ImVec2 position) const;
 
-        /// returns debug-only entry and hit-test counters accumulated since begin_frame().
+        /// returns entry counts accumulated since begin_frame().
         InputRouterStats stats() const;
 
     private:
@@ -98,18 +96,8 @@ namespace ui {
             bool prevent_click = false;
         };
 
-        /// blocks normal dispatch while the debugger selects a node.
+        /// blocks application dispatch while the debugger selects a node.
         void set_debug_inspect_mode(bool enabled);
-
-        /// keeps the next mouse release from reaching application nodes.
-        void finish_debug_inspect_mode();
-
-        /// stops debugger input suppression immediately.
-        void clear_debug_inspect_mode();
-
-        bool debug_inspect_mode() const {
-            return m_debug_inspect_mode || m_debug_inspect_release_pending;
-        }
 
         enum class InputKind : unsigned char {
             Target,
@@ -146,7 +134,6 @@ namespace ui {
         std::vector<InputEntry> m_entries;
         Node* m_focused_node = nullptr;
         bool m_debug_inspect_mode = false;
-        bool m_debug_inspect_release_pending = false;
         Node* m_pointer_capture = nullptr;
         Node* m_hovered_node = nullptr;
         Node* m_active_node = nullptr;

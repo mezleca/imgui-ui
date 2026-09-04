@@ -11,8 +11,7 @@
 
 using namespace ui;
 
-Container::Container(std::string id, std::string_view type_name, bool input_target)
-    : Widget(std::move(id), type_name, input_target) {
+Container::Container(std::string id, std::string_view type_name) : Widget(std::move(id), type_name, false) {
     configure_all_styles([](Style& style) { style.padding({}); });
 }
 
@@ -22,7 +21,7 @@ Container& Container::set_scrollable(bool scrollable) {
 }
 
 void Container::on_layout() {
-    // resolve this box first; child arrangement uses the resulting size and padding.
+    // resolve this box first. child arrangement uses its size and padding.
     resolve_layout();
     arrange_children();
 }
@@ -41,10 +40,6 @@ bool Container::paint() {
 
     ImGuiChildFlags child_flags = ImGuiChildFlags_AlwaysUseWindowPadding;
     ImGuiWindowFlags window_flags = constants::WIDGET_WINDOW_FLAGS | ImGuiWindowFlags_NoBackground;
-
-    if (!accepts_imgui_input()) {
-        window_flags |= ImGuiWindowFlags_NoInputs;
-    }
 
     if (m_scrollable) {
         window_flags &= ~(ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);

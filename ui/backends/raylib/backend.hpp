@@ -2,8 +2,6 @@
 
 #include "../backend.hpp"
 
-#include <memory>
-
 class UI;
 
 namespace ui {
@@ -17,20 +15,14 @@ namespace ui {
         void register_effects(EffectRegistry& effects) override;
         bool initialize_imgui() override;
         void shutdown_imgui() override;
-        void make_current() override;
         void begin_frame(ImVec4 clear_color) override;
         void set_mouse_cursor(ImGuiMouseCursor cursor) override;
         void render(ImDrawData* draw_data) override;
         float content_scale() const override;
         uint64_t window_id() const override;
         ImVec2 display_size() const override;
-        bool focused() const override;
-        void position_next_to(const Backend& target, float gap) override;
-        void show() override;
-        void hide() override;
-        void raise() override;
 
-        /// returns true only when the retained tree handles a polled native event.
+        /// forwards the current raylib input state to the retained tree.
         bool process_events(UI& surface);
 
     private:

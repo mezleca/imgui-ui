@@ -1,18 +1,24 @@
 #include "ui.hpp"
 
 #include "imgui/context-scope.hpp"
+#include "diagnostics/debugger.hpp"
 #include "layout/layer-container.hpp"
 #include "style/theme.hpp"
 
 #include <algorithm>
 #include <utility>
 
-UI::UI(ui::Runtime& runtime, std::unique_ptr<ui::Backend> backend)
-    : m_runtime(runtime), m_backend(std::move(backend)), m_profiler(runtime.performance_directory()) {
+UI::UI(ui::Runtime& runtime, ui::UIConfig config)
+    : m_runtime(runtime), m_backend(std::move(config.backend)), m_profiler(runtime.performance_directory()) {
     initialize();
+
+    if (m_ready && config.enable_debugger) {
+        m_debugger.reset(new ui::Debugger(*this));
+    }
 }
 
 UI::~UI() {
+    m_debugger.reset();
     if (m_context == nullptr) {
         return;
     }
@@ -38,19 +44,23 @@ void UI::set_theme(ui::Theme theme) {
     }
 }
 
+ImFont* UI::resolve_font(ui::Font* font, int size) const {
+    if (font != nullptr) {
+        if (ImFont* result = font->get(size); result != nullptr) {
+            return result;
+        }
+    }
+
+    return ImGui::GetCurrentContext() == nullptr ? nullptr : ImGui::GetFont();
+}
+
 ImFont* UI::get_font(std::string_view id, int size) const {
     if (m_context == nullptr) {
         return nullptr;
     }
 
     const ui::ImGuiContextScope scope(m_context);
-    if (ui::Font* font = m_runtime.fonts().find(id); font != nullptr) {
-        if (ImFont* result = font->get(size); result != nullptr) {
-            return result;
-        }
-    }
-
-    return ImGui::GetFont();
+    return resolve_font(m_runtime.fonts().find(id), size);
 }
 
 void UI::initialize() {
@@ -58,7 +68,6 @@ void UI::initialize() {
         if (!m_backend->initialize()) {
             return;
         }
-        m_backend->make_current();
     }
 
     m_context = ImGui::CreateContext();
@@ -99,15 +108,6 @@ void UI::initialize() {
     m_root->set_input_router(&m_input_router);
     m_root->set_profiler(&m_profiler);
     m_profiler.set_root_node(m_root->identity());
-}
-
-void UI::begin_input_frame() {
-    if (!m_ready) {
-        return;
-    }
-
-    const ui::ImGuiContextScope scope(m_context);
-    m_input_router.begin_frame();
 }
 
 void UI::configure_style(float main_scale) {
@@ -177,7 +177,20 @@ void UI::apply_theme_colors() {
 }
 
 bool UI::dispatch(ui::UiEvent& event) {
-    return m_ready && input_router().dispatch(event);
+    if (!m_ready) {
+        return false;
+    }
+
+    const ui::ImGuiContextScope scope(m_context);
+    if (m_debugger != nullptr && m_debugger->handle_input(event)) {
+        return true;
+    }
+
+    return input_router().dispatch(event);
+}
+
+bool UI::debugger_blocks_pointer_input() const {
+    return m_debugger != nullptr && m_debugger->blocks_pointer_input();
 }
 
 void UI::begin_frame() {
@@ -187,14 +200,15 @@ void UI::begin_frame() {
 
     m_previous_context = ImGui::GetCurrentContext();
     ImGui::SetCurrentContext(m_context);
-    if (m_backend != nullptr) m_backend->make_current();
 
+    m_input_router.begin_frame();
     m_profiler.begin_frame();
 
     m_effects.begin_frame();
 
     if (m_backend != nullptr) m_backend->begin_frame(m_runtime.theme().background_color);
     ImGui::NewFrame();
+    if (m_debugger != nullptr) m_debugger->update();
 }
 
 void UI::end_frame() {
@@ -202,6 +216,7 @@ void UI::end_frame() {
         return;
     }
 
+    if (m_debugger != nullptr) m_debugger->render();
     if (m_backend != nullptr) m_backend->set_mouse_cursor(ImGui::GetMouseCursor());
     ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();

@@ -8,7 +8,7 @@
 namespace ui {
     class Window {
     public:
-        Window(std::string title, ImVec2 size, SDL_WindowFlags flags, Window* shared_with = nullptr);
+        Window(std::string title, ImVec2 size, SDL_WindowFlags flags);
         Window(SDL_Window* window, SDL_GLContext context);
         Window(const Window&) = delete;
         ~Window();
@@ -22,10 +22,6 @@ namespace ui {
         ImVec2 display_size() const;
 
         void make_current();
-        void set_position(int x, int y);
-        void show();
-        void hide();
-        void raise();
         void swap();
 
     private:

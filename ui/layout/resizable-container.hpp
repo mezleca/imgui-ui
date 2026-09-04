@@ -18,7 +18,6 @@ namespace ui {
         void handle_resize(UiEvent& event);
         void draw_resize_indicator();
         ImGuiMouseCursor resize_cursor() const;
-        void update_resize_cursor() const;
         Rect resize_handle() const;
 
         ImVec2 m_drag_start = {0.0f, 0.0f};

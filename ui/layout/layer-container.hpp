@@ -29,5 +29,6 @@ namespace ui {
     private:
         LayerMode m_mode;
         bool m_focus_requested = false;
+        bool m_window_initialized = false;
     };
 } // namespace ui

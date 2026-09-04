@@ -14,12 +14,7 @@ Style::PushState Style::push(float opacity, ImFont* effective_font) const {
     state.font_pushed = effective_font != nullptr && effective_font != ImGui::GetFont();
     if (state.font_pushed) ImGui::PushFont(effective_font);
 
-    const auto push_var = [&state](ImGuiStyleVar variable, float value) {
-        ImGui::PushStyleVar(variable, value);
-        ++state.variables;
-    };
-
-    const auto push_vec2_var = [&state](ImGuiStyleVar variable, ImVec2 value) {
+    const auto push_var = [&state](ImGuiStyleVar variable, auto value) {
         ImGui::PushStyleVar(variable, value);
         ++state.variables;
     };
@@ -34,7 +29,7 @@ Style::PushState Style::push(float opacity, ImFont* effective_font) const {
     };
 
     if (current.FramePadding.x != m_padding.x || current.FramePadding.y != m_padding.y) {
-        push_vec2_var(ImGuiStyleVar_FramePadding, m_padding);
+        push_var(ImGuiStyleVar_FramePadding, m_padding);
     }
     if (current.FrameRounding != m_border_radius) push_var(ImGuiStyleVar_FrameRounding, m_border_radius);
     if (current.FrameBorderSize != 0.0F) push_var(ImGuiStyleVar_FrameBorderSize, 0.0F);

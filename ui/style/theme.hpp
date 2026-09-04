@@ -29,10 +29,6 @@ namespace ui {
         ImVec4 control_border_color = {72.0F / 255.0F, 72.0F / 255.0F, 72.0F / 255.0F, 1.0F};
         ImVec4 control_mark_color = accent_color;
         ImVec4 transparent = {0.0F, 0.0F, 0.0F, 0.0F};
-
-        static Theme defaults() {
-            return {};
-        }
     };
 
 } // namespace ui

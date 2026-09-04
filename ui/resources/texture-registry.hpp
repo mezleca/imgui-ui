@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace ui {
     class Texture {
@@ -33,6 +34,20 @@ namespace ui {
         const Texture* find(std::string_view id) const;
 
     private:
+        template <typename Source>
+        Texture* load_asset(std::string id, Source&& source) {
+            if (Texture* existing = find(id); existing != nullptr) {
+                return existing;
+            }
+
+            if (m_loader == nullptr) {
+                return nullptr;
+            }
+
+            auto texture = m_loader->load(std::forward<Source>(source), id);
+            return add_asset(std::move(id), std::move(texture));
+        }
+
         std::unique_ptr<TextureLoader> m_loader;
     };
 } // namespace ui

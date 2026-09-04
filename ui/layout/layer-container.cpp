@@ -1,12 +1,12 @@
 #include "layer-container.hpp"
+#include "../constants.hpp"
 #include "../imgui/draw.hpp"
 
 #include <utility>
 
 using namespace ui;
 
-static constexpr ImGuiWindowFlags LAYER_WINDOW_FLAGS =
-    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings;
+static constexpr ImGuiWindowFlags LAYER_WINDOW_FLAGS = constants::WINDOW_FLAGS;
 
 LayerContainer::LayerContainer(std::string id, LayerMode mode) : LayerContainer(std::move(id), mode, "LayerContainer") {}
 
@@ -32,6 +32,10 @@ bool LayerContainer::paint() {
     // window layers create a borderless viewport-sized imgui window.
     const bool accepts_input = this->accepts_input();
     ImGuiWindowFlags window_flags = LAYER_WINDOW_FLAGS;
+    // keep the layer order after creation. an explicit focus request may reorder it once.
+    if (!m_window_initialized || m_focus_requested) {
+        window_flags &= ~ImGuiWindowFlags_NoBringToFrontOnFocus;
+    }
     if (!accepts_input) {
         window_flags |= ImGuiWindowFlags_NoInputs;
     }
@@ -47,6 +51,7 @@ bool LayerContainer::paint() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{});
     ImGui::Begin(id().c_str(), nullptr, window_flags);
+    m_window_initialized = true;
 
     const Rect window_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
     set_layout_rect(window_rect);

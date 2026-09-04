@@ -12,7 +12,6 @@
 #include <ui/widgets/number-input.hpp>
 #include <ui/widgets/text.hpp>
 #include <ui/widgets/text-input.hpp>
-#include <ui/widgets/widget.hpp>
 #include "../examples/demo.hpp"
 #include "imgui-context.hpp"
 
@@ -86,7 +85,6 @@ TEST_CASE("checkbox input is limited to its box", "[CheckboxWidget][input][regre
     ui_test::ImGuiContext::build_fonts();
     ImGui::GetIO().DisplaySize = {400.0F, 180.0F};
 
-    surface.begin_input_frame();
     surface.begin_frame();
     surface.root().update(ImGui::GetIO().DeltaTime);
     surface.root().draw();
@@ -136,7 +134,6 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
     ImGui::GetIO().DisplaySize = {400.0F, 180.0F};
 
     const auto draw_frame = [&surface] {
-        surface.begin_input_frame();
         surface.begin_frame();
         surface.root().update(ImGui::GetIO().DeltaTime);
         surface.root().draw();
@@ -191,7 +188,6 @@ TEST_CASE("dropdown opens from a nested container without extending its parent",
     ImGui::GetIO().DisplaySize = {400.0F, 240.0F};
 
     const auto draw_frame = [&surface] {
-        surface.begin_input_frame();
         surface.begin_frame();
         surface.root().update(ImGui::GetIO().DeltaTime);
         surface.root().draw();
@@ -400,7 +396,6 @@ TEST_CASE("pointer block prevents hover and clicks on content controls", "[input
         ImGui::SetCurrentContext(surface.imgui_context());
         ImGui::GetIO().MousePos = mouse_position;
         ImGui::GetIO().MouseDown[ImGuiMouseButton_Left] = mouse_down;
-        surface.begin_input_frame();
         surface.begin_frame();
         ImGui::SetNextWindowPos({0.0F, 0.0F});
         ImGui::SetNextWindowSize({900.0F, 600.0F});
@@ -462,7 +457,6 @@ TEST_CASE("resizable dynamic list keeps its allocated box", "[ResizableContainer
     ui_test::ImGuiContext::build_fonts();
 
     const auto draw_frame = [&surface] {
-        surface.begin_input_frame();
         surface.begin_frame();
         ImGui::SetNextWindowPos({0.0F, 0.0F});
         ImGui::SetNextWindowSize({900.0F, 600.0F});
@@ -522,7 +516,6 @@ TEST_CASE("pointer block rejects clicks on another overlay control", "[input][re
     const auto draw_frame = [&surface](ImVec2 mouse_position) {
         ImGui::SetCurrentContext(surface.imgui_context());
         ImGui::GetIO().MousePos = mouse_position;
-        surface.begin_input_frame();
         surface.begin_frame();
         ImGui::SetNextWindowPos({0.0F, 0.0F});
         ImGui::SetNextWindowSize({900.0F, 600.0F});
@@ -612,7 +605,6 @@ TEST_CASE("dropdown opens after fading out and fades after selection", "[Dropdow
         }
         previous_mouse_down = mouse_down;
 
-        surface.begin_input_frame();
         surface.begin_frame();
         ImGui::SetNextWindowPos({0.0F, 0.0F});
         ImGui::SetNextWindowSize({320.0F, 220.0F});
@@ -721,7 +713,7 @@ TEST_CASE("runtime owns shared theme and explicitly registered assets", "[Runtim
     Runtime other_runtime;
 
     REQUIRE(runtime.theme().box_rounding == 8.0F);
-    REQUIRE(other_runtime.theme().content_padding == Theme::defaults().content_padding);
+    REQUIRE(other_runtime.theme().content_padding == Theme{}.content_padding);
 }
 
 TEST_CASE("style transition duration uses seconds", "[VisualState][transition]") {
@@ -1131,7 +1123,6 @@ TEST_CASE("editing the selected style updates its effective appearance") {
 
 namespace context_menu_test {
     void draw_frame(UI& surface, float dt = 0.2F) {
-        surface.begin_input_frame();
         surface.begin_frame();
         surface.root().update(dt);
         surface.root().draw();

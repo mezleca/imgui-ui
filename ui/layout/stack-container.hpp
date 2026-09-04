@@ -3,18 +3,9 @@
 #include "container.hpp"
 
 namespace ui {
-    struct StackConfig {
-        LayoutSize size{};
-        StackDirection direction = StackDirection::Vertical;
-        ImVec2 padding{};
-        float spacing = 0.0F;
-        Anchor content_alignment = Anchor::TopLeft;
-    };
-
     class StackContainer : public Container {
     public:
         explicit StackContainer(std::string id, StackDirection direction = StackDirection::Vertical);
-        StackContainer(std::string id, StackConfig config);
 
         /// changes the main axis used to arrange visible children.
         StackContainer& set_direction(StackDirection direction);

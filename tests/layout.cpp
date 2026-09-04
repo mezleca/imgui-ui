@@ -104,12 +104,12 @@ TEST_CASE("input entries exclude clipped widget bounds", "[Widget][input][regres
 }
 
 TEST_CASE("layout anchors resolve the child origin against the parent") {
-    const ImVec2 centered = resolve_layout_position({100.0F, 80.0F}, {20.0F, 10.0F}, Anchor::Center, Origin::Center);
+    const ImVec2 centered = resolve_layout_position({100.0F, 80.0F}, {20.0F, 10.0F}, Anchor::Center, Anchor::Center);
     REQUIRE(centered.x == 40.0F);
     REQUIRE(centered.y == 35.0F);
 
     const ImVec2 bottom_right =
-        resolve_layout_position({100.0F, 80.0F}, {20.0F, 10.0F}, Anchor::BottomRight, Origin::TopLeft, {2.0F, -3.0F});
+        resolve_layout_position({100.0F, 80.0F}, {20.0F, 10.0F}, Anchor::BottomRight, Anchor::TopLeft, {2.0F, -3.0F});
     REQUIRE(bottom_right.x == 102.0F);
     REQUIRE(bottom_right.y == 77.0F);
 
@@ -136,7 +136,7 @@ TEST_CASE("placement changes preserve implicit measured sizing") {
 
     LayoutConfig config = node.layout().config();
     config.placement.anchor = Anchor::Center;
-    config.placement.origin = Origin::Center;
+    config.placement.origin = Anchor::Center;
     config.in_flow = false;
     node.set_layout(config);
 
@@ -154,7 +154,7 @@ TEST_CASE("placement changes preserve implicit measured sizing") {
 TEST_CASE("layout geometry exposes resolved rectangles") {
     const Rect parent{{10.0F, 20.0F}, {110.0F, 100.0F}};
     const Rect child = resolve_layout_rect(
-        parent, {20.0F, 10.0F}, {.anchor = Anchor::BottomRight, .origin = Origin::TopLeft, .offset = {2.0F, -3.0F}}
+        parent, {20.0F, 10.0F}, {.anchor = Anchor::BottomRight, .origin = Anchor::TopLeft, .offset = {2.0F, -3.0F}}
     );
 
     REQUIRE(child.min.x == 112.0F);
@@ -229,7 +229,7 @@ TEST_CASE("stack layout centers flow content on requested axes") {
     REQUIRE(field_rect.size().x == Catch::Approx(40.0F));
 }
 
-TEST_CASE("stack config applies common layout properties", "[layout]") {
+TEST_CASE("stack setters apply common layout properties", "[layout]") {
     class FixedNode final : public Node {
     public:
         FixedNode() {
@@ -244,15 +244,10 @@ TEST_CASE("stack config applies common layout properties", "[layout]") {
     };
 
     ui_test::ImGuiContext context({240.0F, 160.0F});
-    StackContainer stack(
-        "configured-stack", {
-                                .size = {px(200.0F), px(100.0F)},
-                                .direction = StackDirection::Horizontal,
-                                .padding = {10.0F, 5.0F},
-                                .spacing = 4.0F,
-                                .content_alignment = Anchor::Center,
-                            }
-    );
+    StackContainer stack("configured-stack", StackDirection::Horizontal);
+    stack.set_size({px(200.0F), px(100.0F)});
+    stack.set_spacing(4.0F).set_content_alignment(Anchor::Center);
+    stack.configure_all_styles([](Style& style) { style.padding({10.0F, 5.0F}); });
     auto& child = stack.add<FixedNode>();
 
     ImGui::NewFrame();
@@ -443,7 +438,7 @@ TEST_CASE("visibility changes in an anchored overlay do not move its fixed sibli
     StackContainer overlay("overlay", StackDirection::Horizontal);
     overlay.set_layout({
         .size = {fit(), fit()},
-        .placement = {.anchor = Anchor::TopRight, .origin = Origin::TopRight, .offset = {-20.0F, 20.0F}},
+        .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-20.0F, 20.0F}},
         .in_flow = false,
     });
     overlay.style().padding({});
@@ -775,7 +770,9 @@ TEST_CASE("resizable container stays within its parent bounds") {
         ImGui::SetNextWindowSize({320.0F, 220.0F});
         ImGui::Begin("resize-root");
         ImGui::BeginChild("resize-parent", {120.0F, 90.0F});
+        const int foreground_vertices = ImGui::GetForegroundDrawList()->VtxBuffer.Size;
         resizable.draw();
+        REQUIRE(ImGui::GetForegroundDrawList()->VtxBuffer.Size == foreground_vertices);
         ImGui::EndChild();
         ImGui::End();
         ImGui::EndFrame();

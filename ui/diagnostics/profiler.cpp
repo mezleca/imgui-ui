@@ -1,7 +1,5 @@
 #include "profiler.hpp"
 
-#include "../constants.hpp"
-
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -36,10 +34,6 @@ static uint64_t profile_session_timestamp() {
 }
 
 Profiler::Profiler(std::filesystem::path output_directory) {
-    if constexpr (!constants::IS_DEBUG_BUILD) {
-        return;
-    }
-
     if (output_directory.empty()) {
         output_directory = default_profile_directory();
     }
@@ -65,11 +59,6 @@ double Profiler::MetricSummary::average() const {
 }
 
 void Profiler::set_enabled(bool enabled) {
-    if constexpr (!constants::IS_DEBUG_BUILD) {
-        m_enabled = false;
-        return;
-    }
-
     m_enabled = enabled;
     if (!enabled) {
         m_frame_open = false;
@@ -77,7 +66,7 @@ void Profiler::set_enabled(bool enabled) {
 }
 
 bool Profiler::enabled() const {
-    return constants::IS_DEBUG_BUILD && m_enabled;
+    return m_enabled;
 }
 
 void Profiler::set_root_node(uint64_t identity) {
@@ -85,10 +74,6 @@ void Profiler::set_root_node(uint64_t identity) {
 }
 
 void Profiler::begin_frame() {
-    if constexpr (!constants::IS_DEBUG_BUILD) {
-        return;
-    }
-
     if (!m_enabled) {
         return;
     }
@@ -106,10 +91,6 @@ void Profiler::begin_frame() {
 }
 
 void Profiler::end_frame() {
-    if constexpr (!constants::IS_DEBUG_BUILD) {
-        return;
-    }
-
     if (!m_enabled || !m_frame_open) {
         return;
     }
@@ -144,7 +125,7 @@ double Profiler::node_duration_ms(uint64_t node_identity) const {
         return 0.0;
     }
 
-    // build the node index once; each node total is the sum of its update and draw zones.
+    // build the node index once. each node total is the sum of its update and draw zones.
     const FrameBuffer& frame = m_frames[m_read_index];
     if (!frame.node_durations_ready) {
         for (std::size_t index = 0; index < frame.count; ++index) {
@@ -187,7 +168,7 @@ bool Profiler::save_report() const {
         return false;
     }
 
-    // persist aggregate frame timing and the latest frame snapshot; raw events stay in memory.
+    // persist aggregate frame timing and the latest frame snapshot. raw events stay in memory.
     std::error_code error;
     std::filesystem::create_directories(m_output_path.parent_path(), error);
     if (error) {
@@ -233,10 +214,6 @@ const std::filesystem::path& Profiler::output_path() const {
 }
 
 Profiler::ZoneToken Profiler::begin_zone(std::string_view name, uint64_t node_identity) {
-    if constexpr (!constants::IS_DEBUG_BUILD) {
-        return {};
-    }
-
     if (!m_enabled || !m_frame_open) {
         return {};
     }
@@ -258,10 +235,6 @@ Profiler::ZoneToken Profiler::begin_zone(std::string_view name, uint64_t node_id
 }
 
 void Profiler::end_zone(ZoneToken token) {
-    if constexpr (!constants::IS_DEBUG_BUILD) {
-        return;
-    }
-
     if (!m_enabled || !m_frame_open) {
         return;
     }
@@ -280,7 +253,7 @@ void Profiler::record_node_draw() {
 }
 
 void Profiler::record_root_phase_times(FrameBuffer& frame) {
-    // root phase times are inclusive; layout and input sum all node zones.
+    // root phase times are inclusive. layout and input sum all node zones.
     for (std::size_t index = 0; index < frame.count; ++index) {
         const ProfileEvent& event = frame.events[index];
         const double duration = profile_milliseconds(event.start, event.end);

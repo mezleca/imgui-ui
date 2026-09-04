@@ -1,14 +1,17 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <ui/diagnostics/debugger.hpp>
 #include <ui/diagnostics/profiler.hpp>
 #include <ui/imgui/effects/effects.hpp>
 #include <ui/style/styled-node.hpp>
+#include <ui/ui.hpp>
 
 #include <imgui.h>
 
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <string_view>
 
 #include "imgui-context.hpp"
 
@@ -32,6 +35,88 @@ static void shutdown_test_effect(void* data) {
 }
 
 static void render_test_effect(const ImDrawList*, const ImDrawCmd*) {}
+
+static int draw_list_index(const ImDrawData& draw_data, std::string_view owner) {
+    for (int index = 0; index < draw_data.CmdListsCount; ++index) {
+        const ImDrawList* draw_list = draw_data.CmdLists[index];
+        if (draw_list != nullptr && draw_list->_OwnerName != nullptr &&
+            std::string_view{draw_list->_OwnerName}.find(owner) != std::string_view::npos) {
+            return index;
+        }
+    }
+
+    return -1;
+}
+
+TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.enable_debugger = true});
+    REQUIRE(surface.debugger() != nullptr);
+    REQUIRE_FALSE(surface.debugger()->enabled());
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
+    ui_test::ImGuiContext::build_fonts();
+
+    surface.begin_frame();
+    surface.end_frame();
+    REQUIRE_FALSE(surface.debugger()->enabled());
+
+    surface.debugger()->set_enabled(true);
+    surface.begin_frame();
+    const bool modal_visible = ImGui::Begin("modal-layer");
+    REQUIRE(modal_visible);
+    ImGui::TextUnformatted("modal");
+    REQUIRE(ImGui::GetWindowDrawList()->CmdBuffer.Size > 1);
+    ImGui::End();
+    surface.end_frame();
+
+    surface.begin_frame();
+    ImGui::Begin("modal-layer");
+    ImGui::TextUnformatted("modal");
+    ImGui::End();
+    surface.end_frame();
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    const ImDrawData* draw_data = ImGui::GetDrawData();
+    REQUIRE(draw_data != nullptr);
+    const int modal_index = draw_list_index(*draw_data, "modal-layer");
+    const int debugger_index = draw_list_index(*draw_data, "ui debugger");
+    REQUIRE(modal_index >= 0);
+    REQUIRE(debugger_index >= 0);
+    REQUIRE(modal_index < debugger_index);
+
+    surface.begin_frame();
+
+    ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
+    down.position = {10.0F, 10.0F};
+    down.button = ui::PointerButton::Left;
+    REQUIRE(surface.dispatch(down));
+
+    ui::UiEvent up = ui::UiEvent::make(ui::EventType::PointerUp);
+    up.position = down.position;
+    up.button = ui::PointerButton::Left;
+    REQUIRE(surface.dispatch(up));
+    surface.end_frame();
+}
+
+TEST_CASE("debugger hotkey toggles on the target surface") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.enable_debugger = true});
+    REQUIRE(surface.debugger() != nullptr);
+    REQUIRE_FALSE(surface.debugger()->enabled());
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
+    ui_test::ImGuiContext::build_fonts();
+    ImGui::GetIO().AddKeyEvent(ImGuiMod_Shift, true);
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_D, true);
+
+    surface.begin_frame();
+
+    REQUIRE(surface.debugger()->enabled());
+    surface.end_frame();
+}
 
 TEST_CASE("effect registry manages lifecycle and draw submission") {
     EffectProbe probe;

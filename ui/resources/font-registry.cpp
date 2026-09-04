@@ -19,27 +19,13 @@ ImFont* Font::load_variation(ImGuiContext* context, int size) {
     std::cout << "[ui] loading " << m_font_location << " (" << size << ")\n";
 
     ContextFonts& context_fonts = m_contexts[context];
-    if (context_fonts.io == nullptr) {
-        context_fonts.io = &ImGui::GetIO();
-    }
-
-    ImFont* font =
-        context_fonts.io->Fonts->AddFontFromFileTTF(m_font_location.string().c_str(), static_cast<float>(size), &m_cfg);
+    ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(m_font_location.string().c_str(), static_cast<float>(size), &m_cfg);
 
     if (font != nullptr) {
         context_fonts.fonts[size] = font;
     }
 
     return font;
-}
-
-bool Font::load(int size) {
-    if (load_variation(ImGui::GetCurrentContext(), size) == nullptr) {
-        std::cout << "[ui] failed to load " << m_font_location << " (" << size << ")\n";
-        return false;
-    }
-
-    return true;
 }
 
 ImFont* Font::get(int size) {
@@ -64,10 +50,6 @@ void Font::release_context(ImGuiContext* context) {
 }
 
 Font* FontRegistry::add(std::string id, std::filesystem::path location) {
-    if (Font* existing = find(id); existing != nullptr) {
-        return existing;
-    }
-
     return add_asset(std::move(id), std::make_unique<Font>(std::move(location)));
 }
 

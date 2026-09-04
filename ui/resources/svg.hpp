@@ -29,6 +29,21 @@ inline constexpr std::string_view INSPECT_SVG = R"(
         <path d="M18 18l3 3" />
     </svg>)";
 
+inline constexpr std::string_view CLOSE_SVG = R"(
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="white"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round">
+        <path d="M6 6l12 12" />
+        <path d="M18 6L6 18" />
+    </svg>)";
+
 inline constexpr std::string_view CONTEXT_MENU_CHEVRON_SVG = R"(
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M4 10L8 6L12 10" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
