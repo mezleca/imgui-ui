@@ -291,7 +291,7 @@ DropdownWidget& DropdownWidget::set_options(std::vector<DropdownOption> options)
 void DropdownWidget::on_measure() {
     ImVec2 size = layout().intrinsic_size();
     if (layout().size_spec().height.mode != LayoutSizeMode::Fixed) {
-        size.y = ImGui::GetFrameHeight();
+        size.y = ImGui::GetTextLineHeight() + m_trigger->style().padding().y * 2.0F;
         if (has_label()) size.y += m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y;
     }
 
