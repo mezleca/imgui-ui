@@ -11,7 +11,7 @@ static constexpr ImGuiWindowFlags LAYER_WINDOW_FLAGS =
 LayerContainer::LayerContainer(std::string id, LayerMode mode) : LayerContainer(std::move(id), mode, "LayerContainer") {}
 
 LayerContainer::LayerContainer(std::string id, LayerMode mode, std::string_view type_name)
-    : Container(std::move(id), type_name, mode == LayerMode::Window), m_mode(mode) {}
+    : Container(std::move(id), type_name), m_mode(mode) {}
 
 void LayerContainer::resolve_layout() {
     assign_size(ImGui::GetMainViewport()->WorkSize);
