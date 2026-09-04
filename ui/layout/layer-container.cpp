@@ -38,9 +38,10 @@ bool LayerContainer::paint() {
 
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
-    if (accepts_input) {
+    if (accepts_input && m_focus_requested) {
         ImGui::SetNextWindowFocus();
     }
+    m_focus_requested = false;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style().padding());
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);

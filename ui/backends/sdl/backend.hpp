@@ -13,7 +13,7 @@ namespace ui {
 
     class SdlBackend final : public Backend {
     public:
-        explicit SdlBackend(Config config);
+        explicit SdlBackend(BackendConfig config);
         SdlBackend(SDL_Window* window, SDL_GLContext context);
         ~SdlBackend() override;
 
@@ -40,7 +40,6 @@ namespace ui {
     private:
         void apply_mouse_cursor(ImGuiMouseCursor cursor);
 
-        Config m_config;
         std::unique_ptr<Window> m_window;
         SDL_Cursor* m_mouse_cursor = nullptr;
         ImGuiMouseCursor m_mouse_cursor_type = ImGuiMouseCursor_Arrow;
@@ -48,7 +47,5 @@ namespace ui {
         bool m_imgui_initialized = false;
     };
 
-    std::unique_ptr<Backend> create_sdl_backend(const Config& config);
-    std::unique_ptr<Backend> attach_sdl_backend(SDL_Window* window, SDL_GLContext context);
     bool process_sdl_event(UI& surface, const SDL_Event& event);
 } // namespace ui

@@ -4,26 +4,24 @@
 #include "style/theme.hpp"
 #include "diagnostics/profiler.hpp"
 #include "imgui/effects/effects.hpp"
-#include "runtime.hpp"
 #include "input/router.hpp"
-#include "resources/assets.hpp"
+#include "runtime.hpp"
 
 #include <imgui.h>
 #include <memory>
+#include <string_view>
 
 class UI;
-class IconTexture;
 
 namespace ui {
     class Node;
 } // namespace ui
 
-/// assets and theme remain owned by Runtime.
+/// assets and theme remain owned by runtime.
 /// imgui context, root and router are surface-local.
 class UI {
 public:
-    UI(ui::Runtime& runtime, const ui::Config& config);
-    UI(ui::Runtime& runtime, std::unique_ptr<ui::Backend> backend);
+    explicit UI(ui::Runtime& runtime, std::unique_ptr<ui::Backend> backend = nullptr);
     ~UI();
 
     UI(const UI&) = delete;
@@ -53,13 +51,8 @@ public:
         return m_ready;
     }
 
-    ui::Font& get_font(ui::FontType type) {
-        return m_runtime.font(type);
-    }
-
-    const ui::Font& get_font(ui::FontType type) const {
-        return m_runtime.font(type);
-    }
+    /// returns a registered font variation, or imgui's current font when it is unavailable.
+    ImFont* get_font(std::string_view id, int size) const;
 
     void set_primary_font(ui::Font* font) {
         m_primary_font = font;
@@ -117,11 +110,9 @@ public:
         return m_runtime;
     }
 
-    IconTexture* find_texture(std::string_view id);
-
     /// application nodes should normally be owned below this retained root.
     ui::Node& root() {
-        return *m_container;
+        return *m_root;
     }
 
     ui::Backend& backend() {
@@ -132,10 +123,6 @@ public:
         return m_context;
     }
 
-    void set_frame_style(ImVec2 padding, float rounding, float border_thickness);
-    void set_grab_style(float minimum_size, float rounding);
-    void set_item_spacing(ImVec2 spacing, ImVec2 inner_spacing);
-
 private:
     void initialize();
     void configure_style(float main_scale);
@@ -145,7 +132,7 @@ private:
     ImGuiContext* m_context = nullptr;
     ImGuiContext* m_previous_context = nullptr;
     std::unique_ptr<ui::Backend> m_backend;
-    std::unique_ptr<ui::Node> m_container;
+    std::unique_ptr<ui::Node> m_root;
     ui::InputRouter m_input_router;
     ui::EffectRegistry m_effects;
     ui::Profiler m_profiler;

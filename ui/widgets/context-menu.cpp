@@ -124,8 +124,8 @@ private:
 
 ContextMenuWidget::ContextMenuWidget(UI& ui, ContextMenuItems items, IconTexture* submenu_icon)
     : ContextMenuWidget(
-          ui.input_router(), ui.theme(), submenu_icon != nullptr ? submenu_icon : ui.find_texture("context-menu-chevron"),
-          std::move(items)
+          ui.input_router(), ui.theme(),
+          submenu_icon != nullptr ? submenu_icon : ui.runtime().textures().find("context-menu-chevron"), std::move(items)
       ) {}
 
 ContextMenuWidget::ContextMenuWidget(InputRouter& router, const Theme& theme, IconTexture* submenu_icon, ContextMenuItems items)

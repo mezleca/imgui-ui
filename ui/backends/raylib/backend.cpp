@@ -211,8 +211,8 @@ namespace ui {
         return surface.dispatch(event);
     }
 
-    RaylibBackend::RaylibBackend(Config config) : m_config(std::move(config)) {}
-    RaylibBackend::RaylibBackend(bool attach_to_current_window) : m_attached(attach_to_current_window) {}
+    RaylibBackend::RaylibBackend(BackendConfig config) : Backend(std::move(config)) {}
+    RaylibBackend::RaylibBackend() : Backend(), m_attached(true) {}
 
     RaylibBackend::~RaylibBackend() {
         if (m_owns_window && IsWindowReady()) CloseWindow();
@@ -223,7 +223,7 @@ namespace ui {
             return IsWindowReady();
         }
 
-        if (m_config.shared_with != nullptr) {
+        if (config().shared_with != nullptr) {
             TraceLog(LOG_ERROR, "ui: raylib does not support shared secondary windows");
             return false;
         }
@@ -233,11 +233,11 @@ namespace ui {
         }
 
         unsigned int flags = 0;
-        if (m_config.resizable) flags |= FLAG_WINDOW_RESIZABLE;
-        if (!m_config.visible) flags |= FLAG_WINDOW_HIDDEN;
+        if (config().resizable) flags |= FLAG_WINDOW_RESIZABLE;
+        if (!config().visible) flags |= FLAG_WINDOW_HIDDEN;
         if (flags != 0) SetConfigFlags(flags);
 
-        InitWindow(static_cast<int>(m_config.size.x), static_cast<int>(m_config.size.y), m_config.title.c_str());
+        InitWindow(static_cast<int>(config().size.x), static_cast<int>(config().size.y), config().title.c_str());
         m_owns_window = IsWindowReady();
         return m_owns_window;
     }
@@ -417,14 +417,6 @@ namespace ui {
         }
 
         return handled;
-    }
-
-    std::unique_ptr<Backend> create_raylib_backend(const Config& config) {
-        return std::make_unique<RaylibBackend>(config);
-    }
-
-    std::unique_ptr<Backend> attach_raylib_backend() {
-        return std::make_unique<RaylibBackend>(true);
     }
 
     bool process_raylib_events(UI& surface) {

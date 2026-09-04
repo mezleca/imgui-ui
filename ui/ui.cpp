@@ -1,41 +1,11 @@
 #include "ui.hpp"
 
-#include "constants.hpp"
 #include "imgui/context-scope.hpp"
+#include "layout/layer-container.hpp"
 #include "style/theme.hpp"
-#include "tree/node.hpp"
 
 #include <algorithm>
 #include <utility>
-
-namespace ui {
-    class SurfaceRootNode final : public Node {
-    public:
-        SurfaceRootNode() : Node("surface-root") {}
-
-    protected:
-        bool on_draw() override {
-            const ImGuiViewport* viewport = ImGui::GetMainViewport();
-            ImGui::SetNextWindowPos(viewport->WorkPos);
-            ImGui::SetNextWindowSize(viewport->WorkSize);
-            ImGui::Begin("##ui-surface", nullptr, constants::WINDOW_FLAGS);
-
-            const ImVec2 position = ImGui::GetWindowPos();
-            const ImVec2 size = ImGui::GetWindowSize();
-            assign_size(size);
-            const Rect rect = Rect::from_position_size(position, size);
-            set_layout_rect(rect);
-            set_visual_rect(rect);
-            return true;
-        }
-
-        void on_draw_end() override {
-            ImGui::End();
-        }
-    };
-} // namespace ui
-
-UI::UI(ui::Runtime& runtime, const ui::Config& config) : UI(runtime, ui::create_backend(config)) {}
 
 UI::UI(ui::Runtime& runtime, std::unique_ptr<ui::Backend> backend)
     : m_runtime(runtime), m_backend(std::move(backend)), m_profiler(runtime.performance_directory()) {
@@ -53,6 +23,21 @@ UI::~UI() {
     m_runtime.release_context(m_context);
     if (m_backend != nullptr) m_backend->shutdown_imgui();
     ImGui::DestroyContext(m_context);
+}
+
+ImFont* UI::get_font(std::string_view id, int size) const {
+    if (m_context == nullptr) {
+        return nullptr;
+    }
+
+    const ui::ImGuiContextScope scope(m_context);
+    if (ui::Font* font = m_runtime.fonts().find(id); font != nullptr) {
+        if (ImFont* result = font->get(size); result != nullptr) {
+            return result;
+        }
+    }
+
+    return ImGui::GetFont();
 }
 
 void UI::initialize() {
@@ -97,10 +82,10 @@ void UI::initialize() {
 
     m_ready = true;
 
-    m_container = std::make_unique<ui::SurfaceRootNode>();
-    m_container->set_input_router(&m_input_router);
-    m_container->set_profiler(&m_profiler);
-    m_profiler.set_root_node(m_container->identity());
+    m_root = std::make_unique<ui::LayerContainer>("ui-surface", ui::LayerMode::Window);
+    m_root->set_input_router(&m_input_router);
+    m_root->set_profiler(&m_profiler);
+    m_profiler.set_root_node(m_root->identity());
 }
 
 void UI::begin_input_frame() {
@@ -125,9 +110,13 @@ void UI::configure_style(float main_scale) {
     style.WindowPadding = ImVec2{0.0f, 0.0f};
     style.CellPadding = ImVec2{0.0f, 0.0f};
 
-    set_frame_style({12.0F, 8.0F}, theme.control_rounding, 0.0F);
-    set_grab_style(theme.control_thumb_size, theme.control_rounding);
-    set_item_spacing({10.0F, 10.0F}, {8.0F, 6.0F});
+    style.FramePadding = {12.0F, 8.0F};
+    style.FrameRounding = std::max(0.0F, theme.control_rounding);
+    style.FrameBorderSize = 0.0F;
+    style.GrabMinSize = std::max(1.0F, theme.control_thumb_size);
+    style.GrabRounding = std::max(0.0F, theme.control_rounding);
+    style.ItemSpacing = {10.0F, 10.0F};
+    style.ItemInnerSpacing = {8.0F, 6.0F};
 
     style.CircleTessellationMaxError = 0.10f;
     style.AntiAliasedLinesUseTex = false;
@@ -136,40 +125,6 @@ void UI::configure_style(float main_scale) {
     style.FontScaleDpi = main_scale;
 
     apply_theme_colors();
-}
-
-void UI::set_frame_style(ImVec2 padding, float rounding, float border_thickness) {
-    if (m_context == nullptr) {
-        return;
-    }
-
-    const ui::ImGuiContextScope scope(m_context);
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.FramePadding = padding;
-    style.FrameRounding = std::max(0.0F, rounding);
-    style.FrameBorderSize = std::max(0.0F, border_thickness);
-}
-
-void UI::set_grab_style(float minimum_size, float rounding) {
-    if (m_context == nullptr) {
-        return;
-    }
-
-    const ui::ImGuiContextScope scope(m_context);
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.GrabMinSize = std::max(1.0F, minimum_size);
-    style.GrabRounding = std::max(0.0F, rounding);
-}
-
-void UI::set_item_spacing(ImVec2 spacing, ImVec2 inner_spacing) {
-    if (m_context == nullptr) {
-        return;
-    }
-
-    const ui::ImGuiContextScope scope(m_context);
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.ItemSpacing = spacing;
-    style.ItemInnerSpacing = inner_spacing;
 }
 
 void UI::apply_theme_colors() {
@@ -205,10 +160,6 @@ void UI::apply_theme_colors() {
     colors[ImGuiCol_CheckMark] = theme.control_mark_color;
     colors[ImGuiCol_SliderGrab] = theme.control_mark_color;
     colors[ImGuiCol_SliderGrabActive] = theme.accent_hover_color;
-}
-
-IconTexture* UI::find_texture(std::string_view id) {
-    return m_runtime.find_resource(id);
 }
 
 bool UI::dispatch(ui::UiEvent& event) {

@@ -28,7 +28,7 @@ using namespace ui;
 
 TEST_CASE("number input supports typed value updates", "[NumberInputWidget][value]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    UI surface(runtime);
     int integer = 0;
     double decimal = 0.0;
     ui::NumberInputWidget integer_input(surface, integer);
@@ -42,7 +42,7 @@ TEST_CASE("number input supports typed value updates", "[NumberInputWidget][valu
 
 TEST_CASE("checkbox measurement includes style padding and remeasures after changes", "[CheckboxWidget][layout][style]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    UI surface(runtime);
     bool value = false;
     ui::StackContainer stack("checkbox-padding-stack");
     stack.set_size({ui::fit(), ui::fit()});
@@ -80,7 +80,7 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
     ui::RuntimeConfig config;
     config.theme.content_padding = 20.0F;
     ui::Runtime runtime(std::move(config));
-    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    UI surface(runtime);
     bool checked = false;
 
     auto& page = surface.root().add<ui::StackContainer>("page");
@@ -126,7 +126,7 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
 
 TEST_CASE("dropdown opens from a nested container without extending its parent", "[dropdown][container][regression]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {400.0F, 240.0F}});
+    UI surface(runtime);
     std::string value = "light";
 
     auto& page = surface.root().add<ui::StackContainer>("page");
@@ -191,7 +191,7 @@ TEST_CASE("dropdown opens from a nested container without extending its parent",
 
 TEST_CASE("text measurement and drawing include style padding", "[TextWidget][layout][style]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    UI surface(runtime);
     ui::StackContainer stack("text-padding-stack");
     stack.set_size({ui::fit(), ui::fit()});
     stack.style().padding({});
@@ -218,7 +218,7 @@ TEST_CASE("text measurement and drawing include style padding", "[TextWidget][la
 
 TEST_CASE("unwrapped text keeps its explicit width for overflow", "[TextWidget][layout]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    UI surface(runtime);
     ui::TextWidget clipped("this text exceeds the explicit width");
     ui::TextWidget ellipsized("this text exceeds the explicit width");
     clipped.set_size({ui::px(80.0F), ui::px(24.0F)});
@@ -243,7 +243,7 @@ TEST_CASE("unwrapped text keeps its explicit width for overflow", "[TextWidget][
 
 TEST_CASE("text line height scales multi-line text layout", "[TextWidget][layout][style]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    UI surface(runtime);
     ui::TextWidget text("first line\nsecond line");
     text.configure_all_styles([](ui::Style& style) { style.padding({}).line_height(1.5F); });
 
@@ -273,7 +273,7 @@ TEST_CASE("text line height interpolates between visual states", "[TextWidget][s
 
 TEST_CASE("value widgets notify changes", "[Widget][change]") {
     Runtime runtime;
-    UI surface(runtime, Config{});
+    UI surface(runtime);
     bool checked = false;
     int number = 1;
     std::string choice = "one";
@@ -308,7 +308,7 @@ TEST_CASE("value widgets notify changes", "[Widget][change]") {
 
 TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout][regression]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {400.0F, 180.0F}});
+    UI surface(runtime);
     std::string value;
     ui::ResizableContainer parent("resizable");
     parent.set_size({ui::px(180.0F), ui::px(80.0F)});
@@ -344,7 +344,7 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
 
 TEST_CASE("pointer block prevents hover and clicks on content controls", "[input][regression]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {900.0F, 600.0F}});
+    UI surface(runtime);
     setup_demo(surface, "test");
 
     ImGui::SetCurrentContext(surface.imgui_context());
@@ -409,7 +409,7 @@ TEST_CASE("pointer block prevents hover and clicks on content controls", "[input
 
 TEST_CASE("resizable dynamic list keeps its allocated box", "[ResizableContainer][layout][regression]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {900.0F, 600.0F}});
+    UI surface(runtime);
     setup_demo(surface, "test");
 
     ImGui::SetCurrentContext(surface.imgui_context());
@@ -467,7 +467,7 @@ TEST_CASE("resizable dynamic list keeps its allocated box", "[ResizableContainer
 
 TEST_CASE("pointer block rejects clicks on another overlay control", "[input][regression]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {900.0F, 600.0F}});
+    UI surface(runtime);
     setup_demo(surface, "test");
 
     ImGui::SetCurrentContext(surface.imgui_context());
@@ -529,7 +529,7 @@ TEST_CASE("pointer block rejects clicks on another overlay control", "[input][re
 
 TEST_CASE("dropdown opens after fading out and fades after selection", "[DropdownWidget][regression]") {
     ui::Runtime runtime;
-    UI surface(runtime, {.size = {320.0F, 220.0F}});
+    UI surface(runtime);
     std::string value = "blue";
     int changes = 0;
     ui::StackContainer stack("dropdown-stack");
@@ -644,11 +644,14 @@ TEST_CASE("runtime owns shared theme and explicitly registered assets", "[Runtim
     config.theme.content_padding = 20.0F;
     config.theme.box_rounding = 8.0F;
     ui::Runtime runtime(std::move(config));
-    ui::Font* font = runtime.add_font(ui::FontType::REGULAR, "fonts/regular.ttf");
+    ui::Font* font = runtime.fonts().add("regular", "fonts/regular.ttf");
+    ui::Font* semibold = runtime.fonts().add("semibold", "fonts/semibold.ttf");
 
     REQUIRE(runtime.theme().content_padding == 20.0F);
-    REQUIRE(font == runtime.find_font(ui::FontType::REGULAR));
-    REQUIRE(runtime.find_resource("default") == nullptr);
+    REQUIRE(font == runtime.fonts().find("regular"));
+    REQUIRE(semibold == runtime.fonts().find("semibold"));
+    REQUIRE(semibold != font);
+    REQUIRE(runtime.textures().find("default") == nullptr);
 
     ui::Runtime other_runtime;
 
@@ -1080,7 +1083,7 @@ namespace context_menu_test {
 
 TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]") {
     Runtime runtime;
-    UI surface(runtime, {.size = {320.0F, 240.0F}});
+    UI surface(runtime);
     ImGui::SetCurrentContext(surface.imgui_context());
     ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
     ui_test::ImGuiContext::build_fonts();
@@ -1112,7 +1115,7 @@ TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]
 
 TEST_CASE("context menu item callbacks can keep the root menu open", "[ContextMenuWidget]") {
     Runtime runtime;
-    UI surface(runtime, {.size = {320.0F, 240.0F}});
+    UI surface(runtime);
     ImGui::SetCurrentContext(surface.imgui_context());
     ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
     ui_test::ImGuiContext::build_fonts();
@@ -1144,7 +1147,7 @@ TEST_CASE("context menu item callbacks can keep the root menu open", "[ContextMe
 
 TEST_CASE("context menu blocks and closes on outside pointer input", "[ContextMenuWidget]") {
     Runtime runtime;
-    UI surface(runtime, {.size = {320.0F, 240.0F}});
+    UI surface(runtime);
     ImGui::SetCurrentContext(surface.imgui_context());
     ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
     ui_test::ImGuiContext::build_fonts();
@@ -1177,7 +1180,7 @@ TEST_CASE("context menu blocks and closes on outside pointer input", "[ContextMe
 
 TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMenuWidget]") {
     Runtime runtime;
-    UI surface(runtime, {.size = {480.0F, 240.0F}});
+    UI surface(runtime);
     ImGui::SetCurrentContext(surface.imgui_context());
     ImGui::GetIO().DisplaySize = {480.0F, 240.0F};
     ui_test::ImGuiContext::build_fonts();

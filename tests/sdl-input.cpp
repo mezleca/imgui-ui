@@ -21,11 +21,14 @@
 
 TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regression]") {
     REQUIRE(SDL_Init(SDL_INIT_VIDEO));
-    ui::set_backend(ui::create_sdl_backend);
-
     {
         ui::Runtime runtime;
-        UI surface(runtime, ui::Config{.size = {128.0F, 128.0F}, .visible = false, .swap_interval = 0});
+        auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
+            .size = {128.0F, 128.0F},
+            .visible = false,
+            .swap_interval = 0,
+        });
+        UI surface(runtime, std::move(backend));
         REQUIRE(surface.ready());
 
         auto& panel = surface.root().add<ui::Container>("shadow-panel");
@@ -78,11 +81,13 @@ TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regre
 
 TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regression]") {
     REQUIRE(SDL_Init(SDL_INIT_VIDEO));
-    ui::set_backend(ui::create_sdl_backend);
-
     {
         ui::Runtime runtime;
-        UI surface(runtime, ui::Config{.size = {320.0F, 240.0F}, .visible = false});
+        auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
+            .size = {320.0F, 240.0F},
+            .visible = false,
+        });
+        UI surface(runtime, std::move(backend));
         REQUIRE(surface.ready());
         ImGui::SetCurrentContext(surface.imgui_context());
         ui_test::ImGuiContext::build_fonts();
@@ -144,11 +149,13 @@ TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regr
 
 TEST_CASE("pointer blocker prevents native content mutation but keeps descendants interactive", "[input][regression]") {
     REQUIRE(SDL_Init(SDL_INIT_VIDEO));
-    ui::set_backend(ui::create_sdl_backend);
-
     {
         ui::Runtime runtime;
-        UI surface(runtime, ui::Config{.size = {320.0F, 240.0F}, .visible = false});
+        auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
+            .size = {320.0F, 240.0F},
+            .visible = false,
+        });
+        UI surface(runtime, std::move(backend));
         REQUIRE(surface.ready());
         ImGui::SetCurrentContext(surface.imgui_context());
         ui_test::ImGuiContext::build_fonts();

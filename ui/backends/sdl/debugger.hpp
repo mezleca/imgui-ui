@@ -7,12 +7,12 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class UI;
 
 namespace ui {
-    enum class FontType;
     class Style;
     class StyledNode;
 
@@ -32,7 +32,7 @@ namespace ui {
         void render();
 
         void set_style(const ImGuiStyle& style);
-        void set_font(FontType type, int size);
+        void set_font(std::string_view id, int size);
         void set_icon(IconTexture* icon);
         void set_hotkey(ImGuiKeyChord hotkey);
 

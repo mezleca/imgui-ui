@@ -1,16 +1,18 @@
 #pragma once
 
+#include "asset.hpp"
+
 #include <imgui.h>
 #include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
 
-class IconTexture {
+class IconTexture : public ui::Asset {
 public:
     virtual ~IconTexture() = default;
     virtual ImTextureID get(ImVec2 size) = 0;
-    virtual void release_context(ImGuiContext* context) = 0;
+    void release_context(ImGuiContext* context) override = 0;
 };
 
 namespace ui {

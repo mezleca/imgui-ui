@@ -1,12 +1,11 @@
 #pragma once
 
-#include "resources/assets.hpp"
+#include "resources/font-registry.hpp"
+#include "resources/texture-registry.hpp"
 #include "style/theme.hpp"
 
 #include <filesystem>
-#include <string>
-#include <string_view>
-#include <utility>
+#include <memory>
 
 class UI;
 
@@ -29,28 +28,20 @@ namespace ui {
             return m_theme;
         }
 
-        Font* add_font(FontType type, std::filesystem::path location) {
-            return m_assets.add_font(type, std::move(location));
+        FontRegistry& fonts() {
+            return m_fonts;
         }
 
-        IconTexture* add_resource(std::string id, std::filesystem::path location) {
-            return m_assets.add_resource(std::move(id), std::move(location));
+        const FontRegistry& fonts() const {
+            return m_fonts;
         }
 
-        Font* find_font(FontType type) {
-            return m_assets.find_font(type);
+        TextureRegistry& textures() {
+            return m_textures;
         }
 
-        Font& font(FontType type) {
-            return m_assets.font(type);
-        }
-
-        const Font& font(FontType type) const {
-            return m_assets.font(type);
-        }
-
-        IconTexture* find_resource(std::string_view id) {
-            return m_assets.find_texture(id);
+        const TextureRegistry& textures() const {
+            return m_textures;
         }
 
         const std::filesystem::path& performance_directory() const {
@@ -63,7 +54,8 @@ namespace ui {
         void release_context(ImGuiContext* context);
 
         Theme m_theme;
-        AssetRegistry m_assets;
+        FontRegistry m_fonts;
+        TextureRegistry m_textures;
         std::filesystem::path m_performance_directory;
     };
 } // namespace ui

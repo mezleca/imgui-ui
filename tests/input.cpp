@@ -493,8 +493,7 @@ TEST_CASE("later targets win over earlier paint") {
 
 TEST_CASE("hidden layers release focus") {
     ui::Runtime runtime;
-    ui::Config config;
-    UI surface(runtime, std::move(config));
+    UI surface(runtime);
     ui::LayerContainer layer("layer", ui::LayerMode::Inline);
     layer.set_input_router(&surface.input_router());
 

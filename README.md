@@ -21,10 +21,13 @@ target_link_libraries(my-app PRIVATE imgui-ui::sdl)
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
 
-ui::set_backend(ui::create_sdl_backend);
-
 ui::Runtime runtime;
-UI surface(runtime, {.title = "example", .size = {900.0F, 600.0F}});
+auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
+    .title = "example",
+    .size = {900.0F, 600.0F},
+});
+
+UI surface(runtime, std::move(backend));
 surface.root().add<ui::ButtonWidget>(surface, "hello");
 ```
 

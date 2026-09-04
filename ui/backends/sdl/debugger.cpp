@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <format>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ui {
@@ -361,7 +362,7 @@ namespace ui {
     }
 
     void Debugger::setup() {
-        ui::Config config{
+        ui::BackendConfig config{
             .title = "debugger",
             .size = {560.0F, 720.0F},
             .shared_with = &m_target.backend(),
@@ -370,7 +371,7 @@ namespace ui {
             .swap_interval = 0,
         };
 
-        m_ui = std::make_unique<UI>(m_target.runtime(), config);
+        m_ui = std::make_unique<UI>(m_target.runtime(), std::make_unique<SdlBackend>(std::move(config)));
 
         if (!m_ui->ready()) {
             SDL_Log("Debugger: failed to initialize debugger UI");
@@ -497,16 +498,16 @@ namespace ui {
         ImGui::GetStyle() = style;
     }
 
-    void Debugger::set_font(FontType type, int size) {
+    void Debugger::set_font(std::string_view id, int size) {
         if (!ready()) {
             return;
         }
 
         const ui::ImGuiContextScope scope(m_ui->imgui_context());
-        m_font = m_ui->get_font(type).get(size);
+        m_font = m_ui->get_font(id, size);
 
         if (m_font == nullptr) {
-            SDL_Log("failed to load debugger font variation %d", size);
+            SDL_Log("failed to load debugger font '%.*s' variation %d", static_cast<int>(id.size()), id.data(), size);
         }
     }
 

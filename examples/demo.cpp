@@ -1,6 +1,7 @@
 #include "demo.hpp"
 
 #include <ui/layout/layer-container.hpp>
+#include <ui/layout/resizable-container.hpp>
 #include <ui/style/style.hpp>
 #include <ui/style/styled-node.hpp>
 #include <ui/ui.hpp>
@@ -15,6 +16,38 @@
 #include <format>
 #include <utility>
 #include <vector>
+
+class DemoTextListWidget final : public ui::StackContainer {
+public:
+    explicit DemoTextListWidget(std::vector<std::string> items);
+    DemoTextListWidget& set_items(std::vector<std::string> items);
+};
+
+class DemoScreen final : public ui::StackContainer {
+public:
+    DemoScreen(UI& surface, std::string backend);
+    void setup_dynamic_nodes(ui::Node& parent);
+    int& blur();
+
+private:
+    void on_update(float dt) override;
+    static void apply_border_style(ui::Node& node, ui::BorderStyle style);
+
+    UI& m_surface;
+    ui::ResizableContainer* m_dynamic_nodes = nullptr;
+    ui::TextWidget* m_dynamic_status = nullptr;
+    ui::Node* m_pending_remove = nullptr;
+    bool m_enabled = true;
+    int m_clicks = 0;
+    DemoTextListWidget* m_text_list = nullptr;
+    bool m_text_list_horizontal = false;
+    int m_dynamic_count = 0;
+    int m_next_dynamic_id = 0;
+    std::string m_name = "imgui-ui";
+    std::string m_theme = "blue";
+    std::string m_border_style = "solid";
+    int m_blur = 5;
+};
 
 static void style_demo_panel(ui::Style& style, const ui::Theme& theme) {
     style.padding({14.0F, 14.0F})
@@ -407,6 +440,7 @@ void setup_demo(UI& surface, std::string backend) {
 
         modal_layer.set_visible(true);
         modal.set_visible(true);
+        modal_layer.request_focus();
         surface.input_router().set_focus(modal_layer);
     });
 }

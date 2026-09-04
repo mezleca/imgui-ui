@@ -5,14 +5,32 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace ui {
-    struct Config;
     class EffectRegistry;
+    class Backend;
+
+    struct BackendConfig {
+        std::string title = "ui";
+        ImVec2 size{};
+        Backend* shared_with = nullptr;
+        bool resizable = false;
+        bool visible = true;
+        int swap_interval = 1;
+    };
 
     class Backend {
     public:
+        explicit Backend(BackendConfig config = {}) : m_config(std::move(config)) {}
         virtual ~Backend() = default;
+
+        Backend(const Backend&) = delete;
+        Backend& operator=(const Backend&) = delete;
+
+        const BackendConfig& config() const {
+            return m_config;
+        }
 
         virtual bool initialize() = 0;
         virtual void register_effects(EffectRegistry&) {}
@@ -30,20 +48,13 @@ namespace ui {
         virtual void show() = 0;
         virtual void hide() = 0;
         virtual void raise() = 0;
+
+    protected:
+        BackendConfig& config() {
+            return m_config;
+        }
+
+    private:
+        BackendConfig m_config;
     };
-
-    struct Config {
-        std::string title = "ui";
-        ImVec2 size{};
-        Backend* shared_with = nullptr;
-        bool resizable = false;
-        bool visible = true;
-        int swap_interval = 1;
-    };
-
-    using BackendFactory = std::unique_ptr<Backend> (*)(const Config& config);
-
-    /// register the process-wide backend before constructing windowed surfaces.
-    void set_backend(BackendFactory factory);
-    std::unique_ptr<Backend> create_backend(const Config& config);
 } // namespace ui

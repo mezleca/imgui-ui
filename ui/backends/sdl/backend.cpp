@@ -149,10 +149,10 @@ namespace ui {
         return result;
     }
 
-    SdlBackend::SdlBackend(Config config) : m_config(std::move(config)) {}
+    SdlBackend::SdlBackend(BackendConfig config) : Backend(std::move(config)) {}
 
     SdlBackend::SdlBackend(SDL_Window* window, SDL_GLContext context)
-        : m_window(std::make_unique<Window>(window, context)), m_attached(true) {}
+        : Backend(), m_window(std::make_unique<Window>(window, context)), m_attached(true) {}
 
     SdlBackend::~SdlBackend() {
         if (m_mouse_cursor != nullptr) {
@@ -194,8 +194,8 @@ namespace ui {
         }
 
         Window* shared_window = nullptr;
-        if (m_config.shared_with != nullptr) {
-            auto* shared_backend = dynamic_cast<SdlBackend*>(m_config.shared_with);
+        if (config().shared_with != nullptr) {
+            auto* shared_backend = dynamic_cast<SdlBackend*>(config().shared_with);
             if (shared_backend == nullptr || shared_backend->m_window == nullptr) {
                 SDL_Log("ui: cannot share a context with a different backend");
                 return false;
@@ -204,17 +204,17 @@ namespace ui {
         }
 
         SDL_WindowFlags flags = SDL_WINDOW_OPENGL;
-        if (m_config.resizable) flags |= SDL_WINDOW_RESIZABLE;
-        if (!m_config.visible) flags |= SDL_WINDOW_HIDDEN;
+        if (config().resizable) flags |= SDL_WINDOW_RESIZABLE;
+        if (!config().visible) flags |= SDL_WINDOW_HIDDEN;
 
-        m_window = std::make_unique<Window>(m_config.title, m_config.size, flags, shared_window);
+        m_window = std::make_unique<Window>(config().title, config().size, flags, shared_window);
         if (!m_window->valid()) {
-            SDL_Log("ui: failed to create window '%s'", m_config.title.c_str());
+            SDL_Log("ui: failed to create window '%s'", config().title.c_str());
             return false;
         }
 
         m_window->make_current();
-        if (!SDL_GL_SetSwapInterval(m_config.swap_interval)) {
+        if (!SDL_GL_SetSwapInterval(config().swap_interval)) {
             SDL_Log("ui: failed to set OpenGL swap interval: %s", SDL_GetError());
         }
         if (gladLoadGL(load_opengl) == 0 || !GLAD_GL_VERSION_3_3) {
@@ -362,14 +362,6 @@ namespace ui {
 
         ImGui_ImplSDL3_ProcessEvent(&imgui_event);
         return handled;
-    }
-
-    std::unique_ptr<Backend> create_sdl_backend(const Config& config) {
-        return std::make_unique<SdlBackend>(config);
-    }
-
-    std::unique_ptr<Backend> attach_sdl_backend(SDL_Window* window, SDL_GLContext context) {
-        return std::make_unique<SdlBackend>(window, context);
     }
 
     bool process_sdl_event(UI& surface, const SDL_Event& event) {
