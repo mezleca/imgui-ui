@@ -33,7 +33,7 @@ namespace ui {
 
         void set_style(const ImGuiStyle& style);
         void set_font(std::string_view id, int size);
-        void set_icon(IconTexture* icon);
+        void set_icon(Texture* icon);
         void set_hotkey(ImGuiKeyChord hotkey);
 
         bool ready() const;
@@ -67,7 +67,7 @@ namespace ui {
         Rect m_highlight{};
         bool m_highlight_valid = false;
         ImageWidget m_icon;
-        std::unique_ptr<IconTexture> m_inspect_icon;
+        std::unique_ptr<Texture> m_inspect_icon;
         Node* m_node_target = nullptr;
         Node* m_hover_target = nullptr;
         // removed nodes stay alive until shutdown because application widgets may retain raw child pointers.

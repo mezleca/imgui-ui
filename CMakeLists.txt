@@ -71,9 +71,16 @@ if((IMGUI_UI_BUILD_SDL OR IMGUI_UI_BUILD_RAYLIB) AND NOT IMGUI_UI_IMGUI_BACKENDS
     message(FATAL_ERROR "IMGUI_UI_IMGUI_BACKENDS_DIR is required by window backends")
 endif()
 
-if(IMGUI_UI_BUILD_SDL)
+if(IMGUI_UI_BUILD_SDL OR IMGUI_UI_BUILD_RAYLIB)
     find_package(OpenGL REQUIRED)
 
+    if(NOT TARGET lunasvg)
+        set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        add_subdirectory(vendor/lunasvg EXCLUDE_FROM_ALL)
+    endif()
+endif()
+
+if(IMGUI_UI_BUILD_SDL)
     if(NOT TARGET SDL3::SDL3)
         set(SDL_SHARED OFF CACHE BOOL "" FORCE)
         set(SDL_STATIC ON CACHE BOOL "" FORCE)
@@ -81,11 +88,6 @@ if(IMGUI_UI_BUILD_SDL)
         set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
         set(SDL_TESTS OFF CACHE BOOL "" FORCE)
         add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
-    endif()
-
-    if(NOT TARGET lunasvg)
-        set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-        add_subdirectory(vendor/lunasvg EXCLUDE_FROM_ALL)
     endif()
 endif()
 

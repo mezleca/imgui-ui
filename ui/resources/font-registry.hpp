@@ -1,13 +1,44 @@
 #pragma once
 
 #include "asset-registry.hpp"
-#include "font.hpp"
 
+#include <cstdint>
 #include <filesystem>
+#include <imgui.h>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace ui {
+    enum FontVariant : int32_t {
+        FONT_EXTRA_SMALL = 10,
+        FONT_SMALL = 14,
+        FONT_MEDIUM = 20,
+        FONT_LARGE = 26,
+        FONT_EXTRA_LARGE = 32
+    };
+
+    class Font final {
+    public:
+        explicit Font(std::filesystem::path location);
+
+        ImFont* get(int size);
+        bool load(int size);
+        void release_context(ImGuiContext* context);
+
+    private:
+        struct ContextFonts {
+            ImGuiIO* io = nullptr;
+            std::unordered_map<int, ImFont*> fonts;
+        };
+
+        ImFont* load_variation(ImGuiContext* context, int size);
+
+        std::filesystem::path m_font_location;
+        std::unordered_map<ImGuiContext*, ContextFonts> m_contexts;
+        ImFontConfig m_cfg;
+    };
+
     class FontRegistry final : public AssetRegistry {
     public:
         Font* add(std::string id, std::filesystem::path location);

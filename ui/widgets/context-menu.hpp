@@ -8,9 +8,9 @@
 #include <vector>
 
 class UI;
-class IconTexture;
 
 namespace ui {
+    class Texture;
     class ContextMenuItemNode;
     class ContextMenuWidget;
 
@@ -34,10 +34,10 @@ namespace ui {
 
     class ContextMenuWidget : public StackContainer {
     public:
-        ContextMenuWidget(UI& ui, ContextMenuItems items = {}, IconTexture* submenu_icon = nullptr);
+        ContextMenuWidget(UI& ui, ContextMenuItems items = {}, Texture* submenu_icon = nullptr);
 
         ContextMenuWidget& set_items(ContextMenuItems items);
-        ContextMenuWidget& set_submenu_icon(IconTexture* icon);
+        ContextMenuWidget& set_submenu_icon(Texture* icon);
 
         /// waits this many seconds after opening before hover can close this menu or its submenus.
         ContextMenuWidget& set_hover_close_delay(float seconds);
@@ -58,7 +58,7 @@ namespace ui {
     private:
         friend class ContextMenuItemNode;
 
-        ContextMenuWidget(InputRouter& router, const Theme& theme, IconTexture* submenu_icon, ContextMenuItems items);
+        ContextMenuWidget(InputRouter& router, const Theme& theme, Texture* submenu_icon, ContextMenuItems items);
 
         void on_update(float) override;
         void draw_children() override;
@@ -76,7 +76,7 @@ namespace ui {
 
         InputRouter& m_router;
         const Theme& m_theme;
-        IconTexture* m_submenu_icon = nullptr;
+        Texture* m_submenu_icon = nullptr;
         std::vector<ContextMenuItemNode*> m_items;
         ContextMenuWidget* m_parent_menu = nullptr;
         bool m_open = false;

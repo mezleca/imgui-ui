@@ -3,7 +3,7 @@
 #include "../style/theme.hpp"
 #include "../ui.hpp"
 #include "../imgui/draw.hpp"
-#include "../resources/icon.hpp"
+#include "../resources/texture-registry.hpp"
 #include "widget.hpp"
 
 #include <algorithm>
@@ -119,16 +119,16 @@ private:
     std::string m_label;
     ContextMenuCallback m_callback;
     ContextMenuWidget* m_submenu = nullptr;
-    IconTexture* m_submenu_icon = nullptr;
+    Texture* m_submenu_icon = nullptr;
 };
 
-ContextMenuWidget::ContextMenuWidget(UI& ui, ContextMenuItems items, IconTexture* submenu_icon)
+ContextMenuWidget::ContextMenuWidget(UI& ui, ContextMenuItems items, Texture* submenu_icon)
     : ContextMenuWidget(
           ui.input_router(), ui.theme(),
           submenu_icon != nullptr ? submenu_icon : ui.runtime().textures().find("context-menu-chevron"), std::move(items)
       ) {}
 
-ContextMenuWidget::ContextMenuWidget(InputRouter& router, const Theme& theme, IconTexture* submenu_icon, ContextMenuItems items)
+ContextMenuWidget::ContextMenuWidget(InputRouter& router, const Theme& theme, Texture* submenu_icon, ContextMenuItems items)
     : StackContainer({}, StackDirection::Vertical), m_router(router), m_theme(theme), m_submenu_icon(submenu_icon) {
     set_type_name("ContextMenu");
     set_size({px(MENU_WIDTH), px(menu_height(0))});
@@ -180,7 +180,7 @@ ContextMenuWidget& ContextMenuWidget::set_items(ContextMenuItems items) {
     return *this;
 }
 
-ContextMenuWidget& ContextMenuWidget::set_submenu_icon(IconTexture* icon) {
+ContextMenuWidget& ContextMenuWidget::set_submenu_icon(Texture* icon) {
     if (m_submenu_icon == icon) {
         return *this;
     }

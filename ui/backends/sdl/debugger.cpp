@@ -1,7 +1,7 @@
 #include "debugger.hpp"
 #include "backend.hpp"
-#include "icon.hpp"
 #include "../../ui.hpp"
+#include "../opengl/texture-loader.hpp"
 #include "../../resources/svg.hpp"
 #include "../../style/styled-node.hpp"
 #include "../../style/theme.hpp"
@@ -379,7 +379,8 @@ void Debugger::setup() {
 
     const ImGuiContextScope scope(m_ui->imgui_context());
 
-    m_inspect_icon = make_sdl_icon_loader()->load_data(INSPECT_SVG, "debugger-inspect");
+    OpenGLTextureLoader loader;
+    m_inspect_icon = loader.load(INSPECT_SVG, "debugger-inspect");
     m_icon.set_texture(m_inspect_icon.get());
     m_icon.set_size({px(ICON_SIZE.x), px(ICON_SIZE.y)});
     m_icon.configure_all_styles([this](Style& style) { style.color(m_ui->theme().text_secondary_color); });
@@ -387,7 +388,7 @@ void Debugger::setup() {
     m_target.backend().make_current();
 }
 
-void Debugger::set_icon(IconTexture* icon) {
+void Debugger::set_icon(Texture* icon) {
     m_icon.set_texture(icon != nullptr ? icon : m_inspect_icon.get());
 }
 

@@ -13,7 +13,7 @@ namespace ui {
     struct RuntimeConfig {
         Theme theme = Theme::defaults();
         std::filesystem::path performance_directory;
-        std::unique_ptr<IconLoader> icon_loader;
+        std::unique_ptr<TextureLoader> texture_loader;
     };
 
     /// assets and theme shared by independent ui surfaces.

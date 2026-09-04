@@ -24,6 +24,7 @@ endif()
 if(IMGUI_UI_BUILD_SDL)
     file(GLOB IMGUI_UI_SDL_SOURCES CONFIGURE_DEPENDS "backends/sdl/*.cpp")
     list(APPEND IMGUI_UI_SDL_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/backends/opengl/texture-loader.cpp"
         "${IMGUI_UI_IMGUI_BACKENDS_DIR}/imgui_impl_sdl3.cpp"
         "${IMGUI_UI_IMGUI_BACKENDS_DIR}/imgui_impl_opengl3.cpp"
     )
@@ -44,12 +45,18 @@ endif()
 
 if(IMGUI_UI_BUILD_RAYLIB)
     file(GLOB IMGUI_UI_RAYLIB_SOURCES CONFIGURE_DEPENDS "backends/raylib/*.cpp")
-    list(APPEND IMGUI_UI_RAYLIB_SOURCES "${IMGUI_UI_IMGUI_BACKENDS_DIR}/imgui_impl_opengl3.cpp")
+    list(APPEND IMGUI_UI_RAYLIB_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/backends/opengl/texture-loader.cpp"
+        "${IMGUI_UI_IMGUI_BACKENDS_DIR}/imgui_impl_opengl3.cpp"
+    )
 
     add_library(imgui-ui-raylib STATIC ${IMGUI_UI_RAYLIB_SOURCES})
     add_library(imgui-ui::raylib ALIAS imgui-ui-raylib)
     imgui_ui_enable_sanitizers(imgui-ui-raylib)
 
-    target_include_directories(imgui-ui-raylib PRIVATE "${IMGUI_UI_IMGUI_BACKENDS_DIR}")
-    target_link_libraries(imgui-ui-raylib PUBLIC imgui-ui-core raylib)
+    target_include_directories(imgui-ui-raylib PRIVATE
+        "${IMGUI_UI_IMGUI_BACKENDS_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glad/include"
+    )
+    target_link_libraries(imgui-ui-raylib PUBLIC imgui-ui-core raylib lunasvg)
 endif()

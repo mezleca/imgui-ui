@@ -1,4 +1,5 @@
 #include <ui/backends/raylib/backend.hpp>
+#include <ui/backends/opengl/texture-loader.hpp>
 #include <ui/tree/node.hpp>
 #include <ui/ui.hpp>
 
@@ -14,6 +15,7 @@ int main() {
     ui::RuntimeConfig runtime_config;
     runtime_config.theme.accent_color = {0.35F, 0.65F, 1.0F, 1.0F};
     runtime_config.theme.accent_hover_color = {0.55F, 0.78F, 1.0F, 1.0F};
+    runtime_config.texture_loader = std::make_unique<ui::OpenGLTextureLoader>();
     ui::Runtime runtime(std::move(runtime_config));
     const std::filesystem::path font = std::filesystem::path{IMGUI_UI_ASSETS_DIR} / "fonts/Inter.ttf";
     runtime.fonts().add("Inter Regular", font);

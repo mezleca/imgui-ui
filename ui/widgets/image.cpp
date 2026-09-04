@@ -1,12 +1,12 @@
 #include "image.hpp"
 #include "../imgui/draw.hpp"
-#include "../resources/icon.hpp"
+#include "../resources/texture-registry.hpp"
 
 #include <cmath>
 
 using namespace ui;
 
-ImageWidget::ImageWidget(IconTexture* texture) : DrawListWidget({}, "Image", false), m_texture(texture) {}
+ImageWidget::ImageWidget(Texture* texture) : DrawListWidget({}, "Image", false), m_texture(texture) {}
 
 void ImageWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) {
     const Rect content = rect.inset(style.padding());

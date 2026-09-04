@@ -4,15 +4,15 @@
 
 #include <imgui.h>
 
-class IconTexture;
-
 namespace ui {
+    class Texture;
+
     /// images are passive. call set_input_target() to route their pointer input.
     class ImageWidget : public DrawListWidget {
     public:
-        explicit ImageWidget(IconTexture* texture = nullptr);
+        explicit ImageWidget(Texture* texture = nullptr);
 
-        ImageWidget& set_texture(IconTexture* texture) {
+        ImageWidget& set_texture(Texture* texture) {
             m_texture = texture;
             return *this;
         }
@@ -24,7 +24,7 @@ namespace ui {
 
     private:
         void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) override;
-        IconTexture* m_texture = nullptr;
+        Texture* m_texture = nullptr;
         float m_rotation = 0.0F;
     };
 

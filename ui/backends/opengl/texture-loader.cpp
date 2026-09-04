@@ -1,4 +1,4 @@
-#include "icon.hpp"
+#include "texture-loader.hpp"
 
 #include <glad/gl.h>
 #include <lunasvg.h>
@@ -9,9 +9,9 @@
 #include <utility>
 
 using namespace ui;
-class OpenGLIconTexture final : public IconTexture {
+class OpenGLTexture final : public Texture {
 public:
-    explicit OpenGLIconTexture(std::unique_ptr<lunasvg::Document> document) : m_document(std::move(document)) {}
+    explicit OpenGLTexture(std::unique_ptr<lunasvg::Document> document) : m_document(std::move(document)) {}
 
     ImTextureID get(ImVec2 size) override {
         ImGuiContext* context = ImGui::GetCurrentContext();
@@ -66,25 +66,18 @@ private:
     std::unique_ptr<lunasvg::Document> m_document;
 };
 
-class OpenGLIconLoader final : public IconLoader {
-public:
-    std::unique_ptr<IconTexture> load_file(const std::filesystem::path& location, std::string) override {
-        std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromFile(location.string());
-        if (document == nullptr) {
-            throw std::runtime_error(std::format("ui: failed to load icon {}", location.string()));
-        }
-        return std::make_unique<OpenGLIconTexture>(std::move(document));
+std::unique_ptr<Texture> OpenGLTextureLoader::load(const std::filesystem::path& location, std::string) {
+    std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromFile(location.string());
+    if (document == nullptr) {
+        throw std::runtime_error(std::format("ui: failed to load texture {}", location.string()));
     }
+    return std::make_unique<OpenGLTexture>(std::move(document));
+}
 
-    std::unique_ptr<IconTexture> load_data(std::string_view content, std::string) override {
-        std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromData(std::string{content});
-        if (document == nullptr) {
-            throw std::runtime_error("ui: failed to load icon data");
-        }
-        return std::make_unique<OpenGLIconTexture>(std::move(document));
+std::unique_ptr<Texture> OpenGLTextureLoader::load(std::string_view content, std::string) {
+    std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromData(std::string{content});
+    if (document == nullptr) {
+        throw std::runtime_error("ui: failed to load texture data");
     }
-};
-
-std::unique_ptr<IconLoader> ui::make_sdl_icon_loader() {
-    return std::make_unique<OpenGLIconLoader>();
+    return std::make_unique<OpenGLTexture>(std::move(document));
 }

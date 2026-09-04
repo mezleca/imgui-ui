@@ -92,7 +92,7 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
     };
 }
 
-TextInputWidget& TextInputWidget::set_icon(IconTexture* icon) {
+TextInputWidget& TextInputWidget::set_icon(Texture* icon) {
     m_icon_node->set_texture(icon);
     m_icon_node->set_visible(icon != nullptr);
     return *this;
