@@ -99,6 +99,9 @@ namespace ui {
         /// blocks application dispatch while the debugger selects a node.
         void set_debug_inspect_mode(bool enabled);
 
+        /// blocks application hover while the debugger owns the pointer.
+        void set_debug_pointer_blocked(bool blocked);
+
         enum class InputKind : unsigned char {
             Target,
             Blocker,
@@ -134,6 +137,7 @@ namespace ui {
         std::vector<InputEntry> m_entries;
         Node* m_focused_node = nullptr;
         bool m_debug_inspect_mode = false;
+        bool m_debug_pointer_blocked = false;
         Node* m_pointer_capture = nullptr;
         Node* m_hovered_node = nullptr;
         Node* m_active_node = nullptr;

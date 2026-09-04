@@ -97,6 +97,32 @@ static constexpr float INPUT_MAX_WIDTH = 180.0F;
 static constexpr ImVec2 INPUT_PADDING = {0.0F, 0.0F};
 static constexpr ImVec2 SECTION_PADDING = {10.0F, 8.0F};
 
+static bool belongs_to_debugger(const ImGuiWindow& window, const ImGuiWindow& debugger_window) {
+    for (const ImGuiWindow* parent = window.ParentWindow; parent != nullptr; parent = parent->ParentWindow) {
+        if (parent == &debugger_window) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void bring_debugger_to_front(ImGuiWindow& debugger_window) {
+    // keep the debugger above app layers while leaving its popups on top.
+    ImGui::BringWindowToDisplayFront(&debugger_window);
+
+    ImGuiContext* context = ImGui::GetCurrentContext();
+    if (context == nullptr) {
+        return;
+    }
+
+    for (const ImGuiPopupData& popup : context->OpenPopupStack) {
+        if (popup.Window != nullptr && belongs_to_debugger(*popup.Window, debugger_window)) {
+            ImGui::BringWindowToDisplayFront(popup.Window);
+        }
+    }
+}
+
 template <typename... Args>
 static void draw_property_value(std::string_view label, std::string_view format, Args&&... args) {
     const std::string value = std::vformat(format, std::make_format_args(args...));
@@ -402,6 +428,7 @@ void Debugger::set_enabled(bool enabled) {
     }
 
     m_enabled = enabled;
+    m_target.input_router().set_debug_pointer_blocked(enabled);
     if (enabled) {
         m_overlay_focused = true;
         m_overlay_idle_time = 0.0F;
@@ -470,19 +497,37 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
         return true;
     }
 
-    if (m_overlay_focused && ImGui::GetCurrentContext() != nullptr && ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup)) {
-        event.mark_handled();
-        if (event.type == EventType::PointerDown) {
-            m_overlay_pointer_capture = true;
-        } else if (event.type == EventType::PointerUp) {
-            m_overlay_pointer_capture = false;
+    if (m_overlay_focused) {
+        const bool popup_open = ImGui::GetCurrentContext() != nullptr && ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
+        if (popup_open || overlay_contains(event.position)) {
+            event.mark_handled();
+            if (event.type == EventType::PointerDown) {
+                m_overlay_pointer_capture = true;
+                m_overlay_idle_time = 0.0F;
+            }
+            return true;
         }
+
+        // transfer pointer focus on an outside press without forwarding that press to the app.
+        if (event.type == EventType::PointerDown) {
+            m_overlay_focused = false;
+            m_target.input_router().set_debug_pointer_blocked(false);
+            m_overlay_pointer_capture = true;
+            m_overlay_idle_time = 0.0F;
+            if (event.button == PointerButton::Left) {
+                m_highlight_selected = false;
+                m_highlight_valid = false;
+            }
+        }
+
+        event.mark_handled();
         return true;
     }
 
     if (overlay_contains(event.position)) {
         if (event.type == EventType::PointerDown) {
             m_overlay_focused = true;
+            m_target.input_router().set_debug_pointer_blocked(true);
             m_overlay_idle_time = 0.0F;
             m_overlay_pointer_capture = true;
             m_target.input_router().clear_focus();
@@ -539,18 +584,16 @@ bool Debugger::handle_input(UiEvent& event) {
         m_highlight_valid = false;
     }
 
-    if (event.type == EventType::PointerDown) {
-        if (m_overlay_focused) {
-            m_overlay_idle_time = 0.0F;
-        }
-        m_overlay_focused = false;
-    }
-
     return false;
 }
 
 void Debugger::set_inspect_mode(bool enabled) {
     m_inspect_mode = enabled;
+    if (enabled) {
+        m_overlay_focused = false;
+        m_overlay_pointer_capture = false;
+        m_target.input_router().set_debug_pointer_blocked(false);
+    }
     m_target.input_router().set_debug_inspect_mode(enabled);
 
     if (!enabled) {
@@ -1174,8 +1217,7 @@ void Debugger::render() {
 
     const bool debugger_visible =
         ImGui::Begin("ui debugger", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
-    // keep diagnostics above app layers without stealing keyboard focus.
-    ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+    ImGuiWindow* debugger_window = ImGui::GetCurrentWindow();
     m_overlay_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
     if (debugger_visible) {
         const bool has_font = m_font != nullptr;
@@ -1201,5 +1243,8 @@ void Debugger::render() {
     }
 
     ImGui::End();
+    if (debugger_window != nullptr) {
+        bring_debugger_to_front(*debugger_window);
+    }
     ImGui::PopStyleVar(2);
 }

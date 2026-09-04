@@ -5,6 +5,7 @@
 #include <ui/imgui/effects/effects.hpp>
 #include <ui/style/styled-node.hpp>
 #include <ui/ui.hpp>
+#include <ui/widgets/checkbox.hpp>
 
 #include <imgui.h>
 
@@ -116,6 +117,90 @@ TEST_CASE("debugger hotkey toggles on the target surface") {
 
     REQUIRE(surface.debugger()->enabled());
     surface.end_frame();
+}
+
+TEST_CASE("focused debugger blocks application hover") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.enable_debugger = true});
+    bool value = false;
+    auto& checkbox = surface.root().add<ui::CheckboxWidget>(surface, value, "application");
+    checkbox.set_layout({
+        .size = {ui::px(120.0F), ui::px(40.0F)},
+        .placement = {.offset = {20.0F, 20.0F}},
+        .in_flow = false,
+    });
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {900.0F, 600.0F};
+    ui_test::ImGuiContext::build_fonts();
+
+    const auto draw_frame = [&surface] {
+        ImGui::GetIO().MousePos = {30.0F, 30.0F};
+        surface.begin_frame();
+        surface.root().update(ImGui::GetIO().DeltaTime);
+        surface.root().draw();
+        surface.end_frame();
+    };
+
+    draw_frame();
+    REQUIRE(checkbox.input_state().hovered);
+
+    surface.debugger()->set_enabled(true);
+    draw_frame();
+    REQUIRE_FALSE(checkbox.input_state().hovered);
+
+    ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
+    down.position = {30.0F, 30.0F};
+    down.button = ui::PointerButton::Left;
+    REQUIRE(surface.dispatch(down));
+
+    ui::UiEvent up = ui::UiEvent::make(ui::EventType::PointerUp);
+    up.position = down.position;
+    up.button = ui::PointerButton::Left;
+    REQUIRE(surface.dispatch(up));
+
+    draw_frame();
+    REQUIRE(checkbox.input_state().hovered);
+}
+
+TEST_CASE("debugger leaves its imgui popups above its window") {
+    ui::Runtime runtime;
+    UI surface(runtime, {.enable_debugger = true});
+    surface.debugger()->set_enabled(true);
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {900.0F, 600.0F};
+    ui_test::ImGuiContext::build_fonts();
+    ImVec4 color = {1.0F, 0.0F, 0.0F, 1.0F};
+
+    const auto draw_frame = [&surface, &color](bool open_popup) {
+        surface.begin_frame();
+        if (open_popup) {
+            ImGui::Begin("ui debugger");
+            ImGui::BeginChild("##debugger-content");
+            ImGui::OpenPopup("color-picker");
+            if (ImGui::BeginPopup("color-picker")) {
+                ImGui::ColorPicker4("color", &color.x);
+                ImGui::EndPopup();
+            }
+            ImGui::EndChild();
+            ImGui::End();
+        }
+        surface.end_frame();
+    };
+
+    draw_frame(false);
+    draw_frame(true);
+    draw_frame(true);
+
+    ImGui::SetCurrentContext(surface.imgui_context());
+    const ImDrawData* draw_data = ImGui::GetDrawData();
+    REQUIRE(draw_data != nullptr);
+    const int debugger_index = draw_list_index(*draw_data, "ui debugger");
+    const int popup_index = draw_list_index(*draw_data, "##Popup_");
+    REQUIRE(debugger_index >= 0);
+    REQUIRE(popup_index >= 0);
+    REQUIRE(debugger_index < popup_index);
 }
 
 TEST_CASE("effect registry manages lifecycle and draw submission") {

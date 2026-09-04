@@ -80,6 +80,17 @@ void InputRouter::set_debug_inspect_mode(bool enabled) {
     }
 }
 
+void InputRouter::set_debug_pointer_blocked(bool blocked) {
+    if (m_debug_pointer_blocked == blocked) {
+        return;
+    }
+
+    m_debug_pointer_blocked = blocked;
+    if (blocked) {
+        set_input_flag(m_hovered_node, nullptr, InputFlag::Hovered);
+    }
+}
+
 void InputRouter::erase_entries(Node& node) {
     std::erase_if(m_entries, [&node](const InputEntry& entry) { return entry.node == &node || entry.owner == &node; });
 }
@@ -122,7 +133,7 @@ void InputRouter::detach(Node& subtree) {
 }
 
 void InputRouter::refresh_pointer_state(ImVec2 position) {
-    if (m_debug_inspect_mode) {
+    if (m_debug_inspect_mode || m_debug_pointer_blocked) {
         set_input_flag(m_hovered_node, nullptr, InputFlag::Hovered);
         return;
     }
