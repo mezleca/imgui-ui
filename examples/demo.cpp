@@ -3,6 +3,7 @@
 #include <ui/backends/opengl/texture-loader.hpp>
 #include <ui/layout/layer-container.hpp>
 #include <ui/layout/resizable-container.hpp>
+#include <ui/layout/virtual-layout.hpp>
 #include <ui/resources/texture-registry.hpp>
 #include <ui/style/style.hpp>
 #include <ui/style/styled-node.hpp>
@@ -21,6 +22,7 @@
 #include <memory>
 #include <string_view>
 #include <utility>
+#include <unordered_map>
 #include <vector>
 
 static constexpr std::string_view DEMO_INLINE_ICON_SVG = R"(
@@ -325,6 +327,41 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
         m_text_list->set_direction(m_text_list_horizontal ? ui::StackDirection::Horizontal : ui::StackDirection::Vertical);
         text_list_orientation.set_text(m_text_list_horizontal ? "list orientation: horizontal" : "list orientation: vertical");
     });
+
+    auto& virtual_section = add<DemoPanel>("virtual-section", surface.theme());
+    virtual_section.set_size({ui::grow(), ui::fit()});
+    virtual_section.set_spacing(8.0F);
+    virtual_section.add<ui::TextWidget>("virtual list (100000 items)");
+    virtual_section.add<ui::TextWidget>("click to expand or collapse it");
+
+    auto& virtual_list = virtual_section.add<ui::VirtualLayout>("demo-virtual-list", 32.0F);
+    virtual_list.set_size({ui::grow(), ui::px(260.0F)});
+    virtual_list.set_spacing(4.0F);
+    virtual_list.set_overscan(5);
+    virtual_list.set_items(
+        100000,
+        [&surface, &virtual_list, cache = std::unordered_map<size_t, ui::ButtonWidget*>{}](size_t index) mutable -> ui::Node& {
+            const auto found = cache.find(index);
+
+            if (found != cache.end()) {
+                return *found->second;
+            }
+
+            auto& row = virtual_list.add<ui::ButtonWidget>(surface, std::format("item {} - expand", index + 1));
+            row.set_id(std::format("virtual-row-{}", index));
+            row.on_click([&virtual_list, &row, index] {
+                const bool expanded = virtual_list.extra_offset(index) == 0.0F;
+                virtual_list.set_extra_offset(index, expanded ? 64.0F : 0.0F);
+                row.set_text(
+                    expanded ? std::format("item {} - collapse\nthis row reserves 64 extra pixels", index + 1)
+                             : std::format("item {} - expand", index + 1)
+                );
+            });
+
+            cache.emplace(index, &row);
+            return row;
+        }
+    );
 
     button.on_click([this, &status] {
         ++m_clicks;

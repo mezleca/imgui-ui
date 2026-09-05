@@ -360,9 +360,7 @@ void Node::submit_positioned_item() {
 void Node::prepare_layout() {
     UI_PROFILE_NODE(m_profiler, "Node::layout", m_identity);
 
-    if (m_parent == nullptr && m_measure_dirty) {
-        measure_tree();
-    }
+    if (m_measure_dirty) measure_tree();
 
     // keep the size assigned by the parent while the node resolves its own placement.
     const bool size_assigned_by_parent = m_layout.m_size_assigned_by_parent;
