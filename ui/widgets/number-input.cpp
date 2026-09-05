@@ -139,7 +139,7 @@ bool NumberInputWidget::draw_value(T& value) {
 }
 
 bool NumberInputWidget::paint() {
-    const Style& current_style = style();
+    const ComputedStyle& current_style = computed_style();
     ImVec2 frame_padding = current_style.padding();
     m_label.set_font(font());
     const ImVec2 label_size = m_label.text_size();

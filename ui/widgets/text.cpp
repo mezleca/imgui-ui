@@ -45,7 +45,7 @@ void TextWidget::on_measure() {
 }
 
 bool TextWidget::paint() {
-    const Style& current_style = style();
+    const ComputedStyle& current_style = computed_style();
     const ImVec2 minimum = ImGui::GetCursorScreenPos();
     const Rect outer = Rect::from_position_size(minimum, layout().size());
     const Rect content = outer.inset(current_style.padding());

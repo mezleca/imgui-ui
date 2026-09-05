@@ -8,7 +8,7 @@ using namespace ui;
 
 ImageWidget::ImageWidget(Texture* texture) : DrawListWidget({}, "Image", false), m_texture(texture) {}
 
-void ImageWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) {
+void ImageWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) {
     const Rect content = rect.inset(style.padding());
     draw_frame(draw_list, rect, style);
 

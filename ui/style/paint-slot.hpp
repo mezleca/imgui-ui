@@ -11,7 +11,7 @@ namespace ui {
         Rect rect;
         Rect content_rect;
         ImDrawList& draw_list;
-        const Style& style;
+        const ComputedStyle& style;
         float opacity;
     };
 

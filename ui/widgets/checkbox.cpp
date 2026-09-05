@@ -18,7 +18,7 @@ public:
     }
 
 private:
-    void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& current_style) override {
+    void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& current_style) override {
         if (m_fill && !*m_value) {
             return;
         }

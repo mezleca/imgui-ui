@@ -45,10 +45,10 @@ void StyledNode::draw() {
     }
 
     update_cursor();
-    const Style::PushState push_state = style().push(opacity(), font());
+    const ComputedStyle::PushState push_state = computed_style().push(opacity(), font());
 
     Node::draw();
-    Style::pop(push_state);
+    ComputedStyle::pop(push_state);
 }
 
 bool StyledNode::on_draw() {

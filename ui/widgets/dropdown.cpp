@@ -28,7 +28,7 @@ public:
     }
 
 private:
-    void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& current_style) override {
+    void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& current_style) override {
         const auto selected = std::find_if(m_state.options.begin(), m_state.options.end(), [this](const DropdownOption& option) {
             return option.value == *m_state.value;
         });
@@ -41,7 +41,8 @@ private:
     }
 
     void draw_contents(
-        ImDrawList& draw_list, Rect rect, std::string_view preview, bool open, const Style& current_style, ImColor background
+        ImDrawList& draw_list, Rect rect, std::string_view preview, bool open, const ComputedStyle& current_style,
+        ImColor background
     ) const {
         draw_frame(draw_list, rect, current_style, background);
 
@@ -104,7 +105,7 @@ public:
             m_popup_opened = true;
         }
 
-        const Style& current_style = style();
+        const ComputedStyle& current_style = computed_style();
         const ImVec2 item_padding = {m_trigger.style().padding().x, 4.0F};
         const float item_height = ImGui::GetTextLineHeight() + item_padding.y * 2.0F;
         ImGui::SetNextWindowPos(m_popup_position, ImGuiCond_Always);
@@ -120,7 +121,7 @@ public:
             set_visual_rect(body_rect);
             m_router.block(body_rect);
 
-            const Style& hover_style = m_trigger.style(StyleType::HOVER);
+            const ComputedStyle& hover_style = m_trigger.style(StyleType::HOVER).computed_style();
             const ImColor selected_background = m_trigger.style(StyleType::ACTIVE).background_color().value;
             const ImColor hovered_background = hover_style.background_color().value;
             const ImColor hovered_text = hover_style.color().value;

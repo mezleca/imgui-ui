@@ -1,59 +1,54 @@
 #include "style.hpp"
 
-#include <imgui.h>
+#include <string>
+#include <type_traits>
+#include <variant>
 
-using namespace ui;
-static bool same_color(ImVec4 left, ImVec4 right) {
-    return left.x == right.x && left.y == right.y && left.z == right.z && left.w == right.w;
-}
+namespace ui {
+    void Style::lerp(Style& style, const Style& target, float dt) {
+        const ImFont* previous_font = style.m_font;
+        const ImVec2 previous_padding = style.m_padding.value;
+        const float previous_line_height = style.m_line_height.value;
 
-Style::PushState Style::push(float opacity, ImFont* effective_font) const {
-    ImGuiStyle& current = ImGui::GetStyle();
-    PushState state;
+        style.m_font = target.m_font;
+        style.m_padding.tick(target.m_padding, dt);
+        style.m_alpha = target.m_alpha;
+        style.m_cursor = target.m_cursor;
+        style.m_use_background_for_scrollbar = target.m_use_background_for_scrollbar;
+        style.m_blur = target.m_blur;
+        style.m_border_thickness = target.m_border_thickness;
+        style.m_border_radius = target.m_border_radius;
+        style.m_border = target.m_border;
+        style.m_border_style = target.m_border_style;
+        style.m_box_shadow.tick(target.m_box_shadow, dt);
+        style.m_color.tick(target.m_color, dt);
+        style.m_border_color.tick(target.m_border_color, dt);
+        style.m_background_color.tick(target.m_background_color, dt);
+        style.m_line_height.tick(target.m_line_height, dt);
 
-    state.font_pushed = effective_font != nullptr && effective_font != ImGui::GetFont();
-    if (state.font_pushed) ImGui::PushFont(effective_font);
+        style.m_vars.for_each([&](const std::string& key, StyleValue& value) {
+            const StyleValue* target_value = target.m_vars.find(key);
 
-    const auto push_var = [&state](ImGuiStyleVar variable, auto value) {
-        ImGui::PushStyleVar(variable, value);
-        ++state.variables;
-    };
+            if (target_value == nullptr) {
+                return true;
+            }
 
-    const auto push_color = [&current, &state](ImGuiCol color, ImVec4 value) {
-        if (same_color(current.Colors[color], value)) {
-            return;
+            std::visit(
+                [&](auto& current_value) {
+                    using T = std::decay_t<decltype(current_value)>;
+                    if (const T* typed_target = std::get_if<T>(target_value)) {
+                        current_value.tick(*typed_target, dt);
+                    }
+                },
+                value
+            );
+
+            return true;
+        });
+
+        if (previous_font != style.m_font || previous_padding.x != style.m_padding.value.x ||
+            previous_padding.y != style.m_padding.value.y || previous_line_height != style.m_line_height.value) {
+            style.notify_change();
         }
-
-        ImGui::PushStyleColor(color, value);
-        ++state.colors;
-    };
-
-    if (current.FramePadding.x != m_padding.x || current.FramePadding.y != m_padding.y) {
-        push_var(ImGuiStyleVar_FramePadding, m_padding);
     }
-    if (current.FrameRounding != m_border_radius) push_var(ImGuiStyleVar_FrameRounding, m_border_radius);
-    if (current.FrameBorderSize != 0.0F) push_var(ImGuiStyleVar_FrameBorderSize, 0.0F);
-
-    const float alpha = current.Alpha * m_alpha * opacity;
-    if (current.Alpha != alpha) push_var(ImGuiStyleVar_Alpha, alpha);
-
-    const ImVec4 text = m_color.get();
-    const ImVec4 border = m_border_color.get();
-    const ImVec4 background = m_background_color.get();
-
-    push_color(ImGuiCol_Text, text);
-    push_color(ImGuiCol_Border, border);
-    push_color(ImGuiCol_FrameBg, background);
-    push_color(ImGuiCol_FrameBgHovered, background);
-    push_color(ImGuiCol_FrameBgActive, background);
-    push_color(ImGuiCol_Button, background);
-    push_color(ImGuiCol_ButtonHovered, background);
-    push_color(ImGuiCol_ButtonActive, background);
-    return state;
-}
-
-void Style::pop(PushState state) {
-    ImGui::PopStyleColor(state.colors);
-    ImGui::PopStyleVar(state.variables);
-    if (state.font_pushed) ImGui::PopFont();
-}
+} // namespace ui

@@ -25,7 +25,7 @@ namespace ui {
 
     private:
         void dispatch_event(UiEvent& event) override;
-        void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) override;
+        void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override;
 
         GenericValue m_text;
         std::function<void()> m_on_click;

@@ -36,7 +36,7 @@ void Container::resolve_layout() {
 
 bool Container::paint() {
     // begin a child window so imgui supplies clipping, scrolling, and cursor management.
-    const Style& current_style = style();
+    const ComputedStyle& current_style = computed_style();
 
     ImGuiChildFlags child_flags = ImGuiChildFlags_AlwaysUseWindowPadding;
     ImGuiWindowFlags window_flags = constants::WIDGET_WINDOW_FLAGS | ImGuiWindowFlags_NoBackground;
@@ -89,7 +89,7 @@ void Container::on_draw_end() {
     set_layout_rect(child_rect);
     set_visual_rect(child_rect);
 
-    const Style& current_style = style();
+    const ComputedStyle& current_style = computed_style();
     ImColor border = current_style.border_color().value;
     border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();

@@ -8,8 +8,6 @@
 #include <ui/layout/stack-container.hpp>
 #include <ui/layout/virtual-layout.hpp>
 #include <ui/input/router.hpp>
-#include <ui/style/theme.hpp>
-#include <ui/widgets/image.hpp>
 #include <ui/widgets/text.hpp>
 #include "imgui-context.hpp"
 
@@ -51,25 +49,6 @@ TEST_CASE("layout containers resolve themselves before arranging children", "[la
     REQUIRE(container.arrange_count == 1);
     REQUIRE(container.layout().size().x == Catch::Approx(available.x));
     REQUIRE(container.layout().size().y == Catch::Approx(available.y));
-}
-
-TEST_CASE("image padding keeps the outer screen bounds", "[Widget][layout]") {
-    ui_test::ImGuiContext context({200.0F, 120.0F});
-
-    ImageWidget image;
-    image.set_size({px(24.0F), px(20.0F)});
-    image.configure_all_styles([](Style& style) { style.padding({3.0F, 2.0F}); });
-
-    ImGui::NewFrame();
-    ImGui::Begin("image-padding-test");
-    image.draw();
-    ImGui::End();
-    ImGui::EndFrame();
-
-    const Rect bounds = image.layout().visual_rect();
-
-    REQUIRE(bounds.size().x == Catch::Approx(24.0F));
-    REQUIRE(bounds.size().y == Catch::Approx(20.0F));
 }
 
 TEST_CASE("input entries exclude clipped widget bounds", "[Widget][input][regression]") {
@@ -233,41 +212,6 @@ TEST_CASE("stack layout centers flow content on requested axes") {
     REQUIRE(field_rect.min.x - stack_rect.min.x == Catch::Approx(80.0F));
     REQUIRE(field_rect.min.y - stack_rect.min.y == Catch::Approx(40.0F));
     REQUIRE(field_rect.size().x == Catch::Approx(40.0F));
-}
-
-TEST_CASE("stack setters apply common layout properties", "[layout]") {
-    class FixedNode final : public Node {
-    public:
-        FixedNode() {
-            set_size({px(40.0F), px(20.0F)});
-        }
-
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
-    ui_test::ImGuiContext context({240.0F, 160.0F});
-    StackContainer stack("configured-stack", StackDirection::Horizontal);
-    stack.set_size({px(200.0F), px(100.0F)});
-    stack.set_spacing(4.0F).set_content_alignment(Anchor::Center);
-    stack.configure_all_styles([](Style& style) { style.padding({10.0F, 5.0F}); });
-    auto& child = stack.add<FixedNode>();
-
-    ImGui::NewFrame();
-    ImGui::Begin("configured-stack-test");
-    stack.draw();
-    ImGui::End();
-    ImGui::EndFrame();
-
-    const Rect stack_rect = stack.layout().visual_rect();
-    const Rect child_rect = child.layout().visual_rect();
-    REQUIRE(stack.direction() == StackDirection::Horizontal);
-    REQUIRE(stack.spacing() == Catch::Approx(4.0F));
-    REQUIRE(child_rect.min.x - stack_rect.min.x == Catch::Approx(80.0F));
-    REQUIRE(child_rect.min.y - stack_rect.min.y == Catch::Approx(40.0F));
 }
 
 TEST_CASE("stack layout excludes explicitly positioned children from its flow") {

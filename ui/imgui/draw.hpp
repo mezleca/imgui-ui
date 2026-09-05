@@ -76,19 +76,19 @@ namespace ui {
         ImVec2 center, ImVec2 size, ImColor color, TriangleDirection direction = TriangleDirection::Down,
         DrawListTarget target = DrawListTarget::Window
     );
-    void draw_frame(ImDrawList& draw_list, Rect rect, const Style& style);
-    void draw_frame(Rect rect, const Style& style, DrawListTarget target = DrawListTarget::Window);
-    void draw_frame(ImDrawList& draw_list, Rect rect, const Style& style, ImColor background);
-    void draw_frame(Rect rect, const Style& style, ImColor background, DrawListTarget target = DrawListTarget::Window);
-    void draw_frame(ImDrawList& draw_list, Rect rect, const Style& style, float opacity);
-    void draw_frame(Rect rect, const Style& style, float opacity, DrawListTarget target = DrawListTarget::Window);
-    void draw_frame_surface(ImDrawList& draw_list, Rect rect, const Style& style, float opacity = 1.0F);
+    void draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style);
+    void draw_frame(Rect rect, const ComputedStyle& style, DrawListTarget target = DrawListTarget::Window);
+    void draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background);
+    void draw_frame(Rect rect, const ComputedStyle& style, ImColor background, DrawListTarget target = DrawListTarget::Window);
+    void draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity);
+    void draw_frame(Rect rect, const ComputedStyle& style, float opacity, DrawListTarget target = DrawListTarget::Window);
+    void draw_frame_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity = 1.0F);
     BorderPath rounded_rect_border_path(Rect rect, float rounding);
     void draw_border_path(
         ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImColor color, float thickness, BorderStyle style
     );
     void draw_border_path(const BorderPath& path, uint8_t border, ImColor color, float thickness, BorderStyle style);
-    void draw_border(ImDrawList& draw_list, Rect rect, const Style& style, ImColor color);
-    void draw_border(Rect rect, const Style& style, DrawListTarget target = DrawListTarget::Window);
-    void draw_border(Rect rect, const Style& style, ImColor color, DrawListTarget target = DrawListTarget::Window);
+    void draw_border(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor color);
+    void draw_border(Rect rect, const ComputedStyle& style, DrawListTarget target = DrawListTarget::Window);
+    void draw_border(Rect rect, const ComputedStyle& style, ImColor color, DrawListTarget target = DrawListTarget::Window);
 } // namespace ui

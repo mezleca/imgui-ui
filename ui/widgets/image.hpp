@@ -23,7 +23,7 @@ namespace ui {
         }
 
     private:
-        void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) override;
+        void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override;
         Texture* m_texture = nullptr;
         float m_rotation = 0.0F;
     };

@@ -51,11 +51,11 @@ namespace ui {
         bool paint() override {
             const Rect rect = Rect::from_position_size(ImGui::GetCursorScreenPos(), layout().size());
             ImGui::Dummy(rect.size());
-            paint_draw_list(*ImGui::GetWindowDrawList(), rect, style());
+            paint_draw_list(*ImGui::GetWindowDrawList(), rect, computed_style());
             return true;
         }
 
-        virtual void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) = 0;
+        virtual void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) = 0;
     };
 
 } // namespace ui

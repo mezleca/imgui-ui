@@ -79,7 +79,7 @@ protected:
 private:
     friend class ContextMenuWidget;
 
-    void paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) override {
+    void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override {
         draw_frame(draw_list, rect, style);
 
         const ImVec2 padding = style.padding();
@@ -94,7 +94,7 @@ private:
         }
     }
 
-    void draw_submenu_icon(ImDrawList& draw_list, Rect content, const Style& style) const {
+    void draw_submenu_icon(ImDrawList& draw_list, Rect content, const ComputedStyle& style) const {
         const float icon_size = std::min(MENU_ICON_SIZE, std::min(content.size().x, content.size().y));
         const Rect icon = Rect::from_position_size(
             {content.max.x - icon_size, content.min.y + (content.size().y - icon_size) * 0.5F}, {icon_size, icon_size}

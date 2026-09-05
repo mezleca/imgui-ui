@@ -12,7 +12,7 @@ LineWidget::LineWidget(ImVec2 start, ImVec2 end, ImColor color, float thickness)
 }
 
 bool LineWidget::paint() {
-    const Style& current_style = style();
+    const ComputedStyle& current_style = computed_style();
     const float half_thickness = current_style.border_thickness() * 0.5F;
     set_visual_rect({
         {std::min(m_start.x, m_end.x) - half_thickness, std::min(m_start.y, m_end.y) - half_thickness},

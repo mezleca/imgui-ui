@@ -31,6 +31,10 @@ namespace ui {
             return m_state.style();
         }
 
+        const ComputedStyle& computed_style() const {
+            return m_state.computed_style();
+        }
+
         Style& style(StyleType type) {
             return m_state.style(type);
         }
@@ -67,12 +71,24 @@ namespace ui {
             m_state.fade_in();
         }
 
+        void fade_in(TransitionSpec transition) {
+            m_state.fade_in(transition);
+        }
+
         void fade_out() {
             m_state.fade_out();
         }
 
+        void fade_out(TransitionSpec transition) {
+            m_state.fade_out(transition);
+        }
+
         void set_opacity(float opacity) {
             m_state.set_opacity(opacity);
+        }
+
+        void set_opacity(float opacity, TransitionSpec transition) {
+            m_state.set_opacity(opacity, transition);
         }
 
         float opacity() const {
@@ -114,7 +130,7 @@ namespace ui {
 
         /// resolves the local font, then the closest styled ancestor, then imgui's font.
         ImFont* font() const {
-            const Style& current_style = style();
+            const ComputedStyle& current_style = computed_style();
             if (current_style.font() != nullptr) {
                 return current_style.font();
             }
@@ -125,7 +141,7 @@ namespace ui {
                     continue;
                 }
 
-                const Style& ancestor_style = styled_ancestor->style();
+                const ComputedStyle& ancestor_style = styled_ancestor->computed_style();
                 if (ancestor_style.font() != nullptr) {
                     return ancestor_style.font();
                 }

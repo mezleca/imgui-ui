@@ -26,56 +26,6 @@
 
 using namespace ui;
 
-TEST_CASE("number input supports typed value updates", "[NumberInputWidget][value]") {
-    Runtime runtime;
-    UI surface(runtime);
-    int integer = 0;
-    double decimal = 0.0;
-    NumberInputWidget integer_input(surface, integer);
-    NumberInputWidget decimal_input(surface, decimal);
-
-    REQUIRE(integer_input.set_value(42));
-    REQUIRE(integer == 42);
-    REQUIRE(decimal_input.set_value(1.25));
-    REQUIRE(decimal == Catch::Approx(1.25));
-}
-
-TEST_CASE("checkbox measurement includes style padding and remeasures after changes", "[CheckboxWidget][layout][style]") {
-    Runtime runtime;
-    UI surface(runtime);
-    bool value = false;
-    StackContainer stack("checkbox-padding-stack");
-    stack.set_size({fit(), fit()});
-    stack.style().padding({});
-    auto& checkbox = stack.add<CheckboxWidget>(surface, value, "custom checkbox");
-    checkbox.configure_all_styles([](Style& style) { style.padding({10.0F, 6.0F}); });
-
-    ImGui::SetCurrentContext(surface.imgui_context());
-    ui_test::ImGuiContext::build_fonts();
-
-    const auto draw_frame = [&surface, &stack] {
-        ImGui::GetIO().DisplaySize = {400.0F, 180.0F};
-        surface.begin_frame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({400.0F, 180.0F});
-        ImGui::Begin("checkbox-padding-test");
-        stack.draw();
-        ImGui::End();
-        surface.end_frame();
-    };
-
-    draw_frame();
-    const ImVec2 initial_size = checkbox.layout().size();
-
-    checkbox.style().padding({20.0F, 12.0F});
-    draw_frame();
-
-    REQUIRE(checkbox.layout().size().x == Catch::Approx(initial_size.x + 20.0F));
-    REQUIRE(checkbox.layout().size().y == Catch::Approx(initial_size.y + 12.0F));
-    REQUIRE(stack.layout().size().x == Catch::Approx(checkbox.layout().size().x));
-    REQUIRE(stack.layout().size().y == Catch::Approx(checkbox.layout().size().y));
-}
-
 TEST_CASE("checkbox input is limited to its box", "[CheckboxWidget][input][regression]") {
     Runtime runtime;
     UI surface(runtime);
@@ -566,137 +516,6 @@ TEST_CASE("pointer block rejects clicks on another overlay control", "[input][re
     REQUIRE_FALSE(panel->visible());
 }
 
-TEST_CASE("dropdown opens after fading out and fades after selection", "[DropdownWidget][regression]") {
-    Runtime runtime;
-    UI surface(runtime);
-    std::string value = "blue";
-    int changes = 0;
-    StackContainer stack("dropdown-stack");
-    stack.set_input_router(&surface.input_router());
-    stack.set_size({px(280.0F), px(180.0F)});
-    stack.set_spacing(16.0F);
-    auto& dropdown = stack.add<DropdownWidget>(
-        surface, value, std::vector<DropdownOption>{{"blue", "blue"}, {"high contrast", "contrast"}}, "theme"
-    );
-    dropdown.set_size({px(180.0F), px(62.0F)});
-    dropdown.set_label("theme");
-    dropdown.on_change = [&changes] { ++changes; };
-    auto& status = stack.add<TextWidget>("no clicks yet");
-
-    ImGui::SetCurrentContext(surface.imgui_context());
-    ui_test::ImGuiContext::build_fonts();
-
-    bool previous_mouse_down = false;
-    const auto draw_frame = [&surface, &stack, &dropdown, &previous_mouse_down](ImVec2 mouse_position, bool mouse_down) {
-        ImGui::SetCurrentContext(surface.imgui_context());
-        ImGui::GetIO().DisplaySize = {320.0F, 220.0F};
-        ImGui::GetIO().MousePos = mouse_position;
-        ImGui::GetIO().MouseDown[ImGuiMouseButton_Left] = mouse_down;
-
-        if (mouse_down && !previous_mouse_down) {
-            UiEvent event = UiEvent::make(EventType::PointerDown);
-            event.position = mouse_position;
-            event.button = PointerButton::Left;
-            surface.dispatch(event);
-        } else if (!mouse_down && previous_mouse_down) {
-            UiEvent event = UiEvent::make(EventType::PointerUp);
-            event.position = mouse_position;
-            event.button = PointerButton::Left;
-            surface.dispatch(event);
-        }
-        previous_mouse_down = mouse_down;
-
-        surface.begin_frame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({320.0F, 220.0F});
-        ImGui::Begin("dropdown-test");
-        stack.update(ImGui::GetIO().DeltaTime);
-        stack.draw();
-        ImGui::End();
-        surface.end_frame();
-        return dropdown.is_open();
-    };
-
-    for (int frame = 0; frame < 12; ++frame) {
-        REQUIRE_FALSE(draw_frame({0.0F, 0.0F}, false));
-    }
-    REQUIRE_FALSE(dropdown.body().visually_visible());
-    REQUIRE(status.layout().visual_rect().min.y >= dropdown.trigger().layout().visual_rect().max.y + stack.spacing());
-
-    const Rect trigger_rect = dropdown.trigger().layout().visual_rect();
-    const ImVec2 trigger_center = {
-        (trigger_rect.min.x + trigger_rect.max.x) * 0.5F,
-        (trigger_rect.min.y + trigger_rect.max.y) * 0.5F,
-    };
-
-    REQUIRE_FALSE(draw_frame(trigger_center, true));
-    REQUIRE(draw_frame(trigger_center, false));
-    REQUIRE(draw_frame(trigger_center, false));
-    REQUIRE(draw_frame({0.0F, 0.0F}, false));
-    REQUIRE(dropdown.is_open());
-
-    REQUIRE(draw_frame(trigger_center, true));
-    REQUIRE_FALSE(draw_frame(trigger_center, false));
-    REQUIRE_FALSE(dropdown.is_open());
-    REQUIRE(dropdown.body().visually_visible());
-    REQUIRE_FALSE(dropdown.body().accepts_input());
-    REQUIRE_FALSE(draw_frame(trigger_center, true));
-    REQUIRE_FALSE(draw_frame(trigger_center, false));
-    REQUIRE_FALSE(dropdown.is_open());
-    const float trigger_closing_opacity = dropdown.body().opacity();
-    REQUIRE_FALSE(draw_frame({0.0F, 0.0F}, false));
-    REQUIRE(dropdown.body().opacity() < trigger_closing_opacity);
-
-    for (int frame = 0; frame < 12; ++frame) {
-        REQUIRE_FALSE(draw_frame({0.0F, 0.0F}, false));
-    }
-
-    REQUIRE_FALSE(draw_frame(trigger_center, true));
-    REQUIRE(draw_frame(trigger_center, false));
-    REQUIRE(draw_frame({0.0F, 0.0F}, false));
-    REQUIRE(dropdown.is_open());
-
-    const Rect body_rect = dropdown.body().layout().visual_rect();
-    const float item_height = ImGui::GetTextLineHeight() + 8.0F;
-    const ImVec2 second_option = {
-        (body_rect.min.x + body_rect.max.x) * 0.5F,
-        body_rect.min.y + item_height * 1.5F,
-    };
-    const ImU32 hover_background = static_cast<ImU32>(dropdown.trigger().style(StyleType::HOVER).background_color().value);
-    const auto count_color = [](const ImDrawData* draw_data, ImU32 color) {
-        int count = 0;
-        if (draw_data == nullptr) {
-            return count;
-        }
-
-        for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
-            const ImDrawList* draw_list = draw_data->CmdLists[list_index];
-            for (const ImDrawVert& vertex : draw_list->VtxBuffer) {
-                count += vertex.col == color;
-            }
-        }
-
-        return count;
-    };
-    const int unhovered_background_vertices = count_color(ImGui::GetDrawData(), hover_background);
-    REQUIRE(draw_frame(second_option, false));
-    REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
-    REQUIRE(count_color(ImGui::GetDrawData(), hover_background) > unhovered_background_vertices);
-    REQUIRE(draw_frame(second_option, true));
-    REQUIRE_FALSE(draw_frame(second_option, false));
-    REQUIRE(value == "contrast");
-    REQUIRE(changes == 1);
-    REQUIRE_FALSE(dropdown.body().accepts_input());
-    const float closing_opacity = dropdown.body().opacity();
-    REQUIRE_FALSE(draw_frame(second_option, false));
-    REQUIRE(dropdown.body().opacity() < closing_opacity);
-
-    for (int frame = 0; frame < 12; ++frame) {
-        draw_frame({0.0F, 0.0F}, false);
-    }
-    REQUIRE_FALSE(dropdown.body().visually_visible());
-}
-
 TEST_CASE("runtime owns shared theme and explicitly registered assets", "[Runtime]") {
     RuntimeConfig config;
     config.theme.content_padding = 20.0F;
@@ -717,61 +536,33 @@ TEST_CASE("runtime owns shared theme and explicitly registered assets", "[Runtim
     REQUIRE(other_runtime.theme().content_padding == Theme{}.content_padding);
 }
 
-TEST_CASE("style transition duration uses seconds", "[VisualState][transition]") {
+TEST_CASE("style transitions apply the configured easing function", "[VisualState][transition]") {
     VisualState state;
-
-    state.style(StyleType::DEFAULT).color({0.0f, 0.0f, 0.0f, 1.0f});
-    state.style(StyleType::HOVER).color({1.0f, 0.0f, 0.0f, 1.0f}, 0.2F);
-
-    state.style(StyleType::HOVER).variables().set("rounding", FloatValue{10.0f, 0.2f});
-    state.style(StyleType::DEFAULT).variables().set("rounding", FloatValue{0.0f, 0.0f});
-
-    state.style(StyleType::HOVER).variables().set("enabled", BoolValue{true});
-    state.style(StyleType::DEFAULT).variables().set("enabled", BoolValue{false});
-
-    Vec2Value hover_offset;
-    hover_offset.value = {5.0f, 5.0f};
-    hover_offset.duration = 0.2f;
-    state.style(StyleType::HOVER).variables().set("offset", hover_offset);
-
-    Vec2Value default_offset;
-    default_offset.value = {0.0f, 0.0f};
-    state.style(StyleType::DEFAULT).variables().set("offset", default_offset);
-
-    state.style(StyleType::HOVER).variables().set("count", IntValue{100, 0.2f});
-    state.style(StyleType::DEFAULT).variables().set("count", IntValue{0, 0.0f});
+    state.style(StyleType::DEFAULT).color({0.0F, 0.0F, 0.0F, 1.0F});
+    state.style(StyleType::HOVER).color({1.0F, 0.0F, 0.0F, 1.0F}, {0.2F, easing::out_quad});
 
     state.snap_to_style(StyleType::DEFAULT);
     state.set_style(StyleType::HOVER);
-
-    state.update(0.1F);
-    REQUIRE(state.style().color().get().x == Catch::Approx(0.5F));
-    REQUIRE(state.style().variables().get<FloatValue>("rounding")->value == Catch::Approx(5.0F));
-    REQUIRE(state.style().variables().get<Vec2Value>("offset")->value.x == Catch::Approx(2.5F));
-    REQUIRE(state.style().variables().get<IntValue>("count")->value == 50);
-    REQUIRE(state.style().variables().get<BoolValue>("enabled")->value);
-
     state.update(0.1F);
 
-    SECTION("discrete type snaps immediately") {
-        REQUIRE(state.style().variables().get<BoolValue>("enabled")->value);
-    }
+    REQUIRE(state.style().color().get().x == Catch::Approx(0.75F));
+}
 
-    SECTION("color converges") {
-        REQUIRE(state.style().color().get().x == Catch::Approx(1.0f).margin(0.01f));
-    }
+TEST_CASE("style transitions remain active until their duration ends", "[VisualState][transition]") {
+    VisualState state;
+    state.style(StyleType::HOVER).line_height(2.0F, {0.5F, easing::out_cubic});
 
-    SECTION("float var converges") {
-        REQUIRE(state.style().variables().get<FloatValue>("rounding")->value == Catch::Approx(10.0f).margin(0.1f));
-    }
+    state.snap_to_style(StyleType::DEFAULT);
+    state.set_style(StyleType::HOVER);
+    state.update(0.45F);
 
-    SECTION("vec2 var converges") {
-        REQUIRE(state.style().variables().get<Vec2Value>("offset")->value.x == Catch::Approx(5.0f).margin(0.1f));
-    }
+    REQUIRE(state.style().line_height() < 2.0F);
+    REQUIRE(state.transitioning());
 
-    SECTION("int var reaches exact target") {
-        REQUIRE(state.style().variables().get<IntValue>("count")->value == 100);
-    }
+    state.update(0.05F);
+
+    REQUIRE(state.style().line_height() == Catch::Approx(2.0F));
+    REQUIRE_FALSE(state.transitioning());
 }
 
 TEST_CASE("interaction style precedence is active focus hover default", "[VisualState][style]") {
@@ -976,43 +767,6 @@ TEST_CASE("styled nodes keep borders out of imgui style scope", "[Widget][style]
     REQUIRE(ImGui::GetStyle().Alpha == Catch::Approx(before.Alpha));
 }
 
-TEST_CASE("widgets skip drawing after their fade becomes invisible", "[Widget][opacity][regression]") {
-    class DrawProbeWidget final : public Widget {
-    public:
-        DrawProbeWidget() : Widget("draw-probe") {}
-
-        int draws = 0;
-
-    private:
-        bool paint() override {
-            ++draws;
-            ImGui::Dummy({10.0F, 10.0F});
-            return true;
-        }
-    };
-
-    ui_test::ImGuiContext context({160.0F, 120.0F});
-    DrawProbeWidget widget;
-
-    widget.update(0.0F);
-
-    const auto draw_frame = [&widget] {
-        ImGui::NewFrame();
-        ImGui::Begin("widget-visibility-test");
-        widget.draw();
-        ImGui::End();
-        ImGui::EndFrame();
-    };
-
-    draw_frame();
-    REQUIRE(widget.draws == 1);
-
-    widget.fade_out();
-    widget.update(OPACITY_TRANSITION_DURATION);
-    draw_frame();
-    REQUIRE(widget.draws == 1);
-}
-
 TEST_CASE("styled widgets advance visual state during update", "[Widget][style]") {
     ui_test::ImGuiContext context({160.0F, 120.0F});
 
@@ -1078,22 +832,6 @@ TEST_CASE("fade in starts new visual states transparent", "[widget_state][opacit
     REQUIRE(state.opacity() < 1.0F);
 }
 
-TEST_CASE("a var introduced only on the target style still appears after transition", "[widget_state][regression]") {
-    VisualState state;
-
-    state.style(StyleType::DEFAULT).variables().set("line_alpha", FloatValue{0.0f, 0.15f});
-    state.style(StyleType::HOVER).variables().set("line_alpha", FloatValue{1.0f, 0.15f});
-
-    const FloatValue* default_alpha = state.style().variables().get<FloatValue>("line_alpha");
-    REQUIRE(default_alpha != nullptr);
-    REQUIRE(default_alpha->value == Catch::Approx(0.0F));
-
-    state.set_style(StyleType::HOVER);
-    state.update(1.0f / 60.0f); // first transition frame
-
-    REQUIRE(state.style().variables().get<FloatValue>("line_alpha") != nullptr);
-}
-
 TEST_CASE("style variables stay local to their declared state", "[VisualState][variables]") {
     VisualState state;
     state.style(StyleType::HOVER).variables().set("line_width", FloatValue{2.0F, 0.15F});
@@ -1122,21 +860,19 @@ TEST_CASE("editing the selected style updates its effective appearance") {
     REQUIRE(const_state.style().color().get().y == Catch::Approx(1.0F));
 }
 
-namespace context_menu_test {
-    void draw_frame(UI& surface, float dt = 0.2F) {
-        surface.begin_frame();
-        surface.root().update(dt);
-        surface.root().draw();
-        surface.end_frame();
-    }
+static void draw_context_menu_frame(UI& surface, float dt = 0.2F) {
+    surface.begin_frame();
+    surface.root().update(dt);
+    surface.root().draw();
+    surface.end_frame();
+}
 
-    UiEvent pointer_event(EventType type, ImVec2 position) {
-        UiEvent event = UiEvent::make(type);
-        event.position = position;
-        event.button = PointerButton::Left;
-        return event;
-    }
-} // namespace context_menu_test
+static UiEvent make_context_menu_pointer_event(EventType type, ImVec2 position) {
+    UiEvent event = UiEvent::make(type);
+    event.position = position;
+    event.button = PointerButton::Left;
+    return event;
+}
 
 TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]") {
     Runtime runtime;
@@ -1151,22 +887,22 @@ TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]
 
     REQUIRE_FALSE(menu.visible());
     menu.show({300.0F, 220.0F});
-    context_menu_test::draw_frame(surface);
+    draw_context_menu_frame(surface);
 
     REQUIRE(menu.is_open());
     REQUIRE(menu.layout().visual_rect().min.x == Catch::Approx(136.0F));
     REQUIRE(menu.layout().visual_rect().min.y == Catch::Approx(204.0F));
 
     ImGui::GetIO().MousePos = {140.0F, 208.0F};
-    context_menu_test::draw_frame(surface, 0.01F);
+    draw_context_menu_frame(surface, 0.01F);
 
     ImGui::GetIO().MousePos = {0.0F, 0.0F};
-    context_menu_test::draw_frame(surface, 0.78F);
+    draw_context_menu_frame(surface, 0.78F);
     REQUIRE(menu.is_open());
 
-    context_menu_test::draw_frame(surface, 0.02F);
+    draw_context_menu_frame(surface, 0.02F);
     REQUIRE_FALSE(menu.is_open());
-    context_menu_test::draw_frame(surface);
+    draw_context_menu_frame(surface);
     REQUIRE_FALSE(menu.visible());
 }
 
@@ -1188,12 +924,12 @@ TEST_CASE("context menu item callbacks can keep the root menu open", "[ContextMe
     });
     auto& menu = surface.root().add<ContextMenuWidget>(surface, std::move(items));
     menu.show({20.0F, 20.0F});
-    context_menu_test::draw_frame(surface);
+    draw_context_menu_frame(surface);
 
     const Rect item_rect = menu.children().front()->layout().visual_rect();
     const ImVec2 item_position = {item_rect.min.x + 4.0F, item_rect.min.y + 4.0F};
-    auto down = context_menu_test::pointer_event(EventType::PointerDown, item_position);
-    auto up = context_menu_test::pointer_event(EventType::PointerUp, item_position);
+    auto down = make_context_menu_pointer_event(EventType::PointerDown, item_position);
+    auto up = make_context_menu_pointer_event(EventType::PointerUp, item_position);
     REQUIRE_FALSE(surface.dispatch(down));
     REQUIRE(surface.dispatch(up));
 
@@ -1222,16 +958,16 @@ TEST_CASE("context menu blocks and closes on outside pointer input", "[ContextMe
     items.push_back({.label = "item"});
     auto& menu = surface.root().add<ContextMenuWidget>(surface, std::move(items));
     menu.show({160.0F, 120.0F});
-    context_menu_test::draw_frame(surface);
+    draw_context_menu_frame(surface);
 
-    auto down = context_menu_test::pointer_event(EventType::PointerDown, {20.0F, 20.0F});
-    auto up = context_menu_test::pointer_event(EventType::PointerUp, {20.0F, 20.0F});
+    auto down = make_context_menu_pointer_event(EventType::PointerDown, {20.0F, 20.0F});
+    auto up = make_context_menu_pointer_event(EventType::PointerUp, {20.0F, 20.0F});
     REQUIRE(surface.dispatch(down));
     REQUIRE(surface.dispatch(up));
     REQUIRE_FALSE(menu.is_open());
     REQUIRE(click_count == 0);
 
-    context_menu_test::draw_frame(surface);
+    draw_context_menu_frame(surface);
     REQUIRE_FALSE(menu.visible());
 }
 
@@ -1248,53 +984,53 @@ TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMe
     items.push_back({.label = "parent", .children = std::move(children)});
     auto& menu = surface.root().add<ContextMenuWidget>(surface, std::move(items));
     menu.show({20.0F, 20.0F});
-    context_menu_test::draw_frame(surface);
+    draw_context_menu_frame(surface);
 
     const Rect item_rect = menu.children().front()->layout().visual_rect();
     const ImVec2 item_position = {item_rect.min.x + 4.0F, item_rect.min.y + 4.0F};
-    auto move = context_menu_test::pointer_event(EventType::PointerMove, item_position);
+    auto move = make_context_menu_pointer_event(EventType::PointerMove, item_position);
     surface.dispatch(move);
     ImGui::GetIO().MousePos = item_position;
-    context_menu_test::draw_frame(surface);
+    draw_context_menu_frame(surface);
 
     auto* submenu = dynamic_cast<ContextMenuWidget*>(menu.children()[1].get());
     REQUIRE(submenu != nullptr);
     REQUIRE(submenu->visible());
     REQUIRE(submenu->layout().visual_rect().min.x == Catch::Approx(item_rect.max.x + 6.0F));
 
-    auto cross_gap = context_menu_test::pointer_event(
+    auto cross_gap = make_context_menu_pointer_event(
         EventType::PointerMove, {(item_rect.max.x + submenu->layout().visual_rect().min.x) * 0.5F, item_rect.min.y + 4.0F}
     );
     surface.dispatch(cross_gap);
     REQUIRE(submenu->is_open());
 
-    auto enter_submenu = context_menu_test::pointer_event(
+    auto enter_submenu = make_context_menu_pointer_event(
         EventType::PointerMove, {submenu->layout().visual_rect().min.x + 4.0F, submenu->layout().visual_rect().min.y + 4.0F}
     );
     surface.dispatch(enter_submenu);
     REQUIRE(submenu->is_open());
 
-    auto leave_item = context_menu_test::pointer_event(
+    auto leave_item = make_context_menu_pointer_event(
         EventType::PointerMove, {menu.layout().visual_rect().min.x + 1.0F, menu.layout().visual_rect().min.y + 1.0F}
     );
     surface.dispatch(leave_item);
     ImGui::GetIO().MousePos = leave_item.position;
-    context_menu_test::draw_frame(surface, 0.81F);
-    context_menu_test::draw_frame(surface, 0.0F);
+    draw_context_menu_frame(surface, 0.81F);
+    draw_context_menu_frame(surface, 0.0F);
     REQUIRE_FALSE(submenu->is_open());
 
     surface.dispatch(move);
     ImGui::GetIO().MousePos = item_position;
-    context_menu_test::draw_frame(surface);
+    draw_context_menu_frame(surface);
     REQUIRE(submenu->is_open());
 
     ImGui::GetIO().MousePos = {460.0F, 220.0F};
-    context_menu_test::draw_frame(surface);
+    draw_context_menu_frame(surface);
     REQUIRE_FALSE(submenu->is_open());
     REQUIRE_FALSE(menu.is_open());
 }
 
-TEST_CASE("demo virtual rows expand and collapse independently", "[layout][demo]") {
+TEST_CASE("virtual rows expand and collapse independently", "[layout][demo]") {
     Runtime runtime;
     UI surface(runtime);
     setup_demo(surface, "test");

@@ -44,21 +44,34 @@ namespace ui {
         }
 
         void set_opacity(float value) {
+            set_opacity(value, {OPACITY_TRANSITION_DURATION, ui::easing::linear});
+        }
+
+        void set_opacity(float value, TransitionSpec transition) {
+            m_opacity_transition = transition;
             m_opacity = std::clamp(value, 0.0f, 1.0f);
         }
 
         /// starts or reverses the opacity transition towards fully visible.
         void fade_in() {
+            fade_in({OPACITY_TRANSITION_DURATION, ui::easing::linear});
+        }
+
+        void fade_in(TransitionSpec transition) {
             visible = true;
             if (first_frame) {
                 current_opacity.value = 0.0F;
             }
-            set_opacity(1.0f);
+            set_opacity(1.0f, transition);
         }
 
         /// starts a fade to zero and disables visual input immediately.
         void fade_out() {
-            set_opacity(0.0f);
+            fade_out({OPACITY_TRANSITION_DURATION, ui::easing::linear});
+        }
+
+        void fade_out(TransitionSpec transition) {
+            set_opacity(0.0f, transition);
         }
 
         bool accepts_input() const {
@@ -83,7 +96,7 @@ namespace ui {
                 return;
             }
 
-            const FloatValue target_opacity{m_opacity, OPACITY_TRANSITION_DURATION};
+            const FloatValue target_opacity{m_opacity, m_opacity_transition};
             current_opacity.tick(target_opacity, dt);
             if (current_opacity.is_close(target_opacity, TRANSITION_SETTLE_EPSILON)) {
                 current_opacity.value = m_opacity;
@@ -162,6 +175,10 @@ namespace ui {
             return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(m_target_style)];
         }
 
+        const ComputedStyle& computed_style() const {
+            return style().computed_style();
+        }
+
         const Style& style(StyleType type) const {
             return styles[static_cast<size_t>(type)];
         }
@@ -172,6 +189,7 @@ namespace ui {
         Style styles[static_cast<size_t>(StyleType::_COUNT)];
         std::optional<Style> m_transition_style;
         float m_opacity = 1.0f;
+        TransitionSpec m_opacity_transition{OPACITY_TRANSITION_DURATION, ui::easing::linear};
         bool visible = true;
         bool first_frame = true;
     };

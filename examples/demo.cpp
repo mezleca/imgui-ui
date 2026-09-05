@@ -254,25 +254,20 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
     name_input.set_icon(m_surface.runtime().textures().find("demo-file-icon"));
     profile.add<ui::CheckboxWidget>(surface, m_enabled, "enabled").set_size({ui::px(360.0F), ui::px(32.0F)});
 
-    auto& custom_line_text = profile.add<ui::TextWidget>("hover for shadow + custom line height");
-    custom_line_text.set_input_target();
-    custom_line_text.configure_all_styles([](ui::Style& style) {
-        style.box_shadow({}, 0.15F);
+    auto& animated_text = profile.add<ui::TextWidget>("hover for cool animation");
+    animated_text.set_input_target();
+    animated_text.configure_all_styles([](ui::Style& style) {
+        style.background_color({}, {0.5F, ui::easing::out_cubic});
+
+        style.padding({}, {0.5F, ui::easing::out_cubic});
+
         style.line_height(1.0F, 0.1F);
     });
 
-    custom_line_text.configure_style(ui::StyleType::HOVER, [](ui::Style& style) {
-        style.line_height(2.0F, 0.1F);
-        style.color({0, 150, 255}, 0.1F);
-        style.box_shadow(
-            {
-                .offset = {0.0F, 3.0F},
-                .blur = 5.0F,
-                .spread = 5.0F,
-                .color = ImColor{1.0F, 1.0F, 1.0F, 0.5F},
-            },
-            0.15F
-        );
+    animated_text.configure_style(ui::StyleType::HOVER, [&](ui::Style& style) {
+        style.padding({10.0F, 10.0F}, {0.5F, ui::easing::out_cubic});
+
+        style.background_color(surface.theme().accent_color, {0.5F, ui::easing::out_cubic});
     });
 
     profile.add<ui::TextWidget>("ellipsis: this text is longer than the available width")

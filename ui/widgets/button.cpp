@@ -45,7 +45,7 @@ void ButtonWidget::dispatch_event(UiEvent& event) {
     }
 }
 
-void ButtonWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const Style& style) {
+void ButtonWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) {
     const Rect content = rect.inset(style.padding());
     const ImVec2 text_size = ImGui::CalcTextSize(m_text.c_str());
 
