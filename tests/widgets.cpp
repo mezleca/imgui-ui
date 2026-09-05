@@ -4,6 +4,7 @@
 #include <ui/layout/layer-container.hpp>
 #include <ui/layout/resizable-container.hpp>
 #include <ui/layout/stack-container.hpp>
+#include <ui/layout/virtual-layout.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
 #include <ui/widgets/checkbox.hpp>
@@ -1291,4 +1292,46 @@ TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMe
     context_menu_test::draw_frame(surface);
     REQUIRE_FALSE(submenu->is_open());
     REQUIRE_FALSE(menu.is_open());
+}
+
+TEST_CASE("demo virtual rows expand and collapse independently", "[layout][demo]") {
+    Runtime runtime;
+    UI surface(runtime);
+    setup_demo(surface, "test");
+    auto* list = dynamic_cast<VirtualLayout*>(surface.root().find("demo-virtual-list"));
+    REQUIRE(list != nullptr);
+    REQUIRE(list->item_count() == 100000);
+    REQUIRE(list->children().empty());
+
+    auto detached = list->parent()->remove(*list);
+    ImGui::SetCurrentContext(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {240.0F, 180.0F};
+    ui_test::ImGuiContext::build_fonts();
+    list->set_size({px(180.0F), px(100.0F)});
+    const auto draw_frame = [&] {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos({0.0F, 0.0F});
+        ImGui::SetNextWindowSize({240.0F, 180.0F});
+        ImGui::Begin("demo-virtual-layout-test", nullptr, ImGuiWindowFlags_NoSavedSettings);
+        list->update(1.0F);
+        list->draw();
+        ImGui::End();
+        ImGui::EndFrame();
+    };
+    draw_frame();
+    draw_frame();
+    REQUIRE(list->children().size() < 10);
+    auto* first = list->find("virtual-row-0");
+    auto* second = list->find("virtual-row-1");
+    REQUIRE(first != nullptr);
+    REQUIRE(second != nullptr);
+
+    UiEvent click = UiEvent::make(EventType::Click);
+    surface.input_router().dispatch(*first, click);
+    REQUIRE(list->extra_offset(0) == 64.0F);
+    surface.input_router().dispatch(*second, click);
+    REQUIRE(list->extra_offset(1) == 64.0F);
+    surface.input_router().dispatch(*first, click);
+    REQUIRE(list->extra_offset(0) == 0.0F);
+    REQUIRE(list->extra_offset(1) == 64.0F);
 }

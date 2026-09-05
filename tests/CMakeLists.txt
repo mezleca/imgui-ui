@@ -4,7 +4,6 @@ add_executable(imgui-ui-tests
     diagnostics.cpp
     input.cpp
     layout.cpp
-    virtual-layout.cpp
     widgets.cpp
     imgui-context.hpp
 )
