@@ -45,7 +45,7 @@ void StyledNode::draw() {
     }
 
     update_cursor();
-    const ComputedStyle::PushState push_state = computed_style().push(opacity(), font());
+    const PushState push_state = computed_style().push(opacity(), font());
 
     Node::draw();
     ComputedStyle::pop(push_state);

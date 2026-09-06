@@ -1,6 +1,5 @@
 #pragma once
 
-#include "theme.hpp"
 #include "variables.hpp"
 
 #include <cstdint>
@@ -23,15 +22,21 @@ namespace ui {
         Dotted,
     };
 
+    struct PushState {
+        bool font_pushed = false;
+        int variables = 0;
+        int colors = 0;
+    };
+
     class ComputedStyle {
     public:
-        struct PushState {
-            bool font_pushed = false;
-            int variables = 0;
-            int colors = 0;
-        };
-
         ComputedStyle();
+
+        /// pushes resolved style values into imgui and records exactly what must be restored.
+        PushState push(float opacity, ImFont* effective_font) const;
+
+        /// restores the imgui values recorded by push.
+        static void pop(PushState state);
 
         ImFont* font() const {
             return m_font;
@@ -41,7 +46,6 @@ namespace ui {
             return m_padding.value;
         }
 
-        /// returns the unitless multiplier applied to each measured text line.
         float line_height() const {
             return m_line_height.value;
         }
@@ -50,12 +54,10 @@ namespace ui {
             return m_alpha;
         }
 
-        /// returns the cursor used while the mouse hovers a node with this style.
         ImGuiMouseCursor cursor() const {
             return m_cursor;
         }
 
-        /// returns whether the style background is drawn behind a child scrollbar.
         bool use_background_for_scrollbar() const {
             return m_use_background_for_scrollbar;
         }
@@ -99,15 +101,6 @@ namespace ui {
         const StyleVariableStore& variables() const {
             return m_vars;
         }
-
-        /// pushes resolved style values into imgui and records exactly what must be restored.
-        PushState push(float opacity, ImFont* effective_font) const;
-
-        /// restores the imgui values recorded by push.
-        static void pop(PushState state);
-
-        /// reports whether all animated and static values reached the target within epsilon.
-        bool is_close_to(const ComputedStyle& target, float epsilon) const;
 
     protected:
         friend class Style;

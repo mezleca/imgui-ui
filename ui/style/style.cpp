@@ -4,51 +4,73 @@
 #include <type_traits>
 #include <variant>
 
-namespace ui {
-    void Style::lerp(Style& style, const Style& target, float dt) {
-        const ImFont* previous_font = style.m_font;
-        const ImVec2 previous_padding = style.m_padding.value;
-        const float previous_line_height = style.m_line_height.value;
+using namespace ui;
 
-        style.m_font = target.m_font;
-        style.m_padding.tick(target.m_padding, dt);
-        style.m_alpha = target.m_alpha;
-        style.m_cursor = target.m_cursor;
-        style.m_use_background_for_scrollbar = target.m_use_background_for_scrollbar;
-        style.m_blur = target.m_blur;
-        style.m_border_thickness = target.m_border_thickness;
-        style.m_border_radius = target.m_border_radius;
-        style.m_border = target.m_border;
-        style.m_border_style = target.m_border_style;
-        style.m_box_shadow.tick(target.m_box_shadow, dt);
-        style.m_color.tick(target.m_color, dt);
-        style.m_border_color.tick(target.m_border_color, dt);
-        style.m_background_color.tick(target.m_background_color, dt);
-        style.m_line_height.tick(target.m_line_height, dt);
+// name, affects_measure
+// affects_measure is true only when an interpolated value can change the measured geometry.
+#define UI_STYLE_TRANSITION_PROPERTIES(X)                                                                                        \
+    X(padding, true)                                                                                                             \
+    X(line_height, true)                                                                                                         \
+    X(box_shadow, false)                                                                                                         \
+    X(color, false)                                                                                                              \
+    X(border_color, false)                                                                                                       \
+    X(background_color, false)
 
-        style.m_vars.for_each([&](const std::string& key, StyleValue& value) {
-            const StyleValue* target_value = target.m_vars.find(key);
-
-            if (target_value == nullptr) {
-                return true;
-            }
-
-            std::visit(
-                [&](auto& current_value) {
-                    using T = std::decay_t<decltype(current_value)>;
-                    if (const T* typed_target = std::get_if<T>(target_value)) {
-                        current_value.tick(*typed_target, dt);
-                    }
-                },
-                value
-            );
-
-            return true;
-        });
-
-        if (previous_font != style.m_font || previous_padding.x != style.m_padding.value.x ||
-            previous_padding.y != style.m_padding.value.y || previous_line_height != style.m_line_height.value) {
-            style.notify_change();
-        }
+// expands the property list into one tick per animated property and records layout-affecting changes.
+#define UI_STYLE_TICK_PROPERTY(name, affects_measure)                                                                            \
+    if (style.m_##name.tick(target.m_##name, dt) && affects_measure) {                                                           \
+        measure_changed = true;                                                                                                  \
     }
-} // namespace ui
+
+// expands the property list into early-return checks for properties that still have active transitions.
+#define UI_STYLE_HAS_ACTIVE_TRANSITION(name, affects_measure)                                                                    \
+    if (style.m_##name.is_transitioning()) return true;
+
+bool Style::lerp(Style& style, const Style& target, float dt) {
+    const ImFont* previous_font = style.m_font;
+    bool measure_changed = false;
+
+    style.m_font = target.m_font;
+    style.m_alpha = target.m_alpha;
+    style.m_cursor = target.m_cursor;
+    style.m_use_background_for_scrollbar = target.m_use_background_for_scrollbar;
+    style.m_blur = target.m_blur;
+    style.m_border_thickness = target.m_border_thickness;
+    style.m_border_radius = target.m_border_radius;
+    style.m_border = target.m_border;
+    style.m_border_style = target.m_border_style;
+
+    UI_STYLE_TRANSITION_PROPERTIES(UI_STYLE_TICK_PROPERTY)
+
+    style.m_vars.for_each([&](const std::string& key, StyleValue& value) {
+        const StyleValue* target_value = target.m_vars.find(key);
+
+        if (target_value == nullptr) {
+            return true;
+        }
+
+        std::visit(
+            [&](auto& current_value) {
+                using T = std::decay_t<decltype(current_value)>;
+                if (const T* typed_target = std::get_if<T>(target_value)) {
+                    current_value.tick(*typed_target, dt);
+                }
+            },
+            value
+        );
+
+        return true;
+    });
+
+    if (previous_font != style.m_font || measure_changed) {
+        style.notify_change();
+    }
+
+    UI_STYLE_TRANSITION_PROPERTIES(UI_STYLE_HAS_ACTIVE_TRANSITION)
+
+    return style.m_vars.is_transitioning();
+}
+
+#undef UI_STYLE_TRANSITION_PROPERTIES
+#undef UI_STYLE_TICK_PROPERTY
+#undef UI_STYLE_HAS_ACTIVE_TRANSITION

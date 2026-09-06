@@ -7,7 +7,6 @@
 
 namespace ui {
     static constexpr float OPACITY_TRANSITION_DURATION = 0.15F;
-    static constexpr float TRANSITION_SETTLE_EPSILON = 0.003f;
     static constexpr float VISIBILITY_OPACITY_THRESHOLD = 0.002f;
 
     /// owns style slots and interpolates the selected slot and opacity.
@@ -52,20 +51,16 @@ namespace ui {
             m_opacity = std::clamp(value, 0.0f, 1.0f);
         }
 
-        /// starts or reverses the opacity transition towards fully visible.
         void fade_in() {
             fade_in({OPACITY_TRANSITION_DURATION, ui::easing::linear});
         }
 
         void fade_in(TransitionSpec transition) {
             visible = true;
-            if (first_frame) {
-                current_opacity.value = 0.0F;
-            }
+            if (first_frame) current_opacity.value = 0.0F;
             set_opacity(1.0f, transition);
         }
 
-        /// starts a fade to zero and disables visual input immediately.
         void fade_out() {
             fade_out({OPACITY_TRANSITION_DURATION, ui::easing::linear});
         }
@@ -98,15 +93,13 @@ namespace ui {
 
             const FloatValue target_opacity{m_opacity, m_opacity_transition};
             current_opacity.tick(target_opacity, dt);
-            if (current_opacity.is_close(target_opacity, TRANSITION_SETTLE_EPSILON)) {
+            if (current_opacity.is_transition_complete()) {
                 current_opacity.value = m_opacity;
             }
 
             if (m_transition_style.has_value()) {
                 const Style& target_style = styles[static_cast<size_t>(m_target_style)];
-                Style::lerp(*m_transition_style, target_style, dt);
-
-                if (m_transition_style->is_close_to(target_style, TRANSITION_SETTLE_EPSILON)) {
+                if (!Style::lerp(*m_transition_style, target_style, dt)) {
                     m_transition_style.reset();
                 }
             }

@@ -111,6 +111,12 @@ namespace ui {
         return color;
     }
 
+    /// captures eased progress and whether ticking advanced or retargeted the property.
+    struct TransitionStep {
+        float progress = 1.0F;
+        bool changed = false;
+    };
+
     template <typename T>
     struct Value {
         Value() = default;
@@ -138,17 +144,21 @@ namespace ui {
             easing = transition.easing != nullptr ? transition.easing : ui::easing::linear;
         }
 
-    protected:
-        // keeps settle checks from ending an easing curve before its configured duration.
-        bool transition_complete() const {
-            return !m_has_target || m_duration == 0.0F || m_elapsed >= m_duration;
+        bool is_transitioning() const {
+            return m_has_target && m_elapsed < m_duration;
         }
 
-        float transition_progress(const Value& target, float dt) {
+        bool is_transition_complete() const {
+            return !is_transitioning();
+        }
+
+    protected:
+        TransitionStep transition_progress(const Value& target, float dt) {
             const float target_duration = std::max(0.0F, target.duration);
             const EasingFunction target_easing = target.easing != nullptr ? target.easing : ui::easing::linear;
             const bool target_changed = !m_has_target || !transition_values_equal(m_target, target.value) ||
                                         m_duration != target_duration || m_easing != target_easing;
+            const float previous_elapsed = m_elapsed;
             if (target_changed) {
                 m_start = value;
                 m_target = target.value;
@@ -159,15 +169,15 @@ namespace ui {
             }
 
             if (m_duration == 0.0F) {
-                return 1.0F;
+                return {1.0F, target_changed};
             }
 
             m_elapsed = std::min(m_duration, m_elapsed + std::max(0.0F, dt));
             if (m_elapsed >= m_duration) {
-                return 1.0F;
+                return {1.0F, target_changed || m_elapsed != previous_elapsed};
             }
 
-            return m_easing(m_elapsed / m_duration);
+            return {m_easing(m_elapsed / m_duration), target_changed || m_elapsed != previous_elapsed};
         }
 
         const T& transition_start() const {
@@ -186,47 +196,38 @@ namespace ui {
     struct FloatValue : Value<float> {
         using Value::Value;
 
-        void tick(const FloatValue& target, float dt) {
-            const float progress = transition_progress(target, dt);
-            if (transition_complete()) {
+        bool tick(const FloatValue& target, float dt) {
+            const TransitionStep step = transition_progress(target, dt);
+            if (is_transition_complete()) {
                 value = target.value;
-                return;
+                return step.changed;
             }
-            value = std::lerp(transition_start(), target.value, progress);
-        }
-
-        bool is_close(const FloatValue& target, float epsilon) const {
-            return transition_complete() && std::fabs(value - target.value) <= epsilon;
+            value = std::lerp(transition_start(), target.value, step.progress);
+            return step.changed;
         }
     };
 
     struct ColorValue : Value<ImColor> {
         using Value::Value;
 
-        void tick(const ColorValue& target, float dt) {
-            const float progress = transition_progress(target, dt);
-            if (transition_complete()) {
+        bool tick(const ColorValue& target, float dt) {
+            const TransitionStep step = transition_progress(target, dt);
+
+            if (is_transition_complete()) {
                 value = target.value;
-                return;
+                return step.changed;
             }
+
             const ImVec4& start = transition_start().Value;
             const ImVec4& end = target.value.Value;
 
             value.Value = {
-                std::lerp(start.x, end.x, progress),
-                std::lerp(start.y, end.y, progress),
-                std::lerp(start.z, end.z, progress),
-                std::lerp(start.w, end.w, progress),
+                std::lerp(start.x, end.x, step.progress),
+                std::lerp(start.y, end.y, step.progress),
+                std::lerp(start.z, end.z, step.progress),
+                std::lerp(start.w, end.w, step.progress),
             };
-        }
-
-        bool is_close(const ColorValue& target, float epsilon) const {
-            const ImVec4& col = value.Value;
-            const ImVec4& target_col = target.value.Value;
-
-            return transition_complete() && std::fabs(col.x - target_col.x) <= epsilon &&
-                   std::fabs(col.y - target_col.y) <= epsilon && std::fabs(col.z - target_col.z) <= epsilon &&
-                   std::fabs(col.w - target_col.w) <= epsilon;
+            return step.changed;
         }
 
         ImVec4 get() const {
@@ -241,101 +242,80 @@ namespace ui {
     struct BoxShadowValue : Value<BoxShadow> {
         using Value::Value;
 
-        void tick(const BoxShadowValue& target, float dt) {
-            const float progress = transition_progress(target, dt);
-            if (transition_complete()) {
+        bool tick(const BoxShadowValue& target, float dt) {
+            const TransitionStep step = transition_progress(target, dt);
+            if (is_transition_complete()) {
                 value = target.value;
-                return;
+                return step.changed;
             }
             const BoxShadow& start = transition_start();
             value.offset = {
-                std::lerp(start.offset.x, target.value.offset.x, progress),
-                std::lerp(start.offset.y, target.value.offset.y, progress),
+                std::lerp(start.offset.x, target.value.offset.x, step.progress),
+                std::lerp(start.offset.y, target.value.offset.y, step.progress),
             };
-            value.blur = std::lerp(start.blur, target.value.blur, progress);
-            value.spread = std::lerp(start.spread, target.value.spread, progress);
+            value.blur = std::lerp(start.blur, target.value.blur, step.progress);
+            value.spread = std::lerp(start.spread, target.value.spread, step.progress);
             value.color.Value = {
-                std::lerp(start.color.Value.x, target.value.color.Value.x, progress),
-                std::lerp(start.color.Value.y, target.value.color.Value.y, progress),
-                std::lerp(start.color.Value.z, target.value.color.Value.z, progress),
-                std::lerp(start.color.Value.w, target.value.color.Value.w, progress),
+                std::lerp(start.color.Value.x, target.value.color.Value.x, step.progress),
+                std::lerp(start.color.Value.y, target.value.color.Value.y, step.progress),
+                std::lerp(start.color.Value.z, target.value.color.Value.z, step.progress),
+                std::lerp(start.color.Value.w, target.value.color.Value.w, step.progress),
             };
-        }
-
-        bool is_close(const BoxShadowValue& target, float epsilon) const {
-            return transition_complete() && std::fabs(value.offset.x - target.value.offset.x) <= epsilon &&
-                   std::fabs(value.offset.y - target.value.offset.y) <= epsilon &&
-                   std::fabs(value.blur - target.value.blur) <= epsilon &&
-                   std::fabs(value.spread - target.value.spread) <= epsilon &&
-                   std::fabs(value.color.Value.x - target.value.color.Value.x) <= epsilon &&
-                   std::fabs(value.color.Value.y - target.value.color.Value.y) <= epsilon &&
-                   std::fabs(value.color.Value.z - target.value.color.Value.z) <= epsilon &&
-                   std::fabs(value.color.Value.w - target.value.color.Value.w) <= epsilon;
+            return step.changed;
         }
     };
 
     struct Vec2Value : Value<ImVec2> {
         using Value::Value;
 
-        void tick(const Vec2Value& target, float dt) {
-            const float progress = transition_progress(target, dt);
-            if (transition_complete()) {
+        bool tick(const Vec2Value& target, float dt) {
+            const TransitionStep step = transition_progress(target, dt);
+            if (is_transition_complete()) {
                 value = target.value;
-                return;
+                return step.changed;
             }
             const ImVec2& start = transition_start();
             value = {
-                std::lerp(start.x, target.value.x, progress),
-                std::lerp(start.y, target.value.y, progress),
+                std::lerp(start.x, target.value.x, step.progress),
+                std::lerp(start.y, target.value.y, step.progress),
             };
-        }
-
-        bool is_close(const Vec2Value& target, float epsilon) const {
-            return transition_complete() && std::fabs(value.x - target.value.x) <= epsilon &&
-                   std::fabs(value.y - target.value.y) <= epsilon;
+            return step.changed;
         }
     };
 
     struct IntValue : Value<int> {
         using Value::Value;
 
-        void tick(const IntValue& target, float dt) {
-            const float progress = transition_progress(target, dt);
-            if (transition_complete()) {
+        bool tick(const IntValue& target, float dt) {
+            const TransitionStep step = transition_progress(target, dt);
+            if (is_transition_complete()) {
                 value = target.value;
-                return;
+                return step.changed;
             }
             value = static_cast<int>(
-                std::lround(std::lerp(static_cast<float>(transition_start()), static_cast<float>(target.value), progress))
+                std::lround(std::lerp(static_cast<float>(transition_start()), static_cast<float>(target.value), step.progress))
             );
-        }
-
-        bool is_close(const IntValue& target, float epsilon) const {
-            return transition_complete() && std::abs(value - target.value) <= epsilon;
+            return step.changed;
         }
     };
 
     struct BoolValue : Value<bool> {
         using Value::Value;
 
-        void tick(const BoolValue& target, float) {
+        bool tick(const BoolValue& target, float) {
+            const bool changed = value != target.value;
             value = target.value;
-        }
-
-        bool is_close(const BoolValue&, float) const {
-            return true;
+            return changed;
         }
     };
 
     struct StringValue : Value<std::string> {
         using Value::Value;
 
-        void tick(const StringValue& target, float) {
+        bool tick(const StringValue& target, float) {
+            const bool changed = value != target.value;
             value = target.value;
-        }
-
-        bool is_close(const StringValue&, float) const {
-            return true;
+            return changed;
         }
     };
 

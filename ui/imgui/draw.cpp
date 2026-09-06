@@ -27,39 +27,17 @@ static ImColor apply_draw_alpha(ImColor color) {
     return color;
 }
 
-static bool has_fractional_position(float value) {
-    return value != std::round(value);
-}
-
 static void add_text(ImDrawList& draw_list, ImVec2 position, ImU32 color, const char* text_begin, const char* text_end) {
-    if (!has_fractional_position(position.x) && !has_fractional_position(position.y)) {
-        draw_list.AddText(position, color, text_begin, text_end);
-        return;
-    }
-
-    const ImDrawListFlags previous_flags = draw_list.Flags;
-    // disable pixel snapping for this fractional draw so animated glyphs keep subpixel continuity.
-    // restoring the previous flags keeps static integer-position text pixel aligned.
     draw_list.Flags |= ImDrawListFlags_TextNoPixelSnap;
     draw_list.AddText(position, color, text_begin, text_end);
-    draw_list.Flags = previous_flags;
 }
 
 static void add_text(
     ImDrawList& draw_list, ImFont* font, float font_size, ImVec2 position, ImU32 color, const char* text_begin,
     const char* text_end, float wrap_width, const ImVec4* clip_rect
 ) {
-    if (!has_fractional_position(position.x) && !has_fractional_position(position.y)) {
-        draw_list.AddText(font, font_size, position, color, text_begin, text_end, wrap_width, clip_rect);
-        return;
-    }
-
-    const ImDrawListFlags previous_flags = draw_list.Flags;
-    // disable pixel snapping for this fractional draw so animated glyphs keep subpixel continuity.
-    // restoring the previous flags keeps static integer-position text pixel aligned.
     draw_list.Flags |= ImDrawListFlags_TextNoPixelSnap;
     draw_list.AddText(font, font_size, position, color, text_begin, text_end, wrap_width, clip_rect);
-    draw_list.Flags = previous_flags;
 }
 
 struct BorderEntry {

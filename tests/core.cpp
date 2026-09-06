@@ -145,7 +145,7 @@ TEST_CASE("style updates preserve and normalize non-visual fields") {
 
     Style target = style;
     target.border_style(BorderStyle::Dotted);
-    REQUIRE_FALSE(style.is_close_to(target, 0.0F));
+    REQUIRE(style.border_style() != target.border_style());
 
     Style::lerp(style, target, 0.0F);
     REQUIRE(style.border_style() == BorderStyle::Dotted);

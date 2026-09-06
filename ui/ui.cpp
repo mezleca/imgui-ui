@@ -137,6 +137,9 @@ void UI::configure_style(float main_scale) {
     style.ScaleAllSizes(main_scale);
     style.FontScaleDpi = main_scale;
 
+    ImFontConfig font_cfg;
+    font_cfg.PixelSnapH = false;
+
     apply_theme_colors();
 }
 

@@ -66,6 +66,16 @@ namespace ui {
             return m_vars.size();
         }
 
+        bool is_transitioning() const {
+            for (const auto& entry : m_vars) {
+                if (std::visit([](const auto& item) { return item.is_transitioning(); }, entry.second)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         template <typename Func>
         bool for_each(Func&& func) {
             static_assert(

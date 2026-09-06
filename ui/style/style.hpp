@@ -1,6 +1,7 @@
 #pragma once
 
 #include "computed-style.hpp"
+#include "theme.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -18,18 +19,10 @@ namespace ui {
     };
 
     class Style : public ComputedStyle {
-        struct ValueEqual {
-            template <typename T>
-            bool operator()(const T& left, const T& right) const {
-                return transition_values_equal(left, right);
-            }
-        };
-
-        // compares, assigns, and notifies only when a plain property changes.
         template <typename Field>
         Style& set_property(Field ComputedStyle::* member, Field value) {
             Field& current = this->*member;
-            if (ValueEqual{}(current, value)) {
+            if (transition_values_equal(current, value)) {
                 return *this;
             }
 
@@ -47,20 +40,13 @@ namespace ui {
         template <typename ValueType, typename Field>
         Style& set_animated_value(ValueType ComputedStyle::* member, Field value, float duration = -1.0F) {
             ValueType& current = this->*member;
-            const bool changed = !ValueEqual{}(current.value, value);
-            if (!changed && duration < 0.0F) {
-                return *this;
-            }
+            const bool changed = !transition_values_equal(current.value, value);
 
-            if (changed) {
-                current.set(std::move(value));
-            }
-            if (duration >= 0.0F) {
-                current.set_duration(duration);
-            }
-            if (changed) {
-                notify_change();
-            }
+            if (!changed && duration < 0.0F) return *this;
+            if (changed) current.set(std::move(value));
+            if (duration >= 0.0F) current.set_duration(duration);
+            if (changed) notify_change();
+
             return *this;
         }
 
@@ -68,14 +54,12 @@ namespace ui {
         template <typename ValueType, typename Field>
         Style& set_animated_transition(ValueType ComputedStyle::* member, Field value, TransitionSpec transition) {
             ValueType& current = this->*member;
-            const bool changed = !ValueEqual{}(current.value, value);
-            if (changed) {
-                current.set(std::move(value));
-            }
+
+            const bool changed = !transition_values_equal(current.value, value);
+            if (changed) current.set(std::move(value));
             current.set_transition(transition);
-            if (changed) {
-                notify_change();
-            }
+            if (changed) notify_change();
+
             return *this;
         }
 
@@ -91,7 +75,6 @@ namespace ui {
 
     public:
         using ChangeCallback = void (*)(void*);
-        using PushState = ComputedStyle::PushState;
 
         using ComputedStyle::alpha;
         using ComputedStyle::background_color;
@@ -116,6 +99,9 @@ namespace ui {
             return *this;
         }
 
+        /// updates the current style from the target and reports whether any transition remains active.
+        static bool lerp(Style& style, const Style& target, float dt);
+
         Style& font(ImFont* value) {
             return set_property(&ComputedStyle::m_font, value);
         }
@@ -136,12 +122,10 @@ namespace ui {
             return m_vars;
         }
 
-        /// clamps both padding axes, updates the target, and optionally changes its duration.
         Style& padding(ImVec2 value, float transition_duration = -1.0F) {
             return set_animated_value(&ComputedStyle::m_padding, normalize_padding(value), transition_duration);
         }
 
-        /// clamps both padding axes, updates the target, and stores its easing metadata.
         Style& padding(ImVec2 value, TransitionSpec transition) {
             return set_animated_transition(&ComputedStyle::m_padding, normalize_padding(value), transition);
         }
@@ -231,8 +215,6 @@ namespace ui {
         Style& border_style(BorderStyle value) {
             return set_property(&ComputedStyle::m_border_style, value);
         }
-
-        static void lerp(Style& style, const Style& target, float dt);
 
     private:
         friend class StyledNode;
