@@ -19,13 +19,10 @@ namespace ui {
 
     struct UIConfig {
         std::unique_ptr<Backend> backend;
-        /// creates debugger support. the overlay stays hidden until its hotkey opens it.
         bool enable_debugger = false;
     };
 } // namespace ui
 
-/// assets and theme remain owned by runtime.
-/// imgui context, root and router are surface-local.
 class UI {
 public:
     explicit UI(ui::Runtime& runtime, ui::UIConfig config = {});

@@ -1,10 +1,10 @@
 #include "texture-registry.hpp"
-
 #include "svg.hpp"
 
 #include <utility>
 
 using namespace ui;
+
 TextureRegistry::TextureRegistry(std::unique_ptr<TextureLoader> loader) : m_loader(std::move(loader)) {
     if (m_loader == nullptr) {
         return;

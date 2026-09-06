@@ -2,8 +2,6 @@
 
 #include "effects/blur/blur.hpp"
 #include "effects/shadow/shadow.hpp"
-
-#include "../style/style.hpp"
 #include "../widgets/text-value.hpp"
 
 #include <algorithm>

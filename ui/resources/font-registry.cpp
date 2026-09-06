@@ -4,11 +4,10 @@
 #include <utility>
 
 using namespace ui;
+
 Font::Font(std::filesystem::path location) : m_font_location(std::move(location)) {
-    m_cfg.PixelSnapH = false;
-    m_cfg.OversampleH = 5;
-    m_cfg.OversampleV = 5;
-    m_cfg.RasterizerMultiply = 1.2F;
+    m_cfg.OversampleH = 2;
+    m_cfg.PixelSnapH = true;
 }
 
 ImFont* Font::load_variation(ImGuiContext* context, int size) {
