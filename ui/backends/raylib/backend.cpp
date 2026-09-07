@@ -246,7 +246,7 @@ void RaylibBackend::register_effects(EffectRegistry& effects) {
 
 bool RaylibBackend::initialize_imgui() {
     if (!GLAD_GL_VERSION_3_3) {
-        TraceLog(LOG_ERROR, "ui: OpenGL 3.3 or newer is required");
+        TraceLog(LOG_ERROR, "OpenGL 3.3 or newer is required");
         return false;
     }
 

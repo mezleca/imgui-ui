@@ -1,13 +1,11 @@
 #include "font-registry.hpp"
 
-#include <iostream>
 #include <utility>
 
 using namespace ui;
 
-Font::Font(std::filesystem::path location) : m_font_location(std::move(location)) {
-    m_cfg.OversampleH = 2;
-    m_cfg.PixelSnapH = true;
+Font::Font(std::filesystem::path location, ImFontConfig cfg) : m_font_location(std::move(location)) {
+    m_cfg = std::make_unique<ImFontConfig>(cfg);
 }
 
 ImFont* Font::load_variation(ImGuiContext* context, int size) {
@@ -15,10 +13,9 @@ ImFont* Font::load_variation(ImGuiContext* context, int size) {
         return nullptr;
     }
 
-    std::cout << "[ui] loading " << m_font_location << " (" << size << ")\n";
-
     ContextFonts& context_fonts = m_contexts[context];
-    ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(m_font_location.string().c_str(), static_cast<float>(size), &m_cfg);
+    ImFont* font =
+        ImGui::GetIO().Fonts->AddFontFromFileTTF(m_font_location.string().c_str(), static_cast<float>(size), m_cfg.get());
 
     if (font != nullptr) {
         context_fonts.fonts[size] = font;

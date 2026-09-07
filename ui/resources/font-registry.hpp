@@ -9,23 +9,23 @@
 #include <unordered_map>
 
 namespace ui {
+    struct ContextFonts {
+        std::unordered_map<int, ImFont*> fonts;
+    };
+
     class Font final {
     public:
-        explicit Font(std::filesystem::path location);
+        explicit Font(std::filesystem::path location, ImFontConfig cfg = {});
 
         ImFont* get(int size);
         void release_context(ImGuiContext* context);
 
     private:
-        struct ContextFonts {
-            std::unordered_map<int, ImFont*> fonts;
-        };
-
         ImFont* load_variation(ImGuiContext* context, int size);
 
         std::filesystem::path m_font_location;
         std::unordered_map<ImGuiContext*, ContextFonts> m_contexts;
-        ImFontConfig m_cfg;
+        std::unique_ptr<ImFontConfig> m_cfg;
     };
 
     class FontRegistry final : public AssetRegistry {

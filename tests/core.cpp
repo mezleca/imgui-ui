@@ -26,7 +26,7 @@ static void collect_shadow_callback(const ImDrawList*, const ImDrawCmd*) {}
 
 TEST_CASE("surface root does not write to imgui's fallback window") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
 
     ImGui::SetCurrentContext(surface.imgui_context());
     ImGui::GetIO().DisplaySize = {200.0F, 120.0F};

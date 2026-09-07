@@ -6,6 +6,7 @@
 #include "style/theme.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 #include <utility>
 
 UI::UI(ui::Runtime& runtime, ui::UIConfig config)
@@ -19,15 +20,11 @@ UI::UI(ui::Runtime& runtime, ui::UIConfig config)
 
 UI::~UI() {
     m_debugger.reset();
-    if (m_context == nullptr) {
-        return;
-    }
-
     const ui::ImGuiContextScope scope(m_context);
 
     m_effects.shutdown();
     m_runtime.release_context(m_context);
-    if (m_backend != nullptr) m_backend->shutdown_imgui();
+    m_backend->shutdown_imgui();
     ImGui::DestroyContext(m_context);
 }
 
@@ -64,42 +61,30 @@ ImFont* UI::get_font(std::string_view id, int size) const {
 }
 
 void UI::initialize() {
-    if (m_backend != nullptr) {
-        if (!m_backend->initialize()) {
-            return;
-        }
+    if (m_backend == nullptr) {
+        throw std::runtime_error("m_backend is nullptr");
+    }
+
+    if (!m_backend->initialize()) {
+        throw std::runtime_error("failed to initialize backend");
     }
 
     m_context = ImGui::CreateContext();
-
-    if (m_context == nullptr) {
-        return;
-    }
-
     const ui::ImGuiContextScope scope(m_context);
 
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
     io.LogFilename = nullptr;
 
-    configure_style(m_backend == nullptr ? 1.0F : m_backend->content_scale());
+    configure_style(m_backend->content_scale());
+    m_backend->register_effects(m_effects);
 
-    if (m_backend != nullptr) m_backend->register_effects(m_effects);
-
-    if (m_backend != nullptr && !m_backend->initialize_imgui()) {
-        m_effects.shutdown();
-        ImGui::DestroyContext(m_context);
-        m_context = nullptr;
-        return;
+    if (!m_backend->initialize_imgui()) {
+        throw std::runtime_error("failed to initialize imgui");
     }
 
     if (!m_effects.initialize()) {
-        if (m_backend != nullptr) {
-            m_backend->shutdown_imgui();
-        }
-        ImGui::DestroyContext(m_context);
-        m_context = nullptr;
-        return;
+        throw std::runtime_error("failed to initialize effects");
     }
 
     m_ready = true;
@@ -205,10 +190,13 @@ void UI::begin_frame() {
     m_profiler.begin_frame();
 
     m_effects.begin_frame();
+    m_backend->begin_frame(m_runtime.theme().background_color);
 
-    if (m_backend != nullptr) m_backend->begin_frame(m_runtime.theme().background_color);
     ImGui::NewFrame();
-    if (m_debugger != nullptr) m_debugger->update();
+
+    if (m_debugger != nullptr) {
+        m_debugger->update();
+    }
 }
 
 void UI::end_frame() {
@@ -216,20 +204,24 @@ void UI::end_frame() {
         return;
     }
 
-    if (m_debugger != nullptr) m_debugger->render();
-    if (m_backend != nullptr) m_backend->set_mouse_cursor(ImGui::GetMouseCursor());
+    if (m_debugger != nullptr) {
+        m_debugger->render();
+    }
+
+    m_backend->set_mouse_cursor(ImGui::GetMouseCursor());
+
     ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();
+
     if (m_profiler.enabled()) {
         const ui::InputRouterStats input_stats = m_input_router.stats();
         m_profiler.record_frame_metrics(input_stats.entry_count, input_stats.entry_checks);
     }
-    if (m_backend != nullptr) {
-        UI_PROFILE_SCOPE(&m_profiler, "UI::render");
-        m_backend->render(draw_data);
-    }
-    m_profiler.end_frame();
 
+    UI_PROFILE_SCOPE(&m_profiler, "UI::render");
+    m_backend->render(draw_data);
+
+    m_profiler.end_frame();
     ImGui::SetCurrentContext(m_previous_context);
     m_previous_context = nullptr;
 }

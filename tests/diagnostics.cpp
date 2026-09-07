@@ -51,7 +51,7 @@ static int draw_list_index(const ImDrawData& draw_data, std::string_view owner) 
 
 TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
     ui::Runtime runtime;
-    UI surface(runtime, {.enable_debugger = true});
+    UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     REQUIRE(surface.debugger() != nullptr);
     REQUIRE_FALSE(surface.debugger()->enabled());
 
@@ -103,7 +103,7 @@ TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
 
 TEST_CASE("debugger hotkey toggles on the target surface") {
     ui::Runtime runtime;
-    UI surface(runtime, {.enable_debugger = true});
+    UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     REQUIRE(surface.debugger() != nullptr);
     REQUIRE_FALSE(surface.debugger()->enabled());
 
@@ -121,7 +121,7 @@ TEST_CASE("debugger hotkey toggles on the target surface") {
 
 TEST_CASE("focused debugger blocks application hover") {
     ui::Runtime runtime;
-    UI surface(runtime, {.enable_debugger = true});
+    UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     bool value = false;
     auto& checkbox = surface.root().add<ui::CheckboxWidget>(surface, value, "application");
     checkbox.set_layout({
@@ -165,7 +165,7 @@ TEST_CASE("focused debugger blocks application hover") {
 
 TEST_CASE("debugger leaves its imgui popups above its window") {
     ui::Runtime runtime;
-    UI surface(runtime, {.enable_debugger = true});
+    UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     surface.debugger()->set_enabled(true);
 
     ImGui::SetCurrentContext(surface.imgui_context());

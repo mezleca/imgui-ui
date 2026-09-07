@@ -205,16 +205,16 @@ bool SdlBackend::initialize() {
 
     m_window = std::make_unique<Window>(config().title, config().size, flags);
     if (!m_window->valid()) {
-        SDL_Log("ui: failed to create window '%s'", config().title.c_str());
+        SDL_Log("failed to create window '%s'", config().title.c_str());
         return false;
     }
 
     m_window->make_current();
     if (!SDL_GL_SetSwapInterval(config().swap_interval)) {
-        SDL_Log("ui: failed to set OpenGL swap interval: %s", SDL_GetError());
+        SDL_Log("failed to set OpenGL swap interval: %s", SDL_GetError());
     }
     if (gladLoadGL(load_opengl) == 0 || !GLAD_GL_VERSION_3_3) {
-        SDL_Log("ui: OpenGL 3.3 or newer is required");
+        SDL_Log("OpenGL 3.3 or newer is required");
         return false;
     }
     return true;

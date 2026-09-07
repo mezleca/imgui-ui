@@ -69,7 +69,7 @@ private:
 std::unique_ptr<Texture> OpenGLTextureLoader::load(const std::filesystem::path& location, std::string) {
     std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromFile(location.string());
     if (document == nullptr) {
-        throw std::runtime_error(std::format("ui: failed to load texture {}", location.string()));
+        throw std::runtime_error(std::format("failed to load texture {}", location.string()));
     }
     return std::make_unique<OpenGLTexture>(std::move(document));
 }
@@ -77,7 +77,7 @@ std::unique_ptr<Texture> OpenGLTextureLoader::load(const std::filesystem::path& 
 std::unique_ptr<Texture> OpenGLTextureLoader::load(std::string_view content, std::string) {
     std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromData(std::string{content});
     if (document == nullptr) {
-        throw std::runtime_error("ui: failed to load texture data");
+        throw std::runtime_error("failed to load texture data");
     }
     return std::make_unique<OpenGLTexture>(std::move(document));
 }

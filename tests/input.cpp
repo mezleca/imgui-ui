@@ -486,7 +486,7 @@ TEST_CASE("later targets win over earlier paint") {
 
 TEST_CASE("hidden layers release focus") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     LayerContainer layer("layer", LayerMode::Inline);
     layer.set_input_router(&surface.input_router());
 

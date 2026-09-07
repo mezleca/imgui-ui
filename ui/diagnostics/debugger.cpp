@@ -18,6 +18,7 @@
 #include <vector>
 
 using namespace ui;
+
 static Node* find_node_by_identity(Node& root, uint64_t identity) {
     if (root.identity() == identity) {
         return &root;

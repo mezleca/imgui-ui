@@ -28,7 +28,7 @@ using namespace ui;
 
 TEST_CASE("checkbox input is limited to its box", "[CheckboxWidget][input][regression]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     bool checked = false;
     auto& checkbox = surface.root().add<CheckboxWidget>(surface, checked, "checkbox");
 
@@ -71,7 +71,7 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
     RuntimeConfig config;
     config.theme.content_padding = 20.0F;
     Runtime runtime(std::move(config));
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     bool checked = false;
 
     auto& page = surface.root().add<StackContainer>("page");
@@ -120,7 +120,7 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
 
 TEST_CASE("dropdown opens from a nested container without extending its parent", "[dropdown][container][regression]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     std::string value = "light";
 
     auto& page = surface.root().add<StackContainer>("page");
@@ -183,7 +183,7 @@ TEST_CASE("dropdown opens from a nested container without extending its parent",
 
 TEST_CASE("text measurement and drawing include style padding", "[TextWidget][layout][style]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     StackContainer stack("text-padding-stack");
     stack.set_size({fit(), fit()});
     stack.style().padding({});
@@ -210,7 +210,7 @@ TEST_CASE("text measurement and drawing include style padding", "[TextWidget][la
 
 TEST_CASE("unwrapped text keeps its explicit width for overflow", "[TextWidget][layout]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     TextWidget clipped("this text exceeds the explicit width");
     TextWidget ellipsized("this text exceeds the explicit width");
     clipped.set_size({px(80.0F), px(24.0F)});
@@ -235,7 +235,7 @@ TEST_CASE("unwrapped text keeps its explicit width for overflow", "[TextWidget][
 
 TEST_CASE("text line height scales multi-line text layout", "[TextWidget][layout][style]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     TextWidget text("first line\nsecond line");
     text.configure_all_styles([](Style& style) { style.padding({}).line_height(1.5F); });
 
@@ -265,7 +265,7 @@ TEST_CASE("text line height interpolates between visual states", "[TextWidget][s
 
 TEST_CASE("value widgets notify changes", "[Widget][change]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     bool checked = false;
     int number = 1;
     std::string choice = "one";
@@ -300,7 +300,7 @@ TEST_CASE("value widgets notify changes", "[Widget][change]") {
 
 TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout][regression]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     std::string value;
     ResizableContainer parent("resizable");
     parent.set_size({px(180.0F), px(80.0F)});
@@ -336,7 +336,7 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
 
 TEST_CASE("pointer block prevents hover and clicks on content controls", "[input][regression]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     setup_demo(surface, "test");
 
     ImGui::SetCurrentContext(surface.imgui_context());
@@ -400,7 +400,7 @@ TEST_CASE("pointer block prevents hover and clicks on content controls", "[input
 
 TEST_CASE("resizable dynamic list keeps its allocated box", "[ResizableContainer][layout][regression]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     setup_demo(surface, "test");
 
     ImGui::SetCurrentContext(surface.imgui_context());
@@ -457,7 +457,7 @@ TEST_CASE("resizable dynamic list keeps its allocated box", "[ResizableContainer
 
 TEST_CASE("pointer block rejects clicks on another overlay control", "[input][regression]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     setup_demo(surface, "test");
 
     ImGui::SetCurrentContext(surface.imgui_context());
@@ -876,7 +876,7 @@ static UiEvent make_context_menu_pointer_event(EventType type, ImVec2 position) 
 
 TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     ImGui::SetCurrentContext(surface.imgui_context());
     ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
     ui_test::ImGuiContext::build_fonts();
@@ -908,7 +908,7 @@ TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]
 
 TEST_CASE("context menu item callbacks can keep the root menu open", "[ContextMenuWidget]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     ImGui::SetCurrentContext(surface.imgui_context());
     ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
     ui_test::ImGuiContext::build_fonts();
@@ -940,7 +940,7 @@ TEST_CASE("context menu item callbacks can keep the root menu open", "[ContextMe
 
 TEST_CASE("context menu blocks and closes on outside pointer input", "[ContextMenuWidget]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     ImGui::SetCurrentContext(surface.imgui_context());
     ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
     ui_test::ImGuiContext::build_fonts();
@@ -973,7 +973,7 @@ TEST_CASE("context menu blocks and closes on outside pointer input", "[ContextMe
 
 TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMenuWidget]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     ImGui::SetCurrentContext(surface.imgui_context());
     ImGui::GetIO().DisplaySize = {480.0F, 240.0F};
     ui_test::ImGuiContext::build_fonts();
@@ -1032,7 +1032,7 @@ TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMe
 
 TEST_CASE("virtual rows expand and collapse independently", "[layout][demo]") {
     Runtime runtime;
-    UI surface(runtime);
+    UI surface(runtime, {.backend = ui_test::make_backend()});
     setup_demo(surface, "test");
     auto* list = dynamic_cast<VirtualLayout*>(surface.root().find("demo-virtual-list"));
     REQUIRE(list != nullptr);
