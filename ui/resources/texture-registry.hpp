@@ -13,6 +13,7 @@ namespace ui {
     class Texture {
     public:
         virtual ~Texture() = default;
+        virtual ImVec2 size() const = 0;
         virtual ImTextureID get(ImVec2 size) = 0;
         virtual void release_context(ImGuiContext* context) = 0;
     };
@@ -28,7 +29,7 @@ namespace ui {
     public:
         explicit TextureRegistry(std::unique_ptr<TextureLoader> loader = nullptr);
 
-        Texture* add(std::string id, std::filesystem::path location);
+        Texture* add(std::string id, const std::filesystem::path& location);
         Texture* add(std::string id, std::string_view content);
         Texture* find(std::string_view id);
         const Texture* find(std::string_view id) const;

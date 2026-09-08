@@ -14,6 +14,10 @@ class OpenGLTexture final : public Texture {
 public:
     explicit OpenGLTexture(std::unique_ptr<lunasvg::Document> document) : m_document(std::move(document)) {}
 
+    ImVec2 size() const override {
+        return {m_document->width(), m_document->height()};
+    }
+
     ImTextureID get(ImVec2 size) override {
         ImGuiContext* context = ImGui::GetCurrentContext();
         if (context == nullptr) {
@@ -73,6 +77,13 @@ public:
 
     ~OpenGLRasterTexture() override {
         plutovg_surface_destroy(m_surface);
+    }
+
+    ImVec2 size() const override {
+        return {
+            static_cast<float>(plutovg_surface_get_width(m_surface)),
+            static_cast<float>(plutovg_surface_get_height(m_surface)),
+        };
     }
 
     ImTextureID get(ImVec2) override {

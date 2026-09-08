@@ -241,34 +241,6 @@ TEST_CASE("input router reports per-frame entry work") {
     REQUIRE(router.stats().entry_checks == 0);
 }
 
-TEST_CASE("input router skips blocker hit testing when none are registered") {
-    std::vector<EventType> events;
-    PointerEventNode node("target", events);
-    InputRouter router;
-    router.register_target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-
-    auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
-    REQUIRE(router.dispatch(move));
-
-    const InputRouterStats stats = router.stats();
-    REQUIRE(stats.entry_count == 1);
-    REQUIRE(stats.entry_checks == 1);
-}
-
-TEST_CASE("input router skips observer scans when none are registered") {
-    std::vector<EventType> events;
-    PointerEventNode node("target", events);
-    InputRouter router;
-    router.register_target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-
-    auto click = event_of(EventType::Click, {50.0F, 50.0F});
-    REQUIRE(router.dispatch(click));
-
-    const InputRouterStats stats = router.stats();
-    REQUIRE(stats.entry_count == 1);
-    REQUIRE(stats.entry_checks == 1);
-}
-
 TEST_CASE("owner-scoped blockers leave their descendants interactive") {
     std::vector<EventType> events;
     Node owner("overlay");

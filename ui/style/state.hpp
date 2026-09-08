@@ -84,7 +84,7 @@ namespace ui {
 
         bool transitioning() const {
             return current_opacity.value != m_opacity || m_transition_style.has_value() || !m_animation_steps.empty() ||
-                   !m_animation_tracks.empty();
+                   !m_animation_tracks.empty() || !m_animation_callbacks.empty();
         }
 
         void update(float dt) {
@@ -171,7 +171,7 @@ namespace ui {
         }
 
         const ComputedStyle& computed_style() const {
-            return m_has_presentation_style ? m_presentation_style.computed_style() : style().computed_style();
+            return m_has_presentation_style ? m_presentation_style : style();
         }
 
         const Style& style(StyleType type) const {
@@ -197,11 +197,18 @@ namespace ui {
             bool release = false;
         };
 
+        struct AnimationCallback {
+            float at = 0.0F;
+            std::function<void()> callback;
+        };
+
         void schedule_animation(
             AnimationProperty property, std::optional<AnimationValue> value, float start, TransitionSpec transition
         );
+        void schedule_animation_callback(float at, std::function<void()> callback);
         void update_animations(float dt);
         void apply_animation_value(Style& style, AnimationProperty property, const AnimationValue& value) const;
+        AnimationValue track_value(const AnimationTrack& track) const;
         AnimationValue animation_value(const ComputedStyle& style, AnimationProperty property) const;
         bool has_animation_overrides() const;
         bool has_layout_override() const;
@@ -209,12 +216,13 @@ namespace ui {
 
         StyleType m_target_style = StyleType::DEFAULT;
         FloatValue current_opacity;
-        Style styles[static_cast<size_t>(StyleType::_COUNT)];
+        Style styles[static_cast<size_t>(StyleType::COUNT)];
         std::optional<Style> m_transition_style;
         Style m_presentation_style;
-        std::array<std::optional<AnimationValue>, static_cast<size_t>(AnimationProperty::_COUNT)> m_animation_overrides;
+        std::array<std::optional<AnimationValue>, static_cast<size_t>(AnimationProperty::COUNT)> m_animation_overrides;
         std::vector<AnimationStep> m_animation_steps;
         std::vector<AnimationTrack> m_animation_tracks;
+        std::vector<AnimationCallback> m_animation_callbacks;
         float m_animation_time = 0.0F;
         float m_opacity = 1.0f;
         TransitionSpec m_opacity_transition{OPACITY_TRANSITION_DURATION, ui::easing::linear};

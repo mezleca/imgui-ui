@@ -31,7 +31,6 @@ namespace ui {
         Blocker,
     };
 
-    /** owns children and runs their update, layout, paint, and input passes. */
     class Node {
     public:
         explicit Node(std::string id = {});

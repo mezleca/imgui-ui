@@ -28,7 +28,7 @@ namespace ui {
                 return;
             }
 
-        // enter the internal tree so the proxy updates its application children on re-entry.
+            // enter the internal tree so the proxy updates its application children on re-entry.
             m_forwarding = true;
             m_surface_root.update(dt);
             m_forwarding = false;
@@ -66,7 +66,8 @@ namespace ui {
     }
 
     UI::~UI() {
-        const ui::ImGuiContextScope scope(m_context);
+        ImGuiContext* previous_context = ImGui::GetCurrentContext();
+        ImGui::SetCurrentContext(m_context);
 
         m_root.reset();
         m_surface_layout = nullptr;
@@ -77,10 +78,12 @@ namespace ui {
         m_runtime.release_context(m_context);
         m_backend->shutdown_imgui();
         ImGui::DestroyContext(m_context);
+        ImGui::SetCurrentContext(previous_context == m_context ? nullptr : previous_context);
+        m_context = nullptr;
     }
 
     void UI::set_theme(ui::Theme theme) {
-        m_runtime.set_theme(std::move(theme));
+        m_runtime.set_theme(theme);
 
         if (!m_ready || m_context == nullptr) {
             return;

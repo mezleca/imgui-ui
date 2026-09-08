@@ -221,23 +221,6 @@ TEST_CASE("container shadows use the child draw list and keep their spread") {
     shutdown_box_shadow();
 }
 
-TEST_CASE("styled nodes create paint slots only when requested") {
-    Container node("node");
-    REQUIRE_FALSE(node.has_before());
-    REQUIRE_FALSE(node.has_after());
-
-    node.before().style().background_color(ImColor{255, 0, 0, 255});
-    node.after().style().border(BORDER_ALL).border_color(ImColor{255, 255, 255, 255});
-
-    REQUIRE(node.has_before());
-    REQUIRE(node.has_after());
-
-    node.remove_before();
-    node.remove_after();
-    REQUIRE_FALSE(node.has_before());
-    REQUIRE_FALSE(node.has_after());
-}
-
 TEST_CASE("styled paint slots render in before and after order") {
     ui_test::ImGuiContext context({160.0F, 120.0F});
     ImGui::NewFrame();

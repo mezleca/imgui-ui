@@ -21,7 +21,7 @@ namespace ui {
         std::unique_ptr<Backend> backend;
         bool enable_debugger = false;
     };
-    /// coordinates one application ui frame.
+    /// owns the imgui context and drives the retained application tree through input, update, draw, and backend rendering.
     class UI {
     public:
         explicit UI(ui::Runtime& runtime, ui::UIConfig config = {});

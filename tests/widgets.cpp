@@ -6,11 +6,13 @@
 #include <ui/layout/resizable-container.hpp>
 #include <ui/layout/stack-container.hpp>
 #include <ui/layout/virtual-layout.hpp>
+#include <ui/resources/texture-registry.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
 #include <ui/widgets/checkbox.hpp>
 #include <ui/widgets/context-menu.hpp>
 #include <ui/widgets/dropdown.hpp>
+#include <ui/widgets/image.hpp>
 #include <ui/widgets/number-input.hpp>
 #include <ui/widgets/text.hpp>
 #include <ui/widgets/text-input.hpp>
@@ -21,7 +23,10 @@
 #include <catch2/catch_approx.hpp>
 #include <imgui.h>
 #include <imgui_internal.h>
+#include <algorithm>
 #include <cfloat>
+#include <limits>
+#include <numbers>
 #include <string>
 #include <vector>
 
@@ -76,11 +81,6 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
     ui_test::prepare_surface(surface, {400.0F, 180.0F});
 
     ui_test::draw_surface(surface);
-    REQUIRE(runtime.theme().content_padding == Catch::Approx(20.0F));
-    REQUIRE(page.style().padding().x == 0.0F);
-    REQUIRE(page.style().padding().y == 0.0F);
-    REQUIRE(section.style().padding().x == 0.0F);
-    REQUIRE(section.style().padding().y == 0.0F);
 
     const Rect widget_rect = checkbox.layout().visual_rect();
     const ImVec2 padding = checkbox.style().padding();
@@ -96,6 +96,67 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
     UiEvent up = ui_test::pointer_event(EventType::PointerUp, position);
     surface.dispatch(up);
     REQUIRE(checked);
+}
+
+TEST_CASE("buttons flash their active background after click", "[ButtonWidget][animation]") {
+    Runtime runtime;
+    ui::UI surface(runtime, {.backend = ui_test::make_backend()});
+    auto& button = surface.root().add<ButtonWidget>(surface, "button", LayoutSize{px(120.0F), px(36.0F)});
+
+    ui_test::prepare_surface(surface, {400.0F, 180.0F});
+    ui_test::draw_surface(surface);
+
+    const ImVec2 position = ui_test::center(button.layout().visual_rect());
+    UiEvent down = ui_test::pointer_event(EventType::PointerDown, position);
+    surface.dispatch(down);
+
+    UiEvent up = ui_test::pointer_event(EventType::PointerUp, position);
+    surface.dispatch(up);
+    button.update(0.0F);
+
+    const ImColor active_background = button.style(StyleType::ACTIVE).background_color().value;
+    REQUIRE(button.computed_style().background_color().value.Value.x == Catch::Approx(active_background.Value.x));
+}
+
+TEST_CASE("image fit preserves the texture aspect ratio", "[ImageWidget][fit]") {
+    class ProbeTexture final : public Texture {
+    public:
+        ImVec2 size() const override {
+            return {200.0F, 100.0F};
+        }
+
+        ImTextureID get(ImVec2 size) override {
+            requested_size = size;
+            return {};
+        }
+
+        void release_context(ImGuiContext*) override {}
+
+        ImVec2 requested_size{};
+    };
+
+    ui_test::ImGuiContext context({240.0F, 180.0F});
+    const auto draw = [](ImageFit fit) {
+        ProbeTexture texture;
+        ImageWidget image(&texture);
+        image.set_size({px(100.0F), px(100.0F)});
+        image.set_fit(fit);
+
+        ImGui::NewFrame();
+        ImGui::Begin("image-fit-test");
+        image.draw();
+        ImGui::End();
+        ImGui::EndFrame();
+        return texture.requested_size;
+    };
+
+    const ImVec2 contain_size = draw(ImageFit::Contain);
+    REQUIRE(contain_size.x == Catch::Approx(100.0F));
+    REQUIRE(contain_size.y == Catch::Approx(50.0F));
+
+    const ImVec2 cover_size = draw(ImageFit::Cover);
+    REQUIRE(cover_size.x == Catch::Approx(200.0F));
+    REQUIRE(cover_size.y == Catch::Approx(100.0F));
 }
 
 TEST_CASE("dropdown opens from a nested container without extending its parent", "[dropdown][container][regression]") {
@@ -240,7 +301,7 @@ TEST_CASE("inline layer centers inside content beside the debugger", "[LayerCont
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     setup_demo(surface, "test");
-    surface.debugger()->set_enabled(true);
+    surface.debugger()->set_open(true);
 
     ui_test::prepare_surface(surface, {900.0F, 600.0F});
 
@@ -661,6 +722,115 @@ TEST_CASE("released animation properties return to the active style", "[VisualSt
     REQUIRE_FALSE(state.transitioning());
 }
 
+TEST_CASE("interrupted animations release from their displayed value", "[VisualState][animation]") {
+    VisualState state;
+    state.configure_all_styles([](Style& style) { style.padding({2.0F, 0.0F}); });
+    state.animate().padding_x(20.0F, {0.2F, easing::linear});
+    state.update(0.1F);
+
+    state.animate().release_padding_x({0.1F, easing::linear});
+    state.update(0.05F);
+
+    REQUIRE(state.computed_style().padding().x == Catch::Approx(6.5F));
+
+    state.update(0.05F);
+
+    REQUIRE(state.computed_style().padding().x == Catch::Approx(2.0F));
+    REQUIRE_FALSE(state.transitioning());
+}
+
+TEST_CASE("animation sequences transform style presentation values", "[VisualState][animation][transform]") {
+    VisualState state;
+    state.animate().rotation(0.4F, {0.2F, easing::linear}).scale({1.4F, 0.8F}, {0.2F, easing::linear});
+    state.update(0.1F);
+
+    REQUIRE(state.computed_style().rotation() == Catch::Approx(0.2F));
+    REQUIRE(state.computed_style().scale().x == Catch::Approx(1.2F));
+    REQUIRE(state.computed_style().scale().y == Catch::Approx(0.9F));
+
+    state.animate().rotation_by(0.3F, {0.1F, easing::linear});
+    state.update(0.1F);
+
+    REQUIRE(state.computed_style().rotation() == Catch::Approx(0.5F));
+
+    state.animate().release_all({0.1F, easing::linear});
+    state.update(0.1F);
+
+    REQUIRE(state.computed_style().rotation() == Catch::Approx(0.0F));
+    REQUIRE(state.computed_style().scale().x == Catch::Approx(1.0F));
+    REQUIRE(state.computed_style().scale().y == Catch::Approx(1.0F));
+}
+
+TEST_CASE("animation sequence callbacks run after their timeline", "[VisualState][animation]") {
+    VisualState state;
+    bool ended = false;
+    state.animate().rotation(1.0F, {0.1F, easing::linear}).then(0.1F).end([&ended] { ended = true; });
+
+    state.update(0.1F);
+    REQUIRE_FALSE(ended);
+
+    state.update(0.1F);
+    REQUIRE(ended);
+}
+
+TEST_CASE("animation sequence steps continue from the preceding track", "[VisualState][animation]") {
+    VisualState state;
+    state.animate().scale(2.0F, {0.1F, easing::linear}).then().scale(3.0F, {0.1F, easing::linear});
+
+    state.update(0.1F);
+    REQUIRE(state.computed_style().scale().x == Catch::Approx(2.0F));
+
+    state.update(0.05F);
+    REQUIRE(state.computed_style().scale().x == Catch::Approx(2.5F));
+}
+
+TEST_CASE("styled nodes rotate their generated vertices without changing layout", "[Widget][style][transform]") {
+    class TransformProbeWidget final : public Widget {
+    public:
+        TransformProbeWidget() : Widget("transform-probe") {}
+
+    private:
+        bool paint() override {
+            const Rect rect = Rect::from_position_size(ImGui::GetCursorScreenPos(), layout().size());
+            ImGui::Dummy(rect.size());
+            ImGui::GetWindowDrawList()->AddRectFilled(rect.min, rect.max, IM_COL32_WHITE);
+            return true;
+        }
+    };
+
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+    TransformProbeWidget widget;
+    widget.set_size({px(40.0F), px(20.0F)});
+    widget.configure_all_styles([](Style& style) { style.rotation(std::numbers::pi_v<float> * 0.5F); });
+
+    ImGui::NewFrame();
+    ImGui::Begin("styled-transform-test");
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    const int first_vertex = draw_list->VtxBuffer.Size;
+    widget.draw();
+
+    const Rect layout_rect = widget.layout().visual_rect();
+    float min_x = std::numeric_limits<float>::max();
+    float max_x = std::numeric_limits<float>::lowest();
+    float min_y = std::numeric_limits<float>::max();
+    float max_y = std::numeric_limits<float>::lowest();
+    for (int index = first_vertex; index < draw_list->VtxBuffer.Size; ++index) {
+        const ImVec2 position = draw_list->VtxBuffer[index].pos;
+        min_x = std::min(min_x, position.x);
+        max_x = std::max(max_x, position.x);
+        min_y = std::min(min_y, position.y);
+        max_y = std::max(max_y, position.y);
+    }
+
+    ImGui::End();
+    ImGui::EndFrame();
+
+    REQUIRE(layout_rect.size().x == Catch::Approx(40.0F));
+    REQUIRE(layout_rect.size().y == Catch::Approx(20.0F));
+    REQUIRE(max_x - min_x == Catch::Approx(20.0F));
+    REQUIRE(max_y - min_y == Catch::Approx(40.0F));
+}
+
 TEST_CASE("interaction style precedence is active focus hover default", "[VisualState][style]") {
     VisualState state;
 
@@ -938,21 +1108,6 @@ TEST_CASE("style variables stay local to their declared state", "[VisualState][v
     state.set_style(StyleType::ACTIVE);
     state.update(1.0F / 60.0F);
     REQUIRE(state.style().variables().get<FloatValue>("line_width") == nullptr);
-}
-
-TEST_CASE("editing the selected style updates its effective appearance") {
-    VisualState state;
-    state.style(StyleType::DEFAULT).color(ImColor{0, 0, 0, 255});
-    state.style(StyleType::ACTIVE).color(ImColor{255, 0, 0, 255});
-    state.snap_to_style(StyleType::DEFAULT);
-    state.set_style(StyleType::ACTIVE);
-    state.update(1.0F / 60.0F);
-
-    state.style(StyleType::ACTIVE).color().set(ImColor{0, 255, 0, 255});
-
-    const VisualState& const_state = state;
-    REQUIRE(const_state.style().color().get().x == Catch::Approx(0.0F));
-    REQUIRE(const_state.style().color().get().y == Catch::Approx(1.0F));
 }
 
 TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]") {

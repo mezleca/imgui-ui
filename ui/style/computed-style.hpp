@@ -54,6 +54,16 @@ namespace ui {
             return m_line_height.value;
         }
 
+        /// rotation in radians around the visual center.
+        float rotation() const {
+            return m_rotation.value;
+        }
+
+        /// visual scale around the visual center.
+        const ImVec2& scale() const {
+            return m_scale.value;
+        }
+
         float alpha() const {
             return m_alpha;
         }
@@ -113,6 +123,8 @@ namespace ui {
         Vec2Value m_margin;
         Vec2Value m_padding;
         FloatValue m_line_height{1.0F};
+        FloatValue m_rotation{0.0F};
+        Vec2Value m_scale{ImVec2{1.0F, 1.0F}};
         float m_alpha = 1.0F;
         ImGuiMouseCursor m_cursor = ImGuiMouseCursor_None;
         bool m_use_background_for_scrollbar = true;

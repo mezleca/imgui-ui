@@ -1,12 +1,25 @@
 #pragma once
 
 #include <imgui.h>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 
 namespace ui {
+    struct AssetHash {
+        using is_transparent = void;
+
+        size_t operator()(std::string_view value) const noexcept {
+            return std::hash<std::string_view>{}(value);
+        }
+
+        size_t operator()(const std::string& value) const noexcept {
+            return operator()(std::string_view{value});
+        }
+    };
+
     class AssetRegistry {
     public:
         AssetRegistry() = default;
@@ -44,7 +57,7 @@ namespace ui {
 
         template <typename T>
         const T* find_asset(std::string_view id) const {
-            const auto result = m_assets.find(std::string{id});
+            const auto result = m_assets.find(id);
             if (result == m_assets.end()) {
                 return nullptr;
             }
@@ -70,6 +83,6 @@ namespace ui {
             std::unique_ptr<T> value;
         };
 
-        std::unordered_map<std::string, std::unique_ptr<AssetEntryBase>> m_assets;
+        std::unordered_map<std::string, std::unique_ptr<AssetEntryBase>, AssetHash, std::equal_to<>> m_assets;
     };
 } // namespace ui

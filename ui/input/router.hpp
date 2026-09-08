@@ -85,7 +85,7 @@ namespace ui {
         friend class Node;
         friend class Debugger;
 
-        enum class InputFlag {
+        enum class InputFlag : uint8_t {
             Hovered,
             Active,
             Focused,

@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <format>
 #include <memory>
+#include <numbers>
 #include <string_view>
 #include <utility>
 #include <unordered_map>
@@ -184,16 +185,59 @@ public:
 protected:
     void apply_theme_defaults(const ui::Theme& theme) override {
         ui::ButtonWidget::apply_theme_defaults(theme);
+
         configure_all_styles([&theme](ui::Style& style) {
             style.background_color(theme.accent_color).border_color(theme.accent_hover_color);
         });
+
         configure_style(ui::StyleType::HOVER, [&theme](ui::Style& style) {
             style.background_color(theme.accent_hover_color).border_color(theme.accent_hover_color);
         });
+
         configure_style(ui::StyleType::ACTIVE, [&theme](ui::Style& style) {
             style.background_color(theme.accent_color).border_color(theme.accent_color);
         });
     }
+};
+
+class DemoAnimatedText final : public ui::TextWidget {
+public:
+    DemoAnimatedText(ui::UI& ui, std::string text) : ui::TextWidget(std::move(text)), m_ui(ui) {
+        set_input_mode(ui::InputMode::Target);
+        apply_theme_defaults(ui.theme());
+    }
+
+protected:
+    void apply_theme_defaults(const ui::Theme& theme) override {
+        ui::TextWidget::apply_theme_defaults(theme);
+        configure_all_styles([](ui::Style& style) { style.padding({}).background_color({}); });
+    }
+
+private:
+    void input_state_changed() override {
+        ui::StyledNode::input_state_changed();
+
+        const bool hovered = input_state().hovered;
+        if (hovered == m_hovered) {
+            return;
+        }
+
+        m_hovered = hovered;
+        if (hovered) {
+            animate()
+                .padding_y(10.0F, {0.2F, ui::easing::out_quad})
+                .then(0.1F)
+                .padding_x(20.0F, {0.24F, ui::easing::out_cubic})
+                .background_color(m_ui.theme().accent_color, {0.24F, ui::easing::out_cubic})
+                .then(0.1F)
+                .rotation(std::numbers::pi_v<float>, {0.25F, ui::easing::out_cubic});
+        } else {
+            animate().release_all({0.15F, ui::easing::linear});
+        }
+    }
+
+    ui::UI& m_ui;
+    bool m_hovered = false;
 };
 
 class DemoResizableNodes final : public ui::ResizableContainer {
@@ -237,6 +281,9 @@ public:
     int& blur();
 
 private:
+    ui::ImageWidget& add_test_image();
+    ui::ImageFit image_fit() const;
+    void apply_image_fit();
     void on_update(float dt) override;
     static void apply_border_style(ui::Node& node, ui::BorderStyle style);
 
@@ -251,6 +298,8 @@ private:
     ui::UI& m_surface;
     ui::ResizableContainer* m_dynamic_nodes = nullptr;
     ui::TextWidget* m_dynamic_status = nullptr;
+    ui::StackContainer* m_test_images = nullptr;
+    std::vector<ui::Node*> m_pending_image_removals;
     ui::Node* m_pending_remove = nullptr;
     bool m_enabled = true;
     int m_clicks = 0;
@@ -259,6 +308,7 @@ private:
     int m_dynamic_count = 0;
     int m_next_dynamic_id = 0;
     std::string m_name = "imgui-ui";
+    std::string m_image_fit = "cover";
     std::string m_theme = "default";
     std::string m_border_style = "solid";
     int m_blur = 5;
@@ -303,21 +353,33 @@ DemoScreen::DemoScreen(ui::UI& surface, std::string backend)
     name_input.set_icon(m_surface.runtime().textures().find("demo-file-icon"));
     profile.add<ui::CheckboxWidget>(surface, m_enabled, "enabled").set_size({ui::px(360.0F), ui::px(32.0F)});
 
-    auto& test_image = profile.add<ui::ImageWidget>(m_surface.runtime().textures().find("demo-test-image"));
-    test_image.set_size({ui::px(203.0F), ui::px(185.0F)});
+    m_test_images = &profile.add<ui::StackContainer>("demo-images", ui::StackDirection::Horizontal);
+    m_test_images->set_size({ui::grow(), ui::px(140.0F)});
+    m_test_images->set_spacing(8.0F);
 
-    auto& animated_text = profile.add<ui::TextWidget>("hover for cool animation");
-    animated_text.set_input_mode(ui::InputMode::Target);
-    animated_text.configure_all_styles([](ui::Style& style) {
-        style.background_color({}, {0.5F, ui::easing::in_cubic});
-        style.padding({}, {0.5F, ui::easing::in_cubic});
-        style.line_height(1.0F, 0.1F);
+    m_test_images->configure_all_styles([](ui::Style& style) {
+        style.box_shadow({
+            .offset = {0.0F, 0.0F},
+            .blur = 250.0F,
+            .spread = 10.0F,
+            .color = ImColor(255, 255, 255, 110),
+        });
     });
 
-    animated_text.configure_style(ui::StyleType::HOVER, [&](ui::Style& style) {
-        style.padding({10.0F, 10.0F}, {0.5F, ui::easing::in_cubic});
-        style.background_color(surface.theme().accent_color, {0.5F, ui::easing::in_cubic});
-    });
+    add_test_image();
+
+    auto& add_image = profile.add<ui::ButtonWidget>(surface, "add image", ui::LayoutSize{ui::px(140.0F), ui::px(36.0F)});
+    add_image.set_on_click([this] { add_test_image(); });
+
+    auto& image_fit = profile.add<ui::DropdownWidget>(
+        surface, m_image_fit, std::vector<ui::DropdownOption>{{"fill", "fill"}, {"contain", "contain"}, {"cover", "cover"}},
+        "image-fit"
+    );
+
+    image_fit.set_label("image fit").set_size({ui::px(280.0F), ui::px(68.0F)});
+    image_fit.set_on_change([this] { apply_image_fit(); });
+
+    profile.add<DemoAnimatedText>(surface, "hover for cool animation");
 
     profile.add<ui::TextWidget>("ellipsis: this text is longer than the available width")
         .set_size({ui::px(220.0F), ui::px(20.0F)})
@@ -411,15 +473,7 @@ DemoScreen::DemoScreen(ui::UI& surface, std::string backend)
     button.set_on_click([this, &button, &status] {
         ++m_clicks;
         status.set_text(std::format("button clicks: {}", m_clicks));
-        button.animate()
-            .padding_y(12.0F, {0.12F, ui::easing::out_quad})
-            .then(0.08F)
-            .padding_x(20.0F, {0.18F, ui::easing::out_cubic})
-            .background_color(m_surface.theme().accent_color)
-            .then(0.15F)
-            .release_padding_x({0.16F, ui::easing::out_quad})
-            .release_padding_y({0.16F, ui::easing::out_quad})
-            .release_background_color({0.16F, ui::easing::out_quad});
+        button.animate().rotation_by(std::numbers::pi_v<float>, {0.5F, ui::easing::out_back});
     });
 }
 
@@ -489,11 +543,59 @@ void DemoScreen::setup_dynamic_nodes(ui::Node& parent) {
     });
 }
 
+ui::ImageWidget& DemoScreen::add_test_image() {
+    auto& image = m_test_images->add<ui::ImageWidget>(m_surface.runtime().textures().find("demo-test-image"));
+    image.set_size({ui::px(280.0F), ui::px(140.0F)});
+    image.set_fit(image_fit());
+    image.set_input_mode(ui::InputMode::Target);
+
+    ui::ImageWidget* image_ptr = &image;
+    image.set_on_event([this, image_ptr](ui::UiEvent& event) {
+        if (event.type != ui::EventType::Click) {
+            return;
+        }
+
+        image_ptr->set_enabled(false);
+        image_ptr->animate()
+            .padding_y_by(12.0F, {0.30F, ui::easing::in_out_sine})
+            .scale({1.12F, 0.78F}, {0.30F, ui::easing::in_out_sine})
+            .then()
+            .padding_y(0.0F, {0.28F, ui::easing::in_out_sine})
+            .scale({0.94F, 1.08F}, {0.28F, ui::easing::in_out_sine})
+            .then()
+            .padding_y(3.0F, {0.22F, ui::easing::in_out_sine})
+            .scale({1.03F, 0.97F}, {0.22F, ui::easing::in_out_sine})
+            .then()
+            .release_all({0.38F, ui::easing::in_out_sine})
+            .end([this, image_ptr] { m_pending_image_removals.push_back(image_ptr); });
+    });
+
+    return image;
+}
+
+ui::ImageFit DemoScreen::image_fit() const {
+    return m_image_fit == "contain" ? ui::ImageFit::Contain : m_image_fit == "cover" ? ui::ImageFit::Cover : ui::ImageFit::Fill;
+}
+
+void DemoScreen::apply_image_fit() {
+    const ui::ImageFit fit = image_fit();
+    for (const auto& child : m_test_images->children()) {
+        static_cast<ui::ImageWidget*>(child.get())->set_fit(fit);
+    }
+}
+
 int& DemoScreen::blur() {
     return m_blur;
 }
 
 void DemoScreen::on_update(float) {
+    for (ui::Node* image : m_pending_image_removals) {
+        if (image->parent() != nullptr) {
+            image->parent()->remove(*image);
+        }
+    }
+    m_pending_image_removals.clear();
+
     // defer destruction until dispatch finishes because the click callback still references the item.
     if (m_pending_remove != nullptr) {
         ui::Node* pending_remove = m_pending_remove;

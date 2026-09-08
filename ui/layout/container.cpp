@@ -27,8 +27,7 @@ Container& Container::set_scrollable(bool scrollable) {
 }
 
 void Container::on_layout() {
-    // resolve this box first
-    // child arrangement uses its size and padding.
+    // resolve this container before arranging children against its size and padding.
     resolve_layout();
     arrange_children();
 }

@@ -23,7 +23,9 @@ void ButtonWidget::apply_theme_defaults(const Theme& theme) {
             .cursor(ImGuiMouseCursor_Hand);
     });
 
-    configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color, 0.2F); });
+    configure_style(StyleType::ACTIVE, [&theme](Style& style) {
+        style.background_color(theme.controls.active_color).border_color(theme.accent_color, 0.2F);
+    });
     configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
     configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_hover_color); });
 }
@@ -45,7 +47,16 @@ ButtonWidget& ButtonWidget::set_on_click(std::function<void()> callback) {
 
 void ButtonWidget::dispatch_event(UiEvent& event) {
     Widget::dispatch_event(event);
-    if (event.type == EventType::Click && m_on_click) {
+    if (event.type != EventType::Click) {
+        return;
+    }
+
+    animate()
+        .background_color(style(StyleType::ACTIVE).background_color().value)
+        .then(0.04F)
+        .release_all({0.12F, easing::out_quad});
+
+    if (m_on_click) {
         m_on_click();
     }
 }

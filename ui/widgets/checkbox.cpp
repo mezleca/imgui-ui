@@ -65,6 +65,11 @@ CheckboxWidget::CheckboxWidget(UI& ui, bool& value, std::string label, std::stri
         }
 
         *m_value = m_type == CheckboxType::Radio || !*m_value;
+        m_frame_node->animate()
+            .background_color(m_frame_node->style(StyleType::ACTIVE).background_color().value)
+            .then(0.04F)
+            .release_all({0.12F, easing::out_quad});
+
         notify_change();
     };
 }
@@ -188,9 +193,9 @@ void CheckboxWidget::arrange_children() {
         layout().local_rect().min.x - parent_content.min.x + widget_padding.x,
         layout().local_rect().min.y - parent_content.min.y + widget_padding.y,
     };
-    const ImVec2 frame_padding = m_frame_node->computed_style().padding();
-    const float border_inset =
-        m_frame_node->computed_style().border() == BORDER_NONE ? 0.0F : m_frame_node->computed_style().border_thickness();
+    const ComputedStyle& frame_style = m_frame_node->computed_style();
+    const ImVec2 frame_padding = frame_style.padding();
+    const float border_inset = frame_style.border() == BORDER_NONE ? 0.0F : frame_style.border_thickness();
     const ImVec2 fill_inset = {frame_padding.x + border_inset, frame_padding.y + border_inset};
     const ImVec2 fill_size = {
         std::max(0.0F, frame_size.x - fill_inset.x * 2.0F),

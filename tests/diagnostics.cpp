@@ -55,15 +55,15 @@ TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
     ui::Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     REQUIRE(surface.debugger() != nullptr);
-    REQUIRE_FALSE(surface.debugger()->enabled());
+    REQUIRE_FALSE(surface.debugger()->is_open());
 
     ui_test::prepare_surface(surface, {320.0F, 240.0F});
 
     surface.begin_frame();
     surface.end_frame();
-    REQUIRE_FALSE(surface.debugger()->enabled());
+    REQUIRE_FALSE(surface.debugger()->is_open());
 
-    surface.debugger()->set_enabled(true);
+    surface.debugger()->set_open(true);
     const auto draw_modal_frame = [&surface] {
         surface.begin_frame();
         const bool visible = ImGui::Begin("modal-layer");
@@ -104,7 +104,7 @@ TEST_CASE("debugger hotkey toggles on the target surface") {
     ui::Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     REQUIRE(surface.debugger() != nullptr);
-    REQUIRE_FALSE(surface.debugger()->enabled());
+    REQUIRE_FALSE(surface.debugger()->is_open());
 
     ui_test::prepare_surface(surface, {320.0F, 240.0F});
     ImGui::GetIO().AddKeyEvent(ImGuiMod_Shift, true);
@@ -112,7 +112,7 @@ TEST_CASE("debugger hotkey toggles on the target surface") {
 
     surface.begin_frame();
 
-    REQUIRE(surface.debugger()->enabled());
+    REQUIRE(surface.debugger()->is_open());
     surface.end_frame();
 }
 
@@ -137,7 +137,7 @@ TEST_CASE("focused debugger blocks application hover") {
     draw_frame();
     REQUIRE(checkbox.input_state().hovered);
 
-    surface.debugger()->set_enabled(true);
+    surface.debugger()->set_open(true);
     draw_frame();
     REQUIRE_FALSE(checkbox.input_state().hovered);
 
@@ -154,7 +154,7 @@ TEST_CASE("focused debugger blocks application hover") {
 TEST_CASE("debugger renders as a panel in the surface layout") {
     ui::Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
-    surface.debugger()->set_enabled(true);
+    surface.debugger()->set_open(true);
 
     ui_test::prepare_surface(surface, {900.0F, 600.0F});
     ui_test::draw_surface(surface);
@@ -171,7 +171,7 @@ TEST_CASE("debugger renders as a panel in the surface layout") {
 TEST_CASE("debugger exposes the content resize handle", "[Debugger][ResizableContainer][regression]") {
     ui::Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
-    surface.debugger()->set_enabled(true);
+    surface.debugger()->set_open(true);
 
     ui_test::prepare_surface(surface, {900.0F, 600.0F});
     ui_test::draw_surface(surface);

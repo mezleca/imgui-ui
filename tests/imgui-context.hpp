@@ -59,7 +59,7 @@ namespace ui_test {
 
         ~ImGuiContext() {
             ImGui::DestroyContext(m_context);
-            ImGui::SetCurrentContext(m_previous);
+            ImGui::SetCurrentContext(m_previous == m_context ? nullptr : m_previous);
         }
 
         static void build_fonts() {

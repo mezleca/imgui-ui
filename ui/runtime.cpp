@@ -5,7 +5,7 @@
 using namespace ui;
 
 Runtime::Runtime(RuntimeConfig config)
-    : m_theme(std::move(config.theme)), m_textures(std::move(config.texture_loader)),
+    : m_theme(config.theme), m_textures(std::move(config.texture_loader)),
       m_performance_directory(std::move(config.performance_directory)) {}
 
 void Runtime::release_context(ImGuiContext* context) {

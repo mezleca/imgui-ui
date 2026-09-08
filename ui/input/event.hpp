@@ -6,7 +6,7 @@
 #include <string>
 
 namespace ui {
-    enum class EventType {
+    enum class EventType : uint8_t {
         PointerMove,
         PointerDown,
         PointerUp,
@@ -83,14 +83,14 @@ namespace ui {
         return EventMask::None;
     }
 
-    enum class PointerButton {
+    enum class PointerButton : uint8_t {
         None,
         Left,
         Right,
         Middle,
     };
 
-    enum class Key {
+    enum class Key : uint8_t {
         Unknown,
         Escape,
         Enter,

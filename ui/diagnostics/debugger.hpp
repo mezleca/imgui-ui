@@ -27,13 +27,13 @@ namespace ui {
         Debugger(const Debugger&) = delete;
         Debugger& operator=(const Debugger&) = delete;
 
-        void set_enabled(bool enabled);
+        void set_open(bool open);
         void toggle() {
-            set_enabled(!m_enabled);
+            set_open(!m_open);
         }
 
-        bool enabled() const {
-            return m_enabled;
+        bool is_open() const {
+            return m_open;
         }
 
         /// handles overlay and inspect events before the application router.
@@ -100,7 +100,7 @@ namespace ui {
         int m_inspected_style = 0;
         float m_node_list_ratio = 0.6F;
         ImGuiKeyChord m_hotkey = ImGuiMod_Shift | ImGuiKey_D;
-        bool m_enabled = false;
+        bool m_open = false;
         bool m_inspect_mode = false;
         bool m_target_was_flow_position = false;
         bool m_highlight_selected = false;

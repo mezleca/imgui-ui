@@ -125,7 +125,7 @@ void TextInputWidget::on_draw_end() {
     if (m_icon_node->visible()) {
         const ImVec4 icon_color =
             input_state().hovered || input_state().active ? m_ui.theme().text_color : m_ui.theme().text_secondary_color;
-        m_icon_node->style().color().set(ImColor(icon_color));
+        m_icon_node->style().color(ImColor(icon_color));
     }
 
     if (m_field_node->changed()) {

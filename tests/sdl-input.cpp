@@ -151,7 +151,7 @@ TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regres
     );
     REQUIRE(surface.ready());
     REQUIRE(surface.debugger() != nullptr);
-    surface.debugger()->set_enabled(false);
+    surface.debugger()->set_open(false);
     ui_test::prepare_surface(surface);
 
     const SDL_WindowID window_id = surface.backend().window_id();
@@ -169,7 +169,7 @@ TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regres
     REQUIRE_FALSE(ui::process_sdl_event(surface, d_down));
 
     surface.begin_frame();
-    REQUIRE(surface.debugger()->enabled());
+    REQUIRE(surface.debugger()->is_open());
     surface.end_frame();
 }
 

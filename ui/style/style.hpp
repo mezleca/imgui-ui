@@ -4,18 +4,20 @@
 #include "theme.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <cmath>
 #include <utility>
 
 namespace ui {
     class StyledNode;
     class VisualState;
 
-    enum class StyleType : int32_t {
+    enum class StyleType : uint8_t {
         DEFAULT = 0,
         HOVER = 1,
         ACTIVE,
         FOCUS,
-        _COUNT
+        COUNT
     };
 
     class Style : public ComputedStyle {
@@ -36,13 +38,15 @@ namespace ui {
             return set_property(member, normalize(std::move(value)));
         }
 
-        // updates an animated property's target and optional duration without restarting an unchanged target.
         template <typename ValueType, typename Field>
         Style& set_animated_value(ValueType ComputedStyle::* member, Field value, float duration = -1.0F) {
             ValueType& current = this->*member;
             const bool changed = !transition_values_equal(current.value, value);
 
-            if (!changed && duration < 0.0F) return *this;
+            if (!changed && duration < 0.0F) {
+                return *this;
+            }
+
             if (changed) current.set(std::move(value));
             if (duration >= 0.0F) current.set_duration(duration);
             if (changed) notify_change();
@@ -50,7 +54,6 @@ namespace ui {
             return *this;
         }
 
-        // updates an animated property's target and easing metadata in one operation.
         template <typename ValueType, typename Field>
         Style& set_animated_transition(ValueType ComputedStyle::* member, Field value, TransitionSpec transition) {
             ValueType& current = this->*member;
@@ -91,32 +94,18 @@ namespace ui {
         using ComputedStyle::line_height;
         using ComputedStyle::margin;
         using ComputedStyle::padding;
+        using ComputedStyle::rotation;
+        using ComputedStyle::scale;
         using ComputedStyle::use_background_for_scrollbar;
         using ComputedStyle::variables;
 
         Style() = default;
-
-        const ComputedStyle& computed_style() const {
-            return *this;
-        }
 
         /// updates the current style from the target and reports whether any transition remains active.
         static bool lerp(Style& style, const Style& target, float dt);
 
         Style& font(ImFont* value) {
             return set_property(&ComputedStyle::m_font, value);
-        }
-
-        ColorValue& color() {
-            return m_color;
-        }
-
-        ColorValue& border_color() {
-            return m_border_color;
-        }
-
-        ColorValue& background_color() {
-            return m_background_color;
         }
 
         StyleVariableStore& variables() {
@@ -157,6 +146,32 @@ namespace ui {
             return set_animated_transition(&ComputedStyle::m_line_height, std::max(0.0F, value), transition);
         }
 
+        /// rotates drawing without changing layout or input bounds.
+        Style& rotation(float value, float transition_duration = -1.0F) {
+            return set_animated_value(&ComputedStyle::m_rotation, std::isfinite(value) ? value : 0.0F, transition_duration);
+        }
+
+        Style& rotation(float value, TransitionSpec transition) {
+            return set_animated_transition(&ComputedStyle::m_rotation, std::isfinite(value) ? value : 0.0F, transition);
+        }
+
+        /// scales drawing without changing layout or input bounds.
+        Style& scale(ImVec2 value, float transition_duration = -1.0F) {
+            return set_animated_value(&ComputedStyle::m_scale, normalize_scale(value), transition_duration);
+        }
+
+        Style& scale(ImVec2 value, TransitionSpec transition) {
+            return set_animated_transition(&ComputedStyle::m_scale, normalize_scale(value), transition);
+        }
+
+        Style& scale(float value, float transition_duration = -1.0F) {
+            return scale({value, value}, transition_duration);
+        }
+
+        Style& scale(float value, TransitionSpec transition) {
+            return scale({value, value}, transition);
+        }
+
         Style& alpha(float value) {
             return set_property(&ComputedStyle::m_alpha, value, [](float resolved) { return std::clamp(resolved, 0.0F, 1.0F); });
         }
@@ -170,35 +185,35 @@ namespace ui {
         }
 
         Style& color(ImColor value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_color, std::move(value), transition_duration);
+            return set_animated_value(&ComputedStyle::m_color, value, transition_duration);
         }
 
         Style& color(ImColor value, TransitionSpec transition) {
-            return set_animated_transition(&ComputedStyle::m_color, std::move(value), transition);
+            return set_animated_transition(&ComputedStyle::m_color, value, transition);
         }
 
         Style& border_color(ImColor value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_border_color, std::move(value), transition_duration);
+            return set_animated_value(&ComputedStyle::m_border_color, value, transition_duration);
         }
 
         Style& border_color(ImColor value, TransitionSpec transition) {
-            return set_animated_transition(&ComputedStyle::m_border_color, std::move(value), transition);
+            return set_animated_transition(&ComputedStyle::m_border_color, value, transition);
         }
 
         Style& background_color(ImColor value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_background_color, std::move(value), transition_duration);
+            return set_animated_value(&ComputedStyle::m_background_color, value, transition_duration);
         }
 
         Style& background_color(ImColor value, TransitionSpec transition) {
-            return set_animated_transition(&ComputedStyle::m_background_color, std::move(value), transition);
+            return set_animated_transition(&ComputedStyle::m_background_color, value, transition);
         }
 
         Style& box_shadow(BoxShadow value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_box_shadow, normalize_box_shadow(std::move(value)), transition_duration);
+            return set_animated_value(&ComputedStyle::m_box_shadow, normalize_box_shadow(value), transition_duration);
         }
 
         Style& box_shadow(BoxShadow value, TransitionSpec transition) {
-            return set_animated_transition(&ComputedStyle::m_box_shadow, normalize_box_shadow(std::move(value)), transition);
+            return set_animated_transition(&ComputedStyle::m_box_shadow, normalize_box_shadow(value), transition);
         }
 
         Style& blur(int value) {
@@ -226,6 +241,10 @@ namespace ui {
         }
 
     private:
+        static ImVec2 normalize_scale(ImVec2 value) {
+            return {std::isfinite(value.x) ? value.x : 1.0F, std::isfinite(value.y) ? value.y : 1.0F};
+        }
+
         friend class StyledNode;
         friend class VisualState;
         friend class PaintSlot;

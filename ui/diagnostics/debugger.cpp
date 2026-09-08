@@ -168,12 +168,12 @@ void Debugger::draw_property_section(std::string_view label) {
 
     ImGui::Spacing();
 
-    const std::string id{label};
     const ImVec4 section_color = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0.0F, 0.0F});
     ImGui::PushStyleColor(ImGuiCol_ChildBg, section_color);
     ImGui::BeginChild(
-        id.c_str(), {0.0F, 0.0F}, ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
+        ImGui::GetID(label.data(), label.data() + label.size()), {0.0F, 0.0F}, ImGuiChildFlags_AutoResizeY,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse
     );
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
@@ -200,9 +200,7 @@ static bool draw_labeled_input(std::string_view label, DrawInput draw_input, ImV
         frame_background.z *= 0.72F;
     }
 
-    const std::string id{label};
-
-    ImGui::PushID(id.c_str());
+    ImGui::PushID(label.data(), label.data() + label.size());
     const ImVec4 transparent = {0.0F, 0.0F, 0.0F, 0.0F};
     ImGui::PushStyleColor(ImGuiCol_FrameBg, frame_background);
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, frame_background);
@@ -464,23 +462,23 @@ void Debugger::remove_target() {
     }
 }
 
-void Debugger::set_enabled(bool enabled) {
-    if (m_enabled == enabled) {
+void Debugger::set_open(bool open) {
+    if (m_open == open) {
         return;
     }
 
-    m_enabled = enabled;
-    set_visible(enabled);
-    m_target.input_router().set_debug_pointer_blocked(enabled);
+    m_open = open;
+    set_visible(open);
+    m_target.input_router().set_debug_pointer_blocked(open);
 
     if (auto* content = dynamic_cast<ResizableContainer*>(&m_target.root()); content != nullptr) {
-        content->set_resize(enabled ? ResizeAxes::X : ResizeAxes::None);
-        if (!enabled) {
+        content->set_resize(open ? ResizeAxes::X : ResizeAxes::None);
+        if (!open) {
             content->set_size({grow(), grow()});
         }
     }
 
-    if (enabled) {
+    if (open) {
         m_overlay_focused = true;
         return;
     }
@@ -513,7 +511,7 @@ void Debugger::set_font(std::string_view id, int size) {
 }
 
 bool Debugger::overlay_contains(ImVec2 position) const {
-    return m_enabled && m_overlay_rect.valid() && m_overlay_rect.contains(position);
+    return m_open && m_overlay_rect.valid() && m_overlay_rect.contains(position);
 }
 
 bool Debugger::handles_content_resize(const UiEvent& event) const {
@@ -630,7 +628,7 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
 }
 
 bool Debugger::handle_input(UiEvent& event) {
-    if (!m_enabled) {
+    if (!m_open) {
         return false;
     }
 
@@ -969,7 +967,12 @@ void Debugger::render_style_variables(Style& style, std::span<Style*> all_styles
         StyleValue* variable = variables.find(name);
         if (variable == nullptr) {
             for (Style* candidate : all_styles) {
-                if (candidate != nullptr && (variable = candidate->variables().find(name)) != nullptr) {
+                if (candidate == nullptr) {
+                    continue;
+                }
+
+                variable = candidate->variables().find(name);
+                if (variable != nullptr) {
                     break;
                 }
             }
@@ -1030,18 +1033,18 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
 
     ImVec4 color = style.color().get();
     if (draw_color_input("color", color)) {
-        apply([&color](Style& target) { target.color().set(color); });
+        apply([&color](Style& target) { target.color(ImColor{color}); });
     }
 
     if (!is_line) {
         ImVec4 background_color = style.background_color().get();
         if (draw_color_input("background", background_color)) {
-            apply([&background_color](Style& target) { target.background_color().set(background_color); });
+            apply([&background_color](Style& target) { target.background_color(ImColor{background_color}); });
         }
 
         ImVec4 border_color = style.border_color().get();
         if (draw_color_input("border color", border_color)) {
-            apply([&border_color](Style& target) { target.border_color().set(border_color); });
+            apply([&border_color](Style& target) { target.border_color(ImColor{border_color}); });
         }
 
         uint8_t border = style.border();
@@ -1152,10 +1155,10 @@ void Debugger::render_style_properties() {
     }
 
     const bool all_styles = style_index == 0;
-    const int selected_style = std::clamp(style_index - 1, 0, static_cast<int>(StyleType::_COUNT) - 1);
+    const int selected_style = std::clamp(style_index - 1, 0, static_cast<int>(StyleType::COUNT) - 1);
     Style& style = styled->style(static_cast<StyleType>(selected_style));
 
-    std::array<Style*, static_cast<std::size_t>(StyleType::_COUNT)> style_targets{};
+    std::array<Style*, static_cast<std::size_t>(StyleType::COUNT)> style_targets{};
     std::span<Style*> all_style_targets;
     if (all_styles) {
         for (std::size_t index = 0; index < style_targets.size(); ++index) {
@@ -1272,7 +1275,7 @@ void Debugger::render_toolbar() {
         ImGui::SetTooltip("close debugger");
     }
     if (close_clicked) {
-        set_enabled(false);
+        set_open(false);
     }
 
     ImGui::Separator();
@@ -1318,7 +1321,7 @@ void Debugger::render_sections() {
 }
 
 void Debugger::render() {
-    if (!m_enabled || m_target.imgui_context() == nullptr) {
+    if (!m_open || m_target.imgui_context() == nullptr) {
         return;
     }
 

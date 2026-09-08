@@ -12,6 +12,8 @@ using namespace ui;
     X(margin, true)                                                                                                              \
     X(padding, true)                                                                                                             \
     X(line_height, true)                                                                                                         \
+    X(rotation, false)                                                                                                           \
+    X(scale, false)                                                                                                              \
     X(box_shadow, false)                                                                                                         \
     X(color, false)                                                                                                              \
     X(border_color, false)                                                                                                       \

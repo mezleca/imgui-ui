@@ -107,11 +107,11 @@ namespace ui {
     };
 
     struct LayoutConfig {
-        /// requested width and height behavior.
+        /// sizing mode and value requested for each axis.
         LayoutSize size{};
-        /// position relative to the parent content area.
+        /// anchor, origin, and offset used to position the node.
         Placement placement{};
-        /// whether the parent places this node in its linear child flow.
+        /// whether the parent includes this node in flow arrangement.
         bool in_flow = true;
     };
 
