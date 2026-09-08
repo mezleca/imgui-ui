@@ -21,11 +21,11 @@ namespace ui {
         ContextMenuCallback callback;
 
         static ContextMenuItem action(std::string label, ContextMenuCallback callback = {}) {
-            return {.label = std::move(label), .callback = std::move(callback)};
+            return {.label = std::move(label), .children = {}, .callback = std::move(callback)};
         }
 
         static ContextMenuItem submenu(std::string label, std::vector<ContextMenuItem> children) {
-            return {.label = std::move(label), .children = std::move(children)};
+            return {.label = std::move(label), .children = std::move(children), .callback = {}};
         }
     };
 

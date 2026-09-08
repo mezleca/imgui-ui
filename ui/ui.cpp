@@ -268,7 +268,7 @@ namespace ui {
         ImGui::NewFrame();
 
         if (m_debugger != nullptr) {
-            m_debugger->update();
+            m_debugger->handle_hotkey();
         }
     }
 

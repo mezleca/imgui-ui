@@ -38,8 +38,7 @@ namespace ui {
 
         /// handles overlay and inspect events before the application router.
         bool handle_input(UiEvent& event);
-        /// processes the debugger hotkey.
-        void update();
+        void handle_hotkey();
         /// renders the diagnostic panel in the surface layout.
         void render();
 

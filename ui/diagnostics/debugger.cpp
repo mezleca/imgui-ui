@@ -668,7 +668,7 @@ void Debugger::set_inspect_mode(bool enabled) {
     }
 }
 
-void Debugger::update() {
+void Debugger::handle_hotkey() {
     if (m_target.imgui_context() == nullptr) {
         return;
     }
