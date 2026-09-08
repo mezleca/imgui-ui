@@ -10,9 +10,8 @@
 #include <utility>
 #include <variant>
 
-class UI;
-
 namespace ui {
+    class UI;
     class NumberInputWidget final : public Widget {
         // imgui edits the original scalar through its typed pointer.
         using NumberValue = std::variant<

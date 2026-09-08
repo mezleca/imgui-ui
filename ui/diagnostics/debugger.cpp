@@ -1,5 +1,7 @@
 #include "debugger.hpp"
 #include "../imgui/context-scope.hpp"
+#include "../layout/layer-container.hpp"
+#include "../layout/resizable-container.hpp"
 #include "../resources/svg.hpp"
 #include "../resources/texture-registry.hpp"
 #include "../style/styled-node.hpp"
@@ -12,8 +14,10 @@
 #include <imgui_stdlib.h>
 
 #include <algorithm>
+#include <array>
 #include <format>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -62,6 +66,11 @@ Node* Debugger::pick_node(Node& root, ImVec2 position) {
         return nullptr;
     }
 
+    // layers only provide stacking and are not selectable.
+    if (dynamic_cast<const LayerContainer*>(&root) != nullptr) {
+        return nullptr;
+    }
+
     if (dynamic_cast<const StyledNode*>(&root) == nullptr || !root.accepts_input()) {
         return nullptr;
     }
@@ -74,7 +83,7 @@ static constexpr const char* ALIGNMENT_NAMES[] = {
     "center-right", "bottom-left", "bottom-center", "bottom-right", "custom",
 };
 
-static constexpr const char* STYLE_NAMES[] = {"default", "hover", "active", "focus"};
+static constexpr const char* STYLE_NAMES[] = {"all", "default", "hover", "active", "focus"};
 static constexpr const char* BORDER_STYLE_NAMES[] = {"solid", "dashed", "dotted"};
 
 static std::string_view size_mode_name(LayoutSizeMode mode) {
@@ -92,11 +101,12 @@ static std::string_view size_mode_name(LayoutSizeMode mode) {
 static constexpr float WINDOW_PADDING = 8.0F;
 static constexpr ImVec2 INSPECT_ICON_SIZE = {18.0F, 18.0F};
 static constexpr ImVec2 CLOSE_ICON_SIZE = {18.0F, 18.0F};
-static constexpr float OVERLAY_ACTIVE_DURATION = 1.0F;
 static constexpr float ITEM_SPACING = 12.0F;
 static constexpr float INPUT_MAX_WIDTH = 180.0F;
 static constexpr ImVec2 INPUT_PADDING = {0.0F, 0.0F};
 static constexpr ImVec2 SECTION_PADDING = {10.0F, 8.0F};
+static constexpr float DEBUGGER_SPLITTER_HEIGHT = 6.0F;
+static constexpr float DEBUGGER_MIN_PANE_HEIGHT = 72.0F;
 
 static bool belongs_to_debugger(const ImGuiWindow& window, const ImGuiWindow& debugger_window) {
     for (const ImGuiWindow* parent = window.ParentWindow; parent != nullptr; parent = parent->ParentWindow) {
@@ -130,6 +140,16 @@ static void draw_property_value(std::string_view label, std::string_view format,
     ImGui::Text("%.*s:", static_cast<int>(label.size()), label.data());
     ImGui::SameLine(0.0F, ITEM_SPACING);
     ImGui::TextDisabled("%s", value.c_str());
+}
+
+template <typename Apply>
+static void apply_to_styles(Style& style, std::span<Style*> targets, Apply&& apply) {
+    apply(style);
+    for (Style* target : targets) {
+        if (target != nullptr && target != &style) {
+            apply(*target);
+        }
+    }
 }
 
 void Debugger::end_property_section() {
@@ -208,7 +228,9 @@ static bool draw_text_input(std::string_view label, std::string& value) {
 }
 
 static bool draw_color_input(std::string_view label, ImVec4& value) {
-    return draw_labeled_input(label, [&value] { return ImGui::ColorEdit4("##value", &value.x, ImGuiColorEditFlags_NoInputs); });
+    return draw_labeled_input(label, [&value] {
+        return ImGui::ColorEdit4("##value", &value.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+    });
 }
 
 static bool draw_inline_combo(std::string_view label, int* selected, const char* const items[], int item_count) {
@@ -350,9 +372,29 @@ draw_number_input(std::string_view label, int* values, int components = 1, float
     );
 }
 
-Debugger::Debugger(UI& target) : m_target(target) {
+Debugger::Debugger(UI& target) : Container("ui debugger", "Debugger"), m_target(target) {
+    set_size({grow(), grow()});
+    set_visible(false);
+    apply_theme_defaults(target.theme());
+
     m_inspect_icon = m_target.runtime().textures().add("debugger-inspect", INSPECT_SVG);
     m_close_icon = m_target.runtime().textures().add("debugger-close", CLOSE_SVG);
+}
+
+void Debugger::apply_theme_defaults(const Theme& theme) {
+    configure_all_styles([&theme](Style& style) {
+        style.color(theme.text_color)
+            .background_color(theme.background_secondary_color)
+            .border_color(theme.controls.border_color)
+            .border(BORDER_ALL)
+            .border_radius(theme.box_rounding)
+            .border_thickness(theme.controls.border_thickness)
+            .padding({WINDOW_PADDING, WINDOW_PADDING});
+    });
+}
+
+void Debugger::draw_children() {
+    render();
 }
 
 Debugger::~Debugger() {
@@ -375,8 +417,7 @@ void Debugger::set_target(Node* target) {
     m_target_was_flow_position = target != nullptr && target->layout().in_flow();
     m_select_properties = target != nullptr;
 
-    auto* styled = dynamic_cast<StyledNode*>(target);
-    m_inspected_style = styled == nullptr ? StyleType::DEFAULT : styled->style_type();
+    m_inspected_style = 0;
 
     if (m_node_target == nullptr) {
         m_highlight_valid = false;
@@ -429,10 +470,18 @@ void Debugger::set_enabled(bool enabled) {
     }
 
     m_enabled = enabled;
+    set_visible(enabled);
     m_target.input_router().set_debug_pointer_blocked(enabled);
+
+    if (auto* content = dynamic_cast<ResizableContainer*>(&m_target.root()); content != nullptr) {
+        content->set_resize(enabled ? ResizeAxes::X : ResizeAxes::None);
+        if (!enabled) {
+            content->set_size({grow(), grow()});
+        }
+    }
+
     if (enabled) {
         m_overlay_focused = true;
-        m_overlay_idle_time = 0.0F;
         return;
     }
 
@@ -441,7 +490,6 @@ void Debugger::set_enabled(bool enabled) {
 
     m_overlay_rect = {};
     m_overlay_focused = false;
-    m_overlay_idle_time = 0.0F;
     m_overlay_pointer_capture = false;
     m_inspect_pointer_capture = false;
     set_inspect_mode(false);
@@ -468,9 +516,27 @@ bool Debugger::overlay_contains(ImVec2 position) const {
     return m_enabled && m_overlay_rect.valid() && m_overlay_rect.contains(position);
 }
 
+bool Debugger::handles_content_resize(const UiEvent& event) const {
+    if (!ui::contains(EventMask::Pointer, event_mask(event.type))) {
+        return false;
+    }
+
+    const auto* content = dynamic_cast<const ResizableContainer*>(&m_target.root());
+    if (content == nullptr) {
+        return false;
+    }
+
+    if (content->resizing()) {
+        return true;
+    }
+
+    return event.type == EventType::PointerDown && event.button == PointerButton::Left &&
+           content->resize_handle_contains(event.position);
+}
+
 bool Debugger::handle_inspect_event(UiEvent& event) {
-    const bool pointer_event = contains(EventMask::Pointer, event_mask(event.type));
-    const bool keyboard_event = contains(EventMask::Keyboard, event_mask(event.type));
+    const bool pointer_event = ui::contains(EventMask::Pointer, event_mask(event.type));
+    const bool keyboard_event = ui::contains(EventMask::Keyboard, event_mask(event.type));
 
     if (m_inspect_mode && keyboard_event) {
         event.mark_handled();
@@ -504,7 +570,6 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
             event.mark_handled();
             if (event.type == EventType::PointerDown) {
                 m_overlay_pointer_capture = true;
-                m_overlay_idle_time = 0.0F;
             }
             return true;
         }
@@ -514,7 +579,6 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
             m_overlay_focused = false;
             m_target.input_router().set_debug_pointer_blocked(false);
             m_overlay_pointer_capture = true;
-            m_overlay_idle_time = 0.0F;
             if (event.button == PointerButton::Left) {
                 m_highlight_selected = false;
                 m_highlight_valid = false;
@@ -529,7 +593,6 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
         if (event.type == EventType::PointerDown) {
             m_overlay_focused = true;
             m_target.input_router().set_debug_pointer_blocked(true);
-            m_overlay_idle_time = 0.0F;
             m_overlay_pointer_capture = true;
             m_target.input_router().clear_focus();
         }
@@ -571,11 +634,15 @@ bool Debugger::handle_input(UiEvent& event) {
         return false;
     }
 
+    if (handles_content_resize(event)) {
+        return false;
+    }
+
     if (handle_inspect_event(event)) {
         return true;
     }
 
-    if (m_overlay_focused && contains(EventMask::Keyboard, event_mask(event.type))) {
+    if (m_overlay_focused && ui::contains(EventMask::Keyboard, event_mask(event.type))) {
         event.mark_handled();
         return true;
     }
@@ -611,16 +678,6 @@ void Debugger::update() {
     const ImGuiContextScope scope(m_target.imgui_context());
     if (ImGui::IsKeyChordPressed(m_hotkey)) {
         toggle();
-    }
-
-    if (!m_enabled) {
-        return;
-    }
-
-    if (m_overlay_focused) {
-        m_overlay_idle_time = 0.0F;
-    } else {
-        m_overlay_idle_time += std::max(0.0F, ImGui::GetIO().DeltaTime);
     }
 }
 
@@ -882,16 +939,26 @@ void Debugger::render_layout_properties() {
     }
 }
 
-void Debugger::render_style_variables(Style& style) {
+void Debugger::render_style_variables(Style& style, std::span<Style*> all_styles) {
     StyleVariableStore& variables = style.variables();
     m_variable_names.clear();
 
-    variables.for_each([&](const std::string& name, const StyleValue&) {
-        m_variable_names.push_back(name);
-        return true;
-    });
+    const auto collect_names = [this](Style& candidate) {
+        candidate.variables().for_each([this](const std::string& name, const StyleValue&) {
+            m_variable_names.push_back(name);
+            return true;
+        });
+    };
+
+    collect_names(style);
+    for (Style* candidate : all_styles) {
+        if (candidate != nullptr && candidate != &style) {
+            collect_names(*candidate);
+        }
+    }
 
     std::sort(m_variable_names.begin(), m_variable_names.end());
+    m_variable_names.erase(std::unique(m_variable_names.begin(), m_variable_names.end()), m_variable_names.end());
 
     if (m_variable_names.empty()) {
         return;
@@ -901,24 +968,54 @@ void Debugger::render_style_variables(Style& style) {
     for (const std::string& name : m_variable_names) {
         StyleValue* variable = variables.find(name);
         if (variable == nullptr) {
+            for (Style* candidate : all_styles) {
+                if (candidate != nullptr && (variable = candidate->variables().find(name)) != nullptr) {
+                    break;
+                }
+            }
+        }
+
+        if (variable == nullptr) {
             continue;
         }
+
+        const auto apply_variable = [&style, all_styles, &name](auto value) {
+            apply_to_styles(style, all_styles, [&name, &value](Style& target) { target.variables().set(name, value); });
+        };
 
         std::visit(
             [&](auto& value) {
                 using ValueType = std::decay_t<decltype(value)>;
                 if constexpr (std::is_same_v<ValueType, FloatValue>) {
-                    draw_number_input(name, &value.value, 1, 0.01F);
+                    float current = value.value;
+                    if (draw_number_input(name, &current, 1, 0.01F)) {
+                        apply_variable(FloatValue{current});
+                    }
                 } else if constexpr (std::is_same_v<ValueType, IntValue>) {
-                    draw_number_input(name, &value.value);
+                    int current = value.value;
+                    if (draw_number_input(name, &current)) {
+                        apply_variable(IntValue{current});
+                    }
                 } else if constexpr (std::is_same_v<ValueType, BoolValue>) {
-                    draw_labeled_input(name, [&value] { return ImGui::Checkbox("##value", &value.value); });
+                    bool current = value.value;
+                    if (draw_labeled_input(name, [&current] { return ImGui::Checkbox("##value", &current); })) {
+                        apply_variable(BoolValue{current});
+                    }
                 } else if constexpr (std::is_same_v<ValueType, StringValue>) {
-                    draw_text_input(name, value.value);
+                    std::string current = value.value;
+                    if (draw_text_input(name, current)) {
+                        apply_variable(StringValue{std::move(current)});
+                    }
                 } else if constexpr (std::is_same_v<ValueType, ColorValue>) {
-                    draw_color_input(name, value.value.Value);
+                    ImVec4 current = value.value.Value;
+                    if (draw_color_input(name, current)) {
+                        apply_variable(ColorValue{ImColor{current}});
+                    }
                 } else if constexpr (std::is_same_v<ValueType, Vec2Value>) {
-                    draw_number_input(name, &value.value.x, 2, 0.01F);
+                    ImVec2 current = value.value;
+                    if (draw_number_input(name, &current.x, 2, 0.01F)) {
+                        apply_variable(Vec2Value{current});
+                    }
                 }
             },
             *variable
@@ -926,76 +1023,85 @@ void Debugger::render_style_variables(Style& style) {
     }
 }
 
-void Debugger::render_style_controls(Style& style, bool is_line) {
+void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style*> all_styles) {
+    const auto apply = [&style, all_styles](auto&& update) {
+        apply_to_styles(style, all_styles, std::forward<decltype(update)>(update));
+    };
+
     ImVec4 color = style.color().get();
     if (draw_color_input("color", color)) {
-        style.color().set(color);
+        apply([&color](Style& target) { target.color().set(color); });
     }
 
     if (!is_line) {
         ImVec4 background_color = style.background_color().get();
         if (draw_color_input("background", background_color)) {
-            style.background_color().set(background_color);
+            apply([&background_color](Style& target) { target.background_color().set(background_color); });
         }
 
         ImVec4 border_color = style.border_color().get();
         if (draw_color_input("border color", border_color)) {
-            style.border_color().set(border_color);
+            apply([&border_color](Style& target) { target.border_color().set(border_color); });
         }
 
         uint8_t border = style.border();
         if (draw_border_flags("border sides", &border)) {
-            style.border(border);
+            apply([border](Style& target) { target.border(border); });
         }
 
         int border_style = static_cast<int>(style.border_style());
         if (draw_inline_combo("border style", &border_style, BORDER_STYLE_NAMES, IM_ARRAYSIZE(BORDER_STYLE_NAMES))) {
-            style.border_style(static_cast<BorderStyle>(border_style));
+            apply([border_style](Style& target) { target.border_style(static_cast<BorderStyle>(border_style)); });
         }
 
         ImVec2 padding = style.padding();
         if (draw_number_input("padding", &padding.x, 2, 0.1F, 0.0F, 128.0F)) {
-            style.padding(padding);
+            apply([padding](Style& target) { target.padding(padding); });
+        }
+
+        ImVec2 margin = style.margin();
+        if (draw_number_input("margin", &margin.x, 2, 0.1F, 0.0F, 128.0F)) {
+            apply([margin](Style& target) { target.margin(margin); });
         }
 
         int blur = style.blur();
         if (draw_number_input("blur", &blur, 1, 1.0F, 0, 64)) {
-            style.blur(blur);
+            apply([blur](Style& target) { target.blur(blur); });
         }
 
         BoxShadow shadow = style.box_shadow();
         if (draw_number_input("shadow offset", &shadow.offset.x, 2, 0.1F)) {
-            style.box_shadow(shadow);
+            apply([shadow](Style& target) { target.box_shadow(shadow); });
         }
 
         if (draw_slider("shadow blur", &shadow.blur, 0.0F, 256.0F)) {
-            style.box_shadow(shadow);
+            apply([shadow](Style& target) { target.box_shadow(shadow); });
         }
 
         if (draw_slider("shadow spread", &shadow.spread, -128.0F, 256.0F)) {
-            style.box_shadow(shadow);
+            apply([shadow](Style& target) { target.box_shadow(shadow); });
         }
 
         ImVec4 shadow_color = shadow.color.Value;
         if (draw_color_input("shadow color", shadow_color)) {
             shadow.color.Value = shadow_color;
-            style.box_shadow(shadow);
+            apply([shadow](Style& target) { target.box_shadow(shadow); });
         }
 
         float radius = style.border_radius();
         if (draw_number_input("border radius", &radius, 1, 0.1F, 0.0F, 64.0F)) {
-            style.border_radius(radius);
+            apply([radius](Style& target) { target.border_radius(radius); });
         }
     }
 
     float alpha = style.alpha();
     if (draw_number_input("alpha", &alpha, 1, 0.01F, 0.0F, 1.0F)) {
-        style.alpha(alpha);
+        apply([alpha](Style& target) { target.alpha(alpha); });
     }
 
     float thickness = style.border_thickness();
     if (draw_number_input("border thickness", &thickness, 1, 0.1F, 0.0F, 16.0F)) {
-        style.border_thickness(thickness);
+        apply([thickness](Style& target) { target.border_thickness(thickness); });
     }
 }
 
@@ -1040,14 +1146,26 @@ void Debugger::render_style_properties() {
 
     draw_property_section("style");
 
-    int style_index = static_cast<int>(m_inspected_style);
+    int style_index = m_inspected_style;
     if (draw_inline_combo("state", &style_index, STYLE_NAMES, IM_ARRAYSIZE(STYLE_NAMES))) {
-        m_inspected_style = static_cast<StyleType>(style_index);
+        m_inspected_style = style_index;
     }
 
-    Style& style = styled->style(m_inspected_style);
-    render_style_controls(style, styled->type_name() == "Line");
-    render_style_variables(style);
+    const bool all_styles = style_index == 0;
+    const int selected_style = std::clamp(style_index - 1, 0, static_cast<int>(StyleType::_COUNT) - 1);
+    Style& style = styled->style(static_cast<StyleType>(selected_style));
+
+    std::array<Style*, static_cast<std::size_t>(StyleType::_COUNT)> style_targets{};
+    std::span<Style*> all_style_targets;
+    if (all_styles) {
+        for (std::size_t index = 0; index < style_targets.size(); ++index) {
+            style_targets[index] = &styled->style(static_cast<StyleType>(index));
+        }
+        all_style_targets = std::span<Style*>(style_targets);
+    }
+
+    render_style_controls(style, styled->type_name() == "Line", all_style_targets);
+    render_style_variables(style, all_style_targets);
     render_decoration_properties(*styled);
 }
 
@@ -1160,9 +1278,9 @@ void Debugger::render_toolbar() {
     ImGui::Separator();
 }
 
-void Debugger::render_node_list() {
+void Debugger::render_node_list(float height) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {WINDOW_PADDING, 4.0F});
-    ImGui::BeginChild("##debugger-nodes", {0.0F, 180.0F}, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoBackground);
+    ImGui::BeginChild("##debugger-nodes", {0.0F, height}, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoBackground);
     ImGui::PopStyleVar();
 
     for (const auto& child : m_target.root().children()) {
@@ -1205,47 +1323,61 @@ void Debugger::render() {
     }
 
     const ImGuiContextScope scope(m_target.imgui_context());
-    draw_highlight();
-
-    const ImVec2 display_size = ImGui::GetIO().DisplaySize;
-    const ImVec2 window_size = {std::min(440.0F, std::max(320.0F, display_size.x - 2.0F * WINDOW_PADDING)), 500.0F};
-    ImGui::SetNextWindowPos({display_size.x - WINDOW_PADDING, WINDOW_PADDING}, ImGuiCond_FirstUseEver, {1.0F, 0.0F});
-    ImGui::SetNextWindowSize(window_size, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSizeConstraints({300.0F, 220.0F}, {600.0F, std::max(300.0F, display_size.y - 2.0F * WINDOW_PADDING)});
-    const bool overlay_active = m_overlay_focused || m_overlay_idle_time < OVERLAY_ACTIVE_DURATION;
-    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, overlay_active ? 1.0F : 0.75F);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {WINDOW_PADDING, WINDOW_PADDING});
-
-    const bool debugger_visible =
-        ImGui::Begin("ui debugger", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings);
     ImGuiWindow* debugger_window = ImGui::GetCurrentWindow();
     m_overlay_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
-    if (debugger_visible) {
-        const bool has_font = m_font != nullptr;
+    draw_highlight();
 
-        if (has_font) {
-            ImGui::PushFont(m_font);
-        }
-
-        ImGui::BeginChild("##debugger-content", {0.0F, 0.0F}, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
-
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {ITEM_SPACING, 4.0F});
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {6.0F, 4.0F});
-        render_toolbar();
-        render_node_list();
-        render_sections();
-        ImGui::PopStyleVar(2);
-
-        ImGui::EndChild();
-
-        if (has_font) {
-            ImGui::PopFont();
-        }
+    const bool has_font = m_font != nullptr;
+    if (has_font) {
+        ImGui::PushFont(m_font);
     }
 
-    ImGui::End();
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {ITEM_SPACING, 4.0F});
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {6.0F, 4.0F});
+    render_toolbar();
+
+    const float available_height = std::max(0.0F, ImGui::GetContentRegionAvail().y);
+    const float splitter_height = std::min(DEBUGGER_SPLITTER_HEIGHT, available_height);
+    const float panes_height = std::max(0.0F, available_height - splitter_height);
+    const float min_pane_height = std::min(DEBUGGER_MIN_PANE_HEIGHT, panes_height * 0.5F);
+    const float max_node_list_height = std::max(min_pane_height, panes_height - min_pane_height);
+    float node_list_height = std::clamp(panes_height * m_node_list_ratio, min_pane_height, max_node_list_height);
+
+    render_node_list(node_list_height);
+
+    const ImVec2 splitter_size = {std::max(0.0F, ImGui::GetContentRegionAvail().x), splitter_height};
+    ImGui::InvisibleButton("##debugger-node-splitter", splitter_size);
+    const bool splitter_hovered = ImGui::IsItemHovered();
+    const bool splitter_active = ImGui::IsItemActive();
+    if (splitter_hovered || splitter_active) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+    }
+
+    const ImVec2 splitter_min = ImGui::GetItemRectMin();
+    const ImVec2 splitter_max = ImGui::GetItemRectMax();
+    const ImU32 splitter_color = ImGui::GetColorU32(
+        splitter_active    ? ImGuiCol_SeparatorActive
+        : splitter_hovered ? ImGuiCol_SeparatorHovered
+                           : ImGuiCol_Separator
+    );
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        {splitter_min.x, splitter_min.y + splitter_height * 0.5F - 0.5F},
+        {splitter_max.x, splitter_min.y + splitter_height * 0.5F + 0.5F}, splitter_color
+    );
+
+    if (splitter_active) {
+        node_list_height = std::clamp(node_list_height + ImGui::GetIO().MouseDelta.y, min_pane_height, max_node_list_height);
+        m_node_list_ratio = panes_height > 0.0F ? node_list_height / panes_height : 0.6F;
+    }
+
+    render_sections();
+    ImGui::PopStyleVar(2);
+
+    if (has_font) {
+        ImGui::PopFont();
+    }
+
     if (debugger_window != nullptr) {
         bring_debugger_to_front(*debugger_window);
     }
-    ImGui::PopStyleVar(2);
 }

@@ -23,7 +23,7 @@ namespace ui {
     private:
         ImFont* load_variation(ImGuiContext* context, int size);
 
-        std::filesystem::path m_font_location;
+        std::filesystem::path m_location;
         std::unordered_map<ImGuiContext*, ContextFonts> m_contexts;
         std::unique_ptr<ImFontConfig> m_cfg;
     };

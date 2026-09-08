@@ -46,6 +46,10 @@ namespace ui {
             return m_padding.value;
         }
 
+        const ImVec2& margin() const {
+            return m_margin.value;
+        }
+
         float line_height() const {
             return m_line_height.value;
         }
@@ -106,6 +110,7 @@ namespace ui {
         friend class Style;
 
         ImFont* m_font = nullptr;
+        Vec2Value m_margin;
         Vec2Value m_padding;
         FloatValue m_line_height{1.0F};
         float m_alpha = 1.0F;

@@ -27,8 +27,15 @@ auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
     .size = {900.0F, 600.0F},
 });
 
-UI surface(runtime, {.backend = std::move(backend)});
+ui::UI surface(runtime, {.backend = std::move(backend)});
 surface.root().add<ui::ButtonWidget>(surface, "hello");
+
+while (!surface.is_done()) {
+    surface.begin_frame();
+    surface.update(ImGui::GetIO().DeltaTime);
+    surface.draw();
+    surface.end_frame();
+}
 ```
 
 see `examples/` for a complete demo.

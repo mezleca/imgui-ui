@@ -3,6 +3,7 @@
 #include <ui/diagnostics/debugger.hpp>
 #include <ui/diagnostics/profiler.hpp>
 #include <ui/imgui/effects/effects.hpp>
+#include <ui/layout/resizable-container.hpp>
 #include <ui/style/styled-node.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/checkbox.hpp>
@@ -13,6 +14,7 @@
 #include <fstream>
 #include <iterator>
 #include <string_view>
+#include <utility>
 
 #include "imgui-context.hpp"
 
@@ -51,65 +53,60 @@ static int draw_list_index(const ImDrawData& draw_data, std::string_view owner) 
 
 TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
     ui::Runtime runtime;
-    UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     REQUIRE(surface.debugger() != nullptr);
     REQUIRE_FALSE(surface.debugger()->enabled());
 
-    ImGui::SetCurrentContext(surface.imgui_context());
-    ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
-    ui_test::ImGuiContext::build_fonts();
+    ui_test::prepare_surface(surface, {320.0F, 240.0F});
 
     surface.begin_frame();
     surface.end_frame();
     REQUIRE_FALSE(surface.debugger()->enabled());
 
     surface.debugger()->set_enabled(true);
-    surface.begin_frame();
-    const bool modal_visible = ImGui::Begin("modal-layer");
-    REQUIRE(modal_visible);
-    ImGui::TextUnformatted("modal");
-    REQUIRE(ImGui::GetWindowDrawList()->CmdBuffer.Size > 1);
-    ImGui::End();
-    surface.end_frame();
+    const auto draw_modal_frame = [&surface] {
+        surface.begin_frame();
+        const bool visible = ImGui::Begin("modal-layer");
+        ImGui::TextUnformatted("modal");
+        const int command_count = ImGui::GetWindowDrawList()->CmdBuffer.Size;
+        ImGui::End();
+        surface.update(ImGui::GetIO().DeltaTime);
+        surface.draw();
+        surface.end_frame();
+        return std::pair{visible, command_count};
+    };
 
-    surface.begin_frame();
-    ImGui::Begin("modal-layer");
-    ImGui::TextUnformatted("modal");
-    ImGui::End();
-    surface.end_frame();
+    const auto [modal_visible, command_count] = draw_modal_frame();
+    REQUIRE(modal_visible);
+    REQUIRE(command_count > 1);
+    draw_modal_frame();
 
     ImGui::SetCurrentContext(surface.imgui_context());
     const ImDrawData* draw_data = ImGui::GetDrawData();
     REQUIRE(draw_data != nullptr);
     const int modal_index = draw_list_index(*draw_data, "modal-layer");
-    const int debugger_index = draw_list_index(*draw_data, "ui debugger");
+    const int debugger_index = draw_list_index(*draw_data, "##debugger-sections");
     REQUIRE(modal_index >= 0);
     REQUIRE(debugger_index >= 0);
     REQUIRE(modal_index < debugger_index);
 
     surface.begin_frame();
 
-    ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
-    down.position = {10.0F, 10.0F};
-    down.button = ui::PointerButton::Left;
+    ui::UiEvent down = ui_test::pointer_event(ui::EventType::PointerDown, {10.0F, 10.0F});
     REQUIRE(surface.dispatch(down));
 
-    ui::UiEvent up = ui::UiEvent::make(ui::EventType::PointerUp);
-    up.position = down.position;
-    up.button = ui::PointerButton::Left;
+    ui::UiEvent up = ui_test::pointer_event(ui::EventType::PointerUp, down.position);
     REQUIRE(surface.dispatch(up));
     surface.end_frame();
 }
 
 TEST_CASE("debugger hotkey toggles on the target surface") {
     ui::Runtime runtime;
-    UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     REQUIRE(surface.debugger() != nullptr);
     REQUIRE_FALSE(surface.debugger()->enabled());
 
-    ImGui::SetCurrentContext(surface.imgui_context());
-    ImGui::GetIO().DisplaySize = {320.0F, 240.0F};
-    ui_test::ImGuiContext::build_fonts();
+    ui_test::prepare_surface(surface, {320.0F, 240.0F});
     ImGui::GetIO().AddKeyEvent(ImGuiMod_Shift, true);
     ImGui::GetIO().AddKeyEvent(ImGuiKey_D, true);
 
@@ -121,7 +118,7 @@ TEST_CASE("debugger hotkey toggles on the target surface") {
 
 TEST_CASE("focused debugger blocks application hover") {
     ui::Runtime runtime;
-    UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     bool value = false;
     auto& checkbox = surface.root().add<ui::CheckboxWidget>(surface, value, "application");
     checkbox.set_layout({
@@ -130,16 +127,11 @@ TEST_CASE("focused debugger blocks application hover") {
         .in_flow = false,
     });
 
-    ImGui::SetCurrentContext(surface.imgui_context());
-    ImGui::GetIO().DisplaySize = {900.0F, 600.0F};
-    ui_test::ImGuiContext::build_fonts();
+    ui_test::prepare_surface(surface, {900.0F, 600.0F});
 
     const auto draw_frame = [&surface] {
         ImGui::GetIO().MousePos = {30.0F, 30.0F};
-        surface.begin_frame();
-        surface.root().update(ImGui::GetIO().DeltaTime);
-        surface.root().draw();
-        surface.end_frame();
+        ui_test::draw_surface(surface);
     };
 
     draw_frame();
@@ -149,58 +141,62 @@ TEST_CASE("focused debugger blocks application hover") {
     draw_frame();
     REQUIRE_FALSE(checkbox.input_state().hovered);
 
-    ui::UiEvent down = ui::UiEvent::make(ui::EventType::PointerDown);
-    down.position = {30.0F, 30.0F};
-    down.button = ui::PointerButton::Left;
+    ui::UiEvent down = ui_test::pointer_event(ui::EventType::PointerDown, {30.0F, 30.0F});
     REQUIRE(surface.dispatch(down));
 
-    ui::UiEvent up = ui::UiEvent::make(ui::EventType::PointerUp);
-    up.position = down.position;
-    up.button = ui::PointerButton::Left;
+    ui::UiEvent up = ui_test::pointer_event(ui::EventType::PointerUp, down.position);
     REQUIRE(surface.dispatch(up));
 
     draw_frame();
     REQUIRE(checkbox.input_state().hovered);
 }
 
-TEST_CASE("debugger leaves its imgui popups above its window") {
+TEST_CASE("debugger renders as a panel in the surface layout") {
     ui::Runtime runtime;
-    UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     surface.debugger()->set_enabled(true);
 
-    ImGui::SetCurrentContext(surface.imgui_context());
-    ImGui::GetIO().DisplaySize = {900.0F, 600.0F};
-    ui_test::ImGuiContext::build_fonts();
-    ImVec4 color = {1.0F, 0.0F, 0.0F, 1.0F};
-
-    const auto draw_frame = [&surface, &color](bool open_popup) {
-        surface.begin_frame();
-        if (open_popup) {
-            ImGui::Begin("ui debugger");
-            ImGui::BeginChild("##debugger-content");
-            ImGui::OpenPopup("color-picker");
-            if (ImGui::BeginPopup("color-picker")) {
-                ImGui::ColorPicker4("color", &color.x);
-                ImGui::EndPopup();
-            }
-            ImGui::EndChild();
-            ImGui::End();
-        }
-        surface.end_frame();
-    };
-
-    draw_frame(false);
-    draw_frame(true);
-    draw_frame(true);
+    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    ui_test::draw_surface(surface);
 
     ImGui::SetCurrentContext(surface.imgui_context());
     const ImDrawData* draw_data = ImGui::GetDrawData();
     REQUIRE(draw_data != nullptr);
-    const int debugger_index = draw_list_index(*draw_data, "ui debugger");
-    const int popup_index = draw_list_index(*draw_data, "##Popup_");
+    const int debugger_index = draw_list_index(*draw_data, "##debugger-sections");
     REQUIRE(debugger_index >= 0);
-    REQUIRE(popup_index >= 0);
-    REQUIRE(debugger_index < popup_index);
+    REQUIRE(surface.debugger()->layout().visual_rect().valid());
+    REQUIRE(surface.debugger()->layout().visual_rect().min.x > 0.0F);
+}
+
+TEST_CASE("debugger exposes the content resize handle", "[Debugger][ResizableContainer][regression]") {
+    ui::Runtime runtime;
+    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    surface.debugger()->set_enabled(true);
+
+    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    ui_test::draw_surface(surface);
+
+    auto* content = dynamic_cast<ui::ResizableContainer*>(&surface.root());
+    REQUIRE(content != nullptr);
+    const ui::Rect initial = content->layout().visual_rect();
+    REQUIRE(initial.valid());
+
+    const ImVec2 handle = {initial.max.x - 5.0F, initial.max.y - 5.0F};
+    ui::UiEvent down = ui_test::pointer_event(ui::EventType::PointerDown, handle);
+    REQUIRE(surface.dispatch(down));
+    REQUIRE(content->resizing());
+
+    ui::UiEvent move = ui_test::pointer_event(ui::EventType::PointerMove, {handle.x - 100.0F, handle.y});
+    REQUIRE(surface.dispatch(move));
+
+    ui::UiEvent up = ui_test::pointer_event(ui::EventType::PointerUp, move.position);
+    REQUIRE(surface.dispatch(up));
+    REQUIRE_FALSE(content->resizing());
+
+    ui_test::draw_surface(surface);
+    REQUIRE(content->layout().size().x < initial.size().x);
+    REQUIRE(surface.debugger()->layout().visual_rect().min.x < 900.0F - 440.0F + 1.0F);
+    REQUIRE(surface.debugger()->layout().visual_rect().max.x == 900.0F);
 }
 
 TEST_CASE("effect registry manages lifecycle and draw submission") {

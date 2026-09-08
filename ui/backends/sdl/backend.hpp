@@ -6,9 +6,8 @@
 #include <SDL3/SDL_video.h>
 #include <memory>
 
-class UI;
-
 namespace ui {
+    class UI;
     class Window;
 
     class SdlBackend final : public Backend {

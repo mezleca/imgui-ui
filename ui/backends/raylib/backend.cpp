@@ -326,15 +326,17 @@ bool RaylibBackend::process_events(UI& surface) {
     bool handled = false;
 
     bool native_input_blocked = false;
+    bool pointer_move_blocked = false;
     if (surface.debugger_blocks_pointer_input() || !m_has_pointer_position || mouse_position.x != m_pointer_position.x ||
         mouse_position.y != m_pointer_position.y) {
-        // stationary pointers need no synthetic move unless the debugger is tracking them.
-        handled = dispatch_pointer(surface, EventType::PointerMove, input_position, PointerButton::None, native_input_blocked);
+        // update the pointer state when it moves or debugger ownership may have changed.
+        handled = dispatch_pointer(surface, EventType::PointerMove, input_position, PointerButton::None, pointer_move_blocked);
+        native_input_blocked |= pointer_move_blocked;
         m_pointer_position = mouse_position;
         m_has_pointer_position = true;
     }
 
-    if (native_input_blocked) {
+    if (pointer_move_blocked) {
         io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     } else {
         io.AddMousePosEvent(input_position.x, input_position.y);

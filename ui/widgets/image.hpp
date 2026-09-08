@@ -7,7 +7,7 @@
 namespace ui {
     class Texture;
 
-    /// images are passive. call set_input_target() to route their pointer input.
+    /// images are passive. call set_input_mode(InputMode::Target) to route their pointer input.
     class ImageWidget : public DrawListWidget {
     public:
         explicit ImageWidget(Texture* texture = nullptr);

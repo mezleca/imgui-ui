@@ -30,5 +30,6 @@ namespace ui {
         LayerMode m_mode;
         bool m_focus_requested = false;
         bool m_window_initialized = false;
+        bool m_inline_child_scope = false;
     };
 } // namespace ui

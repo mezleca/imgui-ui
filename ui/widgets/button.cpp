@@ -15,11 +15,11 @@ void ButtonWidget::apply_theme_defaults(const Theme& theme) {
     configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color)
             .background_color(theme.background_secondary_color)
-            .border_color(theme.control_border_color, 0.2F)
+            .border_color(theme.controls.border_color, 0.2F)
             .padding({12.0F, 6.0F})
             .border(BORDER_ALL)
-            .border_radius(4.0F)
-            .border_thickness(theme.control_border_thickness)
+            .border_radius(theme.controls.rounding)
+            .border_thickness(theme.controls.border_thickness)
             .cursor(ImGuiMouseCursor_Hand);
     });
 
@@ -29,11 +29,16 @@ void ButtonWidget::apply_theme_defaults(const Theme& theme) {
 }
 
 ButtonWidget& ButtonWidget::set_text(std::string text) {
+    if (text == m_text.str()) {
+        return *this;
+    }
+
     m_text.set(std::move(text));
+    invalidate_measure();
     return *this;
 }
 
-ButtonWidget& ButtonWidget::on_click(std::function<void()> callback) {
+ButtonWidget& ButtonWidget::set_on_click(std::function<void()> callback) {
     m_on_click = std::move(callback);
     return *this;
 }

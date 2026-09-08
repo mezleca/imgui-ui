@@ -2,6 +2,7 @@
 
 #include <glad/gl.h>
 #include <lunasvg.h>
+#include <vendor/lunasvg/plutovg/include/plutovg.h>
 
 #include <format>
 #include <stdexcept>
@@ -66,7 +67,66 @@ private:
     std::unique_ptr<lunasvg::Document> m_document;
 };
 
+class OpenGLRasterTexture final : public Texture {
+public:
+    explicit OpenGLRasterTexture(plutovg_surface_t* surface) : m_surface(surface) {}
+
+    ~OpenGLRasterTexture() override {
+        plutovg_surface_destroy(m_surface);
+    }
+
+    ImTextureID get(ImVec2) override {
+        ImGuiContext* context = ImGui::GetCurrentContext();
+        if (context == nullptr) {
+            return {};
+        }
+
+        const auto existing = m_textures.find(context);
+        if (existing != m_textures.end()) {
+            return static_cast<ImTextureID>(existing->second);
+        }
+
+        GLuint texture = 0;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        glTexImage2D(
+            GL_TEXTURE_2D, 0, GL_RGBA, plutovg_surface_get_width(m_surface), plutovg_surface_get_height(m_surface), 0, GL_BGRA,
+            GL_UNSIGNED_BYTE, plutovg_surface_get_data(m_surface)
+        );
+
+        m_textures.emplace(context, texture);
+        return static_cast<ImTextureID>(texture);
+    }
+
+    void release_context(ImGuiContext* context) override {
+        const auto found = m_textures.find(context);
+        if (found == m_textures.end()) {
+            return;
+        }
+
+        glDeleteTextures(1, &found->second);
+        m_textures.erase(found);
+    }
+
+private:
+    plutovg_surface_t* m_surface = nullptr;
+    std::unordered_map<ImGuiContext*, GLuint> m_textures;
+};
+
 std::unique_ptr<Texture> OpenGLTextureLoader::load(const std::filesystem::path& location, std::string) {
+    if (location.extension() != ".svg") {
+        plutovg_surface_t* surface = plutovg_surface_load_from_image_file(location.string().c_str());
+        if (surface == nullptr) {
+            throw std::runtime_error(std::format("failed to load texture {}", location.string()));
+        }
+        return std::make_unique<OpenGLRasterTexture>(surface);
+    }
+
     std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromFile(location.string());
     if (document == nullptr) {
         throw std::runtime_error(std::format("failed to load texture {}", location.string()));

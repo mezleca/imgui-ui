@@ -10,42 +10,49 @@
 namespace ui {
     class Widget : public StyledNode {
     public:
-        explicit Widget(std::string id, std::string_view type_name = "Widget", bool input_target = true)
+        explicit Widget(std::string id, std::string_view type_name = "Widget", InputMode input_mode = InputMode::Target)
             : StyledNode(std::move(id), type_name) {
-            if (input_target) {
-                set_input_target();
-            }
+            set_input_mode(input_mode);
         }
 
-        /// receives events after the widget's internal behavior has run.
-        std::function<void(UiEvent&)> on_event;
+        Widget& set_on_event(std::function<void(UiEvent&)> callback) {
+            m_on_event = std::move(callback);
+            return *this;
+        }
 
-        /// runs after this widget changes its bound value.
-        std::function<void()> on_change;
+        Widget& set_on_change(std::function<void()> callback) {
+            m_on_change = std::move(callback);
+            return *this;
+        }
 
         bool accepts_input() const override {
             return Node::accepts_input() && accepts_visual_input();
         }
 
     protected:
+        std::function<void(UiEvent&)> m_on_event;
+        std::function<void()> m_on_change;
+
         void notify_change() {
-            if (on_change) {
-                on_change();
+            if (m_on_change) {
+                m_on_change();
             }
         }
 
         void dispatch_event(UiEvent& event) override {
             Node::dispatch_event(event);
-            if (on_event) {
-                on_event(event);
+            if (m_on_event) {
+                m_on_event(event);
             }
         }
     };
 
     class DrawListWidget : public Widget {
     public:
-        explicit DrawListWidget(std::string id = {}, std::string_view type_name = "DrawListWidget", bool input_target = true)
-            : Widget(std::move(id), type_name, input_target) {}
+        explicit DrawListWidget(
+            std::string id = {}, std::string_view type_name = "DrawListWidget", InputMode input_mode = InputMode::Target
+        )
+            : Widget(std::move(id), type_name, input_mode) {}
 
     private:
         bool paint() override {

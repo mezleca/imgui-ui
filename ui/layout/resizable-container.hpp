@@ -10,6 +10,14 @@ namespace ui {
         /// enables resizing along the selected axes from the bottom-right handle.
         ResizableContainer& set_resize(ResizeAxes resize);
 
+        bool resizing() const {
+            return m_dragging;
+        }
+
+        bool resize_handle_contains(ImVec2 position) const {
+            return m_resize != ResizeAxes::None && resize_handle().contains(position);
+        }
+
     protected:
         Rect hit_rect(Rect visual_rect) const override;
         void on_draw_end() override;

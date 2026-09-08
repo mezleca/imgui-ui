@@ -74,17 +74,12 @@ void StyledNode::update_cursor() {
         return;
     }
 
-    if (input_state().hovered) {
-        const ImGuiMouseCursor cursor = style(style_type()).cursor();
-        ImGui::SetMouseCursor(cursor == ImGuiMouseCursor_None ? ImGuiMouseCursor_Arrow : cursor);
-        m_cursor_applied = true;
+    if (!input_state().hovered) {
         return;
     }
 
-    if (m_cursor_applied) {
-        ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
-        m_cursor_applied = false;
-    }
+    const ImGuiMouseCursor cursor = style(style_type()).cursor();
+    ImGui::SetMouseCursor(cursor == ImGuiMouseCursor_None ? ImGuiMouseCursor_Arrow : cursor);
 }
 
 void StyledNode::draw_before() {

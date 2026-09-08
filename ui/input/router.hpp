@@ -31,16 +31,16 @@ namespace ui {
         void begin_frame();
 
         /// adds a target outside the node tree.
-        void target(Node& node, Rect rect, InputCallback callback = {});
+        void register_target(Node& node, Rect rect, InputCallback callback = {});
 
         /// consumes selected events inside a screen-space rectangle.
-        void block(Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
+        void register_blocker(Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
         /// blocks outside the visible owner's descendants.
-        void block(Node& owner, Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
+        void register_blocker(Node& owner, Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
         /// observes matching events without taking their target.
-        void observe(Rect rect, InputCallback callback, EventMask events = EventMask::Pointer);
+        void register_observer(Rect rect, InputCallback callback, EventMask events = EventMask::Pointer);
 
         /// captures later pointer moves and releases for a node.
         bool capture_pointer(Node& node);
@@ -94,6 +94,7 @@ namespace ui {
         struct PressedPointer {
             Node* target = nullptr;
             bool prevent_click = false;
+            bool native_input_blocked = false;
         };
 
         /// blocks application dispatch while the debugger selects a node.
@@ -129,7 +130,8 @@ namespace ui {
         void refresh_pointer_state(ImVec2 position);
         void set_input_flag(Node*& current, Node* next, InputFlag flag);
         const InputEntry* pointer_target(UiEvent& event, bool& blocked);
-        const InputEntry* target_at(ImVec2 position, EventType type = EventType::PointerMove) const;
+        const InputEntry* resolve_target(ImVec2 position, EventType type, const InputEntry*& blocker) const;
+        const InputEntry* target_at(ImVec2 position, EventType type = EventType::PointerMove, const Node* scope = nullptr) const;
         const InputEntry* blocking_entry_at(ImVec2 position, EventType type, const Node* target = nullptr) const;
         void notify_observers(UiEvent& event);
         bool dispatch_target(const InputEntry& target, UiEvent& event);

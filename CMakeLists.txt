@@ -37,12 +37,64 @@ function(imgui_ui_enable_sanitizers target)
     endif()
 endfunction()
 
+function(imgui_ui_configure_freetype)
+    if(TARGET Freetype::Freetype)
+        return()
+    endif()
+
+    find_package(Freetype QUIET)
+    if(TARGET Freetype::Freetype)
+        return()
+    endif()
+
+    add_subdirectory(vendor/freetype EXCLUDE_FROM_ALL)
+    if(TARGET freetype-interface)
+        add_library(Freetype::Freetype ALIAS freetype-interface)
+    endif()
+
+    if(NOT TARGET Freetype::Freetype)
+        message(FATAL_ERROR "the system and vendored freetype targets could not be configured")
+    endif()
+endfunction()
+
+function(imgui_ui_configure_sdl)
+    if(TARGET SDL3::SDL3)
+        return()
+    endif()
+
+    find_package(SDL3 QUIET CONFIG)
+    if(TARGET SDL3::SDL3)
+        return()
+    endif()
+
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(SDL3_SYSTEM QUIET IMPORTED_TARGET sdl3)
+        if(SDL3_SYSTEM_FOUND)
+            add_library(SDL3::SDL3 INTERFACE IMPORTED)
+            set_property(TARGET SDL3::SDL3 PROPERTY
+                INTERFACE_LINK_LIBRARIES PkgConfig::SDL3_SYSTEM
+            )
+            return()
+        endif()
+    endif()
+
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
+    set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
+endfunction()
+
 if(NOT TARGET glad)
     add_subdirectory(vendor/glad EXCLUDE_FROM_ALL)
 endif()
 if(NOT TARGET imgui-ui::glad)
     add_library(imgui-ui::glad ALIAS glad)
 endif()
+
+imgui_ui_configure_freetype()
 
 if(NOT TARGET imgui)
     add_library(imgui STATIC
@@ -59,6 +111,10 @@ if(NOT TARGET imgui)
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui"
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/misc/cpp"
     )
+
+    target_sources(imgui PRIVATE vendor/imgui/misc/freetype/imgui_freetype.cpp)
+    target_compile_definitions(imgui PUBLIC IMGUI_ENABLE_FREETYPE)
+    target_link_libraries(imgui PUBLIC Freetype::Freetype)
 
     set(IMGUI_UI_IMGUI_BACKENDS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends" CACHE INTERNAL "dear imgui backend sources")
 endif()
@@ -81,14 +137,7 @@ if(IMGUI_UI_BUILD_SDL OR IMGUI_UI_BUILD_RAYLIB)
 endif()
 
 if(IMGUI_UI_BUILD_SDL)
-    if(NOT TARGET SDL3::SDL3)
-        set(SDL_SHARED OFF CACHE BOOL "" FORCE)
-        set(SDL_STATIC ON CACHE BOOL "" FORCE)
-        set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
-        set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
-        set(SDL_TESTS OFF CACHE BOOL "" FORCE)
-        add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
-    endif()
+    imgui_ui_configure_sdl()
 endif()
 
 if(IMGUI_UI_BUILD_RAYLIB AND NOT TARGET raylib)

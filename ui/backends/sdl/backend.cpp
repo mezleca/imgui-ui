@@ -309,11 +309,13 @@ bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
         native_input_blocked = dispatched.native_input_blocked;
     }
 
-    if (!native_input_blocked && (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP)) {
+    if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        // keep the coordinate visible to imgui even when the framework consumes the button event.
         ImGui::GetIO().AddMousePosEvent(event.button.x, event.button.y);
     }
 
-    if (native_input_blocked && translated.has_value() && contains(EventMask::Pointer, event_mask(translated->type))) {
+    // a blocked click must keep the last pointer position; only blocked motion should hide it from imgui.
+    if (native_input_blocked && translated.has_value() && translated->type == EventType::PointerMove) {
         ImGui::GetIO().AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     }
 

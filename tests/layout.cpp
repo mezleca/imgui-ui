@@ -56,7 +56,7 @@ TEST_CASE("input entries exclude clipped widget bounds", "[Widget][input][regres
     public:
         InputNode() {
             set_size({px(24.0F), px(20.0F)});
-            set_input_target();
+            set_input_mode(InputMode::Target);
         }
 
     private:
@@ -86,6 +86,30 @@ TEST_CASE("input entries exclude clipped widget bounds", "[Widget][input][regres
     REQUIRE(router.stats().entry_count == 1);
     REQUIRE(router.node_at({bounds.min.x + 6.0F, bounds.min.y + 10.0F}) == &node);
     REQUIRE(router.node_at({bounds.min.x + 18.0F, bounds.min.y + 10.0F}) == nullptr);
+}
+
+TEST_CASE("positioned styled children apply margins around their placement") {
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+
+    Container container("positioned-margin-container");
+    container.set_size({px(200.0F), px(100.0F)});
+    auto& child = container.add<TextWidget>("child");
+    child.set_size({px(20.0F), px(10.0F)});
+    child.style().margin({5.0F, 7.0F});
+    child.set_layout({
+        .size = {px(20.0F), px(10.0F)},
+        .placement = {.offset = {20.0F, 30.0F}},
+        .in_flow = false,
+    });
+
+    ImGui::NewFrame();
+    ImGui::Begin("positioned-margin-test");
+    container.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    REQUIRE(child.layout().local_rect().min.x == Catch::Approx(25.0F));
+    REQUIRE(child.layout().local_rect().min.y == Catch::Approx(37.0F));
 }
 
 TEST_CASE("layout anchors resolve the child origin against the parent") {
@@ -285,6 +309,31 @@ TEST_CASE("fit content stack includes children spacing and padding") {
 
     REQUIRE(stack.layout().size().x == Catch::Approx(64.0F));
     REQUIRE(stack.layout().size().y == Catch::Approx(44.0F));
+}
+
+TEST_CASE("fit content stack applies styled margins around flow children", "[StackContainer][layout][style]") {
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+
+    StackContainer stack("fit-content-margin-stack");
+    stack.set_size({fit(), fit()});
+    stack.set_spacing(4.0F);
+    auto& first = stack.add<TextWidget>("first");
+    first.set_size({px(30.0F), px(10.0F)});
+    first.style().margin({3.0F, 5.0F});
+    auto& second = stack.add<TextWidget>("second");
+    second.set_size({px(10.0F), px(10.0F)});
+
+    ImGui::NewFrame();
+    ImGui::Begin("fit-content-margin-stack-test");
+    stack.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    REQUIRE(stack.layout().size().x == Catch::Approx(36.0F));
+    REQUIRE(stack.layout().size().y == Catch::Approx(34.0F));
+    REQUIRE(first.layout().local_rect().min.x == Catch::Approx(3.0F));
+    REQUIRE(first.layout().local_rect().min.y == Catch::Approx(5.0F));
+    REQUIRE(second.layout().local_rect().min.y == Catch::Approx(24.0F));
 }
 
 TEST_CASE("fit-height stack fills its available width without stretching children", "[StackContainer][layout]") {
@@ -767,7 +816,7 @@ TEST_CASE("nodes without explicit positions follow the ImGui cursor") {
     class FlowNode final : public Node {
     public:
         explicit FlowNode(std::string id) : Node(std::move(id)) {
-            set_input_target();
+            set_input_mode(InputMode::Target);
         }
 
         bool on_draw() override {
@@ -968,7 +1017,7 @@ TEST_CASE("stack auto-sized axes reflow when the parent grows", "[layout][regres
 class VirtualRow : public ui::Node {
 public:
     VirtualRow(int index, std::vector<int>& drawn) : m_index(index), m_drawn(drawn) {
-        set_input_target();
+        set_input_mode(InputMode::Target);
     }
 
 private:

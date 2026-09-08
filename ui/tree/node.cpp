@@ -41,24 +41,12 @@ void Node::set_input_state(InputState state) {
     input_state_changed();
 }
 
-Node& Node::set_input_policy(InputPolicy policy, Rect area) {
+Node& Node::set_input_mode(InputMode mode, Rect area) {
     if (m_input_router != nullptr) m_input_router->erase_entries(*this);
 
     m_input_area = area;
-    m_input_policy = policy;
+    m_input_mode = mode;
     return *this;
-}
-
-Node& Node::set_input_target(Rect area) {
-    return set_input_policy(InputPolicy::Target, area);
-}
-
-Node& Node::set_input_blocker(Rect area) {
-    return set_input_policy(InputPolicy::Blocker, area);
-}
-
-Node& Node::clear_input() {
-    return set_input_policy(InputPolicy::None, {});
 }
 
 void Node::dispatch_event(UiEvent& event) {
@@ -333,8 +321,8 @@ void Node::draw() {
 
     if (m_input_router != nullptr) {
         UI_PROFILE_NODE(m_profiler, "Node::input", m_identity);
-        if (m_input_policy != InputPolicy::None) {
-            m_input_router->register_node(*this, m_input_policy == InputPolicy::Blocker, m_input_area, m_layout.visual_rect());
+        if (m_input_mode != InputMode::None) {
+            m_input_router->register_node(*this, m_input_mode == InputMode::Blocker, m_input_area, m_layout.visual_rect());
         }
 
         if (m_parent == nullptr && ImGui::GetCurrentContext() != nullptr) {

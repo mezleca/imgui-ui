@@ -5,9 +5,8 @@
 
 #include <imgui.h>
 #include <functional>
-class UI;
-
 namespace ui {
+    class UI;
     class ButtonWidget : public DrawListWidget {
     public:
         ButtonWidget(UI& ui, std::string text, LayoutSize size = {px(100.0F), px(60.0F)});
@@ -18,7 +17,7 @@ namespace ui {
         }
 
         ButtonWidget& set_text(std::string text);
-        ButtonWidget& on_click(std::function<void()> callback);
+        ButtonWidget& set_on_click(std::function<void()> callback);
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;

@@ -25,6 +25,12 @@ namespace ui {
         constexpr bool operator==(const InputState&) const = default;
     };
 
+    enum class InputMode : uint8_t {
+        None,
+        Target,
+        Blocker,
+    };
+
     /** owns children and runs their update, layout, paint, and input passes. */
     class Node {
     public:
@@ -50,7 +56,7 @@ namespace ui {
         }
 
         /// updates this node and its visible descendants.
-        void update(float dt);
+        virtual void update(float dt);
 
         /// reapplies theme defaults to this node and every descendant.
         void apply_theme(const Theme& theme);
@@ -134,14 +140,8 @@ namespace ui {
             return m_input_state;
         }
 
-        /// routes pointer events from this area. an empty area uses the visual box.
-        Node& set_input_target(Rect area = {});
-
-        /// blocks pointer events in area while keeping descendants interactive.
-        Node& set_input_blocker(Rect area = {});
-
-        /// removes this node's input policy.
-        Node& clear_input();
+        /// configures this node's persistent input behavior. an empty area uses its visual box.
+        Node& set_input_mode(InputMode mode, Rect area = {});
 
         /// returns geometry from the last draw pass.
         const NodeLayout& layout() const {
@@ -241,14 +241,7 @@ namespace ui {
     private:
         friend class InputRouter;
 
-        enum class InputPolicy : uint8_t {
-            None,
-            Target,
-            Blocker,
-        };
-
         void measure_tree();
-        Node& set_input_policy(InputPolicy policy, Rect area);
         void detach_input_router(InputRouter& router);
         void clear_input_state();
         void capture_parent_content();
@@ -267,7 +260,7 @@ namespace ui {
         InputRouter* m_input_router = nullptr;
         Profiler* m_profiler = nullptr;
         Rect m_input_area{};
-        InputPolicy m_input_policy = InputPolicy::None;
+        InputMode m_input_mode = InputMode::None;
         InputState m_input_state;
     };
 

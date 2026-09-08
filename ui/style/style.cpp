@@ -9,6 +9,7 @@ using namespace ui;
 // name, affects_measure
 // affects_measure is true only when an interpolated value can change the measured geometry.
 #define UI_STYLE_TRANSITION_PROPERTIES(X)                                                                                        \
+    X(margin, true)                                                                                                              \
     X(padding, true)                                                                                                             \
     X(line_height, true)                                                                                                         \
     X(box_shadow, false)                                                                                                         \

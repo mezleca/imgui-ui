@@ -7,11 +7,17 @@
 #include "../style/style.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 using namespace ui;
 
-Container::Container(std::string id, std::string_view type_name) : Widget(std::move(id), type_name, false) {
+ImVec2 ui::layout_margin(const Node& node) {
+    const auto* styled_node = dynamic_cast<const StyledNode*>(&node);
+    return styled_node == nullptr ? ImVec2{} : styled_node->computed_style().margin();
+}
+
+Container::Container(std::string id, std::string_view type_name) : Widget(std::move(id), type_name, InputMode::None) {
     configure_all_styles([](Style& style) { style.padding({}); });
 }
 
@@ -21,7 +27,8 @@ Container& Container::set_scrollable(bool scrollable) {
 }
 
 void Container::on_layout() {
-    // resolve this box first. child arrangement uses its size and padding.
+    // resolve this box first
+    // child arrangement uses its size and padding.
     resolve_layout();
     arrange_children();
 }
@@ -32,6 +39,23 @@ void Container::resolve_layout() {
     }
 
     assign_size(layout().size_spec().resolve(layout().measured_size(), layout().available_size()));
+}
+
+void Container::draw_children() {
+    for (const auto& child : children()) {
+        if (child->layout().in_flow()) {
+            child->draw();
+            continue;
+        }
+
+        const ImVec2 margin = layout_margin(*child);
+        Placement placement = child->layout().placement();
+        const ImVec2 origin = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
+        placement.offset.x += margin.x * (1.0F - 2.0F * origin.x);
+        placement.offset.y += margin.y * (1.0F - 2.0F * origin.y);
+        arrange_child(*child, child->layout().intrinsic_size(), placement);
+        child->draw();
+    }
 }
 
 bool Container::paint() {
@@ -56,6 +80,12 @@ bool Container::paint() {
         background.w *= opacity() * current_style.alpha();
         ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, background);
     }
+
+    // imgui truncates child window positions to integer pixels. round the origin before opening the
+    // child window so an animated position keeps the child and following content on the same pixel
+    // instead of jumping when the animation reaches its final value.
+    const ImVec2 position = ImGui::GetCursorScreenPos();
+    ImGui::SetCursorScreenPos({std::round(position.x), std::round(position.y)});
 
     const ImGuiID child_id = id().empty() ? ImGui::GetID(this) : ImGui::GetID(id().c_str());
     ImDrawList* parent_draw_list = ImGui::GetWindowDrawList();

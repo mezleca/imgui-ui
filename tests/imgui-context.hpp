@@ -1,11 +1,15 @@
 #pragma once
 
 #include <ui/backends/backend.hpp>
+#include <ui/layout/geometry.hpp>
+#include <ui/tree/node.hpp>
+#include <ui/ui.hpp>
 
 #include <imgui.h>
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 namespace ui_test {
     class TestBackend final : public ui::Backend {
@@ -70,4 +74,32 @@ namespace ui_test {
         ::ImGuiContext* m_previous = nullptr;
         ::ImGuiContext* m_context = nullptr;
     };
+
+    inline void prepare_surface(ui::UI& surface) {
+        ImGui::SetCurrentContext(surface.imgui_context());
+        ImGuiContext::build_fonts();
+    }
+
+    inline void prepare_surface(ui::UI& surface, ImVec2 display_size) {
+        prepare_surface(surface);
+        ImGui::GetIO().DisplaySize = display_size;
+    }
+
+    inline void draw_surface(ui::UI& surface, std::optional<float> delta_time = std::nullopt) {
+        surface.begin_frame();
+        surface.update(delta_time.value_or(ImGui::GetIO().DeltaTime));
+        surface.draw();
+        surface.end_frame();
+    }
+
+    inline ImVec2 center(const ui::Rect& rect) {
+        return {(rect.min.x + rect.max.x) * 0.5F, (rect.min.y + rect.max.y) * 0.5F};
+    }
+
+    inline ui::UiEvent pointer_event(ui::EventType type, ImVec2 position, ui::PointerButton button = ui::PointerButton::Left) {
+        ui::UiEvent event = ui::UiEvent::make(type);
+        event.position = position;
+        event.button = button;
+        return event;
+    }
 } // namespace ui_test

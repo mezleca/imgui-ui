@@ -25,19 +25,6 @@ static ImColor apply_draw_alpha(ImColor color) {
     return color;
 }
 
-static void add_text(ImDrawList& draw_list, ImVec2 position, ImU32 color, const char* text_begin, const char* text_end) {
-    draw_list.Flags |= ImDrawListFlags_TextNoPixelSnap;
-    draw_list.AddText(position, color, text_begin, text_end);
-}
-
-static void add_text(
-    ImDrawList& draw_list, ImFont* font, float font_size, ImVec2 position, ImU32 color, const char* text_begin,
-    const char* text_end, float wrap_width, const ImVec4* clip_rect
-) {
-    draw_list.Flags |= ImDrawListFlags_TextNoPixelSnap;
-    draw_list.AddText(font, font_size, position, color, text_begin, text_end, wrap_width, clip_rect);
-}
-
 struct BorderEntry {
     Rect rect;
     float rounding = 0.0F;
@@ -347,7 +334,7 @@ void ui::draw_rect_filled(ImDrawList& draw_list, Rect rect, ImColor color, float
 }
 
 void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, std::string_view text) {
-    add_text(draw_list, position, apply_draw_alpha(color), text.data(), text.data() + text.size());
+    draw_list.AddText(position, apply_draw_alpha(color), text.data(), text.data() + text.size());
 }
 
 void ui::draw_text(ImVec2 position, ImColor color, std::string_view text, DrawListTarget target) {
@@ -360,7 +347,7 @@ void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, const 
     const float font_size = ImGui::GetFontSize();
     const float wrap_width = std::max(0.0F, text.wrap_width());
     if (text.line_height_multiplier() == 1.0F) {
-        add_text(draw_list, font, font_size, position, color, text.c_str(), nullptr, wrap_width, clip_rect);
+        draw_list.AddText(font, font_size, position, color, text.c_str(), nullptr, wrap_width, clip_rect);
         return;
     }
 
@@ -382,7 +369,7 @@ void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, const 
                 }
             }
 
-            add_text(draw_list, font, font_size, {position.x, y}, color, line, line_end, 0.0F, clip_rect);
+            draw_list.AddText(font, font_size, {position.x, y}, color, line, line_end, 0.0F, clip_rect);
             y += line_height;
 
             if (line_end == paragraph_end) {
@@ -421,7 +408,7 @@ void ui::draw_text_ellipsis(ImDrawList& draw_list, ImVec2 position, ImColor colo
         const float available_width = std::max(0.0F, clip_rect.z - position.x);
         const ImVec2 text_size = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, line, line_end);
         if (text_size.x <= available_width) {
-            add_text(draw_list, font, font_size, {position.x, y}, color, line, line_end, 0.0F, &clip_rect);
+            draw_list.AddText(font, font_size, {position.x, y}, color, line, line_end, 0.0F, &clip_rect);
         } else {
             constexpr std::string_view ellipsis = "...";
             const float ellipsis_width = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, ellipsis.data()).x;
@@ -430,11 +417,11 @@ void ui::draw_text_ellipsis(ImDrawList& draw_list, ImVec2 position, ImColor colo
             const ImVec2 visible_size = font->CalcTextSizeA(font_size, text_width, 0.0F, line, line_end, &visible_end);
 
             if (visible_end != line) {
-                add_text(draw_list, font, font_size, {position.x, y}, color, line, visible_end, 0.0F, &clip_rect);
+                draw_list.AddText(font, font_size, {position.x, y}, color, line, visible_end, 0.0F, &clip_rect);
             }
 
-            add_text(
-                draw_list, font, font_size, {position.x + visible_size.x, y}, color, ellipsis.data(), nullptr, 0.0F, &clip_rect
+            draw_list.AddText(
+                font, font_size, {position.x + visible_size.x, y}, color, ellipsis.data(), nullptr, 0.0F, &clip_rect
             );
         }
 

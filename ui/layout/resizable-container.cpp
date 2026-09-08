@@ -12,12 +12,16 @@ using namespace ui;
 
 ResizableContainer::ResizableContainer(std::string id) : StackContainer(std::move(id)) {
     set_type_name("ResizableContainer");
-    set_input_target();
     _on_event = [this](UiEvent& event) { handle_resize(event); };
 }
 
 ResizableContainer& ResizableContainer::set_resize(ResizeAxes resize) {
     m_resize = resize;
+    if (resize == ResizeAxes::None) {
+        set_input_mode(InputMode::None);
+    } else {
+        set_input_mode(InputMode::Target);
+    }
     return *this;
 }
 
@@ -117,19 +121,20 @@ void ResizableContainer::draw_resize_indicator() {
         return;
     }
 
-    const float border_thickness = style().border_thickness();
+    const ComputedStyle& current_style = computed_style();
+    const float border_thickness = current_style.border_thickness();
     ImDrawList& window_draw_list = draw_list(DrawListTarget::Window);
     const ImVec2 max = resize_handle().max;
 
     for (int i = 0; i < 3; ++i) {
         const float distance = 3.0F + static_cast<float>(i) * 4.0F;
         draw_line(
-            window_draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, ImColor(160, 160, 160, 255),
+            window_draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, current_style.border_color().get_col(),
             border_thickness
         );
         draw_line(
             window_draw_list, {max.x - distance + border_thickness + 0.5f, max.y},
-            {max.x, max.y - distance + border_thickness + 0.5f}, ImColor{20, 20, 20, 255}, border_thickness
+            {max.x, max.y - distance + border_thickness + 0.5f}, current_style.background_color().get_col(), border_thickness
         );
     }
 }

@@ -31,7 +31,7 @@ int main() {
             .size = {1120.0F, 920.0F},
             .resizable = true,
         });
-        UI surface(
+        ui::UI surface(
             runtime, {
                          .backend = std::move(backend),
                          .enable_debugger = true,
@@ -40,7 +40,7 @@ int main() {
 
         // use this constructor when the application already owns the window and context.
         // auto backend = std::make_unique<ui::SdlBackend>(existing_window, existing_gl_context);
-        // UI surface(runtime, {.backend = std::move(backend)});
+        // ui::UI surface(runtime, {.backend = std::move(backend)});
         if (!surface.ready()) {
             result = 1;
         } else {
@@ -57,8 +57,8 @@ int main() {
 
                 surface.begin_frame();
                 const float dt = ImGui::GetIO().DeltaTime;
-                surface.root().update(dt);
-                surface.root().draw();
+                surface.update(dt);
+                surface.draw();
                 surface.end_frame();
             }
         }

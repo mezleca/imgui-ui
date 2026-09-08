@@ -26,14 +26,12 @@ static void collect_shadow_callback(const ImDrawList*, const ImDrawCmd*) {}
 
 TEST_CASE("surface root does not write to imgui's fallback window") {
     Runtime runtime;
-    UI surface(runtime, {.backend = ui_test::make_backend()});
+    ui::UI surface(runtime, {.backend = ui_test::make_backend()});
 
-    ImGui::SetCurrentContext(surface.imgui_context());
-    ImGui::GetIO().DisplaySize = {200.0F, 120.0F};
-    ui_test::ImGuiContext::build_fonts();
+    ui_test::prepare_surface(surface, {200.0F, 120.0F});
 
     surface.begin_frame();
-    surface.root().draw();
+    surface.draw();
 
     REQUIRE_FALSE(GImGui->Windows[0]->WriteAccessed);
 
@@ -451,7 +449,7 @@ TEST_CASE("visual bounds stay on layout unless paint overrides them") {
         ItemNode(std::string id, bool input) : Node(std::move(id)) {
             set_size({px(10.0F), px(10.0F)});
             if (input) {
-                set_input_target();
+                set_input_mode(InputMode::Target);
             }
         }
 
@@ -533,7 +531,7 @@ TEST_CASE("nodes register only explicitly configured local input entries") {
     int callbacks = 0;
     auto& passive = root.add<RectNode>("passive", Rect{{100.0F, 20.0F}, {200.0F, 120.0F}});
     auto& target = root.add<RectNode>("target", Rect{{100.0F, 20.0F}, {200.0F, 120.0F}}, [&callbacks](UiEvent&) { ++callbacks; });
-    target.set_input_target({{10.0F, 20.0F}, {50.0F, 60.0F}});
+    target.set_input_mode(InputMode::Target, {{10.0F, 20.0F}, {50.0F, 60.0F}});
     root.set_input_router(&router);
 
     root.draw();

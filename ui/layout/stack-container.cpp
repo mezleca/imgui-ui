@@ -1,4 +1,5 @@
 #include "stack-container.hpp"
+
 #include <algorithm>
 
 using namespace ui;
@@ -105,13 +106,15 @@ void StackContainer::on_measure() {
         }
 
         const ImVec2 child_size = child->layout().intrinsic_size();
+        const ImVec2 margin = layout_margin(*child);
+        const ImVec2 outer_size = {child_size.x + margin.x * 2.0F, child_size.y + margin.y * 2.0F};
 
         if (horizontal) {
-            content_size.x += child_size.x;
-            content_size.y = std::max(content_size.y, child_size.y);
+            content_size.x += outer_size.x;
+            content_size.y = std::max(content_size.y, outer_size.y);
         } else {
-            content_size.x = std::max(content_size.x, child_size.x);
-            content_size.y += child_size.y;
+            content_size.x = std::max(content_size.x, outer_size.x);
+            content_size.y += outer_size.y;
         }
 
         ++flow_count;
@@ -157,7 +160,9 @@ void StackContainer::arrange_children() {
         const LayoutAxis& main_axis = horizontal ? child_layout_size.width : child_layout_size.height;
         const LayoutAxis& cross_axis = horizontal ? child_layout_size.height : child_layout_size.width;
         const ImVec2 child_size = child->layout().intrinsic_size();
+        const ImVec2 margin = layout_margin(*child);
 
+        fixed_main += axis_extent(margin, horizontal) * 2.0F;
         if (main_axis.mode != LayoutSizeMode::Grow) {
             fixed_main += axis_extent(child_size, horizontal);
         } else {
@@ -165,9 +170,11 @@ void StackContainer::arrange_children() {
         }
 
         if (aligns_content) {
-            const float cross_size = cross_axis.mode == LayoutSizeMode::Grow ? axis_extent(content_size, !horizontal)
-                                                                             : axis_extent(child_size, !horizontal);
-            flow_cross = std::max(flow_cross, cross_size);
+            const float cross_size =
+                cross_axis.mode == LayoutSizeMode::Grow
+                    ? std::max(0.0F, axis_extent(content_size, !horizontal) - axis_extent(margin, !horizontal) * 2.0F)
+                    : axis_extent(child_size, !horizontal);
+            flow_cross = std::max(flow_cross, cross_size + axis_extent(margin, !horizontal) * 2.0F);
         }
 
         ++flow_count;
@@ -195,17 +202,19 @@ void StackContainer::arrange_children() {
         }
 
         const ImVec2 child_size = resolve_child_size(*child, content_size, flexible_main);
+        const ImVec2 margin = layout_margin(*child);
+        const ImVec2 child_offset = {cursor.x + margin.x, cursor.y + margin.y};
 
         // explicit top-left placement prevents imgui item widths and same-line
         // behavior from becoming a second, implicit layout system.
-        arrange_child(*child, child_size, {.offset = cursor});
-        m_content_size.x = std::max(m_content_size.x, cursor.x + child_size.x);
-        m_content_size.y = std::max(m_content_size.y, cursor.y + child_size.y);
+        arrange_child(*child, child_size, {.offset = child_offset});
+        m_content_size.x = std::max(m_content_size.x, child_offset.x + child_size.x + margin.x);
+        m_content_size.y = std::max(m_content_size.y, child_offset.y + child_size.y + margin.y);
 
         if (horizontal) {
-            cursor.x += child_size.x + m_spacing;
+            cursor.x += child_size.x + margin.x * 2.0F + m_spacing;
         } else {
-            cursor.y += child_size.y + m_spacing;
+            cursor.y += child_size.y + margin.y * 2.0F + m_spacing;
         }
     }
 }
@@ -218,9 +227,14 @@ ImVec2 StackContainer::resolve_child_size(const Node& child, ImVec2 content_size
     const LayoutSize& layout_size = child.layout().size_spec();
     const LayoutAxis& main_axis = horizontal ? layout_size.width : layout_size.height;
     const LayoutAxis& cross_axis = horizontal ? layout_size.height : layout_size.width;
+    const ImVec2 margin = layout_margin(child);
 
     if (main_axis.mode == LayoutSizeMode::Grow) set_axis_extent(size, horizontal, flexible_main * main_axis.value);
-    if (cross_axis.mode == LayoutSizeMode::Grow) set_axis_extent(size, !horizontal, axis_extent(content_size, !horizontal));
+    if (cross_axis.mode == LayoutSizeMode::Grow) {
+        set_axis_extent(
+            size, !horizontal, std::max(0.0F, axis_extent(content_size, !horizontal) - axis_extent(margin, !horizontal) * 2.0F)
+        );
+    }
 
     return size;
 }

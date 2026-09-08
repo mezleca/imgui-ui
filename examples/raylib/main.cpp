@@ -24,7 +24,7 @@ int main() {
         .resizable = true,
     });
 
-    UI surface(
+    ui::UI surface(
         runtime, {
                      .backend = std::move(backend),
                      .enable_debugger = true,
@@ -33,7 +33,7 @@ int main() {
 
     // use the attached constructor when raylib was initialized by the application.
     // auto backend = std::make_unique<ui::RaylibBackend>();
-    // UI surface(runtime, {.backend = std::move(backend)});
+    // ui::UI surface(runtime, {.backend = std::move(backend)});
     if (!surface.ready()) return 1;
 
     setup_demo(surface, "raylib");
@@ -43,8 +43,8 @@ int main() {
 
         surface.begin_frame();
         const float dt = ImGui::GetIO().DeltaTime;
-        surface.root().update(dt);
-        surface.root().draw();
+        surface.update(dt);
+        surface.draw();
         surface.end_frame();
     }
 

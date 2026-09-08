@@ -7,9 +7,6 @@
 #include <cfloat>
 #include <imgui_stdlib.h>
 
-static constexpr ImVec2 INPUT_ICON_SIZE = {18.0F, 18.0F};
-static constexpr float INPUT_ICON_SPACING = 10.0F;
-
 using namespace ui;
 
 class TextInputWidget::FieldNode final : public StyledNode {
@@ -45,25 +42,20 @@ private:
     bool m_changed = false;
 };
 
-TextInputWidget::TextInputWidget(UI& ui, std::string& value) : TextInputWidget(ui, value, {}) {}
-
 TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
     : StackContainer(std::move(label), StackDirection::Horizontal), m_ui(ui), m_value(&value) {
-    set_input_target();
+    set_input_mode(InputMode::Target);
 
     set_type_name("TextInput");
-    set_spacing(INPUT_ICON_SPACING);
     set_content_alignment(Anchor::CenterLeft);
     set_font(ui.get_primary_font(18));
 
     m_icon_node = &add<ImageWidget>();
     m_icon_node->set_id("icon");
-    m_icon_node->set_size({px(INPUT_ICON_SIZE.x), px(INPUT_ICON_SIZE.y)});
     m_icon_node->set_enabled(false);
     m_icon_node->set_visible(false);
 
     m_field_node = &add<FieldNode>(value, m_focus_requested);
-    m_field_node->set_size({grow(), px(INPUT_ICON_SIZE.y)});
     apply_theme_defaults(ui.theme());
 
     _on_event = [this](UiEvent& event) {
@@ -79,12 +71,18 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
 }
 
 void TextInputWidget::apply_theme_defaults(const Theme& theme) {
+    const ImVec2 icon_size = theme.widgets.text_input_icon_size;
+    set_spacing(theme.widgets.text_input_icon_spacing);
+    m_icon_node->set_size({px(icon_size.x), px(icon_size.y)});
+    m_field_node->set_size({grow(), px(icon_size.y)});
+
     configure_all_styles([&theme](Style& style) {
         style.border_color(theme.border_color, 0.15F)
-            .padding({12.0F, 14.0F})
+            .padding(theme.widgets.text_input_padding)
             .background_color(theme.background_secondary_color)
             .border(BORDER_ALL)
-            .border_radius(theme.box_rounding);
+            .border_radius(theme.box_rounding)
+            .border_thickness(theme.controls.border_thickness);
     });
 
     configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color); });

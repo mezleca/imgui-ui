@@ -16,3 +16,6 @@
 [submodule "vendor/raylib"]
 	path = vendor/raylib
 	url = https://github.com/raysan5/raylib.git
+[submodule "vendor/freetype"]
+	path = vendor/freetype
+	url = https://gitlab.freedesktop.org/freetype/freetype.git

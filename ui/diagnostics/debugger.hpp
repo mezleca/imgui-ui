@@ -1,26 +1,27 @@
 #pragma once
 
 #include "../input/event.hpp"
-#include "../layout/geometry.hpp"
+#include "../layout/container.hpp"
 #include "../style/style.hpp"
 
 #include <imgui.h>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
-class UI;
-
 namespace ui {
+    class UI;
     class Node;
     class Style;
     class StyledNode;
     class Texture;
 
-    class Debugger {
+    class Debugger final : public Container {
     public:
+        explicit Debugger(UI& target);
         ~Debugger();
 
         Debugger(const Debugger&) = delete;
@@ -37,9 +38,9 @@ namespace ui {
 
         /// handles overlay and inspect events before the application router.
         bool handle_input(UiEvent& event);
-        /// toggles the hotkey and advances the idle timer.
+        /// processes the debugger hotkey.
         void update();
-        /// renders the floating overlay after the application tree.
+        /// renders the diagnostic panel in the surface layout.
         void render();
 
         void set_style(const ImGuiStyle& style);
@@ -47,16 +48,14 @@ namespace ui {
         void set_hotkey(ImGuiKeyChord hotkey);
 
     private:
-        friend class ::UI;
-
-        explicit Debugger(UI& target);
+        friend class UI;
 
         bool blocks_pointer_input() const {
             return m_inspect_mode || m_inspect_pointer_capture;
         }
 
         void render_toolbar();
-        void render_node_list();
+        void render_node_list(float height);
         void render_sections();
         void render_node_tree(Node& node, int depth);
         void render_properties();
@@ -64,12 +63,13 @@ namespace ui {
         void render_profiling();
         void render_layout_properties();
         void render_style_properties();
-        void render_style_controls(Style& style, bool is_line = false);
+        void render_style_controls(Style& style, bool is_line = false, std::span<Style*> all_styles = {});
         void render_decoration_properties(StyledNode& node);
-        void render_style_variables(Style& style);
+        void render_style_variables(Style& style, std::span<Style*> all_styles = {});
         void draw_property_section(std::string_view label);
         void end_property_section();
         bool handle_inspect_event(UiEvent& event);
+        bool handles_content_resize(const UiEvent& event) const;
         void draw_highlight();
         void refresh_highlight();
         void synchronize_targets();
@@ -79,6 +79,9 @@ namespace ui {
         bool should_restore_flow_position() const;
         static Node* pick_node(Node& root, ImVec2 position);
         bool overlay_contains(ImVec2 position) const;
+
+        void draw_children() override;
+        void apply_theme_defaults(const Theme& theme) override;
 
         UI& m_target;
         ImFont* m_font = nullptr;
@@ -94,7 +97,8 @@ namespace ui {
         std::vector<std::string> m_variable_names;
         uint64_t m_target_identity = 0;
         uint64_t m_hover_identity = 0;
-        StyleType m_inspected_style = StyleType::DEFAULT;
+        int m_inspected_style = 0;
+        float m_node_list_ratio = 0.6F;
         ImGuiKeyChord m_hotkey = ImGuiMod_Shift | ImGuiKey_D;
         bool m_enabled = false;
         bool m_inspect_mode = false;
@@ -103,7 +107,6 @@ namespace ui {
         bool m_select_properties = false;
         bool m_scroll_to_target = false;
         bool m_overlay_focused = false;
-        float m_overlay_idle_time = 0.0F;
         bool m_overlay_pointer_capture = false;
         bool m_inspect_pointer_capture = false;
         bool m_property_section_open = false;

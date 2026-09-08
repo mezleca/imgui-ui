@@ -69,7 +69,7 @@ namespace ui {
             return value;
         }
 
-        static ImVec2 normalize_padding(ImVec2 value) {
+        static ImVec2 normalize_insets(ImVec2 value) {
             return {std::max(0.0F, value.x), std::max(0.0F, value.y)};
         }
 
@@ -89,6 +89,7 @@ namespace ui {
         using ComputedStyle::cursor;
         using ComputedStyle::font;
         using ComputedStyle::line_height;
+        using ComputedStyle::margin;
         using ComputedStyle::padding;
         using ComputedStyle::use_background_for_scrollbar;
         using ComputedStyle::variables;
@@ -123,21 +124,29 @@ namespace ui {
         }
 
         Style& padding(ImVec2 value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_padding, normalize_padding(value), transition_duration);
+            return set_animated_value(&ComputedStyle::m_padding, normalize_insets(value), transition_duration);
         }
 
         Style& padding(ImVec2 value, TransitionSpec transition) {
-            return set_animated_transition(&ComputedStyle::m_padding, normalize_padding(value), transition);
+            return set_animated_transition(&ComputedStyle::m_padding, normalize_insets(value), transition);
+        }
+
+        Style& margin(ImVec2 value, float transition_duration = -1.0F) {
+            return set_animated_value(&ComputedStyle::m_margin, normalize_insets(value), transition_duration);
+        }
+
+        Style& margin(ImVec2 value, TransitionSpec transition) {
+            return set_animated_transition(&ComputedStyle::m_margin, normalize_insets(value), transition);
         }
 
         Style& control(const Theme& theme, ImVec2 padding = {10.0F, 6.0F}) {
             return color(theme.text_color)
-                .background_color(theme.control_background_color, 0.15F)
-                .border_color(theme.control_border_color, 0.15F)
+                .background_color(theme.controls.background_color, 0.15F)
+                .border_color(theme.controls.border_color, 0.15F)
                 .padding(padding)
                 .border(BORDER_ALL)
-                .border_radius(theme.control_rounding)
-                .border_thickness(theme.control_border_thickness);
+                .border_radius(theme.controls.rounding)
+                .border_thickness(theme.controls.border_thickness);
         }
 
         Style& line_height(float value, float transition_duration = -1.0F) {

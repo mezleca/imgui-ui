@@ -5,9 +5,8 @@
 #include <cstdint>
 #include <string>
 
-class UI;
-
 namespace ui {
+    class UI;
     class CheckboxVisualNode;
     class TextWidget;
 
@@ -21,7 +20,7 @@ namespace ui {
         CheckboxWidget(UI& ui, bool& value, std::string label, std::string id = {});
 
         CheckboxWidget& set_label(std::string label);
-        CheckboxWidget& set_checked(bool checked);
+        bool set_checked(bool checked);
         CheckboxWidget& set_type(CheckboxType type);
         CheckboxWidget& set_box_size(float size);
         CheckboxWidget& set_mark_color(ImColor color);

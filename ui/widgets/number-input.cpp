@@ -13,17 +13,17 @@ void NumberInputWidget::initialize(UI& ui) {
 }
 
 void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
-    m_thumb_color = theme.control_mark_color;
-    m_thumb_size = theme.control_thumb_size;
+    m_thumb_color = theme.controls.mark_color;
+    m_thumb_size = theme.controls.thumb_size;
 
     configure_all_styles([&theme](Style& style) { style.control(theme); });
 
     configure_style(StyleType::HOVER, [&theme](Style& style) {
-        style.background_color(theme.control_hover_color).border_color(theme.accent_hover_color);
+        style.background_color(theme.controls.hover_color).border_color(theme.accent_hover_color);
     });
 
     configure_style(StyleType::ACTIVE, [&theme](Style& style) {
-        style.background_color(theme.control_active_color).border_color(theme.accent_color);
+        style.background_color(theme.controls.active_color).border_color(theme.accent_color);
     });
 }
 

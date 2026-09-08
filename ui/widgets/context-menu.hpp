@@ -7,9 +7,8 @@
 #include <utility>
 #include <vector>
 
-class UI;
-
 namespace ui {
+    class UI;
     class Texture;
     class ContextMenuItemNode;
     class ContextMenuWidget;
@@ -19,10 +18,10 @@ namespace ui {
     struct ContextMenuItem {
         std::string label;
         std::vector<ContextMenuItem> children;
-        ContextMenuCallback on_click;
+        ContextMenuCallback callback;
 
         static ContextMenuItem action(std::string label, ContextMenuCallback callback = {}) {
-            return {.label = std::move(label), .on_click = std::move(callback)};
+            return {.label = std::move(label), .callback = std::move(callback)};
         }
 
         static ContextMenuItem submenu(std::string label, std::vector<ContextMenuItem> children) {
@@ -42,10 +41,10 @@ namespace ui {
         /// waits this many seconds after opening before hover can close this menu or its submenus.
         ContextMenuWidget& set_hover_close_delay(float seconds);
 
-        void show();
-        void show(ImVec2 screen_position);
-        void hide();
-        void cancel_close_request();
+        void open();
+        void open_at(ImVec2 screen_position);
+        void close();
+        void cancel_close();
 
         bool is_open() const {
             return m_open;
@@ -71,7 +70,7 @@ namespace ui {
         void open_submenu(ContextMenuItemNode& item);
         void update_pointer_hover(ImVec2 position);
         void update_submenu_hover(ImVec2 position);
-        void open();
+        void activate();
         void position_submenu(ContextMenuWidget& submenu, const ContextMenuItemNode& item);
         bool contains_open_menu(ImVec2 position) const;
         ContextMenuWidget& root_menu();

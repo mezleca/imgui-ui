@@ -138,9 +138,9 @@ void InputRouter::refresh_pointer_state(ImVec2 position) {
         return;
     }
 
-    const InputEntry* target = target_at(position, EventType::PointerMove);
-    if (m_has_blockers &&
-        blocking_entry_at(position, EventType::PointerMove, target == nullptr ? nullptr : target->node) != nullptr) {
+    const InputEntry* blocker = nullptr;
+    const InputEntry* target = resolve_target(position, EventType::PointerMove, blocker);
+    if (blocker != nullptr) {
         target = nullptr;
     }
     set_input_flag(m_hovered_node, target == nullptr ? nullptr : target->node, InputFlag::Hovered);
@@ -165,9 +165,13 @@ void InputRouter::set_input_flag(Node*& current, Node* next, InputFlag flag) {
         if (flag == InputFlag::Focused) state.focused = true;
         current->set_input_state(state);
     }
+
+    if (flag == InputFlag::Hovered && next == nullptr && ImGui::GetCurrentContext() != nullptr) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
+    }
 }
 
-void InputRouter::target(Node& node, Rect rect, InputCallback callback) {
+void InputRouter::register_target(Node& node, Rect rect, InputCallback callback) {
     add_entry(&node, nullptr, InputKind::Target, rect, EventMask::Pointer, std::move(callback));
 }
 
@@ -209,15 +213,15 @@ void InputRouter::register_node(Node& node, bool blocker, Rect input_rect, Rect 
     add_entry(blocker ? nullptr : &node, blocker ? &node : nullptr, kind, input_rect, EventMask::Pointer, {});
 }
 
-void InputRouter::block(Rect rect, InputCallback callback, EventMask events) {
+void InputRouter::register_blocker(Rect rect, InputCallback callback, EventMask events) {
     add_entry(nullptr, nullptr, InputKind::Blocker, rect, events, std::move(callback));
 }
 
-void InputRouter::block(Node& owner, Rect rect, InputCallback callback, EventMask events) {
+void InputRouter::register_blocker(Node& owner, Rect rect, InputCallback callback, EventMask events) {
     add_entry(nullptr, &owner, InputKind::Blocker, rect, events, std::move(callback));
 }
 
-void InputRouter::observe(Rect rect, InputCallback callback, EventMask events) {
+void InputRouter::register_observer(Rect rect, InputCallback callback, EventMask events) {
     add_entry(nullptr, nullptr, InputKind::Observer, rect, events, std::move(callback));
 }
 
@@ -338,6 +342,8 @@ bool InputRouter::dispatch(UiEvent& event) {
 
         // consume the press so one release can synthesize one click.
         const PressedPointer pressed = std::exchange(m_pressed[*button_index], {});
+        // a native-blocked press must also block its matching release.
+        event.native_input_blocked |= pressed.native_input_blocked;
         const bool default_prevented = pressed.prevent_click || event.default_prevented;
 
         bool blocked = false;
@@ -393,6 +399,7 @@ bool InputRouter::dispatch(UiEvent& event) {
         const bool handled = dispatch_target(*target, event);
         if (button_index.has_value()) {
             m_pressed[*button_index].prevent_click = event.default_prevented;
+            m_pressed[*button_index].native_input_blocked = event.native_input_blocked;
         }
 
         return handled;
@@ -445,21 +452,19 @@ void InputRouter::clear_inactive_targets() {
 }
 
 const InputRouter::InputEntry* InputRouter::pointer_target(UiEvent& event, bool& blocked) {
-    // blockers run before targets and clear hover behind them.
-    const InputEntry* target = target_at(event.position, event.type);
-    if (m_has_blockers) {
-        const InputEntry* blocker = blocking_entry_at(event.position, event.type, target == nullptr ? nullptr : target->node);
-        if (blocker != nullptr) {
-            set_input_flag(m_hovered_node, nullptr, InputFlag::Hovered);
-            if (blocker->callback) {
-                blocker->callback(event);
-            } else if (blocker->owner != nullptr) {
-                dispatch(*blocker->owner, event);
-            }
-            event.mark_handled();
-            blocked = true;
-            return nullptr;
+    // owner-scoped blockers select their descendants before rejecting underlying targets.
+    const InputEntry* blocker = nullptr;
+    const InputEntry* target = resolve_target(event.position, event.type, blocker);
+    if (blocker != nullptr) {
+        set_input_flag(m_hovered_node, nullptr, InputFlag::Hovered);
+        if (blocker->callback) {
+            blocker->callback(event);
+        } else if (blocker->owner != nullptr) {
+            dispatch(*blocker->owner, event);
         }
+        event.mark_handled();
+        blocked = true;
+        return nullptr;
     }
 
     set_input_flag(m_hovered_node, target == nullptr ? nullptr : target->node, InputFlag::Hovered);
@@ -467,13 +472,25 @@ const InputRouter::InputEntry* InputRouter::pointer_target(UiEvent& event, bool&
     return target;
 }
 
-const InputRouter::InputEntry* InputRouter::target_at(ImVec2 position, EventType type) const {
+const InputRouter::InputEntry* InputRouter::resolve_target(ImVec2 position, EventType type, const InputEntry*& blocker) const {
+    const InputEntry* target = target_at(position, type);
+    blocker = m_has_blockers ? blocking_entry_at(position, type, target == nullptr ? nullptr : target->node) : nullptr;
+
+    if (blocker != nullptr && blocker->owner != nullptr) {
+        target = target_at(position, type, blocker->owner);
+        blocker = blocking_entry_at(position, type, target == nullptr ? nullptr : target->node);
+    }
+
+    return target;
+}
+
+const InputRouter::InputEntry* InputRouter::target_at(ImVec2 position, EventType type, const Node* scope) const {
     const InputEntry* target = nullptr;
     for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
         ++m_stats.entry_checks;
 
         if (it->kind != InputKind::Target || it->node == nullptr || !it->rect.contains(position) ||
-            !contains(it->events, event_mask(type))) {
+            !contains(it->events, event_mask(type)) || (scope != nullptr && !scope->contains(it->node))) {
             continue;
         }
 

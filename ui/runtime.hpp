@@ -8,9 +8,8 @@
 #include <memory>
 #include <utility>
 
-class UI;
-
 namespace ui {
+    class UI;
     struct RuntimeConfig {
         Theme theme{};
         std::filesystem::path performance_directory;
@@ -50,7 +49,7 @@ namespace ui {
         }
 
     private:
-        friend class ::UI;
+        friend class UI;
 
         void set_theme(Theme theme) {
             m_theme = std::move(theme);

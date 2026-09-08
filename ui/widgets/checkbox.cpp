@@ -11,7 +11,7 @@ using namespace ui;
 class ui::CheckboxVisualNode final : public DrawListWidget {
 public:
     CheckboxVisualNode(std::string id, bool* value, bool fill, CheckboxType type)
-        : DrawListWidget(std::move(id), "CheckboxVisual", false), m_value(value), m_fill(fill), m_type(type) {}
+        : DrawListWidget(std::move(id), "CheckboxVisual", InputMode::None), m_value(value), m_fill(fill), m_type(type) {}
 
     void set_type(CheckboxType type) {
         m_type = type;
@@ -79,15 +79,15 @@ void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
     });
 
     m_fill_node->configure_all_styles([&theme](Style& style) {
-        style.background_color(theme.control_mark_color).border_radius(theme.checkbox_rounding);
+        style.background_color(theme.controls.mark_color).border_radius(theme.checkbox_rounding);
     });
 
     m_frame_node->configure_style(StyleType::HOVER, [&theme](Style& style) {
-        style.background_color(theme.control_hover_color).border_color(theme.accent_hover_color);
+        style.background_color(theme.controls.hover_color).border_color(theme.accent_hover_color);
     });
 
     m_frame_node->configure_style(StyleType::ACTIVE, [&theme](Style& style) {
-        style.background_color(theme.control_active_color).border_color(theme.accent_color);
+        style.background_color(theme.controls.active_color).border_color(theme.accent_color);
     });
 }
 
@@ -96,12 +96,14 @@ CheckboxWidget& CheckboxWidget::set_label(std::string label) {
     return *this;
 }
 
-CheckboxWidget& CheckboxWidget::set_checked(bool checked) {
-    if (*m_value != checked) {
-        *m_value = checked;
-        notify_change();
+bool CheckboxWidget::set_checked(bool checked) {
+    if (*m_value == checked) {
+        return false;
     }
-    return *this;
+
+    *m_value = checked;
+    notify_change();
+    return true;
 }
 
 CheckboxWidget& CheckboxWidget::set_type(CheckboxType type) {

@@ -93,7 +93,7 @@ private:
 TEST_CASE("widget event handlers preserve internal behavior") {
     std::vector<std::string> events;
     EventWidget widget(events);
-    widget.on_event = [&events](UiEvent&) { events.push_back("public"); };
+    widget.set_on_event([&events](UiEvent&) { events.push_back("public"); });
 
     InputRouter router;
     UiEvent event = click_event();
@@ -139,7 +139,7 @@ TEST_CASE("pointer capture keeps drag events on the original node") {
     std::vector<EventType> events;
     PointerCaptureNode node(router, events);
 
-    router.target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
+    router.register_target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
 
     auto down = event_of(EventType::PointerDown, {5.0F, 5.0F});
     REQUIRE(router.dispatch(down));
@@ -167,7 +167,7 @@ TEST_CASE("input router synthesizes clicks from matching pointer presses") {
     std::vector<EventType> events;
     PointerEventNode node("click", events);
     InputRouter router;
-    router.target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
+    router.register_target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
 
     auto left_down = event_of(EventType::PointerDown, {5.0F, 5.0F});
     left_down.button = PointerButton::Left;
@@ -204,9 +204,11 @@ TEST_CASE("input blocker consumes only its selected event mask") {
     PointerEventNode target("target", events);
     InputRouter router;
     int target_events = 0;
-    router.target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}}, [&target_events](UiEvent&) { ++target_events; });
+    router.register_target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}}, [&target_events](UiEvent&) { ++target_events; });
     int blocked_events = 0;
-    router.block({{25.0F, 25.0F}, {75.0F, 75.0F}}, [&blocked_events](UiEvent&) { ++blocked_events; }, EventMask::PointerDown);
+    router.register_blocker(
+        {{25.0F, 25.0F}, {75.0F, 75.0F}}, [&blocked_events](UiEvent&) { ++blocked_events; }, EventMask::PointerDown
+    );
 
     auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
@@ -224,8 +226,8 @@ TEST_CASE("input router reports per-frame entry work") {
     std::vector<EventType> events;
     PointerEventNode node("target", events);
     InputRouter router;
-    router.target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.block({{200.0F, 200.0F}, {300.0F, 300.0F}});
+    router.register_target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_blocker({{200.0F, 200.0F}, {300.0F, 300.0F}});
 
     auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
@@ -243,7 +245,7 @@ TEST_CASE("input router skips blocker hit testing when none are registered") {
     std::vector<EventType> events;
     PointerEventNode node("target", events);
     InputRouter router;
-    router.target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
@@ -257,7 +259,7 @@ TEST_CASE("input router skips observer scans when none are registered") {
     std::vector<EventType> events;
     PointerEventNode node("target", events);
     InputRouter router;
-    router.target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     auto click = event_of(EventType::Click, {50.0F, 50.0F});
     REQUIRE(router.dispatch(click));
@@ -275,8 +277,8 @@ TEST_CASE("owner-scoped blockers leave their descendants interactive") {
     owner.attach(std::move(child));
 
     InputRouter router;
-    router.target(*child_ptr, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.block(owner, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(*child_ptr, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_blocker(owner, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
@@ -326,8 +328,8 @@ TEST_CASE("pointer down outside a focused node clears focus") {
     other.handle_events = true;
 
     InputRouter router;
-    router.target(focused, {{0.0F, 0.0F}, {40.0F, 40.0F}});
-    router.target(other, {{60.0F, 0.0F}, {100.0F, 40.0F}});
+    router.register_target(focused, {{0.0F, 0.0F}, {40.0F, 40.0F}});
+    router.register_target(other, {{60.0F, 0.0F}, {100.0F, 40.0F}});
     REQUIRE(router.set_focus(focused));
     events.clear();
 
@@ -349,7 +351,7 @@ TEST_CASE("input router clears targets when a node is detached") {
     parent.set_input_router(&router);
     REQUIRE(router.set_focus(*child_ptr));
     REQUIRE(router.capture_pointer(*child_ptr));
-    router.target(*child_ptr, {{0.0F, 0.0F}, {10.0F, 10.0F}});
+    router.register_target(*child_ptr, {{0.0F, 0.0F}, {10.0F, 10.0F}});
     events.clear();
 
     auto detached = parent.remove(*child_ptr);
@@ -375,11 +377,11 @@ TEST_CASE("node input attachment survives router destruction") {
         node.set_input_router(&router);
         REQUIRE(router.set_focus(node));
         REQUIRE(router.capture_pointer(node));
-        router.target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
+        router.register_target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
     }
 
     node.set_visible(false);
-    node.set_input_target();
+    node.set_input_mode(InputMode::Target);
     REQUIRE_FALSE(node.input_state().focused);
     node.set_visible(true);
 
@@ -421,7 +423,7 @@ TEST_CASE("input routers isolate focus and pointer capture between surfaces") {
 
 TEST_CASE("blocking entry consumes empty space") {
     InputRouter router;
-    router.block({{0.0F, 0.0F}, {200.0F, 200.0F}});
+    router.register_blocker({{0.0F, 0.0F}, {200.0F, 200.0F}});
 
     UiEvent move = event_of(EventType::PointerMove, {100.0F, 100.0F});
     REQUIRE(router.dispatch(move));
@@ -431,13 +433,13 @@ TEST_CASE("blocking entry consumes empty space") {
 TEST_CASE("blocking entries clear hover behind them") {
     InputRouter router;
     Node target("target");
-    router.target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     UiEvent move = event_of(EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE_FALSE(router.dispatch(move));
     REQUIRE(target.input_state().hovered);
 
-    router.block({{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_blocker({{0.0F, 0.0F}, {100.0F, 100.0F}});
     move = event_of(EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
     REQUIRE_FALSE(target.input_state().hovered);
@@ -445,7 +447,7 @@ TEST_CASE("blocking entries clear hover behind them") {
 
 TEST_CASE("blocking entries consume pointer release without a retained press") {
     InputRouter router;
-    router.block({{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_blocker({{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     UiEvent release = event_of(EventType::PointerUp, {50.0F, 50.0F});
     REQUIRE(router.dispatch(release));
@@ -459,8 +461,8 @@ TEST_CASE("observer entries do not block their target") {
     InputRouter router;
     int observed = 0;
 
-    router.target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.observe({{0.0F, 0.0F}, {100.0F, 100.0F}}, [&observed](UiEvent&) { ++observed; }, EventMask::Click);
+    router.register_target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_observer({{0.0F, 0.0F}, {100.0F, 100.0F}}, [&observed](UiEvent&) { ++observed; }, EventMask::Click);
 
     UiEvent click = click_event({50.0F, 50.0F});
     REQUIRE(router.dispatch(click));
@@ -476,8 +478,8 @@ TEST_CASE("later targets win over earlier paint") {
     content.handle_events = true;
     InputRouter router;
 
-    router.target(content, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.target(popup, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(content, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(popup, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     UiEvent click = click_event({50.0F, 50.0F});
     REQUIRE(router.dispatch(click));
@@ -510,8 +512,8 @@ TEST_CASE("pointer blockers leave focused keyboard input available") {
     REQUIRE(router.set_focus(content));
     events.clear();
 
-    router.target(content, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.block({{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(content, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_blocker({{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     UiEvent click = click_event({10.0F, 10.0F});
     REQUIRE(router.dispatch(click));
@@ -528,8 +530,8 @@ TEST_CASE("input router resolves overlapping targets") {
     Node top("top");
 
     router.begin_frame();
-    router.target(bottom, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.target(top, {{25.0F, 25.0F}, {75.0F, 75.0F}});
+    router.register_target(bottom, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(top, {{25.0F, 25.0F}, {75.0F, 75.0F}});
 
     REQUIRE(router.node_at({50.0F, 50.0F}) == &top);
     REQUIRE(router.node_at({10.0F, 10.0F}) == &bottom);
@@ -539,8 +541,8 @@ TEST_CASE("input router resolves overlapping targets") {
     Node second("second");
 
     router.begin_frame();
-    router.target(first, {{0.0F, 0.0F}, {20.0F, 20.0F}});
-    router.target(second, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(first, {{0.0F, 0.0F}, {20.0F, 20.0F}});
+    router.register_target(second, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     REQUIRE(router.node_at({10.0F, 10.0F}) == &second);
 
@@ -550,8 +552,8 @@ TEST_CASE("input router resolves overlapping targets") {
     parent.attach(std::move(child));
 
     router.begin_frame();
-    router.target(*child_ptr, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.target(parent, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(*child_ptr, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(parent, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     REQUIRE(router.node_at({50.0F, 50.0F}) == child_ptr);
 }
@@ -562,8 +564,8 @@ TEST_CASE("input router ignores disabled and stale entries") {
     Node hidden("hidden");
 
     router.begin_frame();
-    router.target(disabled, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.target(hidden, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(disabled, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+    router.register_target(hidden, {{0.0F, 0.0F}, {100.0F, 100.0F}});
     disabled.set_enabled(false);
     hidden.set_visible(false);
 

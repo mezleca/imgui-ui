@@ -205,16 +205,18 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
                 continue;
             }
 
-            // get child from provider.
             Node& child = m_item_provider(index);
 
             if (!child.visible()) {
                 continue;
             }
 
-            // arrange the child at its logical y position, then draw only this selected row.
+            const ImVec2 margin = layout_margin(child);
             const float y = offset + static_cast<float>(row) * stride;
-            arrange_child(child, {width, height}, {.offset = {0.0F, y}});
+            arrange_child(
+                child, {std::max(0.0F, width - margin.x * 2.0F), std::max(0.0F, height - margin.y * 2.0F)},
+                {.offset = {margin.x, y + margin.y}}
+            );
             child.draw();
         }
     }

@@ -31,49 +31,98 @@ static constexpr std::string_view DEMO_INLINE_ICON_SVG = R"(
         <path d="M12 8V12L15 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
     </svg>)";
 
-static ui::Theme make_demo_theme(bool dark) {
+static ui::Theme make_demo_theme(std::string_view variant) {
     ui::Theme theme{};
-    theme.content_padding = 24.0F;
-    theme.box_rounding = 8.0F;
-    theme.control_rounding = 6.0F;
 
-    if (!dark) {
-        theme.accent_color = {0.35F, 0.65F, 1.0F, 1.0F};
-        theme.accent_hover_color = {0.55F, 0.78F, 1.0F, 1.0F};
-        theme.background_color = {0.08F, 0.09F, 0.12F, 1.0F};
-        theme.background_secondary_color = {0.12F, 0.14F, 0.19F, 1.0F};
-        theme.background_tertiary_color = {0.06F, 0.07F, 0.10F, 1.0F};
-        theme.control_background_color = {0.10F, 0.12F, 0.17F, 1.0F};
-        theme.control_hover_color = {0.16F, 0.20F, 0.28F, 1.0F};
-        theme.control_active_color = {0.35F, 0.65F, 1.0F, 0.22F};
-        theme.control_border_color = {0.26F, 0.32F, 0.42F, 1.0F};
-        theme.border_color = {0.20F, 0.24F, 0.32F, 1.0F};
-        theme.control_mark_color = theme.accent_color;
-        return theme;
+    if (variant == "pastel") {
+        theme.content_padding = 15.0F;
+        theme.box_rounding = 6.0F;
+        theme.controls.rounding = 10.0F;
+        theme.checkbox_rounding = 6.0F;
+        theme.controls.border_thickness = 1.0F;
+        theme.controls.thumb_size = 14.0F;
+        theme.accent_color = {226.0F / 255.0F, 180.0F / 255.0F, 189.0F / 255.0F, 1.0F};
+        theme.accent_hover_color = {214.0F / 255.0F, 153.0F / 255.0F, 165.0F / 255.0F, 1.0F};
+        theme.background_color = {255.0F / 255.0F, 245.0F / 255.0F, 245.0F / 255.0F, 1.0F};
+        theme.background_secondary_color = {255.0F / 255.0F, 250.0F / 255.0F, 250.0F / 255.0F, 1.0F};
+        theme.background_tertiary_color = {247.0F / 255.0F, 214.0F / 255.0F, 208.0F / 255.0F, 1.0F};
+        theme.scrollbar_background_color = {226.0F / 255.0F, 180.0F / 255.0F, 189.0F / 255.0F, 0.55F};
+        theme.header_background_color = {247.0F / 255.0F, 214.0F / 255.0F, 208.0F / 255.0F, 1.0F};
+        theme.text_color = {74.0F / 255.0F, 74.0F / 255.0F, 74.0F / 255.0F, 1.0F};
+        theme.text_secondary_color = {106.0F / 255.0F, 87.0F / 255.0F, 90.0F / 255.0F, 1.0F};
+        theme.border_color = {226.0F / 255.0F, 180.0F / 255.0F, 189.0F / 255.0F, 1.0F};
+        theme.header_border_color = {214.0F / 255.0F, 153.0F / 255.0F, 165.0F / 255.0F, 0.55F};
+        theme.button_active_color = {226.0F / 255.0F, 180.0F / 255.0F, 189.0F / 255.0F, 0.35F};
+        theme.controls.background_color = {255.0F / 255.0F, 245.0F / 255.0F, 245.0F / 255.0F, 1.0F};
+        theme.controls.hover_color = {247.0F / 255.0F, 214.0F / 255.0F, 208.0F / 255.0F, 1.0F};
+        theme.controls.active_color = {226.0F / 255.0F, 180.0F / 255.0F, 189.0F / 255.0F, 0.35F};
+        theme.controls.border_color = {226.0F / 255.0F, 180.0F / 255.0F, 189.0F / 255.0F, 1.0F};
+        theme.metrics.popup_rounding = 10.0F;
+        theme.metrics.tab_rounding = 8.0F;
+        theme.metrics.item_spacing = {12.0F, 10.0F};
+        theme.widgets.dropdown_item_padding = {12.0F, 7.0F};
+        theme.widgets.dropdown_arrow_size = {10.0F, 5.0F};
+        theme.widgets.dropdown_popup_gap = 6.0F;
+        theme.widgets.context_menu_width = 196.0F;
+        theme.widgets.context_menu_item_height = 36.0F;
+        theme.widgets.context_menu_padding = {8.0F, 8.0F};
+        theme.widgets.context_menu_item_padding = {12.0F, 6.0F};
+        theme.widgets.context_menu_gap = 8.0F;
+        theme.widgets.context_menu_icon_size = 16.0F;
+        theme.widgets.text_input_padding = {14.0F, 12.0F};
+        theme.widgets.text_input_icon_size = {20.0F, 20.0F};
+        theme.widgets.text_input_icon_spacing = 12.0F;
+    } else if (variant == "material") {
+        theme.content_padding = 18.0F;
+        theme.box_rounding = 12.0F;
+        theme.controls.rounding = 12.0F;
+        theme.checkbox_rounding = 5.0F;
+        theme.controls.border_thickness = 1.0F;
+        theme.controls.thumb_size = 16.0F;
+        theme.accent_color = {0.82F, 0.74F, 1.0F, 1.0F};
+        theme.accent_hover_color = {0.91F, 0.87F, 0.97F, 1.0F};
+        theme.background_color = {0.078F, 0.071F, 0.094F, 1.0F};
+        theme.background_secondary_color = {0.129F, 0.122F, 0.149F, 1.0F};
+        theme.background_tertiary_color = {0.059F, 0.051F, 0.075F, 1.0F};
+        theme.scrollbar_background_color = {0.059F, 0.051F, 0.075F, 1.0F};
+        theme.header_background_color = {0.169F, 0.161F, 0.188F, 1.0F};
+        theme.text_color = {0.902F, 0.878F, 0.914F, 1.0F};
+        theme.text_secondary_color = {0.792F, 0.769F, 0.816F, 1.0F};
+        theme.border_color = {0.286F, 0.271F, 0.31F, 1.0F};
+        theme.header_border_color = {0.475F, 0.455F, 0.494F, 0.35F};
+        theme.button_active_color = {0.82F, 0.74F, 1.0F, 0.28F};
+        theme.controls.background_color = {0.129F, 0.122F, 0.149F, 1.0F};
+        theme.controls.hover_color = {0.212F, 0.196F, 0.239F, 1.0F};
+        theme.controls.active_color = {0.82F, 0.74F, 1.0F, 0.24F};
+        theme.controls.border_color = {0.475F, 0.455F, 0.494F, 1.0F};
+        theme.metrics.window_rounding = 4.0F;
+        theme.metrics.child_rounding = 4.0F;
+        theme.metrics.popup_rounding = 12.0F;
+        theme.metrics.tab_rounding = 8.0F;
+        theme.metrics.frame_padding = {14.0F, 10.0F};
+        theme.metrics.item_spacing = {12.0F, 12.0F};
+        theme.metrics.item_inner_spacing = {8.0F, 8.0F};
+        theme.widgets.dropdown_item_padding = {16.0F, 8.0F};
+        theme.widgets.dropdown_arrow_size = {10.0F, 5.0F};
+        theme.widgets.dropdown_popup_gap = 2.0F;
+        theme.widgets.dropdown_transition_duration = 0.06F;
+        theme.widgets.context_menu_width = 220.0F;
+        theme.widgets.context_menu_item_height = 48.0F;
+        theme.widgets.context_menu_padding = {8.0F, 8.0F};
+        theme.widgets.context_menu_item_padding = {16.0F, 8.0F};
+        theme.widgets.context_menu_gap = 4.0F;
+        theme.widgets.context_menu_icon_size = 18.0F;
+        theme.widgets.text_input_padding = {16.0F, 12.0F};
+        theme.widgets.text_input_icon_size = {20.0F, 20.0F};
+        theme.widgets.text_input_icon_spacing = 12.0F;
     }
 
-    theme.accent_color = {1.0F, 0.62F, 0.22F, 1.0F};
-    theme.accent_hover_color = {1.0F, 0.80F, 0.42F, 1.0F};
-    theme.background_color = {0.025F, 0.028F, 0.038F, 1.0F};
-    theme.background_secondary_color = {0.055F, 0.062F, 0.080F, 1.0F};
-    theme.background_tertiary_color = {0.012F, 0.016F, 0.024F, 1.0F};
-    theme.scrollbar_background_color = {0.008F, 0.010F, 0.016F, 1.0F};
-    theme.header_background_color = {0.075F, 0.085F, 0.11F, 1.0F};
-    theme.text_color = {0.96F, 0.97F, 0.99F, 1.0F};
-    theme.text_secondary_color = {0.62F, 0.67F, 0.76F, 1.0F};
-    theme.border_color = {0.13F, 0.16F, 0.21F, 1.0F};
-    theme.header_border_color = {0.34F, 0.38F, 0.48F, 0.35F};
-    theme.button_active_color = {1.0F, 0.62F, 0.22F, 0.30F};
-    theme.control_background_color = {0.040F, 0.048F, 0.064F, 1.0F};
-    theme.control_hover_color = {0.105F, 0.12F, 0.16F, 1.0F};
-    theme.control_active_color = {1.0F, 0.62F, 0.22F, 0.25F};
-    theme.control_border_color = {0.22F, 0.26F, 0.34F, 1.0F};
-    theme.control_mark_color = theme.accent_color;
+    theme.controls.mark_color = theme.accent_color;
     return theme;
 }
 
 void configure_demo_runtime(ui::RuntimeConfig& config) {
-    config.theme = make_demo_theme(false);
+    config.theme = make_demo_theme("default");
 
 #ifdef IMGUI_UI_ASSETS_DIR
     config.texture_loader = std::make_unique<ui::OpenGLTextureLoader>();
@@ -107,7 +156,7 @@ protected:
                 .background_color(background)
                 .border(m_border)
                 .border_color(m_accent_border ? theme.accent_color : theme.border_color)
-                .border_radius(6.0F)
+                .border_radius(theme.box_rounding)
                 .box_shadow(m_shadow ? ui::BoxShadow{
                                            .offset = {0.0F, 8.0F},
                                            .blur = 18.0F,
@@ -128,7 +177,7 @@ private:
 
 class DemoAccentButton final : public ui::ButtonWidget {
 public:
-    DemoAccentButton(UI& ui, std::string text, ui::LayoutSize size) : ui::ButtonWidget(ui, std::move(text), size) {
+    DemoAccentButton(ui::UI& ui, std::string text, ui::LayoutSize size) : ui::ButtonWidget(ui, std::move(text), size) {
         apply_theme_defaults(ui.theme());
     }
 
@@ -158,7 +207,7 @@ protected:
         configure_all_styles([&theme](ui::Style& style) {
             style.background_color(theme.background_tertiary_color)
                 .border(ui::BORDER_NONE)
-                .border_radius(6.0F)
+                .border_radius(theme.box_rounding)
                 .padding({20.0F, 20.0F})
                 .cursor(ImGuiMouseCursor_ResizeNWSE);
         });
@@ -176,14 +225,14 @@ protected:
             style.padding({8.0F, 8.0F})
                 .background_color(theme.background_tertiary_color)
                 .border(ui::BORDER_NONE)
-                .border_radius(6.0F);
+                .border_radius(theme.box_rounding);
         });
     }
 };
 
 class DemoScreen final : public ui::StackContainer {
 public:
-    DemoScreen(UI& surface, std::string backend);
+    DemoScreen(ui::UI& surface, std::string backend);
     void setup_dynamic_nodes(ui::Node& parent);
     int& blur();
 
@@ -194,12 +243,12 @@ private:
 protected:
     void apply_theme_defaults(const ui::Theme& theme) override {
         configure_all_styles([&theme](ui::Style& style) {
-            style.padding({24.0F, 24.0F}).background_color(theme.background_secondary_color);
+            style.padding({theme.content_padding, theme.content_padding}).background_color(theme.background_secondary_color);
         });
     }
 
 private:
-    UI& m_surface;
+    ui::UI& m_surface;
     ui::ResizableContainer* m_dynamic_nodes = nullptr;
     ui::TextWidget* m_dynamic_status = nullptr;
     ui::Node* m_pending_remove = nullptr;
@@ -210,7 +259,7 @@ private:
     int m_dynamic_count = 0;
     int m_next_dynamic_id = 0;
     std::string m_name = "imgui-ui";
-    std::string m_theme = "blue";
+    std::string m_theme = "default";
     std::string m_border_style = "solid";
     int m_blur = 5;
 };
@@ -231,7 +280,7 @@ DemoTextListWidget& DemoTextListWidget::set_items(std::vector<std::string> items
     return *this;
 }
 
-DemoScreen::DemoScreen(UI& surface, std::string backend)
+DemoScreen::DemoScreen(ui::UI& surface, std::string backend)
     : ui::StackContainer("demo", ui::StackDirection::Vertical), m_surface(surface) {
     set_size({ui::grow(), ui::grow()});
     set_scrollable(true);
@@ -254,17 +303,20 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
     name_input.set_icon(m_surface.runtime().textures().find("demo-file-icon"));
     profile.add<ui::CheckboxWidget>(surface, m_enabled, "enabled").set_size({ui::px(360.0F), ui::px(32.0F)});
 
+    auto& test_image = profile.add<ui::ImageWidget>(m_surface.runtime().textures().find("demo-test-image"));
+    test_image.set_size({ui::px(203.0F), ui::px(185.0F)});
+
     auto& animated_text = profile.add<ui::TextWidget>("hover for cool animation");
-    animated_text.set_input_target();
+    animated_text.set_input_mode(ui::InputMode::Target);
     animated_text.configure_all_styles([](ui::Style& style) {
-        style.background_color({}, {0.5F, ui::easing::out_cubic});
-        style.padding({}, {0.5F, ui::easing::out_cubic});
+        style.background_color({}, {0.5F, ui::easing::in_cubic});
+        style.padding({}, {0.5F, ui::easing::in_cubic});
         style.line_height(1.0F, 0.1F);
     });
 
     animated_text.configure_style(ui::StyleType::HOVER, [&](ui::Style& style) {
-        style.padding({10.0F, 10.0F}, {0.5F, ui::easing::out_cubic});
-        style.background_color(surface.theme().accent_color, {0.5F, ui::easing::out_cubic});
+        style.padding({10.0F, 10.0F}, {0.5F, ui::easing::in_cubic});
+        style.background_color(surface.theme().accent_color, {0.5F, ui::easing::in_cubic});
     });
 
     profile.add<ui::TextWidget>("ellipsis: this text is longer than the available width")
@@ -278,11 +330,12 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
     appearance.add<ui::TextWidget>("appearance");
 
     auto& theme = appearance.add<ui::DropdownWidget>(
-        surface, m_theme, std::vector<ui::DropdownOption>{{"blue", "blue"}, {"deep dark", "dark"}}, "theme"
+        surface, m_theme,
+        std::vector<ui::DropdownOption>{{"default", "default"}, {"pastel", "pastel"}, {"material 3", "material"}}, "theme"
     );
 
     theme.set_label("theme").set_size({ui::px(360.0F), ui::px(68.0F)});
-    theme.on_change = [this] { m_surface.set_theme(make_demo_theme(m_theme == "dark")); };
+    theme.set_on_change([this] { m_surface.set_theme(make_demo_theme(m_theme)); });
 
     auto& border_style = appearance.add<ui::DropdownWidget>(
         surface, m_border_style, std::vector<ui::DropdownOption>{{"solid", "solid"}, {"dashed", "dashed"}, {"dotted", "dotted"}},
@@ -290,12 +343,12 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
     );
 
     border_style.set_label("border style").set_size({ui::px(360.0F), ui::px(68.0F)});
-    border_style.on_change = [this] {
+    border_style.set_on_change([this] {
         const ui::BorderStyle style = m_border_style == "dashed"   ? ui::BorderStyle::Dashed
                                       : m_border_style == "dotted" ? ui::BorderStyle::Dotted
                                                                    : ui::BorderStyle::Solid;
         apply_border_style(m_surface.root(), style);
-    };
+    });
 
     auto& actions = add<DemoPanel>("actions", surface.theme());
     actions.set_size({ui::grow(), ui::fit()});
@@ -314,7 +367,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
 
     auto& text_list_orientation =
         list_section.add<ui::ButtonWidget>(surface, "list orientation: vertical", ui::LayoutSize{ui::px(240.0F), ui::px(36.0F)});
-    text_list_orientation.on_click([this, &text_list_orientation] {
+    text_list_orientation.set_on_click([this, &text_list_orientation] {
         m_text_list_horizontal = !m_text_list_horizontal;
         m_text_list->set_direction(m_text_list_horizontal ? ui::StackDirection::Horizontal : ui::StackDirection::Vertical);
         text_list_orientation.set_text(m_text_list_horizontal ? "list orientation: horizontal" : "list orientation: vertical");
@@ -341,7 +394,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
 
             auto& row = virtual_list.add<ui::ButtonWidget>(surface, std::format("item {} - expand", index + 1));
             row.set_id(std::format("virtual-row-{}", index));
-            row.on_click([&virtual_list, &row, index] {
+            row.set_on_click([&virtual_list, &row, index] {
                 const bool expanded = virtual_list.extra_offset(index) == 0.0F;
                 virtual_list.set_extra_offset(index, expanded ? 64.0F : 0.0F);
                 row.set_text(
@@ -355,7 +408,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend)
         }
     );
 
-    button.on_click([this, &status] {
+    button.set_on_click([this, &status] {
         ++m_clicks;
         status.set_text(std::format("button clicks: {}", m_clicks));
     });
@@ -390,7 +443,7 @@ void DemoScreen::setup_dynamic_nodes(ui::Node& parent) {
     m_dynamic_nodes->set_resize(ui::ResizeAxes::Both).set_spacing(8.0F).set_scrollable(true);
 
     auto& add_node = node_controls.add<ui::ButtonWidget>(m_surface, "add node", ui::LayoutSize{ui::px(120.0F), ui::px(36.0F)});
-    add_node.on_click([this] {
+    add_node.set_on_click([this] {
         ++m_dynamic_count;
 
         const int item_id = ++m_next_dynamic_id;
@@ -398,14 +451,14 @@ void DemoScreen::setup_dynamic_nodes(ui::Node& parent) {
             m_surface, std::format("list item {}", item_id), ui::LayoutSize{ui::grow(), ui::px(36.0F)}
         );
         ui::ButtonWidget* item_ptr = &item;
-        item.on_click([this, item_ptr] { m_pending_remove = item_ptr; });
+        item.set_on_click([this, item_ptr] { m_pending_remove = item_ptr; });
 
         m_dynamic_status->set_text(std::format("dynamic nodes: {}", m_dynamic_count));
     });
 
     auto& remove_node =
         node_controls.add<ui::ButtonWidget>(m_surface, "remove node", ui::LayoutSize{ui::px(120.0F), ui::px(36.0F)});
-    remove_node.on_click([this] {
+    remove_node.set_on_click([this] {
         if (m_dynamic_nodes->children().empty()) {
             return;
         }
@@ -419,7 +472,7 @@ void DemoScreen::setup_dynamic_nodes(ui::Node& parent) {
 
     auto& clear_nodes =
         node_controls.add<ui::ButtonWidget>(m_surface, "clear nodes", ui::LayoutSize{ui::px(120.0F), ui::px(36.0F)});
-    clear_nodes.on_click([this] {
+    clear_nodes.set_on_click([this] {
         m_pending_remove = nullptr;
         m_dynamic_nodes->clear();
         m_dynamic_count = 0;
@@ -455,7 +508,7 @@ void DemoScreen::apply_border_style(ui::Node& node, ui::BorderStyle style) {
     }
 }
 
-void setup_demo(UI& surface, std::string backend) {
+void setup_demo(ui::UI& surface, std::string backend) {
     ui::Runtime& runtime = surface.runtime();
 #ifdef IMGUI_UI_ASSETS_DIR
     // register paths before widgets request fonts. sizes load lazily per imgui context.
@@ -467,6 +520,7 @@ void setup_demo(UI& surface, std::string backend) {
     surface.set_secondary_font(runtime.fonts().find("Inter SemiBold"));
 
     runtime.textures().add("demo-file-icon", assets / "icons/demo.svg");
+    runtime.textures().add("demo-test-image", assets / "images/tiny.jpg");
     runtime.textures().add("demo-inline-icon", DEMO_INLINE_ICON_SVG);
 #endif
     ui::Texture* inline_icon = runtime.textures().find("demo-inline-icon");
@@ -474,7 +528,8 @@ void setup_demo(UI& surface, std::string backend) {
     auto& demo = surface.root().add<DemoScreen>(surface, std::move(backend));
 
     // keep the layer out of flow so showing it cannot move the page.
-    auto& overlay = surface.root().add<ui::LayerContainer>("##demo-overlay", ui::LayerMode::Inline);
+    auto& overlay = demo.add<ui::LayerContainer>("##demo-overlay", ui::LayerMode::Inline);
+    overlay.set_layout({.in_flow = false});
     auto& panel = overlay.add<DemoPanel>("overlay-panel", surface.theme());
 
     panel.set_layout({
@@ -495,7 +550,7 @@ void setup_demo(UI& surface, std::string backend) {
         .placement = {.anchor = ui::Anchor::TopRight, .origin = ui::Anchor::TopRight, .offset = {-20.0F, 20.0F}},
         .in_flow = false,
     });
-    overlay_button.on_click([&overlay_button, &panel] {
+    overlay_button.set_on_click([&overlay_button, &panel] {
         panel.set_visible(!panel.visible());
         overlay_button.set_text(panel.visible() ? "hide overlay" : "show overlay");
     });
@@ -515,10 +570,11 @@ void setup_demo(UI& surface, std::string backend) {
     auto& context_menu = surface.root().add<ui::ContextMenuWidget>(surface, std::move(context_items), inline_icon);
     context_menu.set_hover_close_delay(2.0f);
 
-    context_button.on_click([&context_menu] { context_menu.show(); });
+    context_button.set_on_click([&context_menu] { context_menu.open(); });
 
     // block outside the panel so background controls cannot receive its input.
     auto& input_blocker = surface.root().add<ui::LayerContainer>("##input-blocker", ui::LayerMode::Inline);
+    input_blocker.set_layout({.in_flow = false});
     input_blocker.set_visible(false);
 
     auto& blocker_panel = input_blocker.add<DemoPanel>("input-blocker-panel", surface.theme());
@@ -538,23 +594,24 @@ void setup_demo(UI& surface, std::string backend) {
 
     ui::LayerContainer* blocker_ptr = &input_blocker;
     ui::ButtonWidget* block_button_ptr = &block_button;
-    block_button.on_click([blocker_ptr, block_button_ptr] {
+    block_button.set_on_click([blocker_ptr, block_button_ptr] {
         blocker_ptr->set_visible(true);
         // scope the blocker to the layer so its panel still receives clicks.
-        blocker_ptr->set_input_blocker();
+        blocker_ptr->set_input_mode(ui::InputMode::Blocker);
         block_button_ptr->set_text("pointer input blocked");
     });
 
-    unblock_button.on_click([blocker_ptr, block_button_ptr] {
-        blocker_ptr->clear_input();
+    unblock_button.set_on_click([blocker_ptr, block_button_ptr] {
+        blocker_ptr->set_input_mode(ui::InputMode::None);
         blocker_ptr->set_visible(false);
         block_button_ptr->set_text("block pointer input");
     });
 
     // sample the app behind this layer while routing modal input to the panel.
-    auto& modal_layer = surface.root().add<ui::LayerContainer>("##modal-layer", ui::LayerMode::Window);
+    auto& modal_layer = surface.root().add<ui::LayerContainer>("##modal-layer", ui::LayerMode::Inline);
+    modal_layer.set_layout({.in_flow = false});
     modal_layer.set_visible(false);
-    modal_layer.set_input_blocker();
+    modal_layer.set_input_mode(ui::InputMode::Blocker);
     modal_layer.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F}).blur(5); });
 
     auto& modal =
@@ -567,7 +624,7 @@ void setup_demo(UI& surface, std::string backend) {
     });
     modal.set_spacing(10.0F);
     // keep backdrop dismissal on the layer. the panel handles its own controls.
-    modal_layer.on_event = [&modal_layer, &modal](ui::UiEvent& event) {
+    modal_layer.set_on_event([&modal_layer, &modal](ui::UiEvent& event) {
         const bool clicked_outside = (event.type == ui::EventType::Click || event.type == ui::EventType::PointerDown) &&
                                      event.button == ui::PointerButton::Left &&
                                      !modal.layout().visual_rect().contains(event.position);
@@ -580,30 +637,29 @@ void setup_demo(UI& surface, std::string backend) {
         modal.set_visible(false);
         modal_layer.set_visible(false);
         event.stop_propagation();
-    };
+    });
 
     modal.add<ui::TextWidget>("modal overlay");
     auto& blur = modal.add<ui::NumberInputWidget>(surface, demo.blur(), "modal-blur");
     blur.set_label("backdrop blur").set_range(0, 32).set_size({ui::px(180.0F), ui::px(48.0F)});
-    blur.on_change = [&demo, &modal_layer] {
+    blur.set_on_change([&demo, &modal_layer] {
         modal_layer.configure_all_styles([&demo](ui::Style& style) { style.blur(demo.blur()); });
-    };
+    });
 
     auto& close_button = modal.add<ui::ButtonWidget>(surface, "close modal", ui::LayoutSize{ui::px(180.0F), ui::px(40.0F)});
-    close_button.on_click([&modal_layer, &modal] {
+    close_button.set_on_click([&modal_layer, &modal] {
         modal.set_visible(false);
         modal_layer.set_visible(false);
     });
 
     auto& modal_button = demo.add<ui::ButtonWidget>(surface, "open modal", ui::LayoutSize{ui::px(220.0F), ui::px(40.0F)});
-    modal_button.on_click([&modal_layer, &modal, &surface] {
+    modal_button.set_on_click([&modal_layer, &modal, &surface] {
         if (modal.visible()) {
             return;
         }
 
         modal_layer.set_visible(true);
         modal.set_visible(true);
-        modal_layer.request_focus();
         surface.input_router().set_focus(modal_layer);
     });
 

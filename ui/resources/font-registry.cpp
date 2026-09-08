@@ -4,18 +4,17 @@
 
 using namespace ui;
 
-Font::Font(std::filesystem::path location, ImFontConfig cfg) : m_font_location(std::move(location)) {
+Font::Font(std::filesystem::path location, ImFontConfig cfg) : m_location(std::move(location)) {
     m_cfg = std::make_unique<ImFontConfig>(cfg);
 }
 
 ImFont* Font::load_variation(ImGuiContext* context, int size) {
-    if (context == nullptr || m_font_location.empty()) {
+    if (context == nullptr || m_location.empty()) {
         return nullptr;
     }
 
     ContextFonts& context_fonts = m_contexts[context];
-    ImFont* font =
-        ImGui::GetIO().Fonts->AddFontFromFileTTF(m_font_location.string().c_str(), static_cast<float>(size), m_cfg.get());
+    ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(m_location.string().c_str(), static_cast<float>(size), m_cfg.get());
 
     if (font != nullptr) {
         context_fonts.fonts[size] = font;

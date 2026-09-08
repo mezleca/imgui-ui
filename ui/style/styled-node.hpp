@@ -183,6 +183,5 @@ namespace ui {
         std::string_view m_type_name;
         std::unique_ptr<PaintSlot> m_before;
         std::unique_ptr<PaintSlot> m_after;
-        bool m_cursor_applied = false;
     };
 } // namespace ui

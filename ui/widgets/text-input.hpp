@@ -4,16 +4,14 @@
 
 #include <string>
 
-class UI;
-
 namespace ui {
+    class UI;
     class Texture;
     class ImageWidget;
 
     class TextInputWidget final : public StackContainer {
     public:
-        TextInputWidget(UI& ui, std::string& value);
-        TextInputWidget(UI& ui, std::string& value, std::string label);
+        TextInputWidget(UI& ui, std::string& value, std::string label = {});
 
         TextInputWidget& set_icon(Texture* icon);
         bool set_value(std::string value);
