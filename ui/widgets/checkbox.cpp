@@ -152,12 +152,12 @@ const StyledNode& CheckboxWidget::fill() const {
 void CheckboxWidget::on_measure() {
     ImFont* current_font = font();
     if (current_font == nullptr || ImGui::GetCurrentContext() == nullptr) {
-        const ImVec2 padding = style().padding();
+        const ImVec2 padding = computed_style().padding();
         set_measured_size({m_box_size + padding.x * 2.0F, m_box_size + padding.y * 2.0F}, true, true);
         return;
     }
 
-    const ImVec2 padding = style().padding();
+    const ImVec2 padding = computed_style().padding();
     const ImVec2 label_size = m_label_node->layout().intrinsic_size();
     const float label_spacing = label_size.x > 0.0F ? ImGui::GetStyle().ItemInnerSpacing.x : 0.0F;
 
@@ -181,15 +181,16 @@ bool CheckboxWidget::paint() {
 }
 
 void CheckboxWidget::arrange_children() {
-    const ImVec2 widget_padding = style().padding();
+    const ImVec2 widget_padding = computed_style().padding();
     const ImVec2 frame_size = {m_box_size, m_box_size};
     const Rect& parent_content = layout().parent_content_rect();
     const ImVec2 frame_offset = {
         layout().local_rect().min.x - parent_content.min.x + widget_padding.x,
         layout().local_rect().min.y - parent_content.min.y + widget_padding.y,
     };
-    const ImVec2 frame_padding = m_frame_node->style().padding();
-    const float border_inset = m_frame_node->style().border() == BORDER_NONE ? 0.0F : m_frame_node->style().border_thickness();
+    const ImVec2 frame_padding = m_frame_node->computed_style().padding();
+    const float border_inset =
+        m_frame_node->computed_style().border() == BORDER_NONE ? 0.0F : m_frame_node->computed_style().border_thickness();
     const ImVec2 fill_inset = {frame_padding.x + border_inset, frame_padding.y + border_inset};
     const ImVec2 fill_size = {
         std::max(0.0F, frame_size.x - fill_inset.x * 2.0F),
@@ -214,7 +215,7 @@ void CheckboxWidget::arrange_children() {
 }
 
 Rect CheckboxWidget::hit_rect(Rect visual_rect) const {
-    const ImVec2 padding = style().padding();
+    const ImVec2 padding = computed_style().padding();
     const ImVec2 available = visual_rect.size();
     const ImVec2 box_size = {
         std::min(m_box_size, std::max(0.0F, available.x - padding.x * 2.0F)),

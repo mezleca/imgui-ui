@@ -38,8 +38,8 @@ TextWidget& TextWidget::set_text(std::string text) {
 
 void TextWidget::on_measure() {
     m_text.set_font(font());
-    m_text.set_line_height(style().line_height());
-    const ImVec2 padding = style().padding();
+    m_text.set_line_height(computed_style().line_height());
+    const ImVec2 padding = computed_style().padding();
     const ImVec2 text_size = m_text.text_size();
     set_measured_size({text_size.x + padding.x * 2.0F, text_size.y + padding.y * 2.0F}, true, true);
 }

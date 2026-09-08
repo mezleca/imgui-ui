@@ -90,7 +90,7 @@ void NumberInputWidget::sync_value() const {
 
 void NumberInputWidget::on_measure() {
     ImVec2 size = layout().intrinsic_size();
-    const ImVec2 padding = style().padding();
+    const ImVec2 padding = computed_style().padding();
     sync_value();
     m_value.set_font(font());
     m_label.set_font(font());

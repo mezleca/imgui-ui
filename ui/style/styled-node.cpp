@@ -85,13 +85,13 @@ void StyledNode::update_cursor() {
 void StyledNode::draw_before() {
     if (m_before != nullptr) {
         const Rect rect = layout().visual_rect();
-        m_before->paint(rect, rect.inset(style().padding()));
+        m_before->paint(rect, rect.inset(computed_style().padding()));
     }
 }
 
 void StyledNode::draw_after() {
     if (m_after != nullptr) {
         const Rect rect = layout().visual_rect();
-        m_after->paint(rect, rect.inset(style().padding()));
+        m_after->paint(rect, rect.inset(computed_style().padding()));
     }
 }

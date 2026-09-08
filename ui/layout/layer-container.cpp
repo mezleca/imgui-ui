@@ -69,7 +69,7 @@ bool LayerContainer::paint() {
         ImGui::SetNextWindowFocus();
     }
     m_focus_requested = false;
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style().padding());
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, computed_style().padding());
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{});
@@ -80,7 +80,7 @@ bool LayerContainer::paint() {
     set_layout_rect(window_rect);
     set_visual_rect(window_rect);
 
-    draw_frame(window_rect, style());
+    draw_frame(window_rect, computed_style());
     return true;
 }
 

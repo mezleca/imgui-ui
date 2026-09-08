@@ -189,7 +189,7 @@ bool DropdownBodyNode::paint() {
 
     const ComputedStyle& style = computed_style();
     const ImVec2 item_padding =
-        children().empty() ? ImVec2{} : static_cast<const DropdownOptionNode&>(*children().front()).style().padding();
+        children().empty() ? ImVec2{} : static_cast<const DropdownOptionNode&>(*children().front()).computed_style().padding();
     m_item_height = ImGui::GetTextLineHeight() + item_padding.y * 2.0F;
     const ImVec2 padding = style.padding();
 
@@ -415,9 +415,9 @@ DropdownWidget& DropdownWidget::set_options(std::vector<DropdownOption> options)
 
 void DropdownWidget::on_measure() {
     ImVec2 size = layout().intrinsic_size();
-    const ImVec2 padding = style().padding();
+    const ImVec2 padding = computed_style().padding();
     if (layout().size_spec().height.mode != LayoutSizeMode::Fixed) {
-        size.y = ImGui::GetTextLineHeight() + m_trigger->style().padding().y * 2.0F + padding.y * 2.0F;
+        size.y = ImGui::GetTextLineHeight() + m_trigger->computed_style().padding().y * 2.0F + padding.y * 2.0F;
         if (has_label()) {
             size.y += m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y;
         }
@@ -437,7 +437,7 @@ Widget& DropdownWidget::body() {
 void DropdownWidget::on_layout() {
     const float label_height = has_label() ? m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y : 0.0F;
     const ImVec2 outer_size = layout().size();
-    const ImVec2 padding = style().padding();
+    const ImVec2 padding = computed_style().padding();
     const ImVec2 trigger_size = {
         std::max(0.0F, outer_size.x - padding.x * 2.0F),
         std::max(0.0F, outer_size.y - label_height - padding.y * 2.0F),
@@ -447,7 +447,7 @@ void DropdownWidget::on_layout() {
 }
 
 void DropdownWidget::draw_children() {
-    const ImVec2 padding = style().padding();
+    const ImVec2 padding = computed_style().padding();
     const ImVec2 cursor = ImGui::GetCursorPos();
     ImGui::SetCursorPos({cursor.x + padding.x, cursor.y + padding.y});
 

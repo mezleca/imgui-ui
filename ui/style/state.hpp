@@ -1,16 +1,17 @@
 #pragma once
 
+#include "animation.hpp"
 #include "style.hpp"
 
 #include <algorithm>
+#include <array>
 #include <optional>
+#include <vector>
 
 namespace ui {
     static constexpr float OPACITY_TRANSITION_DURATION = 0.15F;
     static constexpr float VISIBILITY_OPACITY_THRESHOLD = 0.002f;
 
-    /// owns style slots and interpolates the selected slot and opacity.
-    /// widgets use it as the single source for appearance and visual input acceptance.
     class VisualState {
     public:
         VisualState() {
@@ -82,15 +83,11 @@ namespace ui {
         }
 
         bool transitioning() const {
-            return current_opacity.value != m_opacity || m_transition_style.has_value();
+            return current_opacity.value != m_opacity || m_transition_style.has_value() || !m_animation_steps.empty() ||
+                   !m_animation_tracks.empty();
         }
 
-        /// advances opacity and style interpolation by one simulation frame.
         void update(float dt) {
-            if (!first_frame && current_opacity.value == m_opacity && !m_transition_style.has_value()) {
-                return;
-            }
-
             const FloatValue target_opacity{m_opacity, m_opacity_transition};
             current_opacity.tick(target_opacity, dt);
             if (current_opacity.is_transition_complete()) {
@@ -105,6 +102,7 @@ namespace ui {
             }
 
             first_frame = false;
+            update_animations(dt);
         }
 
         /// selects a style slot and begins interpolation when necessary.
@@ -154,6 +152,10 @@ namespace ui {
             return m_target_style;
         }
 
+        AnimationSequence animate();
+
+        void cancel_animations();
+
         /// resolved style currently used for drawing.
         Style& style() {
             return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(m_target_style)];
@@ -169,7 +171,7 @@ namespace ui {
         }
 
         const ComputedStyle& computed_style() const {
-            return style().computed_style();
+            return m_has_presentation_style ? m_presentation_style.computed_style() : style().computed_style();
         }
 
         const Style& style(StyleType type) const {
@@ -177,14 +179,48 @@ namespace ui {
         }
 
     private:
+        friend class AnimationSequence;
+
+        struct AnimationStep {
+            AnimationProperty property;
+            std::optional<AnimationValue> value;
+            TransitionSpec transition;
+            float start = 0.0F;
+        };
+
+        struct AnimationTrack {
+            AnimationProperty property;
+            AnimationValue start;
+            AnimationValue target;
+            TransitionSpec transition;
+            float started_at = 0.0F;
+            bool release = false;
+        };
+
+        void schedule_animation(
+            AnimationProperty property, std::optional<AnimationValue> value, float start, TransitionSpec transition
+        );
+        void update_animations(float dt);
+        void apply_animation_value(Style& style, AnimationProperty property, const AnimationValue& value) const;
+        AnimationValue animation_value(const ComputedStyle& style, AnimationProperty property) const;
+        bool has_animation_overrides() const;
+        bool has_layout_override() const;
+        static bool affects_layout(AnimationProperty property);
+
         StyleType m_target_style = StyleType::DEFAULT;
         FloatValue current_opacity;
         Style styles[static_cast<size_t>(StyleType::_COUNT)];
         std::optional<Style> m_transition_style;
+        Style m_presentation_style;
+        std::array<std::optional<AnimationValue>, static_cast<size_t>(AnimationProperty::_COUNT)> m_animation_overrides;
+        std::vector<AnimationStep> m_animation_steps;
+        std::vector<AnimationTrack> m_animation_tracks;
+        float m_animation_time = 0.0F;
         float m_opacity = 1.0f;
         TransitionSpec m_opacity_transition{OPACITY_TRANSITION_DURATION, ui::easing::linear};
         bool visible = true;
         bool first_frame = true;
+        bool m_has_presentation_style = false;
     };
 
 } // namespace ui

@@ -408,9 +408,18 @@ DemoScreen::DemoScreen(ui::UI& surface, std::string backend)
         }
     );
 
-    button.set_on_click([this, &status] {
+    button.set_on_click([this, &button, &status] {
         ++m_clicks;
         status.set_text(std::format("button clicks: {}", m_clicks));
+        button.animate()
+            .padding_y(12.0F, {0.12F, ui::easing::out_quad})
+            .then(0.08F)
+            .padding_x(20.0F, {0.18F, ui::easing::out_cubic})
+            .background_color(m_surface.theme().accent_color)
+            .then(0.15F)
+            .release_padding_x({0.16F, ui::easing::out_quad})
+            .release_padding_y({0.16F, ui::easing::out_quad})
+            .release_background_color({0.16F, ui::easing::out_quad});
     });
 }
 

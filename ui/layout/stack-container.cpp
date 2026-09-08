@@ -128,7 +128,7 @@ void StackContainer::on_measure() {
         content_size.y += total_spacing;
     }
 
-    const ImVec2 padding = style().padding();
+    const ImVec2 padding = computed_style().padding();
     set_measured_size({content_size.x + padding.x * 2.0F, content_size.y + padding.y * 2.0F}, fit_width, fit_height);
 }
 
@@ -136,7 +136,7 @@ void StackContainer::arrange_children() {
     // reserve fixed space, then distribute the remainder by grow weight.
     const bool horizontal = m_direction == StackDirection::Horizontal;
     const ImVec2 container_size = layout().size();
-    const ImVec2 padding = style().padding();
+    const ImVec2 padding = computed_style().padding();
     const ImVec2 content_size = {
         std::max(0.0F, container_size.x - padding.x * 2.0F),
         std::max(0.0F, container_size.y - padding.y * 2.0F),

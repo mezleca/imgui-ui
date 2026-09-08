@@ -114,7 +114,7 @@ void TextInputWidget::on_measure() {
     ImVec2 size = layout().intrinsic_size();
     if (layout().size_spec().height.mode != LayoutSizeMode::Fixed && font() != nullptr && ImGui::GetCurrentContext() != nullptr) {
         ImGui::PushFont(font());
-        size.y = ImGui::GetTextLineHeight() + style().padding().y * 2.0F;
+        size.y = ImGui::GetTextLineHeight() + computed_style().padding().y * 2.0F;
         ImGui::PopFont();
     }
 

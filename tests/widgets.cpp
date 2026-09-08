@@ -289,6 +289,26 @@ TEST_CASE("text measurement and drawing include style padding", "[TextWidget][la
     REQUIRE(text.layout().size().y == Catch::Approx(raw_size.y + 6.0F));
 }
 
+TEST_CASE("animated padding updates text measurement", "[TextWidget][layout][animation]") {
+    Runtime runtime;
+    ui::UI surface(runtime, {.backend = ui_test::make_backend()});
+    TextWidget text("animated text");
+    text.configure_all_styles([](Style& style) { style.padding({}); });
+
+    ui_test::prepare_surface(surface, {400.0F, 180.0F});
+
+    surface.begin_frame();
+    const ImVec2 raw_size = ImGui::GetFont()->CalcTextSizeA(ImGui::GetFont()->LegacySize, FLT_MAX, 0.0F, "animated text");
+    text.animate().padding_x(10.0F, {0.1F, easing::linear});
+    text.update(0.05F);
+    ImGui::Begin("animated-text-padding-test");
+    text.draw();
+    ImGui::End();
+    surface.end_frame();
+
+    REQUIRE(text.layout().size().x == Catch::Approx(raw_size.x + 10.0F));
+}
+
 TEST_CASE("text line height scales multi-line text layout", "[TextWidget][layout][style]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
@@ -572,6 +592,72 @@ TEST_CASE("style transitions remain active until their duration ends", "[VisualS
     state.update(0.05F);
 
     REQUIRE(state.style().line_height() == Catch::Approx(2.0F));
+    REQUIRE_FALSE(state.transitioning());
+}
+
+TEST_CASE("animation sequences run parallel steps before advancing", "[VisualState][animation]") {
+    VisualState state;
+    state.configure_all_styles([](Style& style) {
+        style.padding({2.0F, 4.0F});
+        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F});
+    });
+
+    state.animate()
+        .padding_y(12.0F, {0.1F, easing::linear})
+        .background_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F}, {0.1F, easing::linear})
+        .then(0.05F)
+        .padding_x(20.0F, {0.1F, easing::linear});
+
+    state.update(0.05F);
+
+    REQUIRE(state.computed_style().padding().x == Catch::Approx(2.0F));
+    REQUIRE(state.computed_style().padding().y == Catch::Approx(8.0F));
+    REQUIRE(state.computed_style().background_color().value.Value.x == Catch::Approx(0.5F));
+
+    state.update(0.1F);
+
+    REQUIRE(state.computed_style().padding().x == Catch::Approx(2.0F));
+    REQUIRE(state.computed_style().padding().y == Catch::Approx(12.0F));
+    REQUIRE(state.computed_style().background_color().value.Value.x == Catch::Approx(1.0F));
+    REQUIRE(state.transitioning());
+
+    state.update(0.05F);
+
+    REQUIRE(state.computed_style().padding().x == Catch::Approx(11.0F));
+    REQUIRE(state.transitioning());
+
+    state.update(0.05F);
+
+    REQUIRE(state.computed_style().padding().x == Catch::Approx(20.0F));
+    REQUIRE_FALSE(state.transitioning());
+
+    state.cancel_animations();
+
+    REQUIRE(state.computed_style().padding().x == Catch::Approx(2.0F));
+}
+
+TEST_CASE("released animation properties return to the active style", "[VisualState][animation]") {
+    VisualState state;
+    const ImColor default_color{0.0F, 0.0F, 0.0F, 1.0F};
+    const ImColor hover_color{0.0F, 1.0F, 0.0F, 1.0F};
+    const ImColor flash_color{1.0F, 0.0F, 0.0F, 1.0F};
+    state.style(StyleType::DEFAULT).background_color(default_color);
+    state.style(StyleType::HOVER).background_color(hover_color);
+    state.animate().background_color(flash_color).then(0.05F).release_background_color({0.1F, easing::linear});
+
+    state.update(0.0F);
+    REQUIRE(state.computed_style().background_color().value.Value.x == Catch::Approx(1.0F));
+
+    state.set_style(StyleType::HOVER);
+    state.update(0.1F);
+
+    REQUIRE(state.computed_style().background_color().value.Value.x == Catch::Approx(0.5F));
+    REQUIRE(state.computed_style().background_color().value.Value.y == Catch::Approx(0.5F));
+
+    state.update(0.05F);
+
+    REQUIRE(state.computed_style().background_color().value.Value.x == Catch::Approx(0.0F));
+    REQUIRE(state.computed_style().background_color().value.Value.y == Catch::Approx(1.0F));
     REQUIRE_FALSE(state.transitioning());
 }
 

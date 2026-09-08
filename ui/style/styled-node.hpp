@@ -67,6 +67,14 @@ namespace ui {
             m_state.set_item_state(hovered, active, focused);
         }
 
+        AnimationSequence animate() {
+            return m_state.animate();
+        }
+
+        void cancel_animations() {
+            m_state.cancel_animations();
+        }
+
         void fade_in() {
             m_state.fade_in();
         }
