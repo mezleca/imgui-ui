@@ -16,7 +16,9 @@ static bool needs_child_scope(const ComputedStyle& style) {
 LayerContainer::LayerContainer(std::string id, LayerMode mode) : LayerContainer(std::move(id), mode, "LayerContainer") {}
 
 LayerContainer::LayerContainer(std::string id, LayerMode mode, std::string_view type_name)
-    : Container(std::move(id), type_name), m_mode(mode) {}
+    : Container(std::move(id), type_name), m_mode(mode) {
+    set_layout({.in_flow = false});
+}
 
 void LayerContainer::resolve_layout() {
     if (m_mode == LayerMode::Inline && parent() != nullptr) {

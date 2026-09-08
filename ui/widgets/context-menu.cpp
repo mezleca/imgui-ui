@@ -126,6 +126,7 @@ ContextMenuWidget::ContextMenuWidget(UI& ui, ContextMenuItems items, Texture* su
 ContextMenuWidget::ContextMenuWidget(InputRouter& router, const Theme& theme, Texture* submenu_icon, ContextMenuItems items)
     : StackContainer({}, StackDirection::Vertical), m_router(router), m_theme(theme), m_submenu_icon(submenu_icon) {
     set_type_name("ContextMenu");
+    set_layout({.in_flow = false});
     set_visible(false);
     set_enabled(false);
     set_input_mode(InputMode::Target);
@@ -232,7 +233,6 @@ void ContextMenuWidget::open_at(ImVec2 screen_position) {
     const ImVec2 position = clamp_position(work_area, layout().intrinsic_size(), screen_position);
     LayoutConfig config = layout().config();
     config.placement.offset = {position.x - work_area.min.x, position.y - work_area.min.y};
-    config.in_flow = false;
     set_layout(config);
     activate();
 }

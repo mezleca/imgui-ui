@@ -527,9 +527,7 @@ void setup_demo(ui::UI& surface, std::string backend) {
 
     auto& demo = surface.root().add<DemoScreen>(surface, std::move(backend));
 
-    // keep the layer out of flow so showing it cannot move the page.
-    auto& overlay = demo.add<ui::LayerContainer>("##demo-overlay", ui::LayerMode::Inline);
-    overlay.set_layout({.in_flow = false});
+    auto& overlay = demo.add<ui::LayerContainer>("##demo-overlay");
     auto& panel = overlay.add<DemoPanel>("overlay-panel", surface.theme());
 
     panel.set_layout({
@@ -573,8 +571,7 @@ void setup_demo(ui::UI& surface, std::string backend) {
     context_button.set_on_click([&context_menu] { context_menu.open(); });
 
     // block outside the panel so background controls cannot receive its input.
-    auto& input_blocker = surface.root().add<ui::LayerContainer>("##input-blocker", ui::LayerMode::Inline);
-    input_blocker.set_layout({.in_flow = false});
+    auto& input_blocker = surface.root().add<ui::LayerContainer>("##input-blocker");
     input_blocker.set_visible(false);
 
     auto& blocker_panel = input_blocker.add<DemoPanel>("input-blocker-panel", surface.theme());
@@ -608,8 +605,7 @@ void setup_demo(ui::UI& surface, std::string backend) {
     });
 
     // sample the app behind this layer while routing modal input to the panel.
-    auto& modal_layer = surface.root().add<ui::LayerContainer>("##modal-layer", ui::LayerMode::Inline);
-    modal_layer.set_layout({.in_flow = false});
+    auto& modal_layer = surface.root().add<ui::LayerContainer>("##modal-layer");
     modal_layer.set_visible(false);
     modal_layer.set_input_mode(ui::InputMode::Blocker);
     modal_layer.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F}).blur(5); });

@@ -12,7 +12,7 @@ namespace ui {
 
     class LayerContainer : public Container {
     public:
-        explicit LayerContainer(std::string id, LayerMode mode = LayerMode::Window);
+        explicit LayerContainer(std::string id, LayerMode mode = LayerMode::Inline);
 
         /// focuses a window layer on its next draw.
         LayerContainer& request_focus() {

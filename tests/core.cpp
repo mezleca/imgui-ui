@@ -590,8 +590,10 @@ TEST_CASE("overlay children stay in the surface window") {
     };
 
     ui_test::ImGuiContext context({200.0F, 120.0F});
-    LayerContainer overlay("overlay", LayerMode::Inline);
+    LayerContainer overlay("overlay");
     auto& child = overlay.add<WindowNameNode>();
+
+    REQUIRE_FALSE(overlay.layout().in_flow());
 
     ImGui::NewFrame();
     ImGui::Begin("surface");
