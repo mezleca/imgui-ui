@@ -1,5 +1,7 @@
 # imgui-ui
 
+<img src="https://github.com/mezleca/imgui-ui/blob/main/assets/images/preview.png?raw=true" width="50%"/>
+
 a small retained ui "framework" built on top of dear imgui and opengl. it provides a node tree,
 layout, styling, and input routing with sdl or raylib backends.
 
