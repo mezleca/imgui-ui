@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <ui/backends/opengl/texture-loader.hpp>
 #include <ui/backends/sdl/backend.hpp>
 #include <ui/diagnostics/debugger.hpp>
 #include <ui/imgui/context-scope.hpp>
@@ -83,6 +84,32 @@ TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regre
     CHECK(pixel[1] < 80);
     CHECK(pixel[2] < 80);
     surface.end_frame();
+}
+
+TEST_CASE("gif texture data decodes into an opengl texture", "[texture][gif]") {
+    static constexpr char gif_data[] = "GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,"
+                                       "\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;";
+    constexpr std::string_view gif{gif_data, sizeof(gif_data) - 1U};
+
+    SdlVideoSession sdl;
+    ui::Runtime runtime({.texture_loader = std::make_unique<ui::OpenGLTextureLoader>()});
+    auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
+        .size = {128.0F, 128.0F},
+        .visible = false,
+        .swap_interval = 0,
+    });
+    ui::UI surface(runtime, {.backend = std::move(backend)});
+    REQUIRE(surface.ready());
+
+    ui::Texture* texture = runtime.textures().add("gif", gif);
+    REQUIRE(texture != nullptr);
+    REQUIRE(texture->size().x == 1.0F);
+    REQUIRE(texture->size().y == 1.0F);
+
+    const ui::ImGuiContextScope context(surface.imgui_context());
+    const ImTextureID id = texture->get(texture->size());
+    REQUIRE(id != ImTextureID{});
+    REQUIRE(glIsTexture(static_cast<GLuint>(id)) == GL_TRUE);
 }
 
 TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regression]") {
@@ -204,7 +231,7 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
     });
 
     auto& blocker = surface.root().add<ui::LayerContainer>("blocker", ui::LayerMode::Inline);
-    blocker.set_input_mode(InputMode::Blocker);
+    blocker.set_input_mode(ui::InputMode::Blocker);
     auto& overlay_checkbox = blocker.add<ui::CheckboxWidget>(surface, overlay_value, "overlay");
     overlay_checkbox.set_layout({
         .size = {ui::fit(), ui::fit()},

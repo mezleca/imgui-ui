@@ -4,12 +4,111 @@
 #include <lunasvg.h>
 #include <vendor/lunasvg/plutovg/include/plutovg.h>
 
+extern "C" {
+#include <nsgif.h>
+}
+
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <format>
+#include <memory>
+#include <new>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 using namespace ui;
+
+static GLuint create_opengl_texture(GLsizei width, GLsizei height, GLenum source_format, const void* pixels) {
+    GLuint texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, source_format, GL_UNSIGNED_BYTE, pixels);
+    return texture;
+}
+
+struct GifBitmap {
+    explicit GifBitmap(std::size_t size) : pixels(size) {}
+
+    std::vector<uint8_t> pixels;
+};
+
+struct GifContextTexture {
+    GLuint id = 0;
+    uint64_t revision = 0;
+};
+
+static constexpr std::size_t maximum_gif_bitmap_bytes = 512U * 1024U * 1024U;
+
+static nsgif_bitmap_t* create_gif_bitmap(int width, int height) {
+    if (width <= 0 || height <= 0) {
+        return nullptr;
+    }
+
+    const std::size_t bitmap_width = static_cast<std::size_t>(width);
+    const std::size_t bitmap_height = static_cast<std::size_t>(height);
+    if (bitmap_width > maximum_gif_bitmap_bytes / 4U / bitmap_height) {
+        return nullptr;
+    }
+
+    try {
+        return new GifBitmap(bitmap_width * bitmap_height * 4U);
+    } catch (const std::bad_alloc&) {
+        return nullptr;
+    }
+}
+
+static void destroy_gif_bitmap(nsgif_bitmap_t* bitmap) {
+    delete static_cast<GifBitmap*>(bitmap);
+}
+
+static uint8_t* gif_bitmap_buffer(nsgif_bitmap_t* bitmap) {
+    return static_cast<GifBitmap*>(bitmap)->pixels.data();
+}
+
+static bool has_area(nsgif_rect_t area) {
+    return area.x0 < area.x1 && area.y0 < area.y1;
+}
+
+static nsgif_rect_t full_gif_area(ImVec2 size) {
+    return {
+        .x0 = 0,
+        .y0 = 0,
+        .x1 = static_cast<uint32_t>(size.x),
+        .y1 = static_cast<uint32_t>(size.y),
+    };
+}
+
+static void update_gif_texture(GLuint texture, const GifBitmap& bitmap, int bitmap_width, nsgif_rect_t area) {
+    const int width = static_cast<int>(area.x1 - area.x0);
+    const int height = static_cast<int>(area.y1 - area.y0);
+    const uint8_t* pixels = bitmap.pixels.data() + (static_cast<std::size_t>(area.y0) * bitmap_width + area.x0) * 4U;
+
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, bitmap_width);
+    glTexSubImage2D(
+        GL_TEXTURE_2D, 0, static_cast<int>(area.x0), static_cast<int>(area.y0), width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels
+    );
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+}
+
+static const nsgif_bitmap_cb_vt gif_bitmap_callbacks = {
+    .create = create_gif_bitmap,
+    .destroy = destroy_gif_bitmap,
+    .get_buffer = gif_bitmap_buffer,
+    .set_opaque = nullptr,
+    .test_opaque = nullptr,
+    .modified = nullptr,
+    .get_rowspan = nullptr,
+};
+
 class OpenGLTexture final : public Texture {
 public:
     explicit OpenGLTexture(std::unique_ptr<lunasvg::Document> document) : m_document(std::move(document)) {}
@@ -37,15 +136,7 @@ public:
         bitmap_data.convertToRGBA();
         auto bitmap = std::make_unique<lunasvg::Bitmap>(bitmap_data);
 
-        GLuint texture = 0;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, bitmap->data());
+        const GLuint texture = create_opengl_texture(width, height, GL_RGBA, bitmap->data());
 
         cache.emplace(size_key, std::make_pair(texture, std::move(bitmap)));
         return static_cast<ImTextureID>(texture);
@@ -97,17 +188,9 @@ public:
             return static_cast<ImTextureID>(existing->second);
         }
 
-        GLuint texture = 0;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-        glTexImage2D(
-            GL_TEXTURE_2D, 0, GL_RGBA, plutovg_surface_get_width(m_surface), plutovg_surface_get_height(m_surface), 0, GL_BGRA,
-            GL_UNSIGNED_BYTE, plutovg_surface_get_data(m_surface)
+        const GLuint texture = create_opengl_texture(
+            plutovg_surface_get_width(m_surface), plutovg_surface_get_height(m_surface), GL_BGRA,
+            plutovg_surface_get_data(m_surface)
         );
 
         m_textures.emplace(context, texture);
@@ -129,23 +212,180 @@ private:
     std::unordered_map<ImGuiContext*, GLuint> m_textures;
 };
 
+class OpenGLGifTexture final : public Texture {
+public:
+    explicit OpenGLGifTexture(std::vector<uint8_t> data) : m_data(std::move(data)), m_gif(nullptr, nsgif_destroy) {
+        nsgif_t* gif = nullptr;
+        const nsgif_error create_error = nsgif_create(&gif_bitmap_callbacks, NSGIF_BITMAP_FMT_R8G8B8A8, &gif);
+        if (create_error != NSGIF_OK) {
+            throw std::runtime_error(std::format("failed to create gif decoder: {}", nsgif_strerror(create_error)));
+        }
+
+        m_gif.reset(gif);
+        const nsgif_error scan_error = nsgif_data_scan(m_gif.get(), m_data.size(), m_data.data());
+        nsgif_data_complete(m_gif.get());
+
+        const nsgif_info_t* info = nsgif_get_info(m_gif.get());
+        // a malformed trailing frame can still leave earlier frames drawable.
+        if (info == nullptr || info->frame_count == 0 || info->width == 0 || info->height == 0) {
+            throw std::runtime_error(std::format("failed to load gif texture: {}", nsgif_strerror(scan_error)));
+        }
+
+        m_size = {static_cast<float>(info->width), static_cast<float>(info->height)};
+    }
+
+    ImVec2 size() const override {
+        return m_size;
+    }
+
+    ImTextureID get(ImVec2) override {
+        ImGuiContext* context = ImGui::GetCurrentContext();
+        if (context == nullptr) {
+            return {};
+        }
+
+        advance(ImGui::GetTime());
+        if (m_bitmap == nullptr) {
+            return {};
+        }
+
+        GifContextTexture& texture = m_textures[context];
+        if (texture.id == 0) {
+            texture.id = create_opengl_texture(
+                static_cast<GLsizei>(m_size.x), static_cast<GLsizei>(m_size.y), GL_RGBA, m_bitmap->pixels.data()
+            );
+            texture.revision = m_revision;
+        } else if (texture.revision != m_revision) {
+            if (texture.revision + 1 == m_revision && has_area(m_dirty)) {
+                update_gif_texture(texture.id, *m_bitmap, static_cast<int>(m_size.x), m_dirty);
+            } else {
+                // a context that skipped frames cannot recover from only the latest changed area.
+                update_gif_texture(texture.id, *m_bitmap, static_cast<int>(m_size.x), full_gif_area(m_size));
+            }
+            texture.revision = m_revision;
+        }
+
+        return static_cast<ImTextureID>(texture.id);
+    }
+
+    void release_context(ImGuiContext* context) override {
+        const auto found = m_textures.find(context);
+        if (found == m_textures.end()) {
+            return;
+        }
+
+        glDeleteTextures(1, &found->second.id);
+        m_textures.erase(found);
+    }
+
+private:
+    void advance(double time) {
+        if (m_finished || (m_started && time < m_next_frame_time)) {
+            return;
+        }
+
+        if (!m_started) {
+            m_started = true;
+            m_next_frame_time = time;
+        }
+
+        uint32_t delay = 0;
+        uint32_t frame = 0;
+        nsgif_rect_t area{};
+        const nsgif_error prepare_error = nsgif_frame_prepare(m_gif.get(), &area, &delay, &frame);
+        if (prepare_error == NSGIF_ERR_ANIMATION_END) {
+            m_finished = true;
+            return;
+        }
+        if (prepare_error != NSGIF_OK) {
+            throw std::runtime_error(std::format("failed to prepare gif frame: {}", nsgif_strerror(prepare_error)));
+        }
+
+        nsgif_bitmap_t* bitmap = nullptr;
+        const nsgif_error decode_error = nsgif_frame_decode(m_gif.get(), frame, &bitmap);
+        if (decode_error != NSGIF_OK) {
+            throw std::runtime_error(std::format("failed to decode gif frame: {}", nsgif_strerror(decode_error)));
+        }
+
+        m_bitmap = static_cast<GifBitmap*>(bitmap);
+        m_dirty = area;
+        ++m_revision;
+
+        if (delay == NSGIF_INFINITE) {
+            m_finished = true;
+        } else {
+            m_next_frame_time += static_cast<double>(delay) / 100.0;
+        }
+    }
+
+    // libnsgif reads this source while frames are decoded.
+    std::vector<uint8_t> m_data;
+    std::unique_ptr<nsgif_t, decltype(&nsgif_destroy)> m_gif;
+    std::unordered_map<ImGuiContext*, GifContextTexture> m_textures;
+    GifBitmap* m_bitmap = nullptr;
+    ImVec2 m_size{};
+    nsgif_rect_t m_dirty{};
+    double m_next_frame_time = 0.0;
+    uint64_t m_revision = 0;
+    bool m_started = false;
+    bool m_finished = false;
+};
+
+static std::vector<uint8_t> load_binary_file(const std::filesystem::path& location) {
+    std::ifstream file(location, std::ios::binary | std::ios::ate);
+    if (!file) {
+        throw std::runtime_error(std::format("failed to load texture {}", location.string()));
+    }
+
+    const std::streamsize size = file.tellg();
+    if (size <= 0) {
+        throw std::runtime_error(std::format("failed to load texture {}", location.string()));
+    }
+
+    std::vector<uint8_t> data(static_cast<std::size_t>(size));
+    file.seekg(0);
+    if (!file.read(reinterpret_cast<char*>(data.data()), size)) {
+        throw std::runtime_error(std::format("failed to load texture {}", location.string()));
+    }
+
+    return data;
+}
+
+static bool is_gif(std::string_view content) {
+    return content.starts_with("GIF87a") || content.starts_with("GIF89a");
+}
+
 std::unique_ptr<Texture> OpenGLTextureLoader::load(const std::filesystem::path& location, std::string) {
+    // both loaders build CPU data. ImageWidget::paint_draw_list calls Texture::get(), then svg rasterizes per size, raster
+    // images upload once per imgui context, and gifs decode only their next drawn frame.
+    if (location.extension() == ".gif") {
+        return std::make_unique<OpenGLGifTexture>(load_binary_file(location));
+    }
+
     if (location.extension() != ".svg") {
         plutovg_surface_t* surface = plutovg_surface_load_from_image_file(location.string().c_str());
+
         if (surface == nullptr) {
             throw std::runtime_error(std::format("failed to load texture {}", location.string()));
         }
+
         return std::make_unique<OpenGLRasterTexture>(surface);
     }
 
     std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromFile(location.string());
+
     if (document == nullptr) {
         throw std::runtime_error(std::format("failed to load texture {}", location.string()));
     }
+
     return std::make_unique<OpenGLTexture>(std::move(document));
 }
 
 std::unique_ptr<Texture> OpenGLTextureLoader::load(std::string_view content, std::string) {
+    if (is_gif(content)) {
+        return std::make_unique<OpenGLGifTexture>(std::vector<uint8_t>(content.begin(), content.end()));
+    }
+
     std::unique_ptr<lunasvg::Document> document = lunasvg::Document::loadFromData(std::string{content});
     if (document == nullptr) {
         throw std::runtime_error("failed to load texture data");

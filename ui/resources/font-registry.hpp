@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <imgui.h>
+#include <misc/freetype/imgui_freetype.h>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -15,7 +16,7 @@ namespace ui {
 
     class Font final {
     public:
-        explicit Font(std::filesystem::path location, ImFontConfig cfg = {});
+        Font(std::filesystem::path location, ImFontConfig cfg);
 
         ImFont* get(int size);
         void release_context(ImGuiContext* context);
@@ -25,12 +26,13 @@ namespace ui {
 
         std::filesystem::path m_location;
         std::unordered_map<ImGuiContext*, ContextFonts> m_contexts;
-        std::unique_ptr<ImFontConfig> m_cfg;
+        ImFontConfig m_config;
     };
 
     class FontRegistry final : public AssetRegistry {
     public:
         Font* add(std::string id, std::filesystem::path location);
+        Font* add(std::string id, std::filesystem::path location, ImFontConfig config);
         Font* find(std::string_view id);
         const Font* find(std::string_view id) const;
     };

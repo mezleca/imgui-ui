@@ -39,6 +39,7 @@ if(IMGUI_UI_BUILD_SDL)
         SDL3::SDL3
         OpenGL::GL
         lunasvg
+        nsgif
     )
 endif()
 
@@ -57,5 +58,5 @@ if(IMGUI_UI_BUILD_RAYLIB)
         "${IMGUI_UI_IMGUI_BACKENDS_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glad/include"
     )
-    target_link_libraries(imgui-ui-raylib PUBLIC imgui-ui-core raylib lunasvg)
+    target_link_libraries(imgui-ui-raylib PUBLIC imgui-ui-core raylib lunasvg nsgif)
 endif()

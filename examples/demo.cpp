@@ -281,7 +281,7 @@ public:
     int& blur();
 
 private:
-    ui::ImageWidget& add_test_image();
+    ui::ImageWidget& add_test_image(ui::Texture* texture);
     ui::ImageFit image_fit() const;
     void apply_image_fit();
     void on_update(float dt) override;
@@ -298,6 +298,7 @@ private:
     ui::UI& m_surface;
     ui::ResizableContainer* m_dynamic_nodes = nullptr;
     ui::TextWidget* m_dynamic_status = nullptr;
+    ui::TextWidget* m_fps = nullptr;
     ui::StackContainer* m_test_images = nullptr;
     std::vector<ui::Node*> m_pending_image_removals;
     ui::Node* m_pending_remove = nullptr;
@@ -342,6 +343,7 @@ DemoScreen::DemoScreen(ui::UI& surface, std::string backend)
     overview.set_spacing(4.0F);
     overview.add<ui::TextWidget>("imgui-ui example");
     overview.add<ui::TextWidget>(std::format("backend: {}", backend));
+    m_fps = &overview.add<ui::TextWidget>("fps: 0.0");
     overview.add<ui::TextWidget>("debugger: shift + d");
 
     auto& profile = add<DemoPanel>("profile", surface.theme());
@@ -366,10 +368,11 @@ DemoScreen::DemoScreen(ui::UI& surface, std::string backend)
         });
     });
 
-    add_test_image();
+    add_test_image(m_surface.runtime().textures().find("demo-test-image"));
+    add_test_image(m_surface.runtime().textures().find("demo-test-gif"));
 
     auto& add_image = profile.add<ui::ButtonWidget>(surface, "add image", ui::LayoutSize{ui::px(140.0F), ui::px(36.0F)});
-    add_image.set_on_click([this] { add_test_image(); });
+    add_image.set_on_click([this] { add_test_image(m_surface.runtime().textures().find("demo-test-image")); });
 
     auto& image_fit = profile.add<ui::DropdownWidget>(
         surface, m_image_fit, std::vector<ui::DropdownOption>{{"fill", "fill"}, {"contain", "contain"}, {"cover", "cover"}},
@@ -543,8 +546,8 @@ void DemoScreen::setup_dynamic_nodes(ui::Node& parent) {
     });
 }
 
-ui::ImageWidget& DemoScreen::add_test_image() {
-    auto& image = m_test_images->add<ui::ImageWidget>(m_surface.runtime().textures().find("demo-test-image"));
+ui::ImageWidget& DemoScreen::add_test_image(ui::Texture* texture) {
+    auto& image = m_test_images->add<ui::ImageWidget>(texture);
     image.set_size({ui::px(280.0F), ui::px(140.0F)});
     image.set_fit(image_fit());
     image.set_input_mode(ui::InputMode::Target);
@@ -589,6 +592,8 @@ int& DemoScreen::blur() {
 }
 
 void DemoScreen::on_update(float) {
+    m_fps->set_text(std::format("fps: {:.1f}", ImGui::GetIO().Framerate));
+
     for (ui::Node* image : m_pending_image_removals) {
         if (image->parent() != nullptr) {
             image->parent()->remove(*image);
@@ -632,6 +637,7 @@ void setup_demo(ui::UI& surface, std::string backend) {
 
     runtime.textures().add("demo-file-icon", assets / "icons/demo.svg");
     runtime.textures().add("demo-test-image", assets / "images/tiny.jpg");
+    runtime.textures().add("demo-test-gif", assets / "images/t3.gif");
     runtime.textures().add("demo-inline-icon", DEMO_INLINE_ICON_SVG);
 #endif
     ui::Texture* inline_icon = runtime.textures().find("demo-inline-icon");

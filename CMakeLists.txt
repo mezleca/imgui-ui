@@ -130,6 +130,14 @@ endif()
 if(IMGUI_UI_BUILD_SDL OR IMGUI_UI_BUILD_RAYLIB)
     find_package(OpenGL REQUIRED)
 
+    if(NOT TARGET nsgif)
+        add_library(nsgif STATIC
+            vendor/libnsgif/src/gif.c
+            vendor/libnsgif/src/lzw.c
+        )
+        target_include_directories(nsgif PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/vendor/libnsgif/include")
+    endif()
+
     if(NOT TARGET lunasvg)
         set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
         add_subdirectory(vendor/lunasvg EXCLUDE_FROM_ALL)

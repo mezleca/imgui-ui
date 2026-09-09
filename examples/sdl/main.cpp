@@ -30,6 +30,7 @@ int main() {
             .title = "imgui-ui sdl",
             .size = {1120.0F, 920.0F},
             .resizable = true,
+            .swap_interval = 1,
         });
         ui::UI surface(
             runtime, {
@@ -45,8 +46,6 @@ int main() {
             result = 1;
         } else {
             setup_demo(surface, "sdl");
-
-            SDL_GL_SetSwapInterval(1);
 
             while (!surface.is_done()) {
                 SDL_Event event;

@@ -4,9 +4,7 @@
 
 using namespace ui;
 
-Font::Font(std::filesystem::path location, ImFontConfig cfg) : m_location(std::move(location)) {
-    m_cfg = std::make_unique<ImFontConfig>(cfg);
-}
+Font::Font(std::filesystem::path location, ImFontConfig config) : m_location(std::move(location)), m_config(config) {}
 
 ImFont* Font::load_variation(ImGuiContext* context, int size) {
     if (context == nullptr || m_location.empty()) {
@@ -14,7 +12,7 @@ ImFont* Font::load_variation(ImGuiContext* context, int size) {
     }
 
     ContextFonts& context_fonts = m_contexts[context];
-    ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(m_location.string().c_str(), static_cast<float>(size), m_cfg.get());
+    ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(m_location.string().c_str(), static_cast<float>(size), &m_config);
 
     if (font != nullptr) {
         context_fonts.fonts[size] = font;
@@ -45,7 +43,13 @@ void Font::release_context(ImGuiContext* context) {
 }
 
 Font* FontRegistry::add(std::string id, std::filesystem::path location) {
-    return add_asset(std::move(id), std::make_unique<Font>(std::move(location)));
+    ImFontConfig config;
+    config.FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LightHinting;
+    return add(std::move(id), std::move(location), config);
+}
+
+Font* FontRegistry::add(std::string id, std::filesystem::path location, ImFontConfig config) {
+    return add_asset(std::move(id), std::make_unique<Font>(std::move(location), config));
 }
 
 Font* FontRegistry::find(std::string_view id) {

@@ -14,17 +14,26 @@ namespace ui {
     public:
         virtual ~Texture() = default;
         virtual ImVec2 size() const = 0;
+
+        // creates or reuses GPU data for the current imgui context when a widget draws this texture.
         virtual ImTextureID get(ImVec2 size) = 0;
+
+        // releases only the GPU data for a destroyed imgui context so the shared CPU source can be reused later.
         virtual void release_context(ImGuiContext* context) = 0;
     };
 
     class TextureLoader {
     public:
         virtual ~TextureLoader() = default;
+
+        // creates the CPU representation during registration without requiring an imgui or graphics context.
         virtual std::unique_ptr<Texture> load(const std::filesystem::path& location, std::string id) = 0;
         virtual std::unique_ptr<Texture> load(std::string_view content, std::string id) = 0;
     };
 
+    // add() builds one CPU texture per id. ImageWidget calls get() during paint to lazily create GPU data for its imgui context.
+    // Runtime releases that GPU data before the context is destroyed while this registry keeps the CPU source for future
+    // contexts.
     class TextureRegistry final : public AssetRegistry {
     public:
         explicit TextureRegistry(std::unique_ptr<TextureLoader> loader = nullptr);
