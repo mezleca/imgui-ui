@@ -9,12 +9,15 @@ namespace ui {
     class Texture;
 
     enum class ImageFit : uint8_t {
+        /// stretches the texture to fill the widget rectangle.
         Fill,
+        /// fits the complete texture inside the widget rectangle.
         Contain,
+        /// fills the widget rectangle and crops overflow.
         Cover,
     };
 
-    /// images are passive. call set_input_mode(InputMode::Target) to route their pointer input.
+    /// images are passive until input mode target is enabled.
     class ImageWidget : public DrawListWidget {
     public:
         explicit ImageWidget(Texture* texture = nullptr);

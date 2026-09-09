@@ -6,6 +6,10 @@
 
 namespace ui {
     class Style;
+    class StyledNode;
+
+    /// fractional layout coordinates can place a 1px dotted edge between pixel centers.
+    inline constexpr float MIN_BORDER_THICKNESS = 1.5F;
 
     enum Border : uint8_t {
         BORDER_NONE = 0,
@@ -17,26 +21,27 @@ namespace ui {
     };
 
     enum class BorderStyle : uint8_t {
+        /// draws one continuous stroke per selected side.
         Solid,
+        /// draws repeated rectangular dash segments.
         Dashed,
+        /// draws repeated round dot segments.
         Dotted,
     };
 
+    /// records the imgui state entries pushed by one style pass.
     struct PushState {
+        /// records whether push changed the active font.
         bool font_pushed = false;
+        /// counts style variables pushed by push.
         int variables = 0;
+        /// counts style colors pushed by push.
         int colors = 0;
     };
 
     class ComputedStyle {
     public:
         ComputedStyle();
-
-        /// pushes resolved style values into imgui and records exactly what must be restored.
-        PushState push(float opacity, ImFont* effective_font) const;
-
-        /// restores the imgui values recorded by push.
-        static void pop(PushState state);
 
         ImFont* font() const {
             return m_font;
@@ -54,12 +59,10 @@ namespace ui {
             return m_line_height.value;
         }
 
-        /// rotation in radians around the visual center.
         float rotation() const {
             return m_rotation.value;
         }
 
-        /// visual scale around the visual center.
         const ImVec2& scale() const {
             return m_scale.value;
         }
@@ -118,6 +121,14 @@ namespace ui {
 
     protected:
         friend class Style;
+
+        /// pushes resolved style values into imgui and records exactly what must be restored.
+        PushState push(float opacity, ImFont* effective_font) const;
+
+        /// restores the imgui values recorded by push.
+        void pop(PushState state) const;
+
+        friend class StyledNode;
 
         ImFont* m_font = nullptr;
         Vec2Value m_margin;

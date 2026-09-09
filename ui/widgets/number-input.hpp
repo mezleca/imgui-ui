@@ -12,12 +12,12 @@
 
 namespace ui {
     class UI;
-    class NumberInputWidget final : public Widget {
-        // imgui edits the original scalar through its typed pointer.
-        using NumberValue = std::variant<
-            char*, signed char*, unsigned char*, short*, unsigned short*, int*, unsigned int*, long*, unsigned long*, long long*,
-            unsigned long long*, float*, double*>;
 
+    using NumberValue = std::variant<
+        char*, signed char*, unsigned char*, short*, unsigned short*, int*, unsigned int*, long*, unsigned long*, long long*,
+        unsigned long long*, float*, double*>;
+
+    class NumberInputWidget final : public Widget {
     public:
         template <typename T>
             requires std::constructible_from<NumberValue, T*>
@@ -79,8 +79,8 @@ namespace ui {
         NumberValue m_number;
         GenericValue m_label;
         std::string m_format;
-        std::optional<double> m_minimum;
-        std::optional<double> m_maximum;
+        std::optional<double> m_minimum = 0;
+        std::optional<double> m_maximum = 100;
         ImColor m_thumb_color;
         float m_speed;
         float m_thumb_size = 10.0F;

@@ -314,7 +314,7 @@ bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
         ImGui::GetIO().AddMousePosEvent(event.button.x, event.button.y);
     }
 
-    // a blocked click must keep the last pointer position; only blocked motion should hide it from imgui.
+    // a blocked click keeps the last pointer position while blocked motion hides it from imgui.
     if (native_input_blocked && translated.has_value() && translated->type == EventType::PointerMove) {
         ImGui::GetIO().AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     }

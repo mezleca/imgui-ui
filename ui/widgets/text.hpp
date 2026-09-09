@@ -10,7 +10,9 @@
 
 namespace ui {
     enum class TextOverflow {
+        /// clips text at the content bounds.
         Clip,
+        /// replaces clipped text with an ellipsis.
         Ellipsis,
     };
 

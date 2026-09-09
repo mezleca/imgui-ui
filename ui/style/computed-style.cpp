@@ -61,7 +61,7 @@ PushState ComputedStyle::push(float opacity, ImFont* effective_font) const {
     return state;
 }
 
-void ComputedStyle::pop(PushState state) {
+void ComputedStyle::pop(PushState state) const {
     ImGui::PopStyleColor(state.colors);
     ImGui::PopStyleVar(state.variables);
     if (state.font_pushed) ImGui::PopFont();

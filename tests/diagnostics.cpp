@@ -7,6 +7,7 @@
 #include <ui/style/styled-node.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/checkbox.hpp>
+#include <ui/widgets/color-picker.hpp>
 
 #include <imgui.h>
 
@@ -114,6 +115,44 @@ TEST_CASE("debugger hotkey toggles on the target surface") {
 
     REQUIRE(surface.debugger()->is_open());
     surface.end_frame();
+}
+
+TEST_CASE("debugger clicks preserve an open popup") {
+    ui::Runtime runtime;
+    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ImColor color = {0.26F, 0.59F, 0.98F, 1.0F};
+    auto& picker = surface.root().add<ui::ColorPickerWidget>(surface, color);
+
+    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    ui_test::draw_surface(surface);
+
+    const ImVec2 preview = ui_test::center(picker.preview().layout().visual_rect());
+    ui::UiEvent down = ui_test::pointer_event(ui::EventType::PointerDown, preview);
+    ui::UiEvent up = ui_test::pointer_event(ui::EventType::PointerUp, preview);
+    surface.dispatch(down);
+    surface.dispatch(up);
+    ui_test::draw_surface(surface);
+    REQUIRE(picker.is_open());
+
+    surface.debugger()->set_open(true);
+    ui_test::draw_surface(surface);
+    REQUIRE(picker.is_open());
+
+    const ui::Rect debugger_rect = surface.debugger()->layout().visual_rect();
+    const ImVec2 inspect = {debugger_rect.min.x + 20.0F, debugger_rect.min.y + 20.0F};
+    down = ui_test::pointer_event(ui::EventType::PointerDown, inspect);
+    REQUIRE(surface.dispatch(down));
+    REQUIRE_FALSE(down.native_input_blocked);
+    ImGui::GetIO().AddMousePosEvent(inspect.x, inspect.y);
+    ImGui::GetIO().AddMouseButtonEvent(0, true);
+    ui_test::draw_surface(surface);
+    REQUIRE(picker.is_open());
+
+    up = ui_test::pointer_event(ui::EventType::PointerUp, inspect);
+    REQUIRE(surface.dispatch(up));
+    ImGui::GetIO().AddMouseButtonEvent(0, false);
+    ui_test::draw_surface(surface);
+    REQUIRE(picker.is_open());
 }
 
 TEST_CASE("focused debugger blocks application hover") {

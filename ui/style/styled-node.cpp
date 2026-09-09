@@ -5,19 +5,24 @@
 #include <imgui_internal.h>
 
 #include <cmath>
+#include <numbers>
 #include <vector>
 
 using namespace ui;
 
+static void styled_node_style_changed(void* owner) {
+    static_cast<StyledNode*>(owner)->invalidate_measure();
+}
+
 StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::move(id)), m_type_name(type_name) {
-    m_state.set_change_callback(this, &StyledNode::style_changed);
+    m_state.set_change_callback(this, &styled_node_style_changed);
 }
 
 StyledNode::~StyledNode() = default;
 
 PaintSlot& StyledNode::before() {
     if (m_before == nullptr) {
-        m_before = std::make_unique<PaintSlot>(this, &StyledNode::style_changed);
+        m_before = std::make_unique<PaintSlot>(this, &styled_node_style_changed);
     }
 
     return *m_before;
@@ -25,7 +30,7 @@ PaintSlot& StyledNode::before() {
 
 PaintSlot& StyledNode::after() {
     if (m_after == nullptr) {
-        m_after = std::make_unique<PaintSlot>(this, &StyledNode::style_changed);
+        m_after = std::make_unique<PaintSlot>(this, &styled_node_style_changed);
     }
 
     return *m_after;
@@ -54,10 +59,11 @@ void StyledNode::draw() {
     const PushState push_state = current_style.push(opacity(), font());
 
     const ImVec2 scale = current_style.scale();
-    const float rotation = current_style.rotation();
-    if (rotation == 0.0F && scale.x == 1.0F && scale.y == 1.0F) {
+    const float rotation_deg = current_style.rotation();
+
+    if (rotation_deg == 0.0F && scale.x == 1.0F && scale.y == 1.0F) {
         Node::draw();
-        ComputedStyle::pop(push_state);
+        current_style.pop(push_state);
         return;
     }
 
@@ -84,10 +90,11 @@ void StyledNode::draw() {
 
     const Rect rect = layout().visual_rect();
     const ImVec2 center = {(rect.min.x + rect.max.x) * 0.5F, (rect.min.y + rect.max.y) * 0.5F};
+    const float rotation = rotation_deg * std::numbers::pi_v<float> / 180.0F;
     const float sine = std::sin(rotation);
     const float cosine = std::cos(rotation);
 
-    // transform after Node::draw() because children may append vertices to other draw lists.
+    // apply the transform after node drawing because children may append vertices to other draw lists.
     const auto transform_draw_list = [&](ImDrawList& draw_list, int start) {
         for (int index = start; index < draw_list.VtxBuffer.Size; ++index) {
             ImDrawVert& vertex = draw_list.VtxBuffer[index];
@@ -106,7 +113,7 @@ void StyledNode::draw() {
         transform_draw_list(*context.Windows[index]->DrawList, 0);
     }
 
-    ComputedStyle::pop(push_state);
+    current_style.pop(push_state);
 }
 
 bool StyledNode::on_draw() {

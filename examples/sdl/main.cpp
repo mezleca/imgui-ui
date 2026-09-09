@@ -40,8 +40,6 @@ int main() {
         );
 
         // use this constructor when the application already owns the window and context.
-        // auto backend = std::make_unique<ui::SdlBackend>(existing_window, existing_gl_context);
-        // ui::UI surface(runtime, {.backend = std::move(backend)});
         if (!surface.ready()) {
             result = 1;
         } else {

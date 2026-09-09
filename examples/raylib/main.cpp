@@ -32,8 +32,6 @@ int main() {
     );
 
     // use the attached constructor when raylib was initialized by the application.
-    // auto backend = std::make_unique<ui::RaylibBackend>();
-    // ui::UI surface(runtime, {.backend = std::move(backend)});
     if (!surface.ready()) return 1;
 
     setup_demo(surface, "raylib");

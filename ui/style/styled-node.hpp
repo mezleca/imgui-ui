@@ -67,8 +67,12 @@ namespace ui {
             m_state.set_item_state(hovered, active, focused);
         }
 
-        AnimationSequence animate() {
+        StyleAnimationSequence animate() {
             return m_state.animate();
+        }
+
+        Animator& animator() {
+            return m_state.animator();
         }
 
         void cancel_animations() {
@@ -130,7 +134,7 @@ namespace ui {
 
         /// remeasures descendants because they may inherit this font.
         StyledNode& set_font(ImFont* font) {
-            ImFont* resolved_font = resolve_font(font);
+            ImFont* resolved_font = font != nullptr || ImGui::GetCurrentContext() == nullptr ? font : ImGui::GetFont();
             configure_all_styles([resolved_font](Style& style) { style.font(resolved_font); });
             invalidate_measure_subtree();
             return *this;
@@ -178,14 +182,6 @@ namespace ui {
 
     private:
         void update_cursor();
-
-        static void style_changed(void* owner) {
-            static_cast<StyledNode*>(owner)->invalidate_measure();
-        }
-
-        static ImFont* resolve_font(ImFont* font) {
-            return font != nullptr || ImGui::GetCurrentContext() == nullptr ? font : ImGui::GetFont();
-        }
 
         VisualState m_state;
         std::string_view m_type_name;

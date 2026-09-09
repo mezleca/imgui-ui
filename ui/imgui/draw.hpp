@@ -11,11 +11,15 @@ namespace ui {
     class GenericValue;
 
     enum class DrawListTarget {
+        /// uses the current imgui window draw list.
         Window,
+        /// uses imgui's background draw list.
         Background,
+        /// uses imgui's foreground draw list.
         Foreground,
     };
 
+    /// points a triangle primitive toward one axis.
     enum class TriangleDirection {
         Up,
         Down,
@@ -57,6 +61,10 @@ namespace ui {
     void draw_rect_filled(
         ImDrawList& draw_list, Rect rect, ImColor color, float rounding = 0.0F, ImDrawFlags flags = ImDrawFlags_RoundCornersAll
     );
+    void draw_rect_filled_gradient(
+        ImDrawList& draw_list, Rect rect, ImColor top_left, ImColor top_right, ImColor bottom_right, ImColor bottom_left
+    );
+    void draw_rect_outline(ImDrawList& draw_list, Rect rect, ImColor color, float thickness = 1.0F, float rounding = 0.0F);
     void draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, std::string_view text);
     void draw_text(ImVec2 position, ImColor color, std::string_view text, DrawListTarget target = DrawListTarget::Window);
     void

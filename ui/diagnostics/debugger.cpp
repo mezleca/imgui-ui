@@ -51,7 +51,7 @@ static bool is_effectively_visible(const Node& node) {
     return true;
 }
 
-Node* Debugger::pick_node(Node& root, ImVec2 position) {
+static Node* pick_node(Node& root, ImVec2 position) {
     if (!is_effectively_visible(root)) {
         return nullptr;
     }
@@ -66,12 +66,12 @@ Node* Debugger::pick_node(Node& root, ImVec2 position) {
         return nullptr;
     }
 
-    // layers only provide stacking and are not selectable.
+    // layer containers draw no surface, so selecting one would hide the painted child beneath it.
     if (dynamic_cast<const LayerContainer*>(&root) != nullptr) {
         return nullptr;
     }
 
-    if (dynamic_cast<const StyledNode*>(&root) == nullptr || !root.accepts_input()) {
+    if (dynamic_cast<const StyledNode*>(&root) == nullptr) {
         return nullptr;
     }
 
@@ -108,9 +108,60 @@ static constexpr ImVec2 SECTION_PADDING = {10.0F, 8.0F};
 static constexpr float DEBUGGER_SPLITTER_HEIGHT = 6.0F;
 static constexpr float DEBUGGER_MIN_PANE_HEIGHT = 72.0F;
 
+// imgui closes unrelated root popups when a debugger press changes focus, so save their stack before that press is consumed.
+class ui::DebuggerPopupState {
+public:
+    void save() {
+        ImGuiContext* context = ImGui::GetCurrentContext();
+        if (context == nullptr || context->OpenPopupStack.empty()) {
+            return;
+        }
+
+        // dispatch runs before the backend queues this press for imgui, leaving this stack intact for the later restore.
+        m_popups.assign(context->OpenPopupStack.begin(), context->OpenPopupStack.end());
+    }
+
+    void restore() {
+        ImGuiContext* context = ImGui::GetCurrentContext();
+        if (context == nullptr || m_popups.empty()) {
+            return;
+        }
+
+        context->OpenPopupStack.resize(static_cast<int>(m_popups.size()));
+        std::copy(m_popups.begin(), m_popups.end(), context->OpenPopupStack.begin());
+    }
+
+    void clear() {
+        m_popups.clear();
+    }
+
+private:
+    std::vector<ImGuiPopupData> m_popups;
+};
+
 static bool belongs_to_debugger(const ImGuiWindow& window, const ImGuiWindow& debugger_window) {
     for (const ImGuiWindow* parent = window.ParentWindow; parent != nullptr; parent = parent->ParentWindow) {
         if (parent == &debugger_window) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool debugger_popup_open(ImGuiID debugger_window_id) {
+    ImGuiContext* context = ImGui::GetCurrentContext();
+    if (context == nullptr) {
+        return false;
+    }
+
+    ImGuiWindow* debugger_window = ImGui::FindWindowByID(debugger_window_id);
+    if (debugger_window == nullptr) {
+        return false;
+    }
+
+    for (const ImGuiPopupData& popup : context->OpenPopupStack) {
+        if (popup.Window != nullptr && belongs_to_debugger(*popup.Window, *debugger_window)) {
             return true;
         }
     }
@@ -370,7 +421,8 @@ draw_number_input(std::string_view label, int* values, int components = 1, float
     );
 }
 
-Debugger::Debugger(UI& target) : Container("ui debugger", "Debugger"), m_target(target) {
+Debugger::Debugger(UI& target)
+    : Container("ui debugger", "Debugger"), m_target(target), m_popup_state(std::make_unique<DebuggerPopupState>()) {
     set_size({grow(), grow()});
     set_visible(false);
     apply_theme_defaults(target.theme());
@@ -487,9 +539,11 @@ void Debugger::set_open(bool open) {
     m_target.profiler().save_report();
 
     m_overlay_rect = {};
+    m_overlay_window_id = 0;
     m_overlay_focused = false;
     m_overlay_pointer_capture = false;
     m_inspect_pointer_capture = false;
+    m_popup_state->clear();
     set_inspect_mode(false);
 }
 
@@ -562,17 +616,27 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
         return true;
     }
 
-    if (m_overlay_focused) {
-        const bool popup_open = ImGui::GetCurrentContext() != nullptr && ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup);
-        if (popup_open || overlay_contains(event.position)) {
-            event.mark_handled();
-            if (event.type == EventType::PointerDown) {
-                m_overlay_pointer_capture = true;
+    if (overlay_contains(event.position)) {
+        if (event.type == EventType::PointerDown) {
+            if (!m_overlay_focused) {
+                m_overlay_focused = true;
+                m_target.input_router().set_debug_pointer_blocked(true);
+                m_target.input_router().clear_focus();
             }
-            return true;
-        }
 
-        // transfer pointer focus on an outside press without forwarding that press to the app.
+            m_overlay_pointer_capture = true;
+            // an outside press closes a debugger popup, while a press on the debugger must preserve an unrelated popup.
+            if (debugger_popup_open(m_overlay_window_id)) {
+                m_popup_state->clear();
+            } else {
+                m_popup_state->save();
+            }
+        }
+        event.mark_handled();
+        return true;
+    }
+
+    if (m_overlay_focused) {
         if (event.type == EventType::PointerDown) {
             m_overlay_focused = false;
             m_target.input_router().set_debug_pointer_blocked(false);
@@ -587,17 +651,6 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
         return true;
     }
 
-    if (overlay_contains(event.position)) {
-        if (event.type == EventType::PointerDown) {
-            m_overlay_focused = true;
-            m_target.input_router().set_debug_pointer_blocked(true);
-            m_overlay_pointer_capture = true;
-            m_target.input_router().clear_focus();
-        }
-        event.mark_handled();
-        return true;
-    }
-
     if (!m_inspect_mode) {
         return false;
     }
@@ -608,20 +661,25 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
         return true;
     }
 
-    Node* focused_node = pick_node(m_target.root(), event.position);
-    if (focused_node == nullptr) {
+    // popup blockers receive their final screen bounds after native popup windows draw, so resolve them before retained tree
+    // order.
+    Node* inspect_node = m_target.input_router().inspect_node_at(event.position, event.type);
+    if (inspect_node == nullptr) {
+        inspect_node = pick_node(m_target.root(), event.position);
+    }
+    if (inspect_node == nullptr) {
         m_hover_target = nullptr;
         m_hover_identity = 0;
     } else if (event.type == EventType::PointerDown && event.button == PointerButton::Left) {
         m_inspect_pointer_capture = true;
-        set_target(focused_node);
+        set_target(inspect_node);
         m_hover_target = nullptr;
         m_hover_identity = 0;
         set_inspect_mode(false);
         m_scroll_to_target = true;
     } else {
-        m_hover_target = focused_node;
-        m_hover_identity = focused_node->identity();
+        m_hover_target = inspect_node;
+        m_hover_identity = inspect_node->identity();
     }
 
     return true;
@@ -674,9 +732,18 @@ void Debugger::handle_hotkey() {
     }
 
     const ImGuiContextScope scope(m_target.imgui_context());
+    // a new frame consumes the queued debugger press before popup widgets draw, so restore unrelated popups closed by focus
+    // change.
+    m_popup_state->restore();
     if (ImGui::IsKeyChordPressed(m_hotkey)) {
         toggle();
     }
+}
+
+void Debugger::finish_popup_restore() {
+    // rendering can close the stack again when debugger widgets claim focus, so restore it before the backend reads draw data.
+    m_popup_state->restore();
+    m_popup_state->clear();
 }
 
 void Debugger::refresh_highlight() {
@@ -1328,6 +1395,7 @@ void Debugger::render() {
     const ImGuiContextScope scope(m_target.imgui_context());
     ImGuiWindow* debugger_window = ImGui::GetCurrentWindow();
     m_overlay_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
+    m_overlay_window_id = debugger_window == nullptr ? 0 : debugger_window->ID;
     draw_highlight();
 
     const bool has_font = m_font != nullptr;

@@ -39,9 +39,6 @@ namespace ui {
         /// blocks outside the visible owner's descendants.
         void register_blocker(Node& owner, Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
-        /// observes matching events without taking their target.
-        void register_observer(Rect rect, InputCallback callback, EventMask events = EventMask::Pointer);
-
         /// captures later pointer moves and releases for a node.
         bool capture_pointer(Node& node);
 
@@ -106,7 +103,6 @@ namespace ui {
         enum class InputKind : unsigned char {
             Target,
             Blocker,
-            Observer,
         };
 
         struct InputEntry {
@@ -130,10 +126,10 @@ namespace ui {
         void refresh_pointer_state(ImVec2 position);
         void set_input_flag(Node*& current, Node* next, InputFlag flag);
         const InputEntry* pointer_target(UiEvent& event, bool& blocked);
+        Node* inspect_node_at(ImVec2 position, EventType type) const;
         const InputEntry* resolve_target(ImVec2 position, EventType type, const InputEntry*& blocker) const;
         const InputEntry* target_at(ImVec2 position, EventType type = EventType::PointerMove, const Node* scope = nullptr) const;
         const InputEntry* blocking_entry_at(ImVec2 position, EventType type, const Node* target = nullptr) const;
-        void notify_observers(UiEvent& event);
         bool dispatch_target(const InputEntry& target, UiEvent& event);
 
         std::vector<InputEntry> m_entries;
@@ -144,7 +140,6 @@ namespace ui {
         Node* m_hovered_node = nullptr;
         Node* m_active_node = nullptr;
         bool m_has_blockers = false;
-        bool m_has_observers = false;
         std::array<PressedPointer, POINTER_BUTTON_COUNT> m_pressed{};
         mutable InputRouterStats m_stats;
         std::vector<Node*> m_attached_nodes;

@@ -341,7 +341,7 @@ void Node::submit_positioned_item() {
         return;
     }
 
-    // imgui requires an item after SetCursorPos when the position extends the parent bounds.
+    // imgui requires an item after moving the cursor when the position extends the parent bounds.
     ImGui::Dummy({});
 }
 

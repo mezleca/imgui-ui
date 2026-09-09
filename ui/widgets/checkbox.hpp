@@ -11,7 +11,9 @@ namespace ui {
     class TextWidget;
 
     enum class CheckboxType : uint8_t {
+        /// draws a square check mark.
         Standard,
+        /// draws a circular selection mark.
         Radio,
     };
 

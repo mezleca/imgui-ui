@@ -9,7 +9,7 @@ namespace ui {
     class Texture;
     class ImageWidget;
 
-    class TextInputWidget final : public StackContainer {
+    class TextInputWidget : public StackContainer {
     public:
         TextInputWidget(UI& ui, std::string& value, std::string label = {});
 

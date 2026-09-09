@@ -26,8 +26,11 @@ namespace ui {
     };
 
     enum class InputMode : uint8_t {
+        /// does not register this node with the input router.
         None,
+        /// registers the node as the normal event target for its hit rectangle.
         Target,
+        /// consumes events in the hit rectangle before underlying targets resolve.
         Blocker,
     };
 

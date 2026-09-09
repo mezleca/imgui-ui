@@ -18,13 +18,15 @@ namespace ui {
     class StackContainer;
 
     struct UIConfig {
+        /// backend that creates the platform window and renders imgui draw data.
         std::unique_ptr<Backend> backend;
+        /// creates the debugger overlay when the surface initializes.
         bool enable_debugger = false;
     };
-    /// owns the imgui context and drives the retained application tree through input, update, draw, and backend rendering.
+    /// owns one imgui surface, its backend, input router, retained tree, and optional debugger.
     class UI {
     public:
-        explicit UI(ui::Runtime& runtime, ui::UIConfig config = {});
+        explicit UI(Runtime& runtime, UIConfig config = {});
         ~UI();
 
         UI(const UI&) = delete;
@@ -50,7 +52,7 @@ namespace ui {
 
         /// routes one platform event through the debugger and application tree.
         /// returns true when the event was handled or blocked.
-        bool dispatch(ui::UiEvent& event);
+        bool dispatch(UiEvent& event);
 
         /// returns whether exit() was requested.
         bool is_done() const {
@@ -66,7 +68,7 @@ namespace ui {
         ImFont* get_font(std::string_view id, int size) const;
 
         /// sets the font inherited by widgets that use the primary font.
-        void set_primary_font(ui::Font* font) {
+        void set_primary_font(Font* font) {
             m_primary_font = font;
         }
 
@@ -76,7 +78,7 @@ namespace ui {
         }
 
         /// sets the font inherited by widgets that use the secondary font.
-        void set_secondary_font(ui::Font* font) {
+        void set_secondary_font(Font* font) {
             m_secondary_font = font;
         }
 
@@ -86,57 +88,57 @@ namespace ui {
         }
 
         /// returns the router used by the surface tree.
-        ui::InputRouter& input_router() {
+        InputRouter& input_router() {
             return m_input_router;
         }
 
         /// returns frame timing and node instrumentation for this surface.
-        ui::Profiler& profiler() {
+        Profiler& profiler() {
             return m_profiler;
         }
 
-        const ui::Profiler& profiler() const {
+        const Profiler& profiler() const {
             return m_profiler;
         }
 
         /// returns the debugger when diagnostic support was configured, or nullptr otherwise.
-        ui::Debugger* debugger() {
+        Debugger* debugger() {
             return m_debugger;
         }
 
-        const ui::Debugger* debugger() const {
+        const Debugger* debugger() const {
             return m_debugger;
         }
 
         bool debugger_blocks_pointer_input() const;
 
         /// returns the effect registry used during frame rendering.
-        ui::EffectRegistry& effects() {
+        EffectRegistry& effects() {
             return m_effects;
         }
 
-        const ui::EffectRegistry& effects() const {
+        const EffectRegistry& effects() const {
             return m_effects;
         }
 
-        const ui::Theme& theme() const {
+        const Theme& theme() const {
             return m_runtime.theme();
         }
 
         /// updates imgui metrics and colors, then reapplies theme defaults across the retained tree.
-        void set_theme(ui::Theme theme);
+        void set_theme(Theme theme);
 
-        ui::Runtime& runtime() {
+        Runtime& runtime() {
             return m_runtime;
         }
 
         /// returns the application content root.
-        ui::Node& root() {
+        Node& root() {
             return *m_content_root;
         }
 
         /// returns the backend owned by this surface.
-        ui::Backend& backend() {
+        Backend& backend() {
             return *m_backend;
         }
 
@@ -146,25 +148,25 @@ namespace ui {
         }
 
     private:
-        ImFont* resolve_font(ui::Font* font, int size) const;
+        ImFont* resolve_font(Font* font, int size) const;
         void initialize();
         void configure_style(float main_scale);
         void apply_theme_metrics();
         void apply_theme_colors();
 
-        ui::Runtime& m_runtime;
+        Runtime& m_runtime;
         ImGuiContext* m_context = nullptr;
         ImGuiContext* m_previous_context = nullptr;
-        std::unique_ptr<ui::Backend> m_backend;
-        std::unique_ptr<ui::Node> m_root;
-        ui::StackContainer* m_surface_layout = nullptr;
-        ui::Node* m_content_root = nullptr;
-        ui::InputRouter m_input_router;
-        ui::EffectRegistry m_effects;
-        ui::Profiler m_profiler;
-        ui::Debugger* m_debugger = nullptr;
-        ui::Font* m_primary_font = nullptr;
-        ui::Font* m_secondary_font = nullptr;
+        std::unique_ptr<Backend> m_backend;
+        std::unique_ptr<Node> m_root;
+        StackContainer* m_surface_layout = nullptr;
+        Node* m_content_root = nullptr;
+        InputRouter m_input_router;
+        EffectRegistry m_effects;
+        Profiler m_profiler;
+        Debugger* m_debugger = nullptr;
+        Font* m_primary_font = nullptr;
+        Font* m_secondary_font = nullptr;
         float m_content_scale = 1.0F;
         bool m_done = false;
         bool m_ready = false;

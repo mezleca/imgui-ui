@@ -4,7 +4,6 @@
 
 #include <concepts>
 #include <algorithm>
-#include <cfloat>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -22,7 +21,7 @@ namespace ui {
     /// stores text or a numeric value and lazily caches its imgui font metrics.
     class GenericValue {
     public:
-        // integers are normalized so every integer type is supported without expanding the variant.
+        /// stores every supported scalar type in one stable representation.
         using Value = std::variant<bool, std::int64_t, std::uint64_t, float, double, std::string>;
 
         explicit GenericValue(std::string text = {}, ImFont* font = nullptr) : m_value(std::move(text)), m_font(font) {}
@@ -114,7 +113,18 @@ namespace ui {
         template <typename T>
             requires GenericNumber<T>
         void set(T value) {
-            Value new_value = make_value(value);
+            Value new_value;
+            if constexpr (std::same_as<T, bool>) {
+                new_value = value;
+            } else if constexpr (std::signed_integral<T>) {
+                new_value = static_cast<std::int64_t>(value);
+            } else if constexpr (std::unsigned_integral<T>) {
+                new_value = static_cast<std::uint64_t>(value);
+            } else if constexpr (std::same_as<T, float>) {
+                new_value = value;
+            } else {
+                new_value = static_cast<double>(value);
+            }
 
             if (new_value == m_value) {
                 return;
@@ -137,27 +147,6 @@ namespace ui {
         }
 
     private:
-        // convert every supported arithmetic category to one of the canonical storage types above.
-        template <std::integral T>
-        static Value make_value(T value) {
-            if constexpr (std::same_as<T, bool>) {
-                return value;
-            } else if constexpr (std::signed_integral<T>) {
-                return static_cast<std::int64_t>(value);
-            } else {
-                return static_cast<std::uint64_t>(value);
-            }
-        }
-
-        template <std::floating_point T>
-        static Value make_value(T value) {
-            if constexpr (std::same_as<T, float>) {
-                return value;
-            } else {
-                return static_cast<double>(value);
-            }
-        }
-
         // measures the current text and applies the configured line-height multiplier to its total height.
         void recompute() const {
             if (ImGui::GetCurrentContext() == nullptr) {

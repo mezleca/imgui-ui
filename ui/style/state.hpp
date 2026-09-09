@@ -6,29 +6,56 @@
 #include <algorithm>
 #include <array>
 #include <optional>
-#include <vector>
+#include <span>
 
 namespace ui {
     static constexpr float OPACITY_TRANSITION_DURATION = 0.15F;
     static constexpr float VISIBILITY_OPACITY_THRESHOLD = 0.002f;
 
+    enum class StyleAnimationProperty : uint8_t {
+        PaddingX,
+        PaddingY,
+        MarginX,
+        MarginY,
+        Rotation,
+        Scale,
+        Color,
+        BorderColor,
+        BackgroundColor,
+        Count,
+    };
+
+    struct StyleAnimationSlot {
+        /// selects the style property read and written by this slot.
+        StyleAnimationProperty property = StyleAnimationProperty::PaddingX;
+        /// holds a value while an animation overrides the configured style.
+        std::optional<AnimationValue> override;
+        /// stores the value visible before the current animation frame.
+        AnimationValue current = 0.0F;
+        /// stores the configured value restored by a release track.
+        AnimationValue base = 0.0F;
+        /// marks layout invalid when the property changes padding or margin.
+        bool affects_layout = false;
+        bool* layout_dirty = nullptr;
+    };
+
     class VisualState {
     public:
-        VisualState() {
-            current_opacity.value = m_opacity;
-            snap_to_style(StyleType::DEFAULT);
-        }
+        VisualState();
 
         void set_change_callback(void* owner, Style::ChangeCallback callback) {
+            m_change_owner = owner;
+            m_change_callback = callback;
+
             for (Style& style : styles) {
                 style.set_change_callback(owner, callback);
             }
+
             if (m_transition_style.has_value()) {
                 m_transition_style->set_change_callback(owner, callback);
             }
         }
 
-        /// selects a slot without running a style transition.
         void snap_to_style(StyleType type) {
             m_target_style = type;
             m_transition_style.reset();
@@ -44,7 +71,7 @@ namespace ui {
         }
 
         void set_opacity(float value) {
-            set_opacity(value, {OPACITY_TRANSITION_DURATION, ui::easing::linear});
+            set_opacity(value, {OPACITY_TRANSITION_DURATION, easing::linear});
         }
 
         void set_opacity(float value, TransitionSpec transition) {
@@ -53,7 +80,7 @@ namespace ui {
         }
 
         void fade_in() {
-            fade_in({OPACITY_TRANSITION_DURATION, ui::easing::linear});
+            fade_in({OPACITY_TRANSITION_DURATION, easing::linear});
         }
 
         void fade_in(TransitionSpec transition) {
@@ -63,7 +90,7 @@ namespace ui {
         }
 
         void fade_out() {
-            fade_out({OPACITY_TRANSITION_DURATION, ui::easing::linear});
+            fade_out({OPACITY_TRANSITION_DURATION, easing::linear});
         }
 
         void fade_out(TransitionSpec transition) {
@@ -83,13 +110,14 @@ namespace ui {
         }
 
         bool transitioning() const {
-            return current_opacity.value != m_opacity || m_transition_style.has_value() || !m_animation_steps.empty() ||
-                   !m_animation_tracks.empty() || !m_animation_callbacks.empty();
+            return current_opacity.value != m_opacity || m_transition_style.has_value() || m_style_animator.transitioning() ||
+                   m_animator.transitioning();
         }
 
         void update(float dt) {
             const FloatValue target_opacity{m_opacity, m_opacity_transition};
             current_opacity.tick(target_opacity, dt);
+
             if (current_opacity.is_transition_complete()) {
                 current_opacity.value = m_opacity;
             }
@@ -105,7 +133,6 @@ namespace ui {
             update_animations(dt);
         }
 
-        /// selects a style slot and begins interpolation when necessary.
         void set_style(StyleType type) {
             if (m_target_style == type) {
                 return;
@@ -118,7 +145,6 @@ namespace ui {
             m_target_style = type;
         }
 
-        /// interaction precedence is active, focus, hover, then default.
         void set_item_state(bool hovered, bool active, bool focused = false) {
             if (active) {
                 set_style(StyleType::ACTIVE);
@@ -152,16 +178,22 @@ namespace ui {
             return m_target_style;
         }
 
-        AnimationSequence animate();
+        StyleAnimationSequence animate();
+
+        Animator& animator() {
+            return m_animator;
+        }
+
+        const Animator& animator() const {
+            return m_animator;
+        }
 
         void cancel_animations();
 
-        /// resolved style currently used for drawing.
         Style& style() {
             return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(m_target_style)];
         }
 
-        /// mutable named slot, independent from the current transition.
         Style& style(StyleType type) {
             return styles[static_cast<size_t>(type)];
         }
@@ -179,56 +211,40 @@ namespace ui {
         }
 
     private:
-        friend class AnimationSequence;
+        friend class StyleAnimationSequence;
 
-        struct AnimationStep {
-            AnimationProperty property;
-            std::optional<AnimationValue> value;
-            TransitionSpec transition;
-            float start = 0.0F;
-        };
-
-        struct AnimationTrack {
-            AnimationProperty property;
-            AnimationValue start;
-            AnimationValue target;
-            TransitionSpec transition;
-            float started_at = 0.0F;
-            bool release = false;
-        };
-
-        struct AnimationCallback {
-            float at = 0.0F;
-            std::function<void()> callback;
-        };
-
-        void schedule_animation(
-            AnimationProperty property, std::optional<AnimationValue> value, float start, TransitionSpec transition
-        );
-        void schedule_animation_callback(float at, std::function<void()> callback);
         void update_animations(float dt);
-        void apply_animation_value(Style& style, AnimationProperty property, const AnimationValue& value) const;
-        AnimationValue track_value(const AnimationTrack& track) const;
-        AnimationValue animation_value(const ComputedStyle& style, AnimationProperty property) const;
+        std::span<StyleAnimationSlot> animation_slots() {
+            return m_animation_slots;
+        }
+
+        std::span<const StyleAnimationSlot> animation_slots() const {
+            return m_animation_slots;
+        }
+
+        StyleAnimationSlot& slot(StyleAnimationProperty property) {
+            return m_animation_slots[static_cast<size_t>(property)];
+        }
+
+        AnimationTarget target(StyleAnimationSlot& slot);
         bool has_animation_overrides() const;
-        bool has_layout_override() const;
-        static bool affects_layout(AnimationProperty property);
 
         StyleType m_target_style = StyleType::DEFAULT;
         FloatValue current_opacity;
         Style styles[static_cast<size_t>(StyleType::COUNT)];
         std::optional<Style> m_transition_style;
         Style m_presentation_style;
-        std::array<std::optional<AnimationValue>, static_cast<size_t>(AnimationProperty::COUNT)> m_animation_overrides;
-        std::vector<AnimationStep> m_animation_steps;
-        std::vector<AnimationTrack> m_animation_tracks;
-        std::vector<AnimationCallback> m_animation_callbacks;
-        float m_animation_time = 0.0F;
+        std::array<StyleAnimationSlot, static_cast<size_t>(StyleAnimationProperty::Count)> m_animation_slots;
+        Animator m_style_animator;
+        Animator m_animator;
         float m_opacity = 1.0f;
-        TransitionSpec m_opacity_transition{OPACITY_TRANSITION_DURATION, ui::easing::linear};
+        TransitionSpec m_opacity_transition{OPACITY_TRANSITION_DURATION, easing::linear};
         bool visible = true;
         bool first_frame = true;
         bool m_has_presentation_style = false;
+        bool m_layout_dirty = false;
+        void* m_change_owner = nullptr;
+        Style::ChangeCallback m_change_callback = nullptr;
     };
 
 } // namespace ui

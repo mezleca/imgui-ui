@@ -10,15 +10,16 @@
 #include <utility>
 
 namespace ui {
+    /// stores decoded image data and creates context-owned gpu data on demand.
     class Texture {
     public:
         virtual ~Texture() = default;
         virtual ImVec2 size() const = 0;
 
-        // creates or reuses GPU data for the current imgui context when a widget draws this texture.
+        // creates gpu data on the first draw for each imgui context and reuses it on later draws.
         virtual ImTextureID get(ImVec2 size) = 0;
 
-        // releases only the GPU data for a destroyed imgui context so the shared CPU source can be reused later.
+        // removes one context's gpu data while keeping the decoded cpu source for another context.
         virtual void release_context(ImGuiContext* context) = 0;
     };
 
@@ -26,14 +27,14 @@ namespace ui {
     public:
         virtual ~TextureLoader() = default;
 
-        // creates the CPU representation during registration without requiring an imgui or graphics context.
+        // decodes the source during registration without requiring an imgui or graphics context.
         virtual std::unique_ptr<Texture> load(const std::filesystem::path& location, std::string id) = 0;
         virtual std::unique_ptr<Texture> load(std::string_view content, std::string id) = 0;
     };
 
-    // add() builds one CPU texture per id. ImageWidget calls get() during paint to lazily create GPU data for its imgui context.
-    // Runtime releases that GPU data before the context is destroyed while this registry keeps the CPU source for future
-    // contexts.
+    // add() stores one decoded texture per id. drawing calls get() so each context creates its gpu object only when the
+    // texture becomes visible. runtime releases that object before destroying a context and keeps the decoded source for
+    // later contexts.
     class TextureRegistry final : public AssetRegistry {
     public:
         explicit TextureRegistry(std::unique_ptr<TextureLoader> loader = nullptr);

@@ -7,17 +7,29 @@
 
 namespace ui {
     enum class EventType : uint8_t {
+        /// pointer moved without a button transition.
         PointerMove,
+        /// a pointer button was pressed.
         PointerDown,
+        /// a pointer button was released.
         PointerUp,
+        /// a matching pointer press and release occurred on one target.
         Click,
+        /// a matching secondary pointer press and release occurred on one target.
         ContextClick,
+        /// the pointer wheel changed.
         Scroll,
+        /// a keyboard key was pressed.
         KeyDown,
+        /// a keyboard key was released.
         KeyUp,
+        /// text input produced a character sequence.
         TextInput,
+        /// focus moved to a node.
         FocusGained,
+        /// focus moved away from a node.
         FocusLost,
+        /// the active input operation was canceled.
         Cancel,
     };
 

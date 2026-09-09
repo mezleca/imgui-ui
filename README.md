@@ -1,9 +1,16 @@
 # imgui-ui
 
-<img src="https://github.com/mezleca/imgui-ui/blob/main/assets/images/preview.png?raw=true" width="50%"/>
+A small ui framework built on top of [Dear ImGui](https://github.com/ocornut/imgui).
 
-a small retained ui "framework" built on top of dear imgui and opengl. it provides a node tree,
-layout, styling, and input routing with sdl or raylib backends.
+imgui-ui provides:
+- node tree's
+- layouts (containers)
+- tween (animator)
+- styling
+- input routing
+- custom widgets
+
+<br>while keeping full compatibility with imgui internals.
 
 # usage
 
@@ -21,6 +28,7 @@ target_link_libraries(my-app PRIVATE imgui-ui::sdl)
 ```cpp
 #include <ui/backends/sdl/backend.hpp>
 #include <ui/ui.hpp>
+#include <imgui.hpp>
 #include <ui/widgets/button.hpp>
 
 ui::Runtime runtime;
@@ -39,5 +47,7 @@ while (!surface.is_done()) {
     surface.end_frame();
 }
 ```
+
+<img src="https://github.com/mezleca/imgui-ui/blob/main/assets/images/preview.png?raw=true" width="60%"/><br>
 
 see `examples/` for a complete demo.

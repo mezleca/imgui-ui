@@ -6,7 +6,9 @@
 
 namespace ui {
     enum class LayerMode : uint8_t {
+        /// draws in the current imgui window and opens a child only when effects need a scoped draw list.
         Inline,
+        /// draws in a separate imgui window that covers the layer's resolved bounds.
         Window,
     };
 

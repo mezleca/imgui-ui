@@ -18,6 +18,7 @@ namespace ui {
     class Style;
     class StyledNode;
     class Texture;
+    class DebuggerPopupState;
 
     class Debugger final : public Container {
     public:
@@ -73,10 +74,10 @@ namespace ui {
         void refresh_highlight();
         void synchronize_targets();
         void set_inspect_mode(bool enabled);
+        void finish_popup_restore();
         void set_target(Node* target);
         void remove_target();
         bool should_restore_flow_position() const;
-        static Node* pick_node(Node& root, ImVec2 position);
         bool overlay_contains(ImVec2 position) const;
 
         void draw_children() override;
@@ -89,6 +90,7 @@ namespace ui {
         Rect m_highlight{};
         bool m_highlight_valid = false;
         Rect m_overlay_rect{};
+        ImGuiID m_overlay_window_id = 0;
         Node* m_node_target = nullptr;
         Node* m_hover_target = nullptr;
         // removed nodes stay alive because application widgets may retain raw child pointers.
@@ -109,5 +111,6 @@ namespace ui {
         bool m_overlay_pointer_capture = false;
         bool m_inspect_pointer_capture = false;
         bool m_property_section_open = false;
+        std::unique_ptr<DebuggerPopupState> m_popup_state;
     };
 } // namespace ui

@@ -57,7 +57,6 @@ static bool is_input_target(const Node* node) {
 void InputRouter::begin_frame() {
     m_entries.clear();
     m_has_blockers = false;
-    m_has_observers = false;
 
     if (m_entries.capacity() < m_attached_nodes.size() + 8) {
         m_entries.reserve(m_attached_nodes.size() + 8);
@@ -177,7 +176,6 @@ void InputRouter::register_target(Node& node, Rect rect, InputCallback callback)
 
 void InputRouter::add_entry(Node* node, Node* owner, InputKind kind, Rect rect, EventMask events, InputCallback callback) {
     m_has_blockers |= kind == InputKind::Blocker;
-    m_has_observers |= kind == InputKind::Observer;
     m_entries.push_back(InputEntry{node, owner, rect, events, std::move(callback), kind});
 }
 
@@ -219,10 +217,6 @@ void InputRouter::register_blocker(Rect rect, InputCallback callback, EventMask 
 
 void InputRouter::register_blocker(Node& owner, Rect rect, InputCallback callback, EventMask events) {
     add_entry(nullptr, &owner, InputKind::Blocker, rect, events, std::move(callback));
-}
-
-void InputRouter::register_observer(Rect rect, InputCallback callback, EventMask events) {
-    add_entry(nullptr, nullptr, InputKind::Observer, rect, events, std::move(callback));
 }
 
 bool InputRouter::capture_pointer(Node& node) {
@@ -306,11 +300,6 @@ bool InputRouter::dispatch(UiEvent& event) {
         return false;
     }
 
-    // observers also receive native click events.
-    if (event.type == EventType::Click || event.type == EventType::ContextClick) {
-        notify_observers(event);
-    }
-
     // captured moves stay with the drag origin.
     if (event.type == EventType::PointerMove) {
         if (m_pointer_capture != nullptr) {
@@ -367,7 +356,6 @@ bool InputRouter::dispatch(UiEvent& event) {
         UiEvent click = UiEvent::make(*click_type);
         click.position = event.position;
         click.button = event.button;
-        notify_observers(click);
         return dispatch_target(*released, click) || handled;
     }
 
@@ -424,6 +412,16 @@ bool InputRouter::dispatch(Node& target, UiEvent& event) {
 Node* InputRouter::node_at(ImVec2 position) const {
     const InputEntry* target = target_at(position);
     return target == nullptr ? nullptr : target->node;
+}
+
+Node* InputRouter::inspect_node_at(ImVec2 position, EventType type) const {
+    const InputEntry* blocker = nullptr;
+    const InputEntry* target = resolve_target(position, type, blocker);
+    if (target != nullptr) {
+        return target->node;
+    }
+
+    return blocker == nullptr ? nullptr : blocker->owner;
 }
 
 InputRouterStats InputRouter::stats() const {
@@ -527,23 +525,6 @@ const InputRouter::InputEntry* InputRouter::blocking_entry_at(ImVec2 position, E
     }
 
     return nullptr;
-}
-
-void InputRouter::notify_observers(UiEvent& event) {
-    if (!m_has_observers) {
-        return;
-    }
-
-    const EventMask mask = event_mask(event.type);
-    for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
-        ++m_stats.entry_checks;
-        if (it->kind != InputKind::Observer || !it->rect.contains(event.position) || !contains(it->events, mask) ||
-            !it->callback) {
-            continue;
-        }
-
-        it->callback(event);
-    }
 }
 
 bool InputRouter::dispatch_target(const InputEntry& target, UiEvent& event) {

@@ -426,22 +426,6 @@ TEST_CASE("blocking entries consume pointer release without a retained press") {
     REQUIRE(release.handled);
 }
 
-TEST_CASE("observer entries do not block their target") {
-    std::vector<std::string> events;
-    EventNode target("target", events);
-    target.handle_events = true;
-    InputRouter router;
-    int observed = 0;
-
-    router.register_target(target, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.register_observer({{0.0F, 0.0F}, {100.0F, 100.0F}}, [&observed](UiEvent&) { ++observed; }, EventMask::Click);
-
-    UiEvent click = click_event({50.0F, 50.0F});
-    REQUIRE(router.dispatch(click));
-    REQUIRE(observed == 1);
-    REQUIRE(events == std::vector<std::string>{"target"});
-}
-
 TEST_CASE("later targets win over earlier paint") {
     std::vector<std::string> events;
     EventNode popup("popup", events);

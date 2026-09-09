@@ -1,81 +1,66 @@
 #pragma once
 
-#include "values.hpp"
+#include "../animation.hpp"
 
-#include <cstdint>
 #include <functional>
-#include <optional>
-#include <variant>
 
 namespace ui {
     class VisualState;
+    struct StyleAnimationSlot;
 
-    enum class AnimationProperty : uint8_t {
-        PaddingX,
-        PaddingY,
-        MarginX,
-        MarginY,
-        Rotation,
-        Scale,
-        Color,
-        BorderColor,
-        BackgroundColor,
-        COUNT,
-    };
-
-    using AnimationValue = std::variant<float, ImVec2, ImColor>;
-
-    class AnimationSequence final {
+    /// schedules tracks for the visual properties owned by one styled node.
+    class StyleAnimationSequence final {
     public:
-        AnimationSequence& padding_x(float value, TransitionSpec transition = {});
-        AnimationSequence& padding_y(float value, TransitionSpec transition = {});
-        AnimationSequence& margin_x(float value, TransitionSpec transition = {});
-        AnimationSequence& margin_y(float value, TransitionSpec transition = {});
-        AnimationSequence& rotation(float value, TransitionSpec transition = {});
-        AnimationSequence& scale(ImVec2 value, TransitionSpec transition = {});
-        AnimationSequence& scale(float value, TransitionSpec transition = {});
-        AnimationSequence& color(ImColor value, TransitionSpec transition = {});
-        AnimationSequence& border_color(ImColor value, TransitionSpec transition = {});
-        AnimationSequence& background_color(ImColor value, TransitionSpec transition = {});
+        explicit StyleAnimationSequence(VisualState& state, AnimationSequence sequence)
+            : m_state(state), m_sequence(std::move(sequence)) {}
 
-        AnimationSequence& padding_x_by(float value, TransitionSpec transition = {});
-        AnimationSequence& padding_y_by(float value, TransitionSpec transition = {});
-        AnimationSequence& margin_x_by(float value, TransitionSpec transition = {});
-        AnimationSequence& margin_y_by(float value, TransitionSpec transition = {});
-        AnimationSequence& rotation_by(float radians, TransitionSpec transition = {});
-        AnimationSequence& scale_by(ImVec2 factor, TransitionSpec transition = {});
-        AnimationSequence& scale_by(float factor, TransitionSpec transition = {});
-        AnimationSequence& color_by(ImVec4 value, TransitionSpec transition = {});
-        AnimationSequence& border_color_by(ImVec4 value, TransitionSpec transition = {});
-        AnimationSequence& background_color_by(ImVec4 value, TransitionSpec transition = {});
+        StyleAnimationSequence& padding_x(float value, TransitionSpec transition = {});
+        StyleAnimationSequence& padding_y(float value, TransitionSpec transition = {});
+        StyleAnimationSequence& margin_x(float value, TransitionSpec transition = {});
+        StyleAnimationSequence& margin_y(float value, TransitionSpec transition = {});
+        StyleAnimationSequence& rotation(float value, TransitionSpec transition = {});
+        StyleAnimationSequence& scale(ImVec2 value, TransitionSpec transition = {});
+        StyleAnimationSequence& scale(float value, TransitionSpec transition = {});
+        StyleAnimationSequence& color(ImColor value, TransitionSpec transition = {});
+        StyleAnimationSequence& border_color(ImColor value, TransitionSpec transition = {});
+        StyleAnimationSequence& background_color(ImColor value, TransitionSpec transition = {});
 
-        AnimationSequence& release_padding_x(TransitionSpec transition = {});
-        AnimationSequence& release_padding_y(TransitionSpec transition = {});
-        AnimationSequence& release_margin_x(TransitionSpec transition = {});
-        AnimationSequence& release_margin_y(TransitionSpec transition = {});
-        AnimationSequence& release_rotation(TransitionSpec transition = {});
-        AnimationSequence& release_scale(TransitionSpec transition = {});
-        AnimationSequence& release_color(TransitionSpec transition = {});
-        AnimationSequence& release_border_color(TransitionSpec transition = {});
-        AnimationSequence& release_background_color(TransitionSpec transition = {});
-        AnimationSequence& release_all(TransitionSpec transition = {});
+        StyleAnimationSequence& padding_x_by(float value, TransitionSpec transition = {});
+        StyleAnimationSequence& padding_y_by(float value, TransitionSpec transition = {});
+        StyleAnimationSequence& margin_x_by(float value, TransitionSpec transition = {});
+        StyleAnimationSequence& margin_y_by(float value, TransitionSpec transition = {});
+        StyleAnimationSequence& rotation_by(float degrees, TransitionSpec transition = {});
+        StyleAnimationSequence& scale_by(ImVec2 factor, TransitionSpec transition = {});
+        StyleAnimationSequence& scale_by(float factor, TransitionSpec transition = {});
+        StyleAnimationSequence& color_by(ImVec4 value, TransitionSpec transition = {});
+        StyleAnimationSequence& border_color_by(ImVec4 value, TransitionSpec transition = {});
+        StyleAnimationSequence& background_color_by(ImVec4 value, TransitionSpec transition = {});
 
-        AnimationSequence& then(float delay = 0.0F);
-        AnimationSequence& delay(float duration);
-        AnimationSequence& end(std::function<void()> callback);
+        StyleAnimationSequence& release_padding_x(TransitionSpec transition = {});
+        StyleAnimationSequence& release_padding_y(TransitionSpec transition = {});
+        StyleAnimationSequence& release_margin_x(TransitionSpec transition = {});
+        StyleAnimationSequence& release_margin_y(TransitionSpec transition = {});
+        StyleAnimationSequence& release_rotation(TransitionSpec transition = {});
+        StyleAnimationSequence& release_scale(TransitionSpec transition = {});
+        StyleAnimationSequence& release_color(TransitionSpec transition = {});
+        StyleAnimationSequence& release_border_color(TransitionSpec transition = {});
+        StyleAnimationSequence& release_background_color(TransitionSpec transition = {});
+        StyleAnimationSequence& release_all(TransitionSpec transition = {});
+
+        StyleAnimationSequence& then(float delay = 0.0F);
+        StyleAnimationSequence& delay(float duration);
+        StyleAnimationSequence& end(std::function<void()> callback);
 
     private:
         friend class VisualState;
 
-        explicit AnimationSequence(VisualState& state) : m_state(state) {}
-
-        AnimationSequence& add(AnimationProperty property, std::optional<AnimationValue> value, TransitionSpec transition);
-        AnimationSequence& add_color(AnimationProperty property, ImVec4 value, TransitionSpec transition);
-        float current_float(AnimationProperty property) const;
-        ImVec2 current_vec2(AnimationProperty property) const;
+        StyleAnimationSequence& add(StyleAnimationSlot& slot, AnimationValue value, TransitionSpec transition);
+        StyleAnimationSequence& add_by(StyleAnimationSlot& slot, AnimationValue value, TransitionSpec transition);
+        StyleAnimationSequence& release(StyleAnimationSlot& slot, TransitionSpec transition);
+        float current_float(StyleAnimationSlot& slot) const;
+        ImVec2 current_vec2(StyleAnimationSlot& slot) const;
 
         VisualState& m_state;
-        float m_cursor = 0.0F;
-        float m_end = 0.0F;
+        AnimationSequence m_sequence;
     };
 } // namespace ui

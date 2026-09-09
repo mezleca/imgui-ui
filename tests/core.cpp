@@ -145,6 +145,12 @@ TEST_CASE("style updates preserve and normalize non-visual fields") {
     style.blur(-1);
     REQUIRE(style.blur() == 0);
 
+    style.border_thickness(0.25F);
+    REQUIRE(style.border_thickness() == MIN_BORDER_THICKNESS);
+
+    style.border_thickness(0.0F);
+    REQUIRE(style.border_thickness() == 0.0F);
+
     Style shadow_target;
     shadow_target.box_shadow(
         {

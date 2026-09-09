@@ -1,3 +1,4 @@
+#include <ui/animation.hpp>
 #include <ui/style/state.hpp>
 #include <ui/runtime.hpp>
 #include <ui/diagnostics/debugger.hpp>
@@ -10,6 +11,7 @@
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
 #include <ui/widgets/checkbox.hpp>
+#include <ui/widgets/color-picker.hpp>
 #include <ui/widgets/context-menu.hpp>
 #include <ui/widgets/dropdown.hpp>
 #include <ui/widgets/image.hpp>
@@ -26,7 +28,6 @@
 #include <algorithm>
 #include <cfloat>
 #include <limits>
-#include <numbers>
 #include <string>
 #include <vector>
 
@@ -201,6 +202,74 @@ TEST_CASE("dropdown opens from a nested container without extending its parent",
     up.position = option_position;
     surface.dispatch(up);
     REQUIRE_FALSE(checked);
+}
+
+TEST_CASE("color picker opens outside its parent and blocks content input", "[color-picker][container][regression]") {
+    Runtime runtime;
+    ui::UI surface(runtime, {.backend = ui_test::make_backend()});
+    ImColor color = {0.26F, 0.59F, 0.98F, 1.0F};
+    bool checked = false;
+
+    auto& page = surface.root().add<StackContainer>("page");
+    page.set_size({px(360.0F), px(200.0F)});
+    auto& section = page.add<Container>("section");
+    auto& picker = section.add<ColorPickerWidget>(surface, color, "color");
+    auto& checkbox = surface.root().add<CheckboxWidget>(surface, checked, "enabled");
+
+    ui_test::prepare_surface(surface, {400.0F, 300.0F});
+    ui_test::draw_surface(surface);
+
+    const ImVec2 preview_center = ui_test::center(picker.layout().visual_rect());
+    UiEvent down = ui_test::pointer_event(EventType::PointerDown, preview_center);
+    UiEvent up = ui_test::pointer_event(EventType::PointerUp, preview_center);
+    surface.dispatch(down);
+    surface.dispatch(up);
+
+    ui_test::draw_surface(surface);
+    REQUIRE(picker.is_open());
+    const Rect popup_rect = picker.popup().layout().visual_rect();
+    REQUIRE(popup_rect.valid());
+    REQUIRE(popup_rect.min.y >= picker.layout().visual_rect().max.y);
+
+    surface.input_router().register_target(checkbox, popup_rect);
+    const ImVec2 popup_center = ui_test::center(popup_rect);
+    down.position = popup_center;
+    up.position = popup_center;
+    surface.dispatch(down);
+    surface.dispatch(up);
+    REQUIRE_FALSE(checked);
+
+    const ImVec2 outside_position = {popup_rect.max.x + 2.0F, popup_rect.min.y};
+    down.position = outside_position;
+    up.position = outside_position;
+    REQUIRE(surface.dispatch(down));
+    surface.dispatch(up);
+    REQUIRE_FALSE(picker.is_open());
+
+    picker.open();
+    ui_test::draw_surface(surface);
+    down.position = preview_center;
+    up.position = preview_center;
+    REQUIRE(surface.dispatch(down));
+    surface.dispatch(up);
+    REQUIRE_FALSE(picker.is_open());
+}
+
+TEST_CASE("color pickers do not replace each other", "[color-picker][regression]") {
+    Runtime runtime;
+    ui::UI surface(runtime, {.backend = ui_test::make_backend()});
+    ImColor first_color = {0.26F, 0.59F, 0.98F, 1.0F};
+    ImColor second_color = {0.98F, 0.59F, 0.26F, 1.0F};
+    auto& first = surface.root().add<ColorPickerWidget>(surface, first_color, "first");
+    auto& second = surface.root().add<ColorPickerWidget>(surface, second_color, "second");
+
+    ui_test::prepare_surface(surface, {640.0F, 480.0F});
+    first.open();
+    second.open();
+    ui_test::draw_surface(surface);
+
+    REQUIRE(first.is_open());
+    REQUIRE(second.is_open());
 }
 
 TEST_CASE("dropdown options use framework input and select their value", "[DropdownWidget][input][regression]") {
@@ -741,17 +810,17 @@ TEST_CASE("interrupted animations release from their displayed value", "[VisualS
 
 TEST_CASE("animation sequences transform style presentation values", "[VisualState][animation][transform]") {
     VisualState state;
-    state.animate().rotation(0.4F, {0.2F, easing::linear}).scale({1.4F, 0.8F}, {0.2F, easing::linear});
+    state.animate().rotation(40.0F, {0.2F, easing::linear}).scale({1.4F, 0.8F}, {0.2F, easing::linear});
     state.update(0.1F);
 
-    REQUIRE(state.computed_style().rotation() == Catch::Approx(0.2F));
+    REQUIRE(state.computed_style().rotation() == Catch::Approx(20.0F));
     REQUIRE(state.computed_style().scale().x == Catch::Approx(1.2F));
     REQUIRE(state.computed_style().scale().y == Catch::Approx(0.9F));
 
-    state.animate().rotation_by(0.3F, {0.1F, easing::linear});
+    state.animate().rotation_by(30.0F, {0.1F, easing::linear});
     state.update(0.1F);
 
-    REQUIRE(state.computed_style().rotation() == Catch::Approx(0.5F));
+    REQUIRE(state.computed_style().rotation() == Catch::Approx(50.0F));
 
     state.animate().release_all({0.1F, easing::linear});
     state.update(0.1F);
@@ -764,7 +833,7 @@ TEST_CASE("animation sequences transform style presentation values", "[VisualSta
 TEST_CASE("animation sequence callbacks run after their timeline", "[VisualState][animation]") {
     VisualState state;
     bool ended = false;
-    state.animate().rotation(1.0F, {0.1F, easing::linear}).then(0.1F).end([&ended] { ended = true; });
+    state.animate().rotation(90.0F, {0.1F, easing::linear}).then(0.1F).end([&ended] { ended = true; });
 
     state.update(0.1F);
     REQUIRE_FALSE(ended);
@@ -784,6 +853,40 @@ TEST_CASE("animation sequence steps continue from the preceding track", "[Visual
     REQUIRE(state.computed_style().scale().x == Catch::Approx(2.5F));
 }
 
+TEST_CASE("animator sequences update arbitrary references", "[Animator]") {
+    Animator animator;
+    float line_length = 0.0F;
+    bool ended = false;
+
+    animator.animate()
+        .to(line_length, 10.0F, {0.2F, easing::linear})
+        .then()
+        .by(line_length, -4.0F, {0.1F, easing::linear})
+        .end([&ended] { ended = true; });
+
+    animator.update(0.1F);
+    REQUIRE(line_length == Catch::Approx(5.0F));
+
+    animator.update(0.15F);
+    REQUIRE(line_length == Catch::Approx(8.0F));
+    REQUIRE_FALSE(ended);
+
+    animator.update(0.05F);
+    REQUIRE(line_length == Catch::Approx(6.0F));
+    REQUIRE(ended);
+    REQUIRE_FALSE(animator.transitioning());
+}
+
+TEST_CASE("styled nodes advance their generic animator", "[Animator][StyledNode]") {
+    TextWidget text{"animated-node"};
+    float reveal = 0.0F;
+
+    text.animator().animate().to(reveal, 1.0F, {0.2F, easing::linear});
+    text.update(0.1F);
+
+    REQUIRE(reveal == Catch::Approx(0.5F));
+}
+
 TEST_CASE("styled nodes rotate their generated vertices without changing layout", "[Widget][style][transform]") {
     class TransformProbeWidget final : public Widget {
     public:
@@ -801,7 +904,7 @@ TEST_CASE("styled nodes rotate their generated vertices without changing layout"
     ui_test::ImGuiContext context({240.0F, 160.0F});
     TransformProbeWidget widget;
     widget.set_size({px(40.0F), px(20.0F)});
-    widget.configure_all_styles([](Style& style) { style.rotation(std::numbers::pi_v<float> * 0.5F); });
+    widget.configure_all_styles([](Style& style) { style.rotation(90.0F); });
 
     ImGui::NewFrame();
     ImGui::Begin("styled-transform-test");

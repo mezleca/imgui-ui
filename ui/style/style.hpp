@@ -12,11 +12,30 @@ namespace ui {
     class StyledNode;
     class VisualState;
 
+    inline BoxShadow normalize_style_box_shadow(BoxShadow value) {
+        value.blur = std::max(0.0F, value.blur);
+        value.color.Value.w = std::clamp(value.color.Value.w, 0.0F, 1.0F);
+        return value;
+    }
+
+    inline ImVec2 normalize_style_insets(ImVec2 value) {
+        return {std::max(0.0F, value.x), std::max(0.0F, value.y)};
+    }
+
+    inline ImVec2 normalize_style_scale(ImVec2 value) {
+        return {std::isfinite(value.x) ? value.x : 1.0F, std::isfinite(value.y) ? value.y : 1.0F};
+    }
+
     enum class StyleType : uint8_t {
+        /// base appearance with no interaction state.
         DEFAULT = 0,
+        /// appearance while the pointer is over the node.
         HOVER = 1,
+        /// appearance while the pointer button is held.
         ACTIVE,
+        /// appearance while the node owns keyboard focus.
         FOCUS,
+        /// number of visual styles stored by a node.
         COUNT
     };
 
@@ -66,16 +85,6 @@ namespace ui {
             return *this;
         }
 
-        static BoxShadow normalize_box_shadow(BoxShadow value) {
-            value.blur = std::max(0.0F, value.blur);
-            value.color.Value.w = std::clamp(value.color.Value.w, 0.0F, 1.0F);
-            return value;
-        }
-
-        static ImVec2 normalize_insets(ImVec2 value) {
-            return {std::max(0.0F, value.x), std::max(0.0F, value.y)};
-        }
-
     public:
         using ChangeCallback = void (*)(void*);
 
@@ -113,19 +122,19 @@ namespace ui {
         }
 
         Style& padding(ImVec2 value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_padding, normalize_insets(value), transition_duration);
+            return set_animated_value(&ComputedStyle::m_padding, normalize_style_insets(value), transition_duration);
         }
 
         Style& padding(ImVec2 value, TransitionSpec transition) {
-            return set_animated_transition(&ComputedStyle::m_padding, normalize_insets(value), transition);
+            return set_animated_transition(&ComputedStyle::m_padding, normalize_style_insets(value), transition);
         }
 
         Style& margin(ImVec2 value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_margin, normalize_insets(value), transition_duration);
+            return set_animated_value(&ComputedStyle::m_margin, normalize_style_insets(value), transition_duration);
         }
 
         Style& margin(ImVec2 value, TransitionSpec transition) {
-            return set_animated_transition(&ComputedStyle::m_margin, normalize_insets(value), transition);
+            return set_animated_transition(&ComputedStyle::m_margin, normalize_style_insets(value), transition);
         }
 
         Style& control(const Theme& theme, ImVec2 padding = {10.0F, 6.0F}) {
@@ -157,11 +166,11 @@ namespace ui {
 
         /// scales drawing without changing layout or input bounds.
         Style& scale(ImVec2 value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_scale, normalize_scale(value), transition_duration);
+            return set_animated_value(&ComputedStyle::m_scale, normalize_style_scale(value), transition_duration);
         }
 
         Style& scale(ImVec2 value, TransitionSpec transition) {
-            return set_animated_transition(&ComputedStyle::m_scale, normalize_scale(value), transition);
+            return set_animated_transition(&ComputedStyle::m_scale, normalize_style_scale(value), transition);
         }
 
         Style& scale(float value, float transition_duration = -1.0F) {
@@ -209,11 +218,11 @@ namespace ui {
         }
 
         Style& box_shadow(BoxShadow value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_box_shadow, normalize_box_shadow(value), transition_duration);
+            return set_animated_value(&ComputedStyle::m_box_shadow, normalize_style_box_shadow(value), transition_duration);
         }
 
         Style& box_shadow(BoxShadow value, TransitionSpec transition) {
-            return set_animated_transition(&ComputedStyle::m_box_shadow, normalize_box_shadow(value), transition);
+            return set_animated_transition(&ComputedStyle::m_box_shadow, normalize_style_box_shadow(value), transition);
         }
 
         Style& blur(int value) {
@@ -226,7 +235,7 @@ namespace ui {
 
         Style& border_thickness(float value) {
             return set_property(&ComputedStyle::m_border_thickness, value, [](float resolved) {
-                return std::max(0.0F, resolved);
+                return resolved <= 0.0F ? 0.0F : std::max(MIN_BORDER_THICKNESS, resolved);
             });
         }
 
@@ -241,10 +250,6 @@ namespace ui {
         }
 
     private:
-        static ImVec2 normalize_scale(ImVec2 value) {
-            return {std::isfinite(value.x) ? value.x : 1.0F, std::isfinite(value.y) ? value.y : 1.0F};
-        }
-
         friend class StyledNode;
         friend class VisualState;
         friend class PaintSlot;

@@ -247,7 +247,7 @@ static void stroke_dotted_side(ImDrawList& draw_list, const BorderPath& path, ui
     const int stride = static_cast<int>(unit_circle.size()) / segments;
     std::array<ImVec2, 24> points{};
     const auto draw_dot = [&](ImVec2 center) {
-        if (radius <= 0.75F) {
+        if (radius < 0.75F) {
             draw_list.AddRectFilled({center.x - radius, center.y - radius}, {center.x + radius, center.y + radius}, color);
             return;
         }
@@ -331,6 +331,25 @@ void ui::draw_circle_outline(ImVec2 center, float radius, ImColor color, float t
 
 void ui::draw_rect_filled(ImDrawList& draw_list, Rect rect, ImColor color, float rounding, ImDrawFlags flags) {
     draw_list.AddRectFilled(rect.min, rect.max, apply_draw_alpha(color), rounding, flags);
+}
+
+void ui::draw_rect_filled_gradient(
+    ImDrawList& draw_list, Rect rect, ImColor top_left, ImColor top_right, ImColor bottom_right, ImColor bottom_left
+) {
+    draw_list.AddRectFilledMultiColor(
+        rect.min, rect.max, apply_draw_alpha(top_left), apply_draw_alpha(top_right), apply_draw_alpha(bottom_right),
+        apply_draw_alpha(bottom_left)
+    );
+}
+
+void ui::draw_rect_outline(ImDrawList& draw_list, Rect rect, ImColor color, float thickness, float rounding) {
+    if (thickness <= 0.0F) {
+        return;
+    }
+
+    draw_list.AddRect(
+        rect.min, rect.max, apply_draw_alpha(color), rounding, ImDrawFlags_RoundCornersAll, std::max(1.0F, thickness)
+    );
 }
 
 void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, std::string_view text) {
@@ -611,6 +630,8 @@ void ui::draw_border_path(
     if (border == BORDER_NONE || thickness <= 0.0F) {
         return;
     }
+
+    thickness = std::max(MIN_BORDER_THICKNESS, thickness);
 
     const ImU32 draw_color = color;
     if ((draw_color & IM_COL32_A_MASK) == 0) {

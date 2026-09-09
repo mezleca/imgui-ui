@@ -37,8 +37,8 @@ bool LayerContainer::paint() {
 
     const Rect viewport_rect = Rect::from_position_size(viewport->WorkPos, viewport->WorkSize);
     if (m_mode == LayerMode::Inline) {
-        // use a child window when the layer draws a background, shadow, blur, or border.
-        m_inline_child_scope = needs_child_scope(computed_style());
+        // keep the child window after the first visual effect so native imgui items keep their parent while styles change.
+        m_inline_child_scope = m_inline_child_scope || needs_child_scope(computed_style());
         if (m_inline_child_scope) {
             return Container::paint();
         }
@@ -86,8 +86,8 @@ bool LayerContainer::paint() {
 
 void LayerContainer::on_draw_end() {
     if (m_mode == LayerMode::Inline) {
+        // close the child opened by container painting while retaining the flag for the next frame.
         if (m_inline_child_scope) {
-            m_inline_child_scope = false;
             Container::on_draw_end();
         }
         return;

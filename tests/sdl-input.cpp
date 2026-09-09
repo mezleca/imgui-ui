@@ -6,14 +6,17 @@
 #include <ui/imgui/context-scope.hpp>
 #include <ui/layout/container.hpp>
 #include <ui/layout/layer-container.hpp>
+#include <ui/layout/stack-container.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
 #include <ui/widgets/checkbox.hpp>
 #include <ui/widgets/dropdown.hpp>
+#include <ui/widgets/number-input.hpp>
 
 #include <SDL3/SDL.h>
 #include <glad/gl.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include "imgui-context.hpp"
 #include "../vendor/imgui/backends/imgui_impl_opengl3.h"
@@ -161,6 +164,102 @@ TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regr
         const ui::ImGuiContextScope context(surface.imgui_context());
         REQUIRE_FALSE(ImGui::IsMouseDown(ImGuiMouseButton_Left));
     }
+}
+
+TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input][regression]") {
+    SdlVideoSession sdl;
+    ui::Runtime runtime;
+    auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
+        .size = {900.0F, 600.0F},
+        .visible = false,
+    });
+    ui::UI surface(runtime, {.backend = std::move(backend)});
+    REQUIRE(surface.ready());
+    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+
+    auto& modal_layer = surface.root().add<ui::LayerContainer>("modal-layer");
+    modal_layer.set_input_mode(ui::InputMode::Blocker);
+    modal_layer.configure_all_styles([](ui::Style& style) {
+        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F}).blur(5.0F);
+    });
+
+    auto& modal = modal_layer.add<ui::StackContainer>("modal");
+    modal.set_size({ui::px(480.0F), ui::px(220.0F)});
+    modal.set_layout({
+        .size = {ui::px(480.0F), ui::px(220.0F)},
+        .placement = {.anchor = ui::Anchor::Center, .origin = ui::Anchor::Center},
+        .in_flow = false,
+    });
+    modal.set_spacing(10.0F);
+
+    int value = 5;
+    auto& input = modal.add<ui::NumberInputWidget>(surface, value, "modal-blur");
+    input.set_label("backdrop blur").set_range(0, 32).set_size({ui::px(180.0F), ui::px(48.0F)});
+    input.set_on_change([&modal_layer, &value] {
+        modal_layer.configure_all_styles([&value](ui::Style& style) { style.blur(value); });
+    });
+    surface.input_router().set_focus(modal_layer);
+    const SDL_WindowID window_id = surface.backend().window_id();
+    const auto send_pointer = [&](SDL_EventType type, ImVec2 position) {
+        SDL_Event event{};
+        event.type = type;
+        if (type == SDL_EVENT_MOUSE_MOTION) {
+            event.motion.windowID = window_id;
+            event.motion.x = position.x;
+            event.motion.y = position.y;
+        } else {
+            event.button.windowID = window_id;
+            event.button.x = position.x;
+            event.button.y = position.y;
+            event.button.button = SDL_BUTTON_LEFT;
+        }
+        ui::process_sdl_event(surface, event);
+    };
+
+    ui_test::draw_surface(surface);
+    const ui::Rect rect = input.layout().visual_rect();
+    const ImVec2 press = {rect.min.x + rect.size().x * 0.70F, ui_test::center(rect).y};
+
+    send_pointer(SDL_EVENT_MOUSE_MOTION, press);
+    ui_test::draw_surface(surface);
+    send_pointer(SDL_EVENT_MOUSE_BUTTON_DOWN, press);
+    ui_test::draw_surface(surface);
+    const ImGuiID slider_id = GImGui->ActiveId;
+    REQUIRE(slider_id != 0);
+    int previous_value = value;
+
+    for (float ratio : {0.75F, 0.80F, 0.85F, 0.90F, 0.95F}) {
+        const ImVec2 position = {rect.min.x + rect.size().x * ratio, press.y};
+        send_pointer(SDL_EVENT_MOUSE_MOTION, position);
+        ui_test::draw_surface(surface);
+        REQUIRE(GImGui->ActiveId == slider_id);
+        REQUIRE(value > previous_value);
+        previous_value = value;
+    }
+
+    // blur reaching zero removes the visual effect while the active slider keeps the same imgui parent.
+    for (float ratio : {0.60F, 0.57F}) {
+        const ImVec2 position = {rect.min.x + rect.size().x * ratio, press.y};
+        send_pointer(SDL_EVENT_MOUSE_MOTION, position);
+        ui_test::draw_surface(surface);
+        REQUIRE(GImGui->ActiveId == slider_id);
+        REQUIRE(value <= previous_value);
+        previous_value = value;
+    }
+
+    REQUIRE(value == 0);
+    const ImVec2 restore = {rect.min.x + rect.size().x * 0.80F, press.y};
+    send_pointer(SDL_EVENT_MOUSE_MOTION, restore);
+    ui_test::draw_surface(surface);
+    REQUIRE(GImGui->ActiveId == slider_id);
+    REQUIRE(value > 0);
+
+    send_pointer(SDL_EVENT_MOUSE_MOTION, {850.0F, press.y});
+    ui_test::draw_surface(surface);
+    const int outside_value = value;
+    send_pointer(SDL_EVENT_MOUSE_MOTION, {rect.min.x + rect.size().x * 0.80F, press.y});
+    ui_test::draw_surface(surface);
+    REQUIRE(value != outside_value);
 }
 
 TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regression]") {

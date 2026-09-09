@@ -6,33 +6,52 @@
 
 namespace ui {
     enum class Anchor : uint8_t {
+        /// aligns the top-left corner.
         TopLeft,
+        /// aligns the top center.
         TopCenter,
+        /// aligns the top-right corner.
         TopRight,
+        /// aligns the center-left edge.
         CenterLeft,
+        /// aligns both centers.
         Center,
+        /// aligns the center-right edge.
         CenterRight,
+        /// aligns the bottom-left corner.
         BottomLeft,
+        /// aligns the bottom center.
         BottomCenter,
+        /// aligns the bottom-right corner.
         BottomRight,
+        /// uses anchor_position or origin_position instead of a named point.
         Custom,
     };
 
     enum class StackDirection : uint8_t {
+        /// places flow children from left to right.
         Horizontal,
+        /// places flow children from top to bottom.
         Vertical,
     };
 
     enum class ResizeAxes : uint8_t {
+        /// disables resizing.
         None = 0,
+        /// allows horizontal resizing.
         X = 1 << 0,
+        /// allows vertical resizing.
         Y = 1 << 1,
+        /// allows horizontal and vertical resizing.
         Both = static_cast<uint8_t>(X) | static_cast<uint8_t>(Y),
     };
 
     enum class LayoutSizeMode : uint8_t {
+        /// uses the configured value.
         Fixed,
+        /// uses the measured content size.
         Fit,
+        /// consumes the available parent space.
         Grow,
     };
 

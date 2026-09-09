@@ -23,7 +23,7 @@ namespace ui {
             float tab_rounding = 4.0F;
             float frame_border_size = 0.0F;
 
-            ImVec2 window_padding = {};
+            ImVec2 window_padding = {12.0F, 12.0F};
             ImVec2 cell_padding = {};
             ImVec2 frame_padding = {12.0F, 8.0F};
             ImVec2 item_spacing = {10.0F, 10.0F};
@@ -49,6 +49,8 @@ namespace ui {
             ImVec2 text_input_padding = {12.0F, 14.0F};
             ImVec2 text_input_icon_size = {18.0F, 18.0F};
             float text_input_icon_spacing = 10.0F;
+
+            float color_picker_selector_size = 196.0F;
         } widgets;
 
         float content_padding = 12.0F;

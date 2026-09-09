@@ -25,7 +25,7 @@ namespace ui {
             return *this;
         }
 
-        /// adds manual pixels to a data index; indices refer to the source, and zero removes the offset.
+        /// adds manual pixels to a source index, and zero removes the offset.
         VirtualLayout& set_extra_offset(size_t index, float offset);
         float extra_offset(size_t index) const;
         VirtualLayout& clear_extra_offsets();

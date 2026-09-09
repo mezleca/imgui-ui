@@ -13,18 +13,17 @@
 
 using namespace ui;
 
-class SurfaceContent final : public ui::ResizableContainer {
+class SurfaceContent final : public ResizableContainer {
 public:
-    SurfaceContent(ui::Node& surface_root, const ui::Theme& theme)
-        : ui::ResizableContainer("content"), m_surface_root(surface_root) {
+    SurfaceContent(Node& surface_root, const Theme& theme) : ResizableContainer("content"), m_surface_root(surface_root) {
         set_type_name("SurfaceContent");
-        set_size({ui::grow(), ui::grow()});
+        set_size({grow(), grow()});
         apply_theme_defaults(theme);
     }
 
     void update(float dt) override {
         if (m_forwarding) {
-            ui::Node::update(dt);
+            Node::update(dt);
             return;
         }
 
@@ -36,7 +35,7 @@ public:
 
     void draw() override {
         if (m_forwarding) {
-            ui::StyledNode::draw();
+            StyledNode::draw();
             return;
         }
 
@@ -45,23 +44,23 @@ public:
         m_forwarding = false;
     }
 
-    void apply_theme_defaults(const ui::Theme& theme) override {
-        configure_all_styles([&theme](ui::Style& style) {
-            style.background_color(theme.background_color).border_color(theme.controls.border_color).border(ui::BORDER_NONE);
+    void apply_theme_defaults(const Theme& theme) override {
+        configure_all_styles([&theme](Style& style) {
+            style.background_color(theme.background_color).border_color(theme.controls.border_color).border(BORDER_NONE);
         });
     }
 
 private:
-    ui::Node& m_surface_root;
+    Node& m_surface_root;
     bool m_forwarding = false;
 };
 
-UI::UI(ui::Runtime& runtime, ui::UIConfig config)
+UI::UI(Runtime& runtime, UIConfig config)
     : m_runtime(runtime), m_backend(std::move(config.backend)), m_profiler(runtime.performance_directory()) {
     initialize();
 
     if (m_ready && config.enable_debugger) {
-        m_debugger = &m_surface_layout->add<ui::Debugger>(*this);
+        m_debugger = &m_surface_layout->add<Debugger>(*this);
     }
 }
 
@@ -82,14 +81,14 @@ UI::~UI() {
     m_context = nullptr;
 }
 
-void UI::set_theme(ui::Theme theme) {
+void UI::set_theme(Theme theme) {
     m_runtime.set_theme(theme);
 
     if (!m_ready || m_context == nullptr) {
         return;
     }
 
-    const ui::ImGuiContextScope scope(m_context);
+    const ImGuiContextScope scope(m_context);
 
     apply_theme_metrics();
     apply_theme_colors();
@@ -99,7 +98,7 @@ void UI::set_theme(ui::Theme theme) {
     }
 }
 
-ImFont* UI::resolve_font(ui::Font* font, int size) const {
+ImFont* UI::resolve_font(Font* font, int size) const {
     if (font != nullptr) {
         if (ImFont* result = font->get(size); result != nullptr) {
             return result;
@@ -114,7 +113,7 @@ ImFont* UI::get_font(std::string_view id, int size) const {
         return nullptr;
     }
 
-    const ui::ImGuiContextScope scope(m_context);
+    const ImGuiContextScope scope(m_context);
     return resolve_font(m_runtime.fonts().find(id), size);
 }
 
@@ -128,7 +127,7 @@ void UI::initialize() {
     }
 
     m_context = ImGui::CreateContext();
-    const ui::ImGuiContextScope scope(m_context);
+    const ImGuiContextScope scope(m_context);
 
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
@@ -147,12 +146,12 @@ void UI::initialize() {
 
     m_ready = true;
 
-    m_root = std::make_unique<ui::LayerContainer>("ui-surface", ui::LayerMode::Window);
+    m_root = std::make_unique<LayerContainer>("ui-surface", LayerMode::Window);
     m_root->set_input_router(&m_input_router);
     m_root->set_profiler(&m_profiler);
 
-    auto& surface_layout = m_root->add<ui::StackContainer>("ui-root", ui::StackDirection::Horizontal);
-    surface_layout.set_size({ui::grow(), ui::grow()});
+    auto& surface_layout = m_root->add<StackContainer>("ui-root", StackDirection::Horizontal);
+    surface_layout.set_size({grow(), grow()});
     m_surface_layout = &surface_layout;
 
     auto& content = surface_layout.add<SurfaceContent>(*m_root, m_runtime.theme());
@@ -174,7 +173,7 @@ void UI::configure_style(float main_scale) {
 
 void UI::apply_theme_metrics() {
     ImGuiStyle& style = ImGui::GetStyle();
-    const ui::Theme& theme = m_runtime.theme();
+    const Theme& theme = m_runtime.theme();
     const float scale = m_content_scale;
     const auto scaled = [scale](float value) { return std::max(0.0F, value) * scale; };
     const auto scaled_size = [scale](ImVec2 value) {
@@ -199,7 +198,7 @@ void UI::apply_theme_metrics() {
 }
 
 void UI::apply_theme_colors() {
-    const ui::Theme& theme = m_runtime.theme();
+    const Theme& theme = m_runtime.theme();
     ImVec4* colors = ImGui::GetStyle().Colors;
 
     colors[ImGuiCol_WindowBg] = theme.background_color;
@@ -234,12 +233,12 @@ void UI::apply_theme_colors() {
     colors[ImGuiCol_SliderGrabActive] = theme.accent_hover_color;
 }
 
-bool UI::dispatch(ui::UiEvent& event) {
+bool UI::dispatch(UiEvent& event) {
     if (!m_ready) {
         return false;
     }
 
-    const ui::ImGuiContextScope scope(m_context);
+    const ImGuiContextScope scope(m_context);
     if (m_debugger != nullptr && m_debugger->handle_input(event)) {
         return true;
     }
@@ -292,10 +291,13 @@ void UI::end_frame() {
     m_backend->set_mouse_cursor(ImGui::GetMouseCursor());
 
     ImGui::Render();
+    if (m_debugger != nullptr) {
+        m_debugger->finish_popup_restore();
+    }
     ImDrawData* draw_data = ImGui::GetDrawData();
 
     if (m_profiler.enabled()) {
-        const ui::InputRouterStats input_stats = m_input_router.stats();
+        const InputRouterStats input_stats = m_input_router.stats();
         m_profiler.record_frame_metrics(input_stats.entry_count, input_stats.entry_checks);
     }
 

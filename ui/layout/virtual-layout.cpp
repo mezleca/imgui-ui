@@ -149,7 +149,7 @@ void VirtualLayout::draw_children() {
 
     size_t first = 0;
 
-    // each expanded row becomes its own run; all rows between offsets share one height for ImGuiListClipper.
+    // each expanded row becomes its own run while rows between offsets share one height for imgui's clipper.
     for (const auto& [index, extra] : m_extra_offsets) {
         draw_range(first, index - first, m_item_height, width, buffer);
         draw_range(index, 1, m_item_height + extra, width, buffer);

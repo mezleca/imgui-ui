@@ -356,8 +356,8 @@ static bool is_gif(std::string_view content) {
 }
 
 std::unique_ptr<Texture> OpenGLTextureLoader::load(const std::filesystem::path& location, std::string) {
-    // both loaders build CPU data. ImageWidget::paint_draw_list calls Texture::get(), then svg rasterizes per size, raster
-    // images upload once per imgui context, and gifs decode only their next drawn frame.
+    // both loaders build cpu data. drawing requests gpu data lazily, then svg rasterizes per size while gif frames upload
+    // one context-owned object on first use.
     if (location.extension() == ".gif") {
         return std::make_unique<OpenGLGifTexture>(load_binary_file(location));
     }
