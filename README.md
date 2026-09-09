@@ -10,7 +10,7 @@ imgui-ui provides:
 - input routing
 - custom widgets
 
-<br>while keeping full compatibility with imgui internals.
+while keeping full compatibility with imgui internals.
 
 # usage
 
