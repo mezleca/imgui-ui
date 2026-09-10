@@ -3,13 +3,13 @@
 #include "../style/styled-node.hpp"
 #include "text-value.hpp"
 
+#include <cstdint>
 #include <format>
 #include <string>
-#include <tuple>
 #include <utility>
 
 namespace ui {
-    enum class TextOverflow {
+    enum class TextOverflow : uint8_t {
         /// clips text at the content bounds.
         Clip,
         /// replaces clipped text with an ellipsis.
@@ -21,13 +21,9 @@ namespace ui {
         explicit TextWidget(std::string text) : StyledNode({}, "Text"), m_text(std::move(text)) {}
 
         template <typename... Args>
-        TextWidget(std::string format, std::tuple<Args...> values)
-            : StyledNode({}, "Text"),
-              m_text(
-                  std::apply(
-                      [&format](const auto&... args) { return std::vformat(format, std::make_format_args(args...)); }, values
-                  )
-              ) {}
+            requires(sizeof...(Args) > 0)
+        TextWidget(std::string format, Args&&... args)
+            : StyledNode({}, "Text"), m_text(std::vformat(format, std::make_format_args(args...))) {}
 
         TextWidget& set_wrap(float width);
         TextWidget& set_overflow(TextOverflow overflow);

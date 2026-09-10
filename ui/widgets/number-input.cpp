@@ -28,11 +28,10 @@ void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
 }
 
 NumberInputWidget& NumberInputWidget::set_label(std::string label) {
-    if (label == m_label.str()) {
+    if (!m_label.set(std::move(label))) {
         return *this;
     }
 
-    m_label.set(std::move(label));
     invalidate_measure();
     return *this;
 }
@@ -173,7 +172,9 @@ bool NumberInputWidget::paint() {
         notify_change();
     }
 
-    draw_border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style);
+    ImColor border = current_style.border_color().value;
+    border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
+    draw_border(*ImGui::GetWindowDrawList(), {ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style, border);
 
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);

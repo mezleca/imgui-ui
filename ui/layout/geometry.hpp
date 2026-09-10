@@ -123,6 +123,12 @@ namespace ui {
         ImVec2 offset{};
         ImVec2 anchor_position{};
         ImVec2 origin_position{};
+
+        bool operator==(const Placement& other) const {
+            return anchor == other.anchor && origin == other.origin && offset.x == other.offset.x && offset.y == other.offset.y &&
+                   anchor_position.x == other.anchor_position.x && anchor_position.y == other.anchor_position.y &&
+                   origin_position.x == other.origin_position.x && origin_position.y == other.origin_position.y;
+        }
     };
 
     struct LayoutConfig {
@@ -132,6 +138,10 @@ namespace ui {
         Placement placement{};
         /// whether the parent includes this node in flow arrangement.
         bool in_flow = true;
+
+        bool operator==(const LayoutConfig& other) const {
+            return size == other.size && placement == other.placement && in_flow == other.in_flow;
+        }
     };
 
     /// axis-aligned bounds in one coordinate space.

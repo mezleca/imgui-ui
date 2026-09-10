@@ -44,14 +44,16 @@ namespace ui {
             const bool changed = std::visit(
                 [value](auto* bound_value) {
                     using BoundValue = std::remove_cv_t<std::remove_pointer_t<decltype(bound_value)>>;
-                    if constexpr (!std::same_as<BoundValue, T>) {
-                        return false;
-                    } else if (*bound_value == value) {
-                        return false;
-                    } else {
+                    if constexpr (std::same_as<BoundValue, T>) {
+                        if (*bound_value == value) {
+                            return false;
+                        }
+
                         *bound_value = value;
                         return true;
                     }
+
+                    return false;
                 },
                 m_number
             );

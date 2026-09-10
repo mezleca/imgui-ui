@@ -4,7 +4,6 @@
 #include "../layout/geometry.hpp"
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -130,9 +129,7 @@ namespace ui {
         }
 
         /// enables or disables input.
-        void set_enabled(bool enabled) {
-            m_enabled = enabled;
-        }
+        void set_enabled(bool enabled);
 
         virtual bool accepts_input() const {
             return m_visible && m_enabled;
@@ -164,6 +161,10 @@ namespace ui {
 
         /// replaces the complete layout request.
         Node& set_layout(LayoutConfig config) {
+            if (m_layout.config() == config) {
+                return *this;
+            }
+
             m_layout.set_config(config);
             invalidate_measure();
             return *this;
@@ -173,10 +174,11 @@ namespace ui {
         void invalidate_measure();
 
     protected:
-        std::function<void(UiEvent&)> _on_event;
-
         /// dispatches an event to this node.
         virtual void dispatch_event(UiEvent& event);
+
+        /// handles the node's internal event behavior.
+        virtual void on_event(UiEvent&) {}
 
         /// resolves placement and stores local and screen bounds.
         void resolve_position();

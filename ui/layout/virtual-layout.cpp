@@ -31,7 +31,11 @@ VirtualLayout& VirtualLayout::set_items(size_t count, ItemProvider provider) {
 
     // discard offsets that no longer point at a source item before invalidating fit-height measurements.
     m_item_count = count;
-    m_extra_offsets.erase(m_extra_offsets.lower_bound(count), m_extra_offsets.end());
+    const auto first_removed = m_extra_offsets.lower_bound(count);
+    for (auto offset = first_removed; offset != m_extra_offsets.end(); ++offset) {
+        m_extra_height -= offset->second;
+    }
+    m_extra_offsets.erase(first_removed, m_extra_offsets.end());
 
     invalidate_measure();
     return *this;
@@ -71,11 +75,25 @@ VirtualLayout& VirtualLayout::set_extra_offset(size_t index, float offset) {
         throw std::invalid_argument("virtual extra offset must be finite and nonnegative");
     }
 
+    const auto current = m_extra_offsets.find(index);
+    if (current != m_extra_offsets.end() && current->second == offset) {
+        return *this;
+    }
+
     // zero removes the map entry so only expanded rows split the uniform clipper runs.
     if (offset == 0.0F) {
-        m_extra_offsets.erase(index);
+        if (current != m_extra_offsets.end()) {
+            m_extra_height -= current->second;
+            m_extra_offsets.erase(current);
+        }
     } else {
-        m_extra_offsets[index] = offset;
+        if (current == m_extra_offsets.end()) {
+            m_extra_offsets.emplace(index, offset);
+            m_extra_height += offset;
+        } else {
+            m_extra_height += offset - current->second;
+            current->second = offset;
+        }
     }
 
     invalidate_measure();
@@ -88,7 +106,12 @@ float VirtualLayout::extra_offset(size_t index) const {
 }
 
 VirtualLayout& VirtualLayout::clear_extra_offsets() {
+    if (m_extra_offsets.empty()) {
+        return *this;
+    }
+
     m_extra_offsets.clear();
+    m_extra_height = 0.0F;
     invalidate_measure();
     return *this;
 }
@@ -96,13 +119,10 @@ VirtualLayout& VirtualLayout::clear_extra_offsets() {
 float VirtualLayout::content_height() const {
     const size_t count = m_item_count;
     float height = static_cast<float>(count) * m_item_height;
+
     if (count > 1) height += static_cast<float>(count - 1) * m_spacing;
 
-    for (const auto& entry : m_extra_offsets) {
-        height += entry.second;
-    }
-
-    return height;
+    return height + m_extra_height;
 }
 
 void VirtualLayout::on_measure() {
@@ -128,8 +148,7 @@ void VirtualLayout::draw_children() {
     const float width = std::max(0.0F, ImGui::GetContentRegionAvail().x);
     ItemRange buffer{};
 
-    // map the viewport to source indices once
-    // each run below intersects this interval before asking the provider.
+    // map the viewport once so each run intersects it before asking the provider.
     if (m_overscan != 0 && m_item_count != 0) {
         const ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -164,10 +183,13 @@ size_t VirtualLayout::item_boundary(float position, bool end) const {
     const float stride = m_item_height + m_spacing;
     for (const auto& [index, extra] : m_extra_offsets) {
         const float start = static_cast<float>(index) * stride;
+
         if (position < start) break;
+
         if (position < start + stride + extra) {
             return index + (end ? position > start : position >= start + m_item_height + extra);
         }
+
         position -= extra;
     }
 
@@ -198,8 +220,7 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
             const size_t index = first + static_cast<size_t>(row);
             const float screen_y = start.y + static_cast<float>(row) * stride;
 
-            // the clipper may return a boundary row
-            // avoid creating it unless it is visible or inside overscan.
+            // the clipper may return a boundary row, so avoid creating it unless it is visible or inside overscan.
             if (!(index >= begin && index < end) &&
                 !ImGui::IsRectVisible({start.x, screen_y}, {start.x + width, screen_y + height})) {
                 continue;
@@ -213,10 +234,12 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
 
             const ImVec2 margin = layout_margin(child);
             const float y = offset + static_cast<float>(row) * stride;
+
             arrange_child(
                 child, {std::max(0.0F, width - margin.x * 2.0F), std::max(0.0F, height - margin.y * 2.0F)},
                 {.offset = {margin.x, y + margin.y}}
             );
+
             child.draw();
         }
     }

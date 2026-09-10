@@ -15,11 +15,13 @@ namespace ui {
             set_input_mode(input_mode);
         }
 
+        /// runs after internal event handling for every event reaching this widget.
         Widget& set_on_event(std::function<void(UiEvent&)> callback) {
             m_on_event = std::move(callback);
             return *this;
         }
 
+        /// runs after the widget reports a value change.
         Widget& set_on_change(std::function<void()> callback) {
             m_on_change = std::move(callback);
             return *this;
@@ -44,7 +46,13 @@ namespace ui {
             if (m_on_event) {
                 m_on_event(event);
             }
+
+            if (event.type == EventType::Click) {
+                on_click(event);
+            }
         }
+
+        virtual void on_click(UiEvent&) {}
     };
 
     class DrawListWidget : public Widget {
@@ -64,5 +72,4 @@ namespace ui {
 
         virtual void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) = 0;
     };
-
 } // namespace ui

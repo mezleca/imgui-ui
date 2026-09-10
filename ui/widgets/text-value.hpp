@@ -112,38 +112,38 @@ namespace ui {
 
         template <typename T>
             requires GenericNumber<T>
-        void set(T value) {
+        bool set(T value) {
             Value new_value;
-            if constexpr (std::same_as<T, bool>) {
+            if constexpr (std::same_as<T, bool> || std::same_as<T, float>) {
                 new_value = value;
             } else if constexpr (std::signed_integral<T>) {
                 new_value = static_cast<std::int64_t>(value);
             } else if constexpr (std::unsigned_integral<T>) {
                 new_value = static_cast<std::uint64_t>(value);
-            } else if constexpr (std::same_as<T, float>) {
-                new_value = value;
             } else {
                 new_value = static_cast<double>(value);
             }
 
             if (new_value == m_value) {
-                return;
+                return false;
             }
 
             m_value = std::move(new_value);
             m_string_dirty = true;
             m_dirty = true;
+            return true;
         }
 
-        void set(std::string text) {
+        bool set(std::string text) {
             const auto* current_text = std::get_if<std::string>(&m_value);
             if (current_text != nullptr && *current_text == text) {
-                return;
+                return false;
             }
 
             m_value = std::move(text);
             m_string_dirty = true;
             m_dirty = true;
+            return true;
         }
 
     private:

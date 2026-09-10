@@ -18,6 +18,7 @@ namespace ui {
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;
+        void on_event(UiEvent& event) override;
 
     private:
         class FieldNode;

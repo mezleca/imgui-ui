@@ -58,22 +58,6 @@ namespace ui {
         }
 
         template <typename ValueType, typename Field>
-        Style& set_animated_value(ValueType ComputedStyle::* member, Field value, float duration = -1.0F) {
-            ValueType& current = this->*member;
-            const bool changed = !transition_values_equal(current.value, value);
-
-            if (!changed && duration < 0.0F) {
-                return *this;
-            }
-
-            if (changed) current.set(std::move(value));
-            if (duration >= 0.0F) current.set_duration(duration);
-            if (changed) notify_change();
-
-            return *this;
-        }
-
-        template <typename ValueType, typename Field>
         Style& set_animated_transition(ValueType ComputedStyle::* member, Field value, TransitionSpec transition) {
             ValueType& current = this->*member;
 
@@ -121,19 +105,11 @@ namespace ui {
             return m_vars;
         }
 
-        Style& padding(ImVec2 value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_padding, normalize_style_insets(value), transition_duration);
-        }
-
-        Style& padding(ImVec2 value, TransitionSpec transition) {
+        Style& padding(ImVec2 value, TransitionSpec transition = {}) {
             return set_animated_transition(&ComputedStyle::m_padding, normalize_style_insets(value), transition);
         }
 
-        Style& margin(ImVec2 value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_margin, normalize_style_insets(value), transition_duration);
-        }
-
-        Style& margin(ImVec2 value, TransitionSpec transition) {
+        Style& margin(ImVec2 value, TransitionSpec transition = {}) {
             return set_animated_transition(&ComputedStyle::m_margin, normalize_style_insets(value), transition);
         }
 
@@ -147,37 +123,21 @@ namespace ui {
                 .border_thickness(theme.controls.border_thickness);
         }
 
-        Style& line_height(float value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_line_height, std::max(0.0F, value), transition_duration);
-        }
-
-        Style& line_height(float value, TransitionSpec transition) {
+        Style& line_height(float value, TransitionSpec transition = {}) {
             return set_animated_transition(&ComputedStyle::m_line_height, std::max(0.0F, value), transition);
         }
 
         /// rotates drawing without changing layout or input bounds.
-        Style& rotation(float value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_rotation, std::isfinite(value) ? value : 0.0F, transition_duration);
-        }
-
-        Style& rotation(float value, TransitionSpec transition) {
+        Style& rotation(float value, TransitionSpec transition = {}) {
             return set_animated_transition(&ComputedStyle::m_rotation, std::isfinite(value) ? value : 0.0F, transition);
         }
 
         /// scales drawing without changing layout or input bounds.
-        Style& scale(ImVec2 value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_scale, normalize_style_scale(value), transition_duration);
-        }
-
-        Style& scale(ImVec2 value, TransitionSpec transition) {
+        Style& scale(ImVec2 value, TransitionSpec transition = {}) {
             return set_animated_transition(&ComputedStyle::m_scale, normalize_style_scale(value), transition);
         }
 
-        Style& scale(float value, float transition_duration = -1.0F) {
-            return scale({value, value}, transition_duration);
-        }
-
-        Style& scale(float value, TransitionSpec transition) {
+        Style& scale(float value, TransitionSpec transition = {}) {
             return scale({value, value}, transition);
         }
 
@@ -193,35 +153,19 @@ namespace ui {
             return set_property(&ComputedStyle::m_use_background_for_scrollbar, value);
         }
 
-        Style& color(ImColor value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_color, value, transition_duration);
-        }
-
-        Style& color(ImColor value, TransitionSpec transition) {
+        Style& color(ImColor value, TransitionSpec transition = {}) {
             return set_animated_transition(&ComputedStyle::m_color, value, transition);
         }
 
-        Style& border_color(ImColor value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_border_color, value, transition_duration);
-        }
-
-        Style& border_color(ImColor value, TransitionSpec transition) {
+        Style& border_color(ImColor value, TransitionSpec transition = {}) {
             return set_animated_transition(&ComputedStyle::m_border_color, value, transition);
         }
 
-        Style& background_color(ImColor value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_background_color, value, transition_duration);
-        }
-
-        Style& background_color(ImColor value, TransitionSpec transition) {
+        Style& background_color(ImColor value, TransitionSpec transition = {}) {
             return set_animated_transition(&ComputedStyle::m_background_color, value, transition);
         }
 
-        Style& box_shadow(BoxShadow value, float transition_duration = -1.0F) {
-            return set_animated_value(&ComputedStyle::m_box_shadow, normalize_style_box_shadow(value), transition_duration);
-        }
-
-        Style& box_shadow(BoxShadow value, TransitionSpec transition) {
+        Style& box_shadow(BoxShadow value, TransitionSpec transition = {}) {
             return set_animated_transition(&ComputedStyle::m_box_shadow, normalize_style_box_shadow(value), transition);
         }
 

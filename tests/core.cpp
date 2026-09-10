@@ -53,7 +53,7 @@ TEST_CASE("partial borders keep every draw style inside its selected side") {
 
     const auto require_left_bounds = [&](BorderStyle style) {
         const int first_vertex = draw_list->VtxBuffer.Size;
-        draw_border_path(path, BORDER_LEFT, ImColor{255, 255, 255, 255}, 2.0F, style);
+        draw_border_path(ui::draw_list(), path, BORDER_LEFT, ImColor{255, 255, 255, 255}, 2.0F, style);
         REQUIRE(draw_list->VtxBuffer.Size > first_vertex);
 
         float min_y = std::numeric_limits<float>::max();
@@ -68,7 +68,7 @@ TEST_CASE("partial borders keep every draw style inside its selected side") {
         REQUIRE(max_y < 79.0F);
     };
 
-    draw_border_path(path, BORDER_NONE, ImColor{255, 255, 255, 255}, 2.0F, BorderStyle::Solid);
+    draw_border_path(ui::draw_list(), path, BORDER_NONE, ImColor{255, 255, 255, 255}, 2.0F, BorderStyle::Solid);
     REQUIRE(draw_list->VtxBuffer.Size == vertices_before);
 
     require_left_bounds(BorderStyle::Solid);
@@ -88,7 +88,7 @@ TEST_CASE("patterned borders keep every side visible") {
 
     const auto require_sides = [&](BorderStyle style) {
         const int first_vertex = ImGui::GetWindowDrawList()->VtxBuffer.Size;
-        draw_border_path(path, BORDER_ALL, ImColor{255, 255, 255, 255}, 2.0F, style);
+        draw_border_path(ui::draw_list(), path, BORDER_ALL, ImColor{255, 255, 255, 255}, 2.0F, style);
         const auto& vertices = ImGui::GetWindowDrawList()->VtxBuffer;
         const auto has_side = [&](auto&& predicate) {
             for (int index = first_vertex; index < vertices.Size; ++index) {
@@ -488,17 +488,23 @@ TEST_CASE("visual bounds stay on layout unless paint overrides them") {
 TEST_CASE("nodes register only explicitly configured local input entries") {
     class RectNode final : public Node {
     public:
-        RectNode(std::string id, Rect rect, std::function<void(UiEvent&)> callback = {}) : Node(std::move(id)), m_rect(rect) {
-            _on_event = std::move(callback);
-        }
+        RectNode(std::string id, Rect rect, std::function<void(UiEvent&)> callback = {})
+            : Node(std::move(id)), m_rect(rect), m_callback(std::move(callback)) {}
 
     private:
+        void on_event(UiEvent& event) override {
+            if (m_callback) {
+                m_callback(event);
+            }
+        }
+
         bool on_draw() override {
             set_visual_rect(m_rect);
             return true;
         }
 
         Rect m_rect;
+        std::function<void(UiEvent&)> m_callback;
     };
 
     InputRouter router;

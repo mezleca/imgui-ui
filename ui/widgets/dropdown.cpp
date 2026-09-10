@@ -87,19 +87,7 @@ private:
 
 class ui::DropdownTriggerNode final : public DrawListWidget {
 public:
-    explicit DropdownTriggerNode(DropdownWidget::State& state) : DrawListWidget("trigger", "Dropdown"), m_state(state) {
-        _on_event = [this](UiEvent& event) {
-            if (event.type != EventType::Click || event.button != PointerButton::Left) {
-                return;
-            }
-
-            if (m_state.is_closed()) {
-                m_state.open();
-            } else {
-                m_state.close();
-            }
-        };
-    }
+    explicit DropdownTriggerNode(DropdownWidget::State& state) : DrawListWidget("trigger", "Dropdown"), m_state(state) {}
 
     void set_open(bool open) {
         if (open) {
@@ -111,6 +99,18 @@ public:
     }
 
 private:
+    void on_click(UiEvent& event) override {
+        if (event.button != PointerButton::Left) {
+            return;
+        }
+
+        if (m_state.is_closed()) {
+            m_state.open();
+        } else {
+            m_state.close();
+        }
+    }
+
     void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& current_style) override {
         draw_frame(draw_list, rect, current_style);
 
@@ -206,7 +206,7 @@ bool DropdownBodyNode::paint() {
     if (ImGui::BeginPopup("body", ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
         const Rect body_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
         set_visual_rect(body_rect);
-        draw_frame(body_rect, style);
+        draw_frame(*ImGui::GetWindowDrawList(), body_rect, style);
 
         // block the body while keeping its option rows targetable.
         m_input_router.register_blocker(*this, body_rect);
@@ -330,13 +330,6 @@ DropdownWidget::DropdownWidget(UI& ui, std::string& value, std::vector<DropdownO
     : Widget(std::move(id), "Dropdown"), m_state{.value = &value, .options = std::move(options)} {
     m_state.owner = this;
 
-    // prevent imgui from handling the same press or release.
-    _on_event = [](UiEvent& event) {
-        if (event.type == EventType::PointerDown || event.type == EventType::PointerUp) {
-            event.block_native_input();
-        }
-    };
-
     m_label_node = &add<TextWidget>("");
     m_trigger = &add<DropdownTriggerNode>(m_state);
     m_body = &add<DropdownBodyNode>(m_state, ui, ui.input_router());
@@ -345,6 +338,13 @@ DropdownWidget::DropdownWidget(UI& ui, std::string& value, std::vector<DropdownO
     m_body->set_enabled(false);
 
     apply_theme_defaults(ui.theme());
+}
+
+void DropdownWidget::on_event(UiEvent& event) {
+    // prevent imgui from handling the same press or release.
+    if (event.type == EventType::PointerDown || event.type == EventType::PointerUp) {
+        event.block_native_input();
+    }
 }
 
 void DropdownWidget::apply_theme_defaults(const Theme& theme) {
@@ -371,7 +371,7 @@ void DropdownWidget::apply_theme_defaults(const Theme& theme) {
 }
 
 bool DropdownWidget::paint() {
-    draw_frame(layout().visual_rect(), computed_style());
+    draw_frame(*ImGui::GetWindowDrawList(), layout().visual_rect(), computed_style());
     return true;
 }
 

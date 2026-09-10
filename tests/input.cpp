@@ -32,61 +32,63 @@ static UiEvent click_event(ImVec2 position = {}) {
 
 class EventNode final : public Node {
 public:
-    explicit EventNode(std::string node_id, std::vector<std::string>& events) : Node(std::move(node_id)), m_events(events) {
-        _on_event = [this](UiEvent& event) {
-            m_events.push_back(id());
-            if (stop_events) {
-                event.stop_propagation();
-            } else if (handle_events) {
-                event.mark_handled();
-            }
-        };
-    }
+    explicit EventNode(std::string node_id, std::vector<std::string>& events) : Node(std::move(node_id)), m_events(events) {}
 
     bool handle_events = false;
     bool stop_events = false;
 
 private:
+    void on_event(UiEvent& event) override {
+        m_events.push_back(id());
+        if (stop_events) {
+            event.stop_propagation();
+        } else if (handle_events) {
+            event.mark_handled();
+        }
+    }
+
     std::vector<std::string>& m_events;
 };
 
 class EventWidget final : public Widget {
 public:
-    explicit EventWidget(std::vector<std::string>& events) : Widget("widget"), m_events(events) {
-        _on_event = [this](UiEvent&) { m_events.push_back("internal"); };
-    }
+    explicit EventWidget(std::vector<std::string>& events) : Widget("widget"), m_events(events) {}
 
 private:
+    void on_event(UiEvent&) override {
+        m_events.push_back("internal");
+    }
+
     std::vector<std::string>& m_events;
 };
 
 class PointerCaptureNode final : public Node {
 public:
-    PointerCaptureNode(InputRouter& router, std::vector<EventType>& events) : Node("drag"), m_router(router), m_events(events) {
-        _on_event = [this](UiEvent& event) {
-            m_events.push_back(event.type);
-            if (event.type == EventType::PointerDown) {
-                REQUIRE(m_router.capture_pointer(*this));
-            }
-            event.mark_handled();
-        };
-    }
+    PointerCaptureNode(InputRouter& router, std::vector<EventType>& events) : Node("drag"), m_router(router), m_events(events) {}
 
 private:
+    void on_event(UiEvent& event) override {
+        m_events.push_back(event.type);
+        if (event.type == EventType::PointerDown) {
+            REQUIRE(m_router.capture_pointer(*this));
+        }
+        event.mark_handled();
+    }
+
     InputRouter& m_router;
     std::vector<EventType>& m_events;
 };
 
 class PointerEventNode final : public Node {
 public:
-    PointerEventNode(std::string node_id, std::vector<EventType>& events) : Node(std::move(node_id)), m_events(events) {
-        _on_event = [this](UiEvent& event) {
-            m_events.push_back(event.type);
-            event.mark_handled();
-        };
-    }
+    PointerEventNode(std::string node_id, std::vector<EventType>& events) : Node(std::move(node_id)), m_events(events) {}
 
 private:
+    void on_event(UiEvent& event) override {
+        m_events.push_back(event.type);
+        event.mark_handled();
+    }
+
     std::vector<EventType>& m_events;
 };
 

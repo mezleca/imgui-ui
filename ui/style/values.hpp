@@ -65,10 +65,6 @@ namespace ui {
             m_has_target = false;
         }
 
-        void set_duration(float new_duration) {
-            duration = std::max(0.0F, new_duration);
-        }
-
         void set_transition(TransitionSpec transition) {
             duration = std::max(0.0F, transition.duration);
             easing = transition.easing != nullptr ? transition.easing : easing::linear;

@@ -18,6 +18,6 @@ bool LineWidget::paint() {
         {std::min(m_start.x, m_end.x) - half_thickness, std::min(m_start.y, m_end.y) - half_thickness},
         {std::max(m_start.x, m_end.x) + half_thickness, std::max(m_start.y, m_end.y) + half_thickness},
     });
-    draw_line(m_start, m_end, current_style.color().get_col(), current_style.border_thickness());
+    draw_line(ui::draw_list(), m_start, m_end, current_style.color().get_col(), current_style.border_thickness());
     return true;
 }

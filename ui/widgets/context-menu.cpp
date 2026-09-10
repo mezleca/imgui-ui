@@ -35,20 +35,6 @@ public:
         : DrawListWidget("item", "ContextMenuItem"), m_menu(menu), m_label(std::move(label)), m_callback(std::move(callback)) {
         set_size({grow(), px(m_menu.m_theme.widgets.context_menu_item_height)});
         apply_theme_defaults(m_menu.m_theme);
-
-        _on_event = [this](UiEvent& event) {
-            if (event.type == EventType::PointerMove && m_submenu != nullptr) {
-                m_menu.open_submenu(*this);
-                return;
-            }
-
-            if (event.type != EventType::Click || event.button != PointerButton::Left) {
-                return;
-            }
-
-            m_menu.activate_item(*this);
-            event.stop_propagation();
-        };
     }
 
     bool accepts_input() const override {
@@ -72,6 +58,21 @@ protected:
 
 private:
     friend class ContextMenuWidget;
+
+    void on_event(UiEvent& event) override {
+        if (event.type == EventType::PointerMove && m_submenu != nullptr) {
+            m_menu.open_submenu(*this);
+        }
+    }
+
+    void on_click(UiEvent& event) override {
+        if (event.button != PointerButton::Left) {
+            return;
+        }
+
+        m_menu.activate_item(*this);
+        event.stop_propagation();
+    }
 
     void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override {
         draw_frame(draw_list, rect, style);
@@ -131,14 +132,14 @@ ContextMenuWidget::ContextMenuWidget(InputRouter& router, const Theme& theme, Te
     set_enabled(false);
     set_input_mode(InputMode::Target);
 
-    _on_event = [this](UiEvent& event) {
-        if (event.type == EventType::PointerMove) {
-            root_menu().update_pointer_hover(event.position);
-        }
-    };
-
     apply_theme_defaults(theme);
     set_items(std::move(items));
+}
+
+void ContextMenuWidget::on_event(UiEvent& event) {
+    if (event.type == EventType::PointerMove) {
+        root_menu().update_pointer_hover(event.position);
+    }
 }
 
 void ContextMenuWidget::apply_theme_defaults(const Theme& theme) {

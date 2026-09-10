@@ -12,7 +12,6 @@ using namespace ui;
 
 ResizableContainer::ResizableContainer(std::string id) : StackContainer(std::move(id)) {
     set_type_name("ResizableContainer");
-    _on_event = [this](UiEvent& event) { handle_resize(event); };
 }
 
 ResizableContainer& ResizableContainer::set_resize(ResizeAxes resize) {
@@ -44,6 +43,10 @@ void ResizableContainer::on_draw_end() {
     const ImVec2 cursor = ImGui::GetCursorScreenPos();
     const ImVec2 available = ImGui::GetContentRegionAvail();
     m_parent_content_max = {cursor.x + available.x, cursor.y + available.y};
+}
+
+void ResizableContainer::on_event(UiEvent& event) {
+    handle_resize(event);
 }
 
 Rect ResizableContainer::hit_rect(Rect visual_rect) const {

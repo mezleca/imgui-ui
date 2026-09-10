@@ -2,6 +2,7 @@
 
 #include "widget.hpp"
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -78,7 +79,7 @@ namespace ui {
 
             void finish_close();
 
-            enum class Visibility {
+            enum class Visibility : uint8_t {
                 Closed,
                 Open,
                 Closing,
@@ -103,6 +104,7 @@ namespace ui {
         void draw_children() override;
         void on_measure() override;
         void on_layout() override;
+        void on_event(UiEvent& event) override;
         bool has_label() const;
 
         TextWidget* m_label_node = nullptr;

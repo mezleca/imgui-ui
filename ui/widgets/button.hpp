@@ -3,8 +3,10 @@
 #include "text-value.hpp"
 #include "widget.hpp"
 
-#include <imgui.h>
 #include <functional>
+#include <imgui.h>
+#include <utility>
+
 namespace ui {
     class UI;
     class ButtonWidget : public DrawListWidget {
@@ -17,13 +19,17 @@ namespace ui {
         }
 
         ButtonWidget& set_text(std::string text);
-        ButtonWidget& set_on_click(std::function<void()> callback);
+        /// runs after the click animation starts.
+        ButtonWidget& set_on_click(std::function<void()> callback) {
+            m_on_click = std::move(callback);
+            return *this;
+        }
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;
+        void on_click(UiEvent&) override;
 
     private:
-        void dispatch_event(UiEvent& event) override;
         void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override;
 
         GenericValue m_text;

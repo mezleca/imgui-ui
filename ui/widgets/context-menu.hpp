@@ -63,6 +63,7 @@ namespace ui {
         ContextMenuWidget(InputRouter& router, const Theme& theme, Texture* submenu_icon, ContextMenuItems items);
 
         void on_update(float) override;
+        void on_event(UiEvent& event) override;
         void draw_children() override;
         void on_draw_end() override;
 

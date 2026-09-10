@@ -58,20 +58,6 @@ CheckboxWidget::CheckboxWidget(UI& ui, bool& value, std::string label, std::stri
     m_fill_node = &add<CheckboxVisualNode>("fill", &value, true, m_type);
     m_label_node = &add<TextWidget>(std::move(label));
     apply_theme_defaults(ui.theme());
-
-    _on_event = [this](UiEvent& event) {
-        if (event.type != EventType::Click || event.button != PointerButton::Left) {
-            return;
-        }
-
-        *m_value = m_type == CheckboxType::Radio || !*m_value;
-        m_frame_node->animate()
-            .background_color(m_frame_node->style(StyleType::ACTIVE).background_color().value)
-            .then(0.04F)
-            .release_all({0.12F, easing::out_quad});
-
-        notify_change();
-    };
 }
 
 void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
@@ -109,6 +95,19 @@ bool CheckboxWidget::set_checked(bool checked) {
     *m_value = checked;
     notify_change();
     return true;
+}
+
+void CheckboxWidget::on_click(UiEvent& event) {
+    if (event.button != PointerButton::Left) {
+        return;
+    }
+
+    *m_value = m_type == CheckboxType::Radio || !*m_value;
+    m_frame_node->animate()
+        .background_color(m_frame_node->style(StyleType::ACTIVE).background_color().value)
+        .then(0.04F)
+        .release_all({0.12F, easing::out_quad});
+    notify_change();
 }
 
 CheckboxWidget& CheckboxWidget::set_type(CheckboxType type) {

@@ -54,6 +54,7 @@ namespace ui {
 
         float m_item_height = 1.0F;
         float m_spacing = 0.0F;
+        float m_extra_height = 0.0F;
         size_t m_item_count = 0;
         size_t m_overscan = 0;
         ItemProvider m_item_provider;

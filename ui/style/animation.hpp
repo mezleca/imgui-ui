@@ -11,8 +11,7 @@ namespace ui {
     /// schedules tracks for the visual properties owned by one styled node.
     class StyleAnimationSequence final {
     public:
-        explicit StyleAnimationSequence(VisualState& state, AnimationSequence sequence)
-            : m_state(state), m_sequence(std::move(sequence)) {}
+        explicit StyleAnimationSequence(VisualState& state, AnimationSequence sequence) : m_state(state), m_sequence(sequence) {}
 
         StyleAnimationSequence& padding_x(float value, TransitionSpec transition = {});
         StyleAnimationSequence& padding_y(float value, TransitionSpec transition = {});

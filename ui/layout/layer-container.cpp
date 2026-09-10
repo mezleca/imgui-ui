@@ -48,7 +48,7 @@ bool LayerContainer::paint() {
             parent() == nullptr ? viewport_rect : Rect::from_position_size(ImGui::GetCursorScreenPos(), layout().size());
         set_layout_rect(inline_rect);
         set_visual_rect(inline_rect);
-        draw_frame(inline_rect, computed_style());
+        draw_frame(*ImGui::GetWindowDrawList(), inline_rect, computed_style());
         return true;
     }
 
@@ -80,7 +80,7 @@ bool LayerContainer::paint() {
     set_layout_rect(window_rect);
     set_visual_rect(window_rect);
 
-    draw_frame(window_rect, computed_style());
+    draw_frame(*ImGui::GetWindowDrawList(), window_rect, computed_style());
     return true;
 }
 

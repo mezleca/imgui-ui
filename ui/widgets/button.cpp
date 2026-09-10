@@ -3,6 +3,8 @@
 #include "../ui.hpp"
 #include "../style/theme.hpp"
 
+#include <utility>
+
 using namespace ui;
 
 ButtonWidget::ButtonWidget(UI& ui, std::string text, LayoutSize size) : DrawListWidget({}, "Button"), m_text(text) {
@@ -31,26 +33,15 @@ void ButtonWidget::apply_theme_defaults(const Theme& theme) {
 }
 
 ButtonWidget& ButtonWidget::set_text(std::string text) {
-    if (text == m_text.str()) {
+    if (!m_text.set(std::move(text))) {
         return *this;
     }
 
-    m_text.set(std::move(text));
     invalidate_measure();
     return *this;
 }
 
-ButtonWidget& ButtonWidget::set_on_click(std::function<void()> callback) {
-    m_on_click = std::move(callback);
-    return *this;
-}
-
-void ButtonWidget::dispatch_event(UiEvent& event) {
-    Widget::dispatch_event(event);
-    if (event.type != EventType::Click) {
-        return;
-    }
-
+void ButtonWidget::on_click(UiEvent&) {
     animate()
         .background_color(style(StyleType::ACTIVE).background_color().value)
         .then(0.04F)

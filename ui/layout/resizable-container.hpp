@@ -21,6 +21,7 @@ namespace ui {
     protected:
         Rect hit_rect(Rect visual_rect) const override;
         void on_draw_end() override;
+        void on_event(UiEvent& event) override;
 
     private:
         void handle_resize(UiEvent& event);

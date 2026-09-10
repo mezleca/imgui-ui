@@ -41,7 +41,23 @@ void Node::set_input_state(InputState state) {
     input_state_changed();
 }
 
+void Node::set_enabled(bool enabled) {
+    if (m_enabled == enabled) {
+        return;
+    }
+
+    m_enabled = enabled;
+    if (!enabled && m_input_router != nullptr) {
+        clear_input_state();
+    }
+}
+
 Node& Node::set_input_mode(InputMode mode, Rect area) {
+    if (m_input_mode == mode && m_input_area.min.x == area.min.x && m_input_area.min.y == area.min.y &&
+        m_input_area.max.x == area.max.x && m_input_area.max.y == area.max.y) {
+        return *this;
+    }
+
     if (m_input_router != nullptr) m_input_router->erase_entries(*this);
 
     m_input_area = area;
@@ -50,7 +66,7 @@ Node& Node::set_input_mode(InputMode mode, Rect area) {
 }
 
 void Node::dispatch_event(UiEvent& event) {
-    if (_on_event) _on_event(event);
+    on_event(event);
 }
 
 void Node::resolve_position() {
@@ -134,6 +150,10 @@ void Node::set_visible(bool visible) {
 }
 
 void Node::set_profiler(Profiler* profiler) {
+    if (m_profiler == profiler) {
+        return;
+    }
+
     m_profiler = profiler;
     for (const auto& child : m_children) {
         child->set_profiler(profiler);

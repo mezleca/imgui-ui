@@ -57,17 +57,17 @@ TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
 
     m_field_node = &add<FieldNode>(value, m_focus_requested);
     apply_theme_defaults(ui.theme());
+}
 
-    _on_event = [this](UiEvent& event) {
-        if (event.type == EventType::PointerDown && event.button == PointerButton::Left) {
-            m_focus_requested = m_ui.input_router().set_focus(*this);
-        }
+void TextInputWidget::on_event(UiEvent& event) {
+    if (event.type == EventType::PointerDown && event.button == PointerButton::Left) {
+        m_focus_requested = m_ui.input_router().set_focus(*this);
+    }
 
-        if (event.type == EventType::Cancel || (event.type == EventType::KeyDown && event.key == Key::Escape)) {
-            m_ui.input_router().clear_focus(*this);
-            event.stop_propagation();
-        }
-    };
+    if (event.type == EventType::Cancel || (event.type == EventType::KeyDown && event.key == Key::Escape)) {
+        m_ui.input_router().clear_focus(*this);
+        event.stop_propagation();
+    }
 }
 
 void TextInputWidget::apply_theme_defaults(const Theme& theme) {
@@ -101,7 +101,7 @@ TextInputWidget& TextInputWidget::set_icon(Texture* icon) {
 }
 
 bool TextInputWidget::set_value(std::string value) {
-    if (m_value == nullptr || *m_value == value) {
+    if (*m_value == value) {
         return false;
     }
 

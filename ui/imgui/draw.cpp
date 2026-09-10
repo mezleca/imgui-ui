@@ -309,24 +309,12 @@ void ui::draw_line(ImDrawList& draw_list, ImVec2 start, ImVec2 end, ImColor colo
     draw_list.AddLine(start, end, apply_draw_alpha(color), thickness);
 }
 
-void ui::draw_line(ImVec2 start, ImVec2 end, ImColor color, float thickness, DrawListTarget target) {
-    draw_line(draw_list(target), start, end, color, thickness);
-}
-
 void ui::draw_circle(ImDrawList& draw_list, ImVec2 center, float radius, ImColor color) {
     draw_list.AddCircleFilled(center, radius, apply_draw_alpha(color));
 }
 
-void ui::draw_circle(ImVec2 center, float radius, ImColor color, DrawListTarget target) {
-    draw_circle(draw_list(target), center, radius, color);
-}
-
 void ui::draw_circle_outline(ImDrawList& draw_list, ImVec2 center, float radius, ImColor color, float thickness) {
     draw_list.AddCircle(center, radius, apply_draw_alpha(color), 0, thickness);
-}
-
-void ui::draw_circle_outline(ImVec2 center, float radius, ImColor color, float thickness, DrawListTarget target) {
-    draw_circle_outline(draw_list(target), center, radius, color, thickness);
 }
 
 void ui::draw_rect_filled(ImDrawList& draw_list, Rect rect, ImColor color, float rounding, ImDrawFlags flags) {
@@ -354,10 +342,6 @@ void ui::draw_rect_outline(ImDrawList& draw_list, Rect rect, ImColor color, floa
 
 void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, std::string_view text) {
     draw_list.AddText(position, apply_draw_alpha(color), text.data(), text.data() + text.size());
-}
-
-void ui::draw_text(ImVec2 position, ImColor color, std::string_view text, DrawListTarget target) {
-    draw_text(draw_list(target), position, color, text);
 }
 
 void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, const GenericValue& text, const ImVec4* clip_rect) {
@@ -409,10 +393,6 @@ void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, const 
     }
 }
 
-void ui::draw_text(ImVec2 position, ImColor color, const GenericValue& text, const ImVec4* clip_rect, DrawListTarget target) {
-    draw_text(draw_list(target), position, color, text, clip_rect);
-}
-
 void ui::draw_text_ellipsis(ImDrawList& draw_list, ImVec2 position, ImColor color, const GenericValue& text, ImVec4 clip_rect) {
     color = apply_draw_alpha(color);
     ImFont* font = text.font() != nullptr ? text.font() : ImGui::GetFont();
@@ -429,8 +409,8 @@ void ui::draw_text_ellipsis(ImDrawList& draw_list, ImVec2 position, ImColor colo
         if (text_size.x <= available_width) {
             draw_list.AddText(font, font_size, {position.x, y}, color, line, line_end, 0.0F, &clip_rect);
         } else {
-            constexpr std::string_view ellipsis = "...";
-            const float ellipsis_width = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, ellipsis.data()).x;
+            constexpr char ellipsis[] = "...";
+            const float ellipsis_width = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, ellipsis).x;
             const char* visible_end = line;
             const float text_width = std::max(0.0F, available_width - ellipsis_width);
             const ImVec2 visible_size = font->CalcTextSizeA(font_size, text_width, 0.0F, line, line_end, &visible_end);
@@ -439,9 +419,7 @@ void ui::draw_text_ellipsis(ImDrawList& draw_list, ImVec2 position, ImColor colo
                 draw_list.AddText(font, font_size, {position.x, y}, color, line, visible_end, 0.0F, &clip_rect);
             }
 
-            draw_list.AddText(
-                font, font_size, {position.x + visible_size.x, y}, color, ellipsis.data(), nullptr, 0.0F, &clip_rect
-            );
+            draw_list.AddText(font, font_size, {position.x + visible_size.x, y}, color, ellipsis, nullptr, 0.0F, &clip_rect);
         }
 
         if (line_end == value_end) {
@@ -451,10 +429,6 @@ void ui::draw_text_ellipsis(ImDrawList& draw_list, ImVec2 position, ImColor colo
         line = line_end + 1;
         y += line_height;
     }
-}
-
-void ui::draw_text_ellipsis(ImVec2 position, ImColor color, const GenericValue& text, ImVec4 clip_rect, DrawListTarget target) {
-    draw_text_ellipsis(draw_list(target), position, color, text, clip_rect);
 }
 
 void ui::draw_triangle(ImDrawList& draw_list, ImVec2 center, ImVec2 size, ImColor color, TriangleDirection direction) {
@@ -472,10 +446,6 @@ void ui::draw_triangle(ImDrawList& draw_list, ImVec2 center, ImVec2 size, ImColo
     };
 
     draw_list.AddTriangleFilled(vertex(0), vertex(1), vertex(2), apply_draw_alpha(color));
-}
-
-void ui::draw_triangle(ImVec2 center, ImVec2 size, ImColor color, TriangleDirection direction, DrawListTarget target) {
-    draw_triangle(draw_list(target), center, size, color, direction);
 }
 
 static void draw_full_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background, ImColor border) {
@@ -526,25 +496,13 @@ void ui::draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style
     draw_frame_impl(draw_list, rect, style, style.background_color().value, current_draw_alpha());
 }
 
-void ui::draw_frame(Rect rect, const ComputedStyle& style, DrawListTarget target) {
-    draw_frame(draw_list(target), rect, style);
-}
-
 void ui::draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background) {
     draw_frame_impl(draw_list, rect, style, background, current_draw_alpha());
-}
-
-void ui::draw_frame(Rect rect, const ComputedStyle& style, ImColor background, DrawListTarget target) {
-    draw_frame(draw_list(target), rect, style, background);
 }
 
 void ui::draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity) {
     const float alpha = std::clamp(opacity, 0.0F, 1.0F) * current_draw_alpha();
     draw_frame_impl(draw_list, rect, style, style.background_color().value, alpha);
-}
-
-void ui::draw_frame(Rect rect, const ComputedStyle& style, float opacity, DrawListTarget target) {
-    draw_frame(draw_list(target), rect, style, opacity);
 }
 
 void ui::draw_frame_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity) {
@@ -649,20 +607,6 @@ void ui::draw_border_path(
             stroke_dotted_path(draw_list, path, border, draw_color, thickness);
             return;
     }
-}
-
-void ui::draw_border_path(const BorderPath& path, uint8_t border, ImColor color, float thickness, BorderStyle style) {
-    draw_border_path(draw_list(), path, border, color, thickness, style);
-}
-
-void ui::draw_border(Rect rect, const ComputedStyle& style, DrawListTarget target) {
-    ImColor color = style.border_color().value;
-    color.Value.w *= current_draw_alpha();
-    draw_border(rect, style, color, target);
-}
-
-void ui::draw_border(Rect rect, const ComputedStyle& style, ImColor color, DrawListTarget target) {
-    draw_border(draw_list(target), rect, style, color);
 }
 
 void ui::draw_border(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor color) {

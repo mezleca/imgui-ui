@@ -71,6 +71,9 @@ namespace ui {
     } // namespace easing
 
     struct TransitionSpec {
+        constexpr TransitionSpec(float transition_duration = 0.0F, EasingFunction transition_easing = easing::linear)
+            : duration(transition_duration), easing(transition_easing) {}
+
         float duration = 0.0F;
         EasingFunction easing = easing::linear;
     };

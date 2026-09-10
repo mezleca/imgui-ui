@@ -37,6 +37,7 @@ namespace ui {
 
     private:
         bool paint() override;
+        void on_click(UiEvent&) override;
         void on_measure() override;
         void arrange_children();
         Rect hit_rect(Rect visual_rect) const override;
