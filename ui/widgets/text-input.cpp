@@ -65,8 +65,13 @@ void TextInputWidget::on_event(UiEvent& event) {
     }
 
     if (event.type == EventType::Cancel || (event.type == EventType::KeyDown && event.key == Key::Escape)) {
-        m_ui.input_router().clear_focus(*this);
-        event.stop_propagation();
+        const bool focused = input_state().focused;
+        if (focused) {
+            m_ui.input_router().restore_focus(*this);
+            event.stop_propagation();
+        } else {
+            event.mark_handled();
+        }
     }
 }
 

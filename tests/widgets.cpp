@@ -231,10 +231,15 @@ TEST_CASE("color picker opens outside its parent and blocks content input", "[co
     REQUIRE(popup_rect.valid());
     REQUIRE(popup_rect.min.y >= picker.layout().visual_rect().max.y);
 
-    surface.input_router().register_target(checkbox, popup_rect);
     const ImVec2 popup_center = ui_test::center(popup_rect);
     down.position = popup_center;
     up.position = popup_center;
+    surface.dispatch(down);
+    surface.dispatch(up);
+    REQUIRE_FALSE(down.native_input_blocked);
+    REQUIRE_FALSE(up.native_input_blocked);
+
+    surface.input_router().register_target(checkbox, popup_rect);
     surface.dispatch(down);
     surface.dispatch(up);
     REQUIRE_FALSE(checked);

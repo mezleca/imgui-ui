@@ -2,6 +2,7 @@ add_executable(imgui-ui-tests
     core.cpp
     ../examples/demo.cpp
     diagnostics.cpp
+    file-dialog.cpp
     input.cpp
     layout.cpp
     widgets.cpp

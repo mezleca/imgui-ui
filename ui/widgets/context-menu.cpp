@@ -14,21 +14,6 @@ static float menu_height(const Theme& theme, std::size_t item_count) {
     return theme.widgets.context_menu_item_height * static_cast<float>(item_count);
 }
 
-static Rect menu_work_area() {
-    if (ImGui::GetCurrentContext() == nullptr) {
-        return {};
-    }
-
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    if (viewport == nullptr) {
-        return {};
-    }
-
-    const ImVec2 size =
-        viewport->WorkSize.x > 0.0F && viewport->WorkSize.y > 0.0F ? viewport->WorkSize : ImGui::GetIO().DisplaySize;
-    return Rect::from_position_size(viewport->WorkPos, size);
-}
-
 class ui::ContextMenuItemNode final : public DrawListWidget {
 public:
     ContextMenuItemNode(ContextMenuWidget& menu, std::string label, ContextMenuCallback callback)
@@ -227,7 +212,7 @@ void ContextMenuWidget::open_at(ImVec2 screen_position) {
         return;
     }
 
-    const Rect work_area = menu_work_area();
+    const Rect work_area = viewport_work_area();
     if (!work_area.valid()) {
         return;
     }
@@ -308,7 +293,7 @@ void ContextMenuWidget::on_draw_end() {
         return;
     }
 
-    const Rect work_area = menu_work_area();
+    const Rect work_area = viewport_work_area();
     if (!work_area.valid()) {
         return;
     }
@@ -384,7 +369,7 @@ void ContextMenuWidget::update_submenu_hover(ImVec2 position) {
 
 void ContextMenuWidget::position_submenu(ContextMenuWidget& submenu, const ContextMenuItemNode& item) {
     const Rect item_rect = item.layout().visual_rect();
-    const Rect work_area = menu_work_area();
+    const Rect work_area = viewport_work_area();
     const ImVec2 submenu_size = submenu.layout().intrinsic_size();
 
     const float submenu_gap = m_theme.widgets.context_menu_gap;

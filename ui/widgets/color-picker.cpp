@@ -81,13 +81,6 @@ static ImColor hsv_color(float hue, float saturation, float value, float alpha =
     return color;
 }
 
-static Rect popup_work_area() {
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const ImVec2 size =
-        viewport->WorkSize.x > 0.0F && viewport->WorkSize.y > 0.0F ? viewport->WorkSize : ImGui::GetIO().DisplaySize;
-    return Rect::from_position_size(viewport->WorkPos, size);
-}
-
 class ui::ColorPickerPreviewNode final : public DrawListWidget {
 public:
     ColorPickerPreviewNode(ColorPickerWidget& owner, ImColor& color)
@@ -212,8 +205,10 @@ private:
             set_visual_rect(popup_rect);
             draw_frame(*ImGui::GetWindowDrawList(), popup_rect, style);
 
+            m_ui.input_router().register_target(*this, popup_rect);
+
             // block the whole work area so an empty outside press can close the popup without click synthesis.
-            m_ui.input_router().register_blocker(*this, popup_work_area(), [this, popup_rect](UiEvent& event) {
+            m_ui.input_router().register_blocker(*this, viewport_work_area(), [this, popup_rect](UiEvent& event) {
                 if (event.type == EventType::PointerDown && event.button == PointerButton::Left &&
                     !popup_rect.contains(event.position)) {
                     m_owner.close();

@@ -19,6 +19,7 @@
 #include <ui/widgets/text.hpp>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <format>
 #include <memory>
@@ -368,6 +369,7 @@ public:
 
 private:
     ImageWidget& add_test_image(Texture* texture);
+    void select_test_image();
     ImageFit image_fit() const;
     void apply_image_fit();
     void on_update(float dt) override;
@@ -461,8 +463,11 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     add_test_image(m_surface.runtime().textures().find("demo-test-image"));
     add_test_image(m_surface.runtime().textures().find("demo-test-gif"));
 
-    auto& add_image = profile.add<ButtonWidget>(surface, "add image", LayoutSize{px(140.0F), px(36.0F)});
+    auto& add_image = profile.add<ButtonWidget>(surface, "add test image", LayoutSize{px(140.0F), px(36.0F)});
     add_image.set_on_click([this] { add_test_image(m_surface.runtime().textures().find("demo-test-image")); });
+
+    auto& select_image = profile.add<ButtonWidget>(surface, "add image from file", LayoutSize{px(140.0F), px(36.0F)});
+    select_image.set_on_click([this] { select_test_image(); });
 
     auto& image_fit = profile.add<DropdownWidget>(
         surface, m_image_fit, std::vector<DropdownOption>{{"fill", "fill"}, {"contain", "contain"}, {"cover", "cover"}},
@@ -667,6 +672,18 @@ ImageWidget& DemoScreen::add_test_image(Texture* texture) {
     });
 
     return image;
+}
+
+void DemoScreen::select_test_image() {
+    static const std::array<FileDialogFilter, 1> image_filters{{{"image files", "png,jpg,jpeg,gif,svg"}}};
+
+    const FileDialogResult result = m_surface.file_dialog().open_file({.filters = image_filters});
+    if (!result.accepted() || result.paths.empty()) {
+        return;
+    }
+
+    Texture* texture = m_surface.runtime().textures().add(result.paths.front().filename().string(), result.paths.front());
+    add_test_image(texture);
 }
 
 ImageFit DemoScreen::image_fit() const {

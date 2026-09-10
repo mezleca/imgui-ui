@@ -50,6 +50,7 @@ namespace ui {
     };
 
     ImDrawList& draw_list(DrawListTarget target = DrawListTarget::Window);
+    Rect viewport_work_area();
 
     void draw_line(ImDrawList& draw_list, ImVec2 start, ImVec2 end, ImColor color, float thickness);
     void draw_circle(ImDrawList& draw_list, ImVec2 center, float radius, ImColor color);

@@ -19,3 +19,6 @@
 [submodule "vendor/freetype"]
 	path = vendor/freetype
 	url = https://gitlab.freedesktop.org/freetype/freetype.git
+[submodule "vendor/nativefiledialog-extended"]
+	path = vendor/nativefiledialog-extended
+	url = https://github.com/btzy/nativefiledialog-extended.git

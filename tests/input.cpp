@@ -259,6 +259,21 @@ TEST_CASE("owner-scoped blockers leave their descendants interactive") {
     REQUIRE(events == std::vector<EventType>{EventType::PointerMove});
 }
 
+TEST_CASE("input router restores focus to a blocker ancestor") {
+    Node modal("modal");
+    modal.set_input_mode(InputMode::Blocker);
+    auto panel = std::make_unique<Node>("panel");
+    auto input = std::make_unique<Node>("input");
+    Node* input_ptr = input.get();
+    panel->attach(std::move(input));
+    modal.attach(std::move(panel));
+
+    InputRouter router;
+    REQUIRE(router.set_focus(*input_ptr));
+    router.restore_focus(*input_ptr);
+    REQUIRE(router.focused_node() == &modal);
+}
+
 TEST_CASE("input router invalidates inactive focus and pointer capture") {
     std::vector<std::string> events;
     EventNode node("input", events);
@@ -404,6 +419,15 @@ TEST_CASE("blocking entry consumes empty space") {
     REQUIRE(move.handled);
 }
 
+TEST_CASE("blocking entries block native scroll") {
+    InputRouter router;
+    router.register_blocker({{0.0F, 0.0F}, {200.0F, 200.0F}});
+
+    UiEvent scroll = event_of(EventType::Scroll, {100.0F, 100.0F});
+    REQUIRE(router.dispatch(scroll));
+    REQUIRE(scroll.native_input_blocked);
+}
+
 TEST_CASE("blocking entries clear hover behind them") {
     InputRouter router;
     Node target("target");
@@ -473,9 +497,10 @@ TEST_CASE("pointer blockers leave focused keyboard input available") {
     router.register_target(content, {{0.0F, 0.0F}, {100.0F, 100.0F}});
     router.register_blocker({{0.0F, 0.0F}, {100.0F, 100.0F}});
 
-    UiEvent click = click_event({10.0F, 10.0F});
-    REQUIRE(router.dispatch(click));
+    UiEvent down = event_of(EventType::PointerDown, {10.0F, 10.0F});
+    REQUIRE(router.dispatch(down));
     REQUIRE(events.empty());
+    REQUIRE(router.focused_node() == &content);
 
     UiEvent key = event_of(EventType::KeyDown);
     REQUIRE(router.dispatch(key));

@@ -56,7 +56,8 @@ private:
 };
 
 UI::UI(Runtime& runtime, UIConfig config)
-    : m_runtime(runtime), m_backend(std::move(config.backend)), m_profiler(runtime.performance_directory()) {
+    : m_runtime(runtime), m_backend(std::move(config.backend)), m_file_dialog(std::move(config.file_dialog_backend)),
+      m_profiler(runtime.performance_directory()) {
     initialize();
 
     if (m_ready && config.enable_debugger) {

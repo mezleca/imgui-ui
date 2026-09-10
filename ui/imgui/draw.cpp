@@ -305,6 +305,21 @@ ImDrawList& ui::draw_list(DrawListTarget target) {
     return *ImGui::GetWindowDrawList();
 }
 
+Rect ui::viewport_work_area() {
+    if (ImGui::GetCurrentContext() == nullptr) {
+        return {};
+    }
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (viewport == nullptr) {
+        return {};
+    }
+
+    const ImVec2 size =
+        viewport->WorkSize.x > 0.0F && viewport->WorkSize.y > 0.0F ? viewport->WorkSize : ImGui::GetIO().DisplaySize;
+    return Rect::from_position_size(viewport->WorkPos, size);
+}
+
 void ui::draw_line(ImDrawList& draw_list, ImVec2 start, ImVec2 end, ImColor color, float thickness) {
     draw_list.AddLine(start, end, apply_draw_alpha(color), thickness);
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "backends/backend.hpp"
+#include "file-dialog.hpp"
 #include "style/theme.hpp"
 #include "diagnostics/profiler.hpp"
 #include "imgui/effects/effects.hpp"
@@ -22,6 +23,8 @@ namespace ui {
         std::unique_ptr<Backend> backend;
         /// creates the debugger overlay when the surface initializes.
         bool enable_debugger = false;
+        /// replaces the native dialog backend selected by the build configuration.
+        std::unique_ptr<FileDialogBackend> file_dialog_backend;
     };
     /// owns one imgui surface, its backend, input router, retained tree, and optional debugger.
     class UI {
@@ -92,6 +95,11 @@ namespace ui {
             return m_input_router;
         }
 
+        /// returns the native file dialog facade configured for this surface.
+        FileDialog& file_dialog() {
+            return m_file_dialog;
+        }
+
         /// returns frame timing and node instrumentation for this surface.
         Profiler& profiler() {
             return m_profiler;
@@ -158,6 +166,7 @@ namespace ui {
         ImGuiContext* m_context = nullptr;
         ImGuiContext* m_previous_context = nullptr;
         std::unique_ptr<Backend> m_backend;
+        FileDialog m_file_dialog;
         std::unique_ptr<Node> m_root;
         StackContainer* m_surface_layout = nullptr;
         Node* m_content_root = nullptr;

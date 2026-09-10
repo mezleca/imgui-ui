@@ -10,6 +10,7 @@ option(IMGUI_UI_BUILD_SDL "build the SDL3/OpenGL backend" OFF)
 option(IMGUI_UI_BUILD_RAYLIB "build the raylib backend" OFF)
 option(IMGUI_UI_BUILD_TESTS "build the framework tests" ${PROJECT_IS_TOP_LEVEL})
 option(IMGUI_UI_BUILD_EXAMPLES "build the selected backend examples" OFF)
+option(IMGUI_UI_USE_NFD "build native file dialogs with nativefiledialog-extended" ON)
 
 if(MSVC)
     foreach(config DEBUG RELWITHDEBINFO)
@@ -87,6 +88,16 @@ function(imgui_ui_configure_sdl)
     add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
 endfunction()
 
+function(imgui_ui_configure_nfd)
+    if(TARGET nfd)
+        return()
+    endif()
+
+    set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(NFD_INSTALL OFF CACHE BOOL "" FORCE)
+    add_subdirectory(vendor/nativefiledialog-extended EXCLUDE_FROM_ALL)
+endfunction()
+
 if(NOT TARGET glad)
     add_subdirectory(vendor/glad EXCLUDE_FROM_ALL)
 endif()
@@ -95,6 +106,10 @@ if(NOT TARGET imgui-ui::glad)
 endif()
 
 imgui_ui_configure_freetype()
+
+if(IMGUI_UI_USE_NFD)
+    imgui_ui_configure_nfd()
+endif()
 
 if(NOT TARGET imgui)
     add_library(imgui STATIC
