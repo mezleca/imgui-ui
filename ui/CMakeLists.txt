@@ -22,6 +22,13 @@ if(IMGUI_UI_USE_NFD)
     target_link_libraries(imgui-ui-core PRIVATE nfd)
 endif()
 
+function(imgui_ui_link_plutovg target)
+    if(TARGET plutovg)
+        target_compile_definitions(${target} PRIVATE PLUTOVG_BUILD_STATIC)
+        target_link_libraries(${target} PUBLIC plutovg::plutovg)
+    endif()
+endfunction()
+
 if(WIN32)
     target_compile_definitions(imgui-ui-core PRIVATE
         WIN32_LEAN_AND_MEAN
@@ -51,6 +58,8 @@ if(IMGUI_UI_BUILD_SDL)
         lunasvg
         nsgif
     )
+
+    imgui_ui_link_plutovg(imgui-ui-sdl)
 endif()
 
 if(IMGUI_UI_BUILD_RAYLIB)
@@ -69,4 +78,6 @@ if(IMGUI_UI_BUILD_RAYLIB)
         "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glad/include"
     )
     target_link_libraries(imgui-ui-raylib PUBLIC imgui-ui-core raylib lunasvg nsgif)
+
+    imgui_ui_link_plutovg(imgui-ui-raylib)
 endif()

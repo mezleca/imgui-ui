@@ -29,6 +29,24 @@ class SdlVideoSession final {
 public:
     SdlVideoSession() {
         REQUIRE(SDL_Init(SDL_INIT_VIDEO));
+
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+        SDL_Window* window = SDL_CreateWindow("imgui-ui test", 1, 1, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+        SDL_GLContext context = window == nullptr ? nullptr : SDL_GL_CreateContext(window);
+        bool supports_opengl = context != nullptr;
+        if (supports_opengl) {
+            SDL_GL_MakeCurrent(window, context);
+            supports_opengl = gladLoadGL(SDL_GL_GetProcAddress) != 0 && GLAD_GL_VERSION_3_3;
+        }
+        if (context != nullptr) SDL_GL_DestroyContext(context);
+        if (window != nullptr) SDL_DestroyWindow(window);
+
+        if (!supports_opengl) {
+            SKIP("OpenGL 3.3 is unavailable on this runner");
+        }
     }
 
     ~SdlVideoSession() {
@@ -468,10 +486,10 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
     REQUIRE(value == "two");
     REQUIRE_FALSE(dropdown.is_open());
 
-    ui_test::draw_surface(surface);
+    ui_test::draw_surface(surface, 1.0F / 60.0F);
     REQUIRE(dropdown.body().opacity() < visible_opacity);
     for (int frame = 0; frame < 8; ++frame) {
-        ui_test::draw_surface(surface);
+        ui_test::draw_surface(surface, 1.0F / 60.0F);
     }
     REQUIRE_FALSE(dropdown.body().visually_visible());
     REQUIRE(changes == 1);

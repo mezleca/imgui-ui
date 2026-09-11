@@ -4,30 +4,48 @@ on:
   push:
   pull_request:
 
+env:
+  SCCACHE_GHA_ENABLED: "true"
+
 jobs:
-  linux:
-    runs-on: ubuntu-latest
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        backend: [core, sdl, raylib, all]
+
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
         with:
           submodules: recursive
-      - name: install tools
+      - name: install tools (ubuntu)
+        if: runner.os == 'Linux'
         run: >-
           sudo apt-get update && sudo apt-get install -y
-          ninja-build libgl1-mesa-dev libx11-dev libxrandr-dev
+          ninja-build xvfb libgl1-mesa-dev libx11-dev libxrandr-dev
           libxinerama-dev libxcursor-dev libxi-dev libxss-dev
           libxtst-dev libxkbcommon-dev libasound2-dev libgtk-3-dev
+      - name: setup sccache (ubuntu)
+        if: runner.os == 'Linux'
+        uses: mozilla-actions/sccache-action@v0.0.10
+      - name: setup msvc
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: start virtual display (ubuntu)
+        if: runner.os == 'Linux' && (matrix.backend == 'sdl' || matrix.backend == 'all')
+        run: |
+          Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp &
+          sleep 1
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          echo "SDL_VIDEODRIVER=x11" >> "$GITHUB_ENV"
+          echo "ASAN_OPTIONS=detect_leaks=0" >> "$GITHUB_ENV"
       - name: run tests
-        run: ./ez tests
+        run: python ez tests --backend ${{ matrix.backend }}
       - name: build examples
-        run: ./ez build --backend all
-
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-      - uses: ilammy/msvc-dev-cmd@v1
-      - name: run tests
-        run: python ez tests
+        if: runner.os == 'Linux' && matrix.backend == 'all'
+        run: python ez build --backend all
+      - name: sccache stats (ubuntu)
+        if: runner.os == 'Linux'
+        run: sccache --show-stats

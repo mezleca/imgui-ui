@@ -203,6 +203,10 @@ bool SdlBackend::initialize() {
     if (config().resizable) flags |= SDL_WINDOW_RESIZABLE;
     if (!config().visible) flags |= SDL_WINDOW_HIDDEN;
 
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
     m_window = std::make_unique<Window>(config().title, config().size, flags);
     if (!m_window->valid()) {
         SDL_Log("failed to create window '%s'", config().title.c_str());
