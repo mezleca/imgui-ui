@@ -13,7 +13,9 @@ struct BoxShadowGlState {
     GLuint vertex_array = 0;
     GLuint program = 0;
     GLint shape = -1;
+    GLint cutout = -1;
     GLint rounding = -1;
+    GLint cutout_rounding = -1;
     GLint sigma = -1;
     GLint viewport_height = -1;
     GLint color = -1;
@@ -41,7 +43,9 @@ gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
 
 static constexpr const char* FRAGMENT_SHADER = R"(#version 330 core
 uniform vec4 shape;
+uniform vec4 cutout;
 uniform float rounding;
+uniform float cutout_rounding;
 uniform float sigma;
 uniform float viewport_height;
 uniform vec4 shadow_color;
@@ -102,6 +106,13 @@ if (sigma <= 0.001) {
     coverage = rounded_shadow(relative, half_size, sigma, rounding);
 }
 
+vec2 cutout_center = (cutout.xy + cutout.zw) * 0.5;
+vec2 cutout_half_size = (cutout.zw - cutout.xy) * 0.5;
+float cutout_distance = rounded_box_sdf(point - cutout_center, cutout_half_size, cutout_rounding);
+float cutout_antialias = max(fwidth(cutout_distance), 0.5);
+// remove the owner shape so a deferred shadow cannot darken its own node.
+coverage *= smoothstep(-cutout_antialias, cutout_antialias, cutout_distance);
+
 color = vec4(shadow_color.rgb, shadow_color.a * coverage);
 })";
 
@@ -145,7 +156,9 @@ static bool create_program() {
     }
 
     gl_state->shape = glGetUniformLocation(gl_state->program, "shape");
+    gl_state->cutout = glGetUniformLocation(gl_state->program, "cutout");
     gl_state->rounding = glGetUniformLocation(gl_state->program, "rounding");
+    gl_state->cutout_rounding = glGetUniformLocation(gl_state->program, "cutout_rounding");
     gl_state->sigma = glGetUniformLocation(gl_state->program, "sigma");
     gl_state->viewport_height = glGetUniformLocation(gl_state->program, "viewport_height");
     gl_state->color = glGetUniformLocation(gl_state->program, "shadow_color");
@@ -187,6 +200,8 @@ static void render_box_shadow(const ImDrawList*, const ImDrawCmd* command) {
 
     const ImVec2 shape_min = to_framebuffer(region->shape.min);
     const ImVec2 shape_max = to_framebuffer(region->shape.max);
+    const ImVec2 cutout_min = to_framebuffer(region->cutout.min);
+    const ImVec2 cutout_max = to_framebuffer(region->cutout.max);
     const ImVec2 bounds_min = to_framebuffer(region->bounds.min);
     const ImVec2 bounds_max = to_framebuffer(region->bounds.max);
     const int left = std::clamp(static_cast<int>(std::floor(bounds_min.x)), 0, width);
@@ -224,7 +239,9 @@ static void render_box_shadow(const ImDrawList*, const ImDrawCmd* command) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glUseProgram(gl_state->program);
     glUniform4f(gl_state->shape, shape_min.x, shape_min.y, shape_max.x, shape_max.y);
+    glUniform4f(gl_state->cutout, cutout_min.x, cutout_min.y, cutout_max.x, cutout_max.y);
     glUniform1f(gl_state->rounding, radius);
+    glUniform1f(gl_state->cutout_rounding, region->cutout_rounding * scale_factor);
     glUniform1f(gl_state->sigma, blur);
     glUniform1f(gl_state->viewport_height, static_cast<float>(height));
     glUniform4f(gl_state->color, region->color.x, region->color.y, region->color.z, region->color.w);

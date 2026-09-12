@@ -77,22 +77,28 @@ void TextInputWidget::on_event(UiEvent& event) {
 
 void TextInputWidget::apply_theme_defaults(const Theme& theme) {
     const ImVec2 icon_size = theme.widgets.text_input_icon_size;
+    const TransitionSpec transition{theme.widgets.input_transition_duration, easing::out_quad};
     set_spacing(theme.widgets.text_input_icon_spacing);
     m_icon_node->set_size({px(icon_size.x), px(icon_size.y)});
     m_field_node->set_size({grow(), px(icon_size.y)});
 
-    configure_all_styles([&theme](Style& style) {
-        style.border_color(theme.border_color, 0.15F)
+    configure_all_styles([&theme, transition](Style& style) {
+        style.border_color(theme.controls.border_color, transition)
             .padding(theme.widgets.text_input_padding)
-            .background_color(theme.background_secondary_color)
+            .background_color(theme.controls.background_color, transition)
             .border(BORDER_ALL)
             .border_radius(theme.box_rounding)
             .border_thickness(theme.controls.border_thickness);
     });
 
-    configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color); });
-    configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
-    configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_color); });
+    const auto configure_active_style = [&theme, transition](Style& style) {
+        style.background_color(theme.controls.active_color, transition).border_color(theme.accent_color, transition);
+    };
+    configure_style(StyleType::ACTIVE, configure_active_style);
+    configure_style(StyleType::FOCUS, configure_active_style);
+    configure_style(StyleType::HOVER, [&theme, transition](Style& style) {
+        style.background_color(theme.controls.hover_color, transition);
+    });
 
     m_field_node->configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BORDER_NONE);
@@ -119,11 +125,11 @@ void TextInputWidget::on_measure() {
     ImVec2 size = layout().intrinsic_size();
     if (layout().size_spec().height.mode != LayoutSizeMode::Fixed && font() != nullptr && ImGui::GetCurrentContext() != nullptr) {
         ImGui::PushFont(font());
-        size.y = ImGui::GetTextLineHeight() + computed_style().padding().y * 2.0F;
+        size.y = ImGui::GetTextLineHeight();
         ImGui::PopFont();
     }
 
-    set_measured_size(size, false, true);
+    set_measured_content_size(size, false, true);
 }
 
 void TextInputWidget::on_draw_end() {

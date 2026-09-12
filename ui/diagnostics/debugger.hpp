@@ -80,6 +80,7 @@ namespace ui {
         bool should_restore_flow_position() const;
         bool overlay_contains(ImVec2 position) const;
 
+        bool paint() override;
         void draw_children() override;
         void apply_theme_defaults(const Theme& theme) override;
 

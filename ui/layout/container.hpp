@@ -6,9 +6,6 @@
 #include <string_view>
 
 namespace ui {
-    /// returns the computed margin, or zero for unstyled nodes.
-    ImVec2 layout_margin(const Node& node);
-
     class Container : public Widget {
     public:
         explicit Container(std::string id, std::string_view type_name = "Container");

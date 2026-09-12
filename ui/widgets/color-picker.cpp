@@ -96,6 +96,10 @@ public:
     }
 
 private:
+    void draw_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle&) const override {
+        StyledNode::draw_surface(draw_list, rect, *m_color);
+    }
+
     void on_click(UiEvent& event) override {
         if (event.button != PointerButton::Left) {
             return;
@@ -113,9 +117,7 @@ private:
         if (m_owner.is_open()) set_visual_style(StyleType::ACTIVE);
     }
 
-    void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override {
-        draw_frame(draw_list, rect, style, *m_color);
-    }
+    void paint_draw_list(ImDrawList&, Rect, const ComputedStyle&) override {}
 
     ColorPickerWidget& m_owner;
     ImColor* m_color = nullptr;
@@ -203,7 +205,7 @@ private:
             const Rect popup_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
 
             set_visual_rect(popup_rect);
-            draw_frame(*ImGui::GetWindowDrawList(), popup_rect, style);
+            draw_surface(*ImGui::GetWindowDrawList(), popup_rect);
 
             m_ui.input_router().register_target(*this, popup_rect);
 

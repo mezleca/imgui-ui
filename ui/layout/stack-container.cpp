@@ -40,10 +40,6 @@ StackContainer& StackContainer::set_direction(StackDirection direction) {
     return *this;
 }
 
-StackDirection StackContainer::direction() const {
-    return m_direction;
-}
-
 StackContainer& StackContainer::set_content_alignment(Anchor alignment) {
     return set_content_alignment(alignment_factor(alignment));
 }
@@ -77,10 +73,6 @@ StackContainer& StackContainer::set_spacing(float spacing) {
     return *this;
 }
 
-float StackContainer::spacing() const {
-    return m_spacing;
-}
-
 bool StackContainer::paint() {
     ImGui::SetNextWindowContentSize(m_content_size);
     return Container::paint();
@@ -106,7 +98,7 @@ void StackContainer::on_measure() {
         }
 
         const ImVec2 child_size = child->layout().intrinsic_size();
-        const ImVec2 margin = layout_margin(*child);
+        const ImVec2 margin = child->layout_margin();
         const ImVec2 outer_size = {child_size.x + margin.x * 2.0F, child_size.y + margin.y * 2.0F};
 
         if (horizontal) {
@@ -128,19 +120,14 @@ void StackContainer::on_measure() {
         content_size.y += total_spacing;
     }
 
-    const ImVec2 padding = computed_style().padding();
-    set_measured_size({content_size.x + padding.x * 2.0F, content_size.y + padding.y * 2.0F}, fit_width, fit_height);
+    set_measured_size(outer_size(content_size), fit_width, fit_height);
 }
 
 void StackContainer::arrange_children() {
     // reserve fixed space, then distribute the remainder by grow weight.
     const bool horizontal = m_direction == StackDirection::Horizontal;
     const ImVec2 container_size = layout().size();
-    const ImVec2 padding = computed_style().padding();
-    const ImVec2 content_size = {
-        std::max(0.0F, container_size.x - padding.x * 2.0F),
-        std::max(0.0F, container_size.y - padding.y * 2.0F),
-    };
+    const ImVec2 content_size = this->content_size(container_size);
 
     const float available_main = axis_extent(content_size, horizontal);
 
@@ -160,7 +147,7 @@ void StackContainer::arrange_children() {
         const LayoutAxis& main_axis = horizontal ? child_layout_size.width : child_layout_size.height;
         const LayoutAxis& cross_axis = horizontal ? child_layout_size.height : child_layout_size.width;
         const ImVec2 child_size = child->layout().intrinsic_size();
-        const ImVec2 margin = layout_margin(*child);
+        const ImVec2 margin = child->layout_margin();
 
         fixed_main += axis_extent(margin, horizontal) * 2.0F;
         if (main_axis.mode != LayoutSizeMode::Grow) {
@@ -202,7 +189,7 @@ void StackContainer::arrange_children() {
         }
 
         const ImVec2 child_size = resolve_child_size(*child, content_size, flexible_main);
-        const ImVec2 margin = layout_margin(*child);
+        const ImVec2 margin = child->layout_margin();
         const ImVec2 child_offset = {cursor.x + margin.x, cursor.y + margin.y};
 
         // explicit top-left placement prevents imgui item widths and same-line
@@ -227,7 +214,7 @@ ImVec2 StackContainer::resolve_child_size(const Node& child, ImVec2 content_size
     const LayoutSize& layout_size = child.layout().size_spec();
     const LayoutAxis& main_axis = horizontal ? layout_size.width : layout_size.height;
     const LayoutAxis& cross_axis = horizontal ? layout_size.height : layout_size.width;
-    const ImVec2 margin = layout_margin(child);
+    const ImVec2 margin = child.layout_margin();
 
     if (main_axis.mode == LayoutSizeMode::Grow) set_axis_extent(size, horizontal, flexible_main * main_axis.value);
     if (cross_axis.mode == LayoutSizeMode::Grow) {

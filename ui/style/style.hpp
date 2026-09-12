@@ -9,6 +9,9 @@
 #include <utility>
 
 namespace ui {
+    // three box-blur passes sample at most 32 texels from either side.
+    inline constexpr int MAX_BLUR_STRENGTH = 32;
+
     class StyledNode;
     class VisualState;
 
@@ -113,10 +116,10 @@ namespace ui {
             return set_animated_transition(&ComputedStyle::m_margin, normalize_style_insets(value), transition);
         }
 
-        Style& control(const Theme& theme, ImVec2 padding = {10.0F, 6.0F}) {
+        Style& control(const Theme& theme, ImVec2 padding = {10.0F, 6.0F}, TransitionSpec transition = {0.15F}) {
             return color(theme.text_color)
-                .background_color(theme.controls.background_color, 0.15F)
-                .border_color(theme.controls.border_color, 0.15F)
+                .background_color(theme.controls.background_color, transition)
+                .border_color(theme.controls.border_color, transition)
                 .padding(padding)
                 .border(BORDER_ALL)
                 .border_radius(theme.controls.rounding)
@@ -170,7 +173,9 @@ namespace ui {
         }
 
         Style& blur(int value) {
-            return set_property(&ComputedStyle::m_blur, value, [](int resolved) { return std::max(0, resolved); });
+            return set_property(&ComputedStyle::m_blur, value, [](int resolved) {
+                return std::clamp(resolved, 0, MAX_BLUR_STRENGTH);
+            });
         }
 
         Style& border_radius(float value) {

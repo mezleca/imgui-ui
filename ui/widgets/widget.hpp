@@ -62,11 +62,19 @@ namespace ui {
         )
             : Widget(std::move(id), type_name, input_mode) {}
 
+    protected:
+        virtual void draw_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle&) const {
+            StyledNode::draw_surface(draw_list, rect);
+        }
+
     private:
         bool paint() override {
             const Rect rect = Rect::from_position_size(ImGui::GetCursorScreenPos(), layout().size());
             ImGui::Dummy(rect.size());
-            paint_draw_list(*ImGui::GetWindowDrawList(), rect, computed_style());
+            ImDrawList& draw_list = *ImGui::GetWindowDrawList();
+            const ComputedStyle& style = computed_style();
+            draw_surface(draw_list, rect, style);
+            paint_draw_list(draw_list, rect, style);
             return true;
         }
 

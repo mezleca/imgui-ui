@@ -112,21 +112,19 @@ private:
     }
 
     void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& current_style) override {
-        draw_frame(draw_list, rect, current_style);
-
         const DropdownOption* selected = m_state.selected_option();
         const std::string_view preview = selected == nullptr ? m_state.placeholder : selected->label;
         const ImVec2 text_size = ImGui::CalcTextSize(preview.data(), preview.data() + preview.size());
+        const Rect content = content_rect(rect);
 
         draw_text(
-            draw_list, {rect.min.x + current_style.padding().x, rect.min.y + (rect.size().y - text_size.y) * 0.5F},
-            current_style.color().get_col(), preview
+            draw_list, {content.min.x, content.min.y + (content.size().y - text_size.y) * 0.5F}, current_style.color().get_col(),
+            preview
         );
 
         draw_triangle(
-            draw_list, {rect.max.x - current_style.padding().x - m_state.arrow_size.x * 0.5F, rect.min.y + rect.size().y * 0.5F},
-            m_state.arrow_size, current_style.color().get_col(),
-            m_state.is_open() ? TriangleDirection::Up : TriangleDirection::Down
+            draw_list, {content.max.x - m_state.arrow_size.x * 0.5F, content.min.y + content.size().y * 0.5F}, m_state.arrow_size,
+            current_style.color().get_col(), m_state.is_open() ? TriangleDirection::Up : TriangleDirection::Down
         );
     }
 
@@ -191,13 +189,9 @@ bool DropdownBodyNode::paint() {
     const ImVec2 item_padding =
         children().empty() ? ImVec2{} : static_cast<const DropdownOptionNode&>(*children().front()).computed_style().padding();
     m_item_height = ImGui::GetTextLineHeight() + item_padding.y * 2.0F;
-    const ImVec2 padding = style.padding();
-
     ImGui::SetNextWindowPos(m_popup_position, ImGuiCond_Always);
-    ImGui::SetNextWindowSize(
-        {m_popup_width + padding.x * 2.0F, m_item_height * static_cast<float>(children().size()) + padding.y * 2.0F}
-    );
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+    ImGui::SetNextWindowSize(outer_size({m_popup_width, m_item_height * static_cast<float>(children().size())}));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.padding());
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{});
     ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, style.border_radius());
     ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 0.0F);
@@ -206,7 +200,7 @@ bool DropdownBodyNode::paint() {
     if (ImGui::BeginPopup("body", ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
         const Rect body_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
         set_visual_rect(body_rect);
-        draw_frame(*ImGui::GetWindowDrawList(), body_rect, style);
+        draw_surface(*ImGui::GetWindowDrawList(), body_rect);
 
         // block the body while keeping its option rows targetable.
         m_input_router.register_blocker(*this, body_rect);
@@ -224,8 +218,7 @@ bool DropdownBodyNode::paint() {
 
 void DropdownBodyNode::draw_children() {
     // use the resolved popup width for every option row.
-    const ImVec2 padding = computed_style().padding();
-    const float item_width = std::max(0.0F, layout().visual_rect().size().x - padding.x * 2.0F);
+    const float item_width = content_size(layout().visual_rect().size()).x;
 
     for (std::size_t index = 0; index < children().size(); ++index) {
         auto& option_node = static_cast<DropdownOptionNode&>(*children()[index]);
@@ -371,7 +364,7 @@ void DropdownWidget::apply_theme_defaults(const Theme& theme) {
 }
 
 bool DropdownWidget::paint() {
-    draw_frame(*ImGui::GetWindowDrawList(), layout().visual_rect(), computed_style());
+    draw_surface(*ImGui::GetWindowDrawList(), layout().visual_rect());
     return true;
 }
 
@@ -415,15 +408,14 @@ DropdownWidget& DropdownWidget::set_options(std::vector<DropdownOption> options)
 
 void DropdownWidget::on_measure() {
     ImVec2 size = layout().intrinsic_size();
-    const ImVec2 padding = computed_style().padding();
     if (layout().size_spec().height.mode != LayoutSizeMode::Fixed) {
-        size.y = ImGui::GetTextLineHeight() + m_trigger->computed_style().padding().y * 2.0F + padding.y * 2.0F;
+        size.y = ImGui::GetTextLineHeight() + m_trigger->computed_style().padding().y * 2.0F;
         if (has_label()) {
             size.y += m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y;
         }
     }
 
-    set_measured_size(size, false, true);
+    set_measured_content_size(size, false, true);
 }
 
 Widget& DropdownWidget::trigger() {
@@ -436,12 +428,8 @@ Widget& DropdownWidget::body() {
 
 void DropdownWidget::on_layout() {
     const float label_height = has_label() ? m_label_node->layout().size().y + ImGui::GetStyle().ItemSpacing.y : 0.0F;
-    const ImVec2 outer_size = layout().size();
-    const ImVec2 padding = computed_style().padding();
-    const ImVec2 trigger_size = {
-        std::max(0.0F, outer_size.x - padding.x * 2.0F),
-        std::max(0.0F, outer_size.y - label_height - padding.y * 2.0F),
-    };
+    const ImVec2 outer = layout().size();
+    const ImVec2 trigger_size = content_size({outer.x, std::max(0.0F, outer.y - label_height)});
 
     m_trigger->set_size({px(trigger_size.x), px(trigger_size.y)});
 }

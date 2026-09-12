@@ -145,6 +145,9 @@ TEST_CASE("style updates preserve and normalize non-visual fields") {
     style.blur(-1);
     REQUIRE(style.blur() == 0);
 
+    style.blur(MAX_BLUR_STRENGTH + 1);
+    REQUIRE(style.blur() == MAX_BLUR_STRENGTH);
+
     style.border_thickness(0.25F);
     REQUIRE(style.border_thickness() == MIN_BORDER_THICKNESS);
 
@@ -175,7 +178,7 @@ TEST_CASE("style updates preserve and normalize non-visual fields") {
     REQUIRE(normalized.box_shadow().color.Value.w == 0.0F);
 }
 
-TEST_CASE("container shadows use the child draw list and keep their spread") {
+TEST_CASE("container shadows render above siblings while preserving their owner surface") {
     ui_test::ImGuiContext context({320.0F, 240.0F});
     ImGui::NewFrame();
     ImGui::SetNextWindowPos({0.0F, 0.0F});
@@ -184,6 +187,7 @@ TEST_CASE("container shadows use the child draw list and keep their spread") {
 
     begin_box_shadow_frame();
     set_box_shadow_callback(collect_shadow_callback);
+    ImDrawList* foreground_draw_list = ImGui::GetForegroundDrawList();
 
     Container node("container");
     node.set_size({px(100.0F), px(60.0F)});
@@ -206,14 +210,14 @@ TEST_CASE("container shadows use the child draw list and keep their spread") {
     const ImDrawData* draw_data = ImGui::GetDrawData();
     REQUIRE(draw_data != nullptr);
     const BoxShadowRegion* queued_region = nullptr;
-    int callback_list = -1;
+    const ImDrawList* callback_draw_list = nullptr;
     for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
         for (const ImDrawCmd& command : draw_data->CmdLists[list_index]->CmdBuffer) {
             if (command.UserCallback != collect_shadow_callback) {
                 continue;
             }
 
-            callback_list = list_index;
+            callback_draw_list = draw_data->CmdLists[list_index];
             queued_region = static_cast<const BoxShadowRegion*>(command.UserCallbackData);
             break;
         }
@@ -222,7 +226,9 @@ TEST_CASE("container shadows use the child draw list and keep their spread") {
     REQUIRE(queued_region != nullptr);
     REQUIRE(queued_region->shape.size().x == Catch::Approx(180.0F));
     REQUIRE(queued_region->shape.size().y == Catch::Approx(140.0F));
-    REQUIRE(callback_list > 0);
+    REQUIRE(queued_region->cutout.size().x == Catch::Approx(100.0F));
+    REQUIRE(queued_region->cutout.size().y == Catch::Approx(60.0F));
+    REQUIRE(callback_draw_list == foreground_draw_list);
 
     shutdown_box_shadow();
 }

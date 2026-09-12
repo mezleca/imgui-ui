@@ -60,10 +60,7 @@ private:
     }
 
     void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override {
-        draw_frame(draw_list, rect, style);
-
-        const ImVec2 padding = style.padding();
-        const Rect content = rect.inset(padding);
+        const Rect content = content_rect(rect);
         const ImVec2 text_size = ImGui::CalcTextSize(m_label.c_str());
         draw_text(
             draw_list, {content.min.x, content.min.y + (content.size().y - text_size.y) * 0.5F}, style.color().get_col(), m_label

@@ -1,6 +1,7 @@
 #include "styled-node.hpp"
 
 #include "paint-slot.hpp"
+#include "../imgui/draw.hpp"
 
 #include <imgui_internal.h>
 
@@ -19,6 +20,14 @@ StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::m
 }
 
 StyledNode::~StyledNode() = default;
+
+void StyledNode::draw_surface(ImDrawList& draw_list, Rect rect) const {
+    ui::draw_frame(draw_list, rect, computed_style());
+}
+
+void StyledNode::draw_surface(ImDrawList& draw_list, Rect rect, ImColor background) const {
+    ui::draw_frame(draw_list, rect, computed_style(), background);
+}
 
 PaintSlot& StyledNode::before() {
     if (m_before == nullptr) {
@@ -129,7 +138,7 @@ void StyledNode::advance_frame_state(float dt) {
 }
 
 void StyledNode::input_state_changed() {
-    const InputState& input = input_state();
+    const InputState input = subtree_input_state();
     set_interaction_style(input.hovered, input.active, input.focused);
     update_cursor();
 }

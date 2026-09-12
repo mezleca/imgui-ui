@@ -49,6 +49,7 @@ namespace ui {
             ImVec2 text_input_padding = {12.0F, 14.0F};
             ImVec2 text_input_icon_size = {18.0F, 18.0F};
             float text_input_icon_spacing = 10.0F;
+            float input_transition_duration = 0.25F;
 
             float color_picker_selector_size = 196.0F;
         } widgets;

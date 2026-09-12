@@ -18,14 +18,17 @@ public:
     }
 
 private:
+    void draw_surface(ImDrawList&, Rect, const ComputedStyle&) const override {}
+
     void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& current_style) override {
         if (m_fill && !*m_value) {
             return;
         }
 
         if (m_fill) {
-            rect = rect.inset(current_style.padding());
+            rect = content_rect(rect);
         }
+
         if (!rect.valid()) {
             return;
         }
@@ -156,19 +159,17 @@ const StyledNode& CheckboxWidget::fill() const {
 void CheckboxWidget::on_measure() {
     ImFont* current_font = font();
     if (current_font == nullptr || ImGui::GetCurrentContext() == nullptr) {
-        const ImVec2 padding = computed_style().padding();
-        set_measured_size({m_box_size + padding.x * 2.0F, m_box_size + padding.y * 2.0F}, true, true);
+        set_measured_content_size({m_box_size, m_box_size}, true, true);
         return;
     }
 
-    const ImVec2 padding = computed_style().padding();
     const ImVec2 label_size = m_label_node->layout().intrinsic_size();
     const float label_spacing = label_size.x > 0.0F ? ImGui::GetStyle().ItemInnerSpacing.x : 0.0F;
 
-    set_measured_size(
+    set_measured_content_size(
         {
-            m_box_size + label_spacing + label_size.x + padding.x * 2.0F,
-            std::max(m_box_size, label_size.y) + padding.y * 2.0F,
+            m_box_size + label_spacing + label_size.x,
+            std::max(m_box_size, label_size.y),
         },
         true, true
     );
@@ -185,20 +186,20 @@ bool CheckboxWidget::paint() {
 }
 
 void CheckboxWidget::arrange_children() {
-    const ImVec2 widget_padding = computed_style().padding();
     const ImVec2 frame_size = {m_box_size, m_box_size};
     const Rect& parent_content = layout().parent_content_rect();
+    const Rect content = content_rect(layout().local_rect());
     const ImVec2 frame_offset = {
-        layout().local_rect().min.x - parent_content.min.x + widget_padding.x,
-        layout().local_rect().min.y - parent_content.min.y + widget_padding.y,
+        content.min.x - parent_content.min.x,
+        content.min.y - parent_content.min.y,
     };
     const ComputedStyle& frame_style = m_frame_node->computed_style();
     const ImVec2 frame_padding = frame_style.padding();
     const float border_inset = frame_style.border() == BORDER_NONE ? 0.0F : frame_style.border_thickness();
     const ImVec2 fill_inset = {frame_padding.x + border_inset, frame_padding.y + border_inset};
     const ImVec2 fill_size = {
-        std::max(0.0F, frame_size.x - fill_inset.x * 2.0F),
-        std::max(0.0F, frame_size.y - fill_inset.y * 2.0F),
+        std::max(0.0F, frame_size.x - (fill_inset.x * 2.0F)),
+        std::max(0.0F, frame_size.y - (fill_inset.y * 2.0F)),
     };
 
     arrange_child(*m_frame_node, frame_size, {.offset = frame_offset});
@@ -219,11 +220,11 @@ void CheckboxWidget::arrange_children() {
 }
 
 Rect CheckboxWidget::hit_rect(Rect visual_rect) const {
-    const ImVec2 padding = computed_style().padding();
-    const ImVec2 available = visual_rect.size();
+    const Rect content = content_rect(visual_rect);
+    const ImVec2 available = content.size();
     const ImVec2 box_size = {
-        std::min(m_box_size, std::max(0.0F, available.x - padding.x * 2.0F)),
-        std::min(m_box_size, std::max(0.0F, available.y - padding.y * 2.0F)),
+        std::min(m_box_size, available.x),
+        std::min(m_box_size, available.y),
     };
-    return Rect::from_position_size({visual_rect.min.x + padding.x, visual_rect.min.y + padding.y}, box_size);
+    return Rect::from_position_size(content.min, box_size);
 }

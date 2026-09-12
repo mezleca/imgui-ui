@@ -22,8 +22,6 @@ struct BlurTextures {
     GLuint program = 0;
     int width = 0;
     int height = 0;
-    int strength = -1;
-    bool captured = false;
     GLint image = -1;
     GLint original = -1;
     GLint texel = -1;
@@ -213,8 +211,7 @@ static void blur_pass(GLuint input, GLuint output, int width, int height, int ra
 
 static std::array<int, 3> box_widths(int sigma) {
     constexpr int passes = 3;
-    // https://drafts.csswg.org/filter-effects/#funcdef-filter-blur
-    // three box widths approximate a gaussian whose standard deviation is sigma.
+    // three integer box widths approximate the requested gaussian standard deviation.
     int lower = static_cast<int>(std::floor(std::sqrt((12.0 * sigma * sigma / passes) + 1.0)));
     if ((lower & 1) == 0) --lower;
 
@@ -268,17 +265,11 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
         return;
     }
 
-    if (!textures->captured) {
-        glBindTexture(GL_TEXTURE_2D, textures->source);
-        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
-
-        textures->captured = true;
-    }
-
-    if (textures->strength != region->strength) {
-        blur(width, height, region->strength);
-        textures->strength = region->strength;
-    }
+    // each backdrop samples the framebuffer immediately before its own node is drawn.
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(framebuffer));
+    glBindTexture(GL_TEXTURE_2D, textures->source);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
+    blur(width, height, region->strength);
 
     const ImDrawData* draw_data = ImGui::GetDrawData();
     const ImVec2 display_position = draw_data == nullptr ? ImVec2{} : draw_data->DisplayPos;
@@ -368,9 +359,6 @@ static void begin_blur_effect(void*) {
     if (!select_textures()) {
         return;
     }
-
-    textures->captured = false;
-    textures->strength = -1;
 }
 
 static void shutdown_blur_effect(void*) {

@@ -115,6 +115,10 @@ namespace ui {
             return m_state.accepts_input();
         }
 
+        ImVec2 layout_margin() const override {
+            return computed_style().margin();
+        }
+
         /// creates the paint slot rendered before this node's contents on first access.
         PaintSlot& before();
 
@@ -179,6 +183,22 @@ namespace ui {
         void input_state_changed() override;
         void draw_before() override;
         void draw_after() override;
+        ImVec2 box_padding() const override {
+            return computed_style().padding();
+        }
+        float minimum_content_height() const override {
+            if (ImGui::GetCurrentContext() == nullptr) {
+                return 0.0F;
+            }
+
+            ImGui::PushFont(font());
+            const float line_height = ImGui::GetTextLineHeight();
+            ImGui::PopFont();
+            return line_height * computed_style().line_height();
+        }
+
+        void draw_surface(ImDrawList& draw_list, Rect rect) const;
+        void draw_surface(ImDrawList& draw_list, Rect rect, ImColor background) const;
 
     private:
         void update_cursor();

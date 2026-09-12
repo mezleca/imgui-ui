@@ -4,18 +4,11 @@
 #include "../imgui/draw.hpp"
 #include "../imgui/effects/blur/blur.hpp"
 #include "../imgui/effects/shadow/shadow.hpp"
-#include "../style/style.hpp"
-
 #include <algorithm>
 #include <cmath>
 #include <utility>
 
 using namespace ui;
-
-ImVec2 ui::layout_margin(const Node& node) {
-    const auto* styled_node = dynamic_cast<const StyledNode*>(&node);
-    return styled_node == nullptr ? ImVec2{} : styled_node->computed_style().margin();
-}
 
 Container::Container(std::string id, std::string_view type_name) : Widget(std::move(id), type_name, InputMode::None) {
     configure_all_styles([](Style& style) { style.padding({}); });
@@ -47,7 +40,7 @@ void Container::draw_children() {
             continue;
         }
 
-        const ImVec2 margin = layout_margin(*child);
+        const ImVec2 margin = child->layout_margin();
         Placement placement = child->layout().placement();
         const ImVec2 origin = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
         placement.offset.x += margin.x * (1.0F - 2.0F * origin.x);

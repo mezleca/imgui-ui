@@ -9,7 +9,9 @@ namespace ui {
     struct BoxShadowRegion {
         Rect shape;
         Rect bounds;
+        Rect cutout;
         float rounding = 0.0F;
+        float cutout_rounding = 0.0F;
         float blur = 0.0F;
         ImVec4 color{};
     };

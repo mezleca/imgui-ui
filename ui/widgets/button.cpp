@@ -52,17 +52,22 @@ void ButtonWidget::on_click(UiEvent&) {
     }
 }
 
-void ButtonWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) {
-    const Rect content = rect.inset(style.padding());
-    const ImVec2 text_size = ImGui::CalcTextSize(m_text.c_str());
+void ButtonWidget::on_measure() {
+    m_text.set_font(font());
+    m_text.set_line_height(computed_style().line_height());
+    set_measured_content_size(m_text.text_size(), true, true);
+}
 
-    draw_frame(draw_list, rect, style);
+void ButtonWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) {
+    const Rect content = content_rect(rect);
+    const ImVec2 text_size = m_text.text_size();
+
     draw_text(
         draw_list,
         {
             content.min.x + (content.size().x - text_size.x) * m_text_alignment.x,
             content.min.y + (content.size().y - text_size.y) * m_text_alignment.y,
         },
-        style.color().get_col(), m_text.str()
+        style.color().get_col(), m_text
     );
 }

@@ -13,6 +13,7 @@
 
 namespace ui {
     class InputRouter;
+    class HitTestIndex;
     class Profiler;
     struct Theme;
 
@@ -139,6 +140,9 @@ namespace ui {
             return m_input_state;
         }
 
+        /// returns direct focus plus hover and active state from the subtree.
+        InputState subtree_input_state() const;
+
         /// configures this node's persistent input behavior. an empty area uses its visual box.
         Node& set_input_mode(InputMode mode, Rect area = {});
 
@@ -146,6 +150,8 @@ namespace ui {
         const NodeLayout& layout() const {
             return m_layout;
         }
+
+        virtual ImVec2 layout_margin() const;
 
         /// replaces the width and height sizing modes.
         Node& set_size(LayoutSize size) {
@@ -198,6 +204,12 @@ namespace ui {
         /// stores intrinsic size and measured axes.
         void set_measured_size(ImVec2 size, bool measured_width, bool measured_height);
 
+        /// stores a measured content size after applying this node's line height and padding.
+        void set_measured_content_size(ImVec2 size, bool measured_width, bool measured_height);
+        ImVec2 content_size(ImVec2 size) const;
+        ImVec2 outer_size(ImVec2 size) const;
+        Rect content_rect(Rect rect) const;
+
         /// overrides visual bounds.
         void set_visual_rect(Rect rect);
 
@@ -240,10 +252,14 @@ namespace ui {
         /// closes the node's paint scope.
         virtual void on_draw_end();
 
+        virtual ImVec2 box_padding() const;
+        virtual float minimum_content_height() const;
+
         void set_input_state(InputState state);
 
     private:
         friend class InputRouter;
+        friend class HitTestIndex;
 
         void measure_tree();
         void detach_input_router(InputRouter& router);

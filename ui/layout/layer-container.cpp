@@ -48,15 +48,15 @@ bool LayerContainer::paint() {
             parent() == nullptr ? viewport_rect : Rect::from_position_size(ImGui::GetCursorScreenPos(), layout().size());
         set_layout_rect(inline_rect);
         set_visual_rect(inline_rect);
-        draw_frame(*ImGui::GetWindowDrawList(), inline_rect, computed_style());
+        draw_surface(*ImGui::GetWindowDrawList(), inline_rect);
         return true;
     }
 
     // window layers use a borderless viewport-sized imgui window.
     const bool accepts_input = this->accepts_input();
     ImGuiWindowFlags window_flags = LAYER_WINDOW_FLAGS;
-    // allow the first draw or an explicit focus request to reorder the layer once.
-    if (!m_window_initialized || m_focus_requested) {
+    // allow the first draw to establish the layer above its parent window.
+    if (!m_window_initialized) {
         window_flags &= ~ImGuiWindowFlags_NoBringToFrontOnFocus;
     }
     if (!accepts_input) {
@@ -65,10 +65,6 @@ bool LayerContainer::paint() {
 
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
-    if (accepts_input && m_focus_requested) {
-        ImGui::SetNextWindowFocus();
-    }
-    m_focus_requested = false;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, computed_style().padding());
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
@@ -80,7 +76,7 @@ bool LayerContainer::paint() {
     set_layout_rect(window_rect);
     set_visual_rect(window_rect);
 
-    draw_frame(*ImGui::GetWindowDrawList(), window_rect, computed_style());
+    draw_surface(*ImGui::GetWindowDrawList(), window_rect);
     return true;
 }
 

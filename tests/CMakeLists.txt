@@ -1,6 +1,5 @@
 add_executable(imgui-ui-tests
     core.cpp
-    ../examples/demo.cpp
     diagnostics.cpp
     file-dialog.cpp
     input.cpp
@@ -10,6 +9,7 @@ add_executable(imgui-ui-tests
 )
 
 target_link_libraries(imgui-ui-tests PRIVATE imgui-ui::core Catch2::Catch2WithMain)
+target_compile_definitions(imgui-ui-tests PRIVATE IMGUI_UI_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
 imgui_ui_enable_sanitizers(imgui-ui-tests)
 
 include(Catch)

@@ -28,6 +28,7 @@ namespace ui {
     protected:
         void apply_theme_defaults(const Theme& theme) override;
         void on_click(UiEvent&) override;
+        void on_measure() override;
 
     private:
         void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override;

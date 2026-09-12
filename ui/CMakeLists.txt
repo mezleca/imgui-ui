@@ -1,3 +1,27 @@
+function(imgui_ui_add_backend name)
+    cmake_parse_arguments(ARG "" "" "SOURCES;PRIVATE_INCLUDE_DIRS;LINK_LIBS" ${ARGN})
+
+    add_library(imgui-ui-${name} STATIC ${ARG_SOURCES})
+    add_library(imgui-ui::${name} ALIAS imgui-ui-${name})
+    imgui_ui_enable_sanitizers(imgui-ui-${name})
+
+    target_link_libraries(imgui-ui-${name} PUBLIC imgui-ui-core ${ARG_LINK_LIBS})
+
+    if(ARG_PRIVATE_INCLUDE_DIRS)
+        target_include_directories(imgui-ui-${name} PRIVATE ${ARG_PRIVATE_INCLUDE_DIRS})
+    endif()
+endfunction()
+
+function(imgui_ui_link_plutovg target)
+    if(TARGET plutovg)
+        target_compile_definitions(${target} PRIVATE PLUTOVG_BUILD_STATIC)
+        target_link_libraries(${target} PUBLIC plutovg::plutovg)
+        message(STATUS "${target}: linked against plutovg")
+    else()
+        message(STATUS "${target}: plutovg not available, skipping")
+    endif()
+endfunction()
+
 file(GLOB_RECURSE IMGUI_UI_CORE_SOURCES CONFIGURE_DEPENDS "*.cpp")
 list(FILTER IMGUI_UI_CORE_SOURCES EXCLUDE REGEX "/backends/")
 list(FILTER IMGUI_UI_CORE_SOURCES EXCLUDE REGEX "/file-dialog-nfd\\.cpp$")
@@ -15,19 +39,12 @@ target_include_directories(imgui-ui-core
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/.."
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glad/include"
 )
-target_link_libraries(imgui-ui-core PUBLIC imgui)
+target_link_libraries(imgui-ui-core PUBLIC imgui-ui::imgui)
 
 if(IMGUI_UI_USE_NFD)
     target_compile_definitions(imgui-ui-core PRIVATE IMGUI_UI_USE_NFD)
-    target_link_libraries(imgui-ui-core PRIVATE nfd)
+    target_link_libraries(imgui-ui-core PRIVATE imgui-ui::nfd)
 endif()
-
-function(imgui_ui_link_plutovg target)
-    if(TARGET plutovg)
-        target_compile_definitions(${target} PRIVATE PLUTOVG_BUILD_STATIC)
-        target_link_libraries(${target} PUBLIC plutovg::plutovg)
-    endif()
-endfunction()
 
 if(WIN32)
     target_compile_definitions(imgui-ui-core PRIVATE
@@ -45,18 +62,15 @@ if(IMGUI_UI_BUILD_SDL)
         "${IMGUI_UI_IMGUI_BACKENDS_DIR}/imgui_impl_opengl3.cpp"
     )
 
-    add_library(imgui-ui-sdl STATIC ${IMGUI_UI_SDL_SOURCES})
-    add_library(imgui-ui::sdl ALIAS imgui-ui-sdl)
-    imgui_ui_enable_sanitizers(imgui-ui-sdl)
-
-    target_include_directories(imgui-ui-sdl PRIVATE "${IMGUI_UI_IMGUI_BACKENDS_DIR}")
-    target_link_libraries(imgui-ui-sdl PUBLIC
-        imgui-ui-core
-        imgui-ui::glad
-        SDL3::SDL3
-        OpenGL::GL
-        lunasvg
-        nsgif
+    imgui_ui_add_backend(sdl
+        SOURCES ${IMGUI_UI_SDL_SOURCES}
+        PRIVATE_INCLUDE_DIRS "${IMGUI_UI_IMGUI_BACKENDS_DIR}"
+        LINK_LIBS
+            imgui-ui::glad
+            imgui-ui::lunasvg
+            imgui-ui::nsgif
+            SDL3::SDL3
+            OpenGL::GL
     )
 
     imgui_ui_link_plutovg(imgui-ui-sdl)
@@ -69,15 +83,16 @@ if(IMGUI_UI_BUILD_RAYLIB)
         "${IMGUI_UI_IMGUI_BACKENDS_DIR}/imgui_impl_opengl3.cpp"
     )
 
-    add_library(imgui-ui-raylib STATIC ${IMGUI_UI_RAYLIB_SOURCES})
-    add_library(imgui-ui::raylib ALIAS imgui-ui-raylib)
-    imgui_ui_enable_sanitizers(imgui-ui-raylib)
-
-    target_include_directories(imgui-ui-raylib PRIVATE
-        "${IMGUI_UI_IMGUI_BACKENDS_DIR}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glad/include"
+    imgui_ui_add_backend(raylib
+        SOURCES ${IMGUI_UI_RAYLIB_SOURCES}
+        PRIVATE_INCLUDE_DIRS
+            "${IMGUI_UI_IMGUI_BACKENDS_DIR}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glad/include"
+        LINK_LIBS
+            raylib
+            imgui-ui::lunasvg
+            imgui-ui::nsgif
     )
-    target_link_libraries(imgui-ui-raylib PUBLIC imgui-ui-core raylib lunasvg nsgif)
 
     imgui_ui_link_plutovg(imgui-ui-raylib)
 endif()

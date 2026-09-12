@@ -437,10 +437,16 @@ void Debugger::apply_theme_defaults(const Theme& theme) {
             .background_color(theme.background_secondary_color)
             .border_color(theme.controls.border_color)
             .border(BORDER_ALL)
-            .border_radius(theme.box_rounding)
             .border_thickness(theme.controls.border_thickness)
             .padding({WINDOW_PADDING, WINDOW_PADDING});
     });
+}
+
+bool Debugger::paint() {
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0F);
+    const bool draw_content = Container::paint();
+    ImGui::PopStyleVar();
+    return draw_content;
 }
 
 void Debugger::draw_children() {
@@ -521,7 +527,7 @@ void Debugger::set_open(bool open) {
 
     m_open = open;
     set_visible(open);
-    m_target.input_router().set_debug_pointer_blocked(open);
+    m_target.set_debug_pointer_blocked(open);
 
     if (auto* content = dynamic_cast<ResizableContainer*>(&m_target.root()); content != nullptr) {
         content->set_resize(open ? ResizeAxes::X : ResizeAxes::None);
@@ -620,7 +626,7 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
         if (event.type == EventType::PointerDown) {
             if (!m_overlay_focused) {
                 m_overlay_focused = true;
-                m_target.input_router().set_debug_pointer_blocked(true);
+                m_target.set_debug_pointer_blocked(true);
                 m_target.input_router().clear_focus();
             }
 
@@ -639,7 +645,7 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
     if (m_overlay_focused) {
         if (event.type == EventType::PointerDown) {
             m_overlay_focused = false;
-            m_target.input_router().set_debug_pointer_blocked(false);
+            m_target.set_debug_pointer_blocked(false);
             m_overlay_pointer_capture = true;
             if (event.button == PointerButton::Left) {
                 m_highlight_selected = false;
@@ -663,7 +669,7 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
 
     // popup blockers receive their final screen bounds after native popup windows draw, so resolve them before retained tree
     // order.
-    Node* inspect_node = m_target.input_router().inspect_node_at(event.position, event.type);
+    Node* inspect_node = m_target.inspect_input_target(event.position, event.type);
     if (inspect_node == nullptr) {
         inspect_node = pick_node(m_target.root(), event.position);
     }
@@ -716,9 +722,9 @@ void Debugger::set_inspect_mode(bool enabled) {
     if (enabled) {
         m_overlay_focused = false;
         m_overlay_pointer_capture = false;
-        m_target.input_router().set_debug_pointer_blocked(false);
+        m_target.set_debug_pointer_blocked(false);
     }
-    m_target.input_router().set_debug_inspect_mode(enabled);
+    m_target.set_debug_inspect_mode(enabled);
 
     if (!enabled) {
         m_hover_target = nullptr;
@@ -1135,7 +1141,7 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
         }
 
         int blur = style.blur();
-        if (draw_number_input("blur", &blur, 1, 1.0F, 0, 64)) {
+        if (draw_number_input("blur", &blur, 1, 1.0F, 0, MAX_BLUR_STRENGTH)) {
             apply([blur](Style& target) { target.blur(blur); });
         }
 

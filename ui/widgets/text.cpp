@@ -39,19 +39,18 @@ TextWidget& TextWidget::set_text(std::string text) {
 void TextWidget::on_measure() {
     m_text.set_font(font());
     m_text.set_line_height(computed_style().line_height());
-    const ImVec2 padding = computed_style().padding();
     const ImVec2 text_size = m_text.text_size();
-    set_measured_size({text_size.x + padding.x * 2.0F, text_size.y + padding.y * 2.0F}, true, true);
+    set_measured_content_size(text_size, true, true);
 }
 
 bool TextWidget::paint() {
     const ComputedStyle& current_style = computed_style();
     const ImVec2 minimum = ImGui::GetCursorScreenPos();
     const Rect outer = Rect::from_position_size(minimum, layout().size());
-    const Rect content = outer.inset(current_style.padding());
+    const Rect content = content_rect(outer);
 
     ImDrawList& draw_list = *ImGui::GetWindowDrawList();
-    draw_frame(draw_list, outer, current_style);
+    draw_surface(draw_list, outer);
 
     ImGui::Dummy(layout().size());
     const ImVec4 clip_rect = {content.min.x, content.min.y, content.max.x, content.max.y};

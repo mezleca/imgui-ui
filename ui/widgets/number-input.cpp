@@ -8,23 +8,32 @@
 
 using namespace ui;
 
-void NumberInputWidget::initialize(UI& ui) {
-    apply_theme_defaults(ui.theme());
+void NumberInputWidget::initialize() {
+    apply_theme_defaults(m_ui.theme());
 }
 
 void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
+    const TransitionSpec transition{theme.widgets.input_transition_duration, easing::out_quad};
     m_thumb_color = theme.controls.mark_color;
     m_thumb_size = theme.controls.thumb_size;
 
-    configure_all_styles([&theme](Style& style) { style.control(theme); });
+    configure_all_styles([&theme, transition](Style& style) { style.control(theme, {}, transition); });
 
-    configure_style(StyleType::HOVER, [&theme](Style& style) {
-        style.background_color(theme.controls.hover_color).border_color(theme.accent_hover_color);
+    configure_style(StyleType::HOVER, [&theme, transition](Style& style) {
+        style.background_color(theme.controls.hover_color, transition);
     });
 
-    configure_style(StyleType::ACTIVE, [&theme](Style& style) {
-        style.background_color(theme.controls.active_color).border_color(theme.accent_color);
-    });
+    const auto configure_active_style = [&theme, transition](Style& style) {
+        style.background_color(theme.controls.active_color, transition).border_color(theme.accent_color, transition);
+    };
+    configure_style(StyleType::ACTIVE, configure_active_style);
+    configure_style(StyleType::FOCUS, configure_active_style);
+}
+
+void NumberInputWidget::on_event(UiEvent& event) {
+    if (event.type == EventType::PointerDown && event.button == PointerButton::Left) {
+        m_ui.input_router().set_focus(*this);
+    }
 }
 
 NumberInputWidget& NumberInputWidget::set_label(std::string label) {
@@ -89,16 +98,15 @@ void NumberInputWidget::sync_value() const {
 
 void NumberInputWidget::on_measure() {
     ImVec2 size = layout().intrinsic_size();
-    const ImVec2 padding = computed_style().padding();
     sync_value();
     m_value.set_font(font());
     m_label.set_font(font());
 
     if (layout().size_spec().height.mode != LayoutSizeMode::Fixed) {
-        size.y = m_value.line_height() + padding.y * 2.0F;
+        size.y = m_value.line_height();
     }
 
-    set_measured_size(size, false, true);
+    set_measured_content_size(size, false, true);
 }
 
 template <typename T>

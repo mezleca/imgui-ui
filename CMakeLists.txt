@@ -101,6 +101,7 @@ endfunction()
 if(NOT TARGET glad)
     add_subdirectory(vendor/glad EXCLUDE_FROM_ALL)
 endif()
+
 if(NOT TARGET imgui-ui::glad)
     add_library(imgui-ui::glad ALIAS glad)
 endif()
@@ -109,33 +110,36 @@ imgui_ui_configure_freetype()
 
 if(IMGUI_UI_USE_NFD)
     imgui_ui_configure_nfd()
+    if(NOT TARGET imgui-ui::nfd)
+        add_library(imgui-ui::nfd ALIAS nfd)
+    endif()
 endif()
 
-if(NOT TARGET imgui)
-    add_library(imgui STATIC
+if(NOT TARGET imgui-ui-imgui)
+    add_library(imgui-ui-imgui STATIC
         vendor/imgui/imgui.cpp
         vendor/imgui/imgui_demo.cpp
         vendor/imgui/imgui_draw.cpp
         vendor/imgui/imgui_tables.cpp
         vendor/imgui/imgui_widgets.cpp
         vendor/imgui/misc/cpp/imgui_stdlib.cpp
+        vendor/imgui/misc/freetype/imgui_freetype.cpp
     )
 
-    target_include_directories(imgui PUBLIC
+    target_include_directories(imgui-ui-imgui PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/ui/imgui"
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui"
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/misc/cpp"
     )
 
-    target_sources(imgui PRIVATE vendor/imgui/misc/freetype/imgui_freetype.cpp)
-    target_compile_definitions(imgui PUBLIC IMGUI_ENABLE_FREETYPE)
-    target_link_libraries(imgui PUBLIC Freetype::Freetype)
+    target_compile_definitions(imgui-ui-imgui PUBLIC IMGUI_ENABLE_FREETYPE)
+    target_link_libraries(imgui-ui-imgui PUBLIC Freetype::Freetype)
 
-    set(IMGUI_UI_IMGUI_BACKENDS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends" CACHE INTERNAL "dear imgui backend sources")
+    set(IMGUI_UI_IMGUI_BACKENDS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends")
 endif()
 
 if(NOT TARGET imgui-ui::imgui)
-    add_library(imgui-ui::imgui ALIAS imgui)
+    add_library(imgui-ui::imgui ALIAS imgui-ui-imgui)
 endif()
 
 if((IMGUI_UI_BUILD_SDL OR IMGUI_UI_BUILD_RAYLIB) AND NOT IMGUI_UI_IMGUI_BACKENDS_DIR)
@@ -152,10 +156,16 @@ if(IMGUI_UI_BUILD_SDL OR IMGUI_UI_BUILD_RAYLIB)
         )
         target_include_directories(nsgif PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/vendor/libnsgif/include")
     endif()
+    if(NOT TARGET imgui-ui::nsgif)
+        add_library(imgui-ui::nsgif ALIAS nsgif)
+    endif()
 
     if(NOT TARGET lunasvg)
         set(LUNASVG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
         add_subdirectory(vendor/lunasvg EXCLUDE_FROM_ALL)
+    endif()
+    if(NOT TARGET imgui-ui::lunasvg)
+        add_library(imgui-ui::lunasvg ALIAS lunasvg)
     endif()
 endif()
 

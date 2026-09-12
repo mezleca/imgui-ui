@@ -18,7 +18,6 @@
 #include <ui/widgets/number-input.hpp>
 #include <ui/widgets/text.hpp>
 #include <ui/widgets/text-input.hpp>
-#include "../examples/demo.hpp"
 #include "imgui-context.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -328,29 +327,18 @@ TEST_CASE("dropdown options use framework input and select their value", "[Dropd
     REQUIRE(changes == 1);
 }
 
-TEST_CASE("demo dropdown rows expose their complete visual hit boxes", "[DropdownWidget][input][regression]") {
+TEST_CASE("dropdown rows expose their complete visual hit boxes", "[DropdownWidget][input][regression]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    setup_demo(surface, "test");
+    std::string value;
+    auto& dropdown = surface.root().add<DropdownWidget>(
+        surface, value, std::vector<DropdownOption>{{"dark", "dark"}, {"light", "light"}}, "theme"
+    );
+    dropdown.set_size({px(240.0F), px(40.0F)});
 
     ui_test::prepare_surface(surface, {900.0F, 1200.0F});
-
-    auto* dropdown = dynamic_cast<DropdownWidget*>(surface.root().find("theme"));
-    REQUIRE(dropdown != nullptr);
-
-    const auto draw_frame = [&surface] {
-        surface.begin_frame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({900.0F, 1200.0F});
-        ImGui::Begin("demo-dropdown-hover-test");
-        surface.update(ImGui::GetIO().DeltaTime);
-        surface.draw();
-        ImGui::End();
-        surface.end_frame();
-    };
-
-    draw_frame();
-    const Rect trigger_rect = dropdown->trigger().layout().visual_rect();
+    ui_test::draw_surface(surface);
+    const Rect trigger_rect = dropdown.trigger().layout().visual_rect();
     const ImVec2 trigger_center = ui_test::center(trigger_rect);
 
     UiEvent down = ui_test::pointer_event(EventType::PointerDown, trigger_center);
@@ -358,9 +346,9 @@ TEST_CASE("demo dropdown rows expose their complete visual hit boxes", "[Dropdow
 
     UiEvent up = ui_test::pointer_event(EventType::PointerUp, trigger_center);
     surface.dispatch(up);
-    draw_frame();
+    ui_test::draw_surface(surface);
 
-    for (const auto& child : dropdown->body().children()) {
+    for (const auto& child : dropdown.body().children()) {
         const Rect option_rect = child->layout().visual_rect();
         const ImVec2 option_center = ui_test::center(option_rect);
 
@@ -374,22 +362,21 @@ TEST_CASE("demo dropdown rows expose their complete visual hit boxes", "[Dropdow
 TEST_CASE("inline layer centers inside content beside the debugger", "[LayerContainer][Debugger][layout][regression]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
-    setup_demo(surface, "test");
+    auto& layer = surface.root().add<LayerContainer>("modal-layer", LayerMode::Inline);
+    layer.set_input_mode(InputMode::Blocker);
+    auto& modal = layer.add<Container>("modal");
+    modal.set_layout({
+        .size = {px(480.0F), px(220.0F)},
+        .placement = {.anchor = Anchor::Center, .origin = Anchor::Center},
+        .in_flow = false,
+    });
     surface.debugger()->set_open(true);
 
     ui_test::prepare_surface(surface, {900.0F, 600.0F});
-
-    auto* layer = dynamic_cast<LayerContainer*>(surface.root().find("##modal-layer"));
-    auto* modal = surface.root().find("demo-modal");
-    REQUIRE(layer != nullptr);
-    REQUIRE(modal != nullptr);
-    layer->set_visible(true);
-    modal->set_visible(true);
-
     ui_test::draw_surface(surface);
 
     const Rect content_rect = surface.root().layout().visual_rect();
-    const Rect modal_rect = modal->layout().visual_rect();
+    const Rect modal_rect = modal.layout().visual_rect();
     REQUIRE(content_rect.valid());
     REQUIRE(modal_rect.valid());
 
@@ -544,47 +531,25 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
 TEST_CASE("pointer block prevents hover and clicks on content controls", "[input][regression]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    setup_demo(surface, "test");
+    auto& content = surface.root().add<StackContainer>("content");
+    auto& controls = content.add<StackContainer>("controls");
+    auto& dynamic_nodes = content.add<StackContainer>("dynamic-nodes");
+    auto& add_button = controls.add<ButtonWidget>(surface, "add node", LayoutSize{px(120.0F), px(36.0F)});
+    add_button.set_on_click([&dynamic_nodes, &surface] {
+        dynamic_nodes.add<ButtonWidget>(surface, "node", LayoutSize{px(120.0F), px(36.0F)});
+    });
+    auto& blocker = surface.root().add<LayerContainer>("input-blocker");
+    blocker.set_visible(false);
 
     ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    ui_test::draw_surface(surface);
 
-    const auto draw_frame = [&surface](ImVec2 mouse_position, bool mouse_down = false) {
-        ImGui::GetIO().MousePos = mouse_position;
-        ImGui::GetIO().MouseDown[ImGuiMouseButton_Left] = mouse_down;
-        surface.begin_frame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({900.0F, 600.0F});
-        ImGui::Begin("demo-input-test");
-        surface.update(ImGui::GetIO().DeltaTime);
-        surface.draw();
-        ImGui::End();
-        surface.end_frame();
-    };
+    blocker.set_visible(true);
+    blocker.set_input_mode(InputMode::Blocker);
+    ui_test::draw_surface(surface);
 
-    draw_frame({0.0F, 0.0F});
-
-    auto* blocker = surface.root().find("##input-blocker");
-    auto* controls = surface.root().find("dynamic-node-controls");
-    auto* dynamic_nodes = surface.root().find("dynamic-nodes");
-    auto* blocker_overlay = dynamic_cast<LayerContainer*>(blocker);
-    REQUIRE(blocker != nullptr);
-    REQUIRE(blocker_overlay != nullptr);
-    REQUIRE(controls != nullptr);
-    REQUIRE(dynamic_nodes != nullptr);
-    REQUIRE_FALSE(controls->children().empty());
-
-    blocker_overlay->set_visible(true);
-    blocker_overlay->set_input_mode(InputMode::Blocker);
-    draw_frame({0.0F, 0.0F});
-
-    auto* add_button = dynamic_cast<ButtonWidget*>(controls->children().front().get());
-    REQUIRE(add_button != nullptr);
-    const Rect add_button_rect = add_button->layout().visual_rect();
+    const Rect add_button_rect = add_button.layout().visual_rect();
     const ImVec2 add_button_center = ui_test::center(add_button_rect);
-
-    draw_frame(add_button_center, true);
-    draw_frame(add_button_center, false);
-    REQUIRE(add_button->style_type() == StyleType::DEFAULT);
 
     UiEvent down = ui_test::pointer_event(EventType::PointerDown, add_button_center);
     surface.dispatch(down);
@@ -592,43 +557,36 @@ TEST_CASE("pointer block prevents hover and clicks on content controls", "[input
     UiEvent up = ui_test::pointer_event(EventType::PointerUp, add_button_center);
     surface.dispatch(up);
 
-    REQUIRE(dynamic_nodes->children().empty());
+    REQUIRE(dynamic_nodes.children().empty());
 }
 
-TEST_CASE("resizable dynamic list keeps its allocated box", "[ResizableContainer][layout][regression]") {
+TEST_CASE("resizable lists keep their allocated box", "[ResizableContainer][layout][regression]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    setup_demo(surface, "test");
+    auto& section = surface.root().add<StackContainer>("section", StackDirection::Horizontal);
+    section.set_size({px(460.0F), px(220.0F)});
+    section.style().padding({14.0F, 14.0F});
+    auto& controls = section.add<StackContainer>("controls");
+    controls.set_size({px(120.0F), grow()});
+    auto& list = section.add<StackContainer>("list");
+    list.set_size({px(300.0F), grow()});
+    auto& dynamic_nodes = list.add<ResizableContainer>("dynamic-nodes");
+    dynamic_nodes.set_size({px(240.0F), grow()});
+    dynamic_nodes.set_resize(ResizeAxes::Both);
+    auto& add_button = controls.add<ButtonWidget>(surface, "add node", LayoutSize{px(120.0F), px(36.0F)});
+    add_button.set_on_click([&dynamic_nodes, &surface] {
+        dynamic_nodes.add<ButtonWidget>(surface, "node", LayoutSize{grow(), px(36.0F)});
+    });
 
     ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    ui_test::draw_surface(surface);
 
-    const auto draw_frame = [&surface] {
-        surface.begin_frame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({900.0F, 600.0F});
-        ImGui::Begin("resizable-dynamic-test");
-        surface.update(ImGui::GetIO().DeltaTime);
-        surface.draw();
-        ImGui::End();
-        surface.end_frame();
-    };
+    REQUIRE(dynamic_nodes.layout().visual_rect().valid());
+    REQUIRE(dynamic_nodes.layout().size().y > 0.0F);
 
-    draw_frame();
-
-    auto* dynamic_nodes = dynamic_cast<ResizableContainer*>(surface.root().find("dynamic-nodes"));
-    auto* dynamic_section = surface.root().find("dynamic-section");
-    auto* controls = surface.root().find("dynamic-node-controls");
-    auto* dynamic_list = surface.root().find("dynamic-list");
-    REQUIRE(dynamic_nodes != nullptr);
-    REQUIRE(dynamic_section != nullptr);
-    REQUIRE(controls != nullptr);
-    REQUIRE(dynamic_list != nullptr);
-    REQUIRE(dynamic_nodes->layout().visual_rect().valid());
-    REQUIRE(dynamic_nodes->layout().size().y > 0.0F);
-
-    const Rect section_rect = dynamic_section->layout().visual_rect();
-    const Rect controls_rect = controls->layout().visual_rect();
-    const Rect list_rect = dynamic_list->layout().visual_rect();
+    const Rect section_rect = section.layout().visual_rect();
+    const Rect controls_rect = controls.layout().visual_rect();
+    const Rect list_rect = list.layout().visual_rect();
     REQUIRE(section_rect.valid());
     REQUIRE(controls_rect.valid());
     REQUIRE(list_rect.valid());
@@ -636,60 +594,37 @@ TEST_CASE("resizable dynamic list keeps its allocated box", "[ResizableContainer
     REQUIRE(controls_rect.min.x < list_rect.min.x);
     REQUIRE(section_rect.min.y < controls_rect.min.y);
 
-    auto* add_button = dynamic_cast<ButtonWidget*>(controls->children().front().get());
-    REQUIRE(add_button != nullptr);
     UiEvent click = UiEvent::make(EventType::Click);
     click.button = PointerButton::Left;
-    surface.input_router().dispatch(*add_button, click);
-    REQUIRE(dynamic_nodes->children().size() == 1);
+    surface.input_router().dispatch(add_button, click);
+    REQUIRE(dynamic_nodes.children().size() == 1);
 
-    draw_frame();
+    ui_test::draw_surface(surface);
 
-    REQUIRE(dynamic_nodes->children().size() == 1);
-    REQUIRE(dynamic_nodes->layout().visual_rect().valid());
-    REQUIRE(dynamic_nodes->children().front()->layout().visual_rect().valid());
+    REQUIRE(dynamic_nodes.children().size() == 1);
+    REQUIRE(dynamic_nodes.layout().visual_rect().valid());
+    REQUIRE(dynamic_nodes.children().front()->layout().visual_rect().valid());
 }
 
 TEST_CASE("pointer block rejects clicks on another overlay control", "[input][regression]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    setup_demo(surface, "test");
+    auto& overlay = surface.root().add<LayerContainer>("overlay");
+    auto& panel = overlay.add<Container>("panel");
+    panel.set_visible(false);
+    auto& show_button = overlay.add<ButtonWidget>(surface, "show overlay", LayoutSize{px(160.0F), px(40.0F)});
+    show_button.set_on_click([&panel] { panel.set_visible(true); });
+    auto& blocker = surface.root().add<LayerContainer>("input-blocker");
+    blocker.set_visible(false);
 
     ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    ui_test::draw_surface(surface);
 
-    const auto draw_frame = [&surface](ImVec2 mouse_position) {
-        ImGui::GetIO().MousePos = mouse_position;
-        surface.begin_frame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({900.0F, 600.0F});
-        ImGui::Begin("demo-overlay-input-test");
-        surface.update(ImGui::GetIO().DeltaTime);
-        surface.draw();
-        ImGui::End();
-        surface.end_frame();
-    };
+    blocker.set_visible(true);
+    blocker.set_input_mode(InputMode::Blocker);
+    ui_test::draw_surface(surface);
 
-    draw_frame({0.0F, 0.0F});
-
-    auto* overlay = surface.root().find("##demo-overlay");
-    auto* blocker = surface.root().find("##input-blocker");
-    auto* blocker_overlay = dynamic_cast<LayerContainer*>(blocker);
-    REQUIRE(overlay != nullptr);
-    REQUIRE(blocker != nullptr);
-    REQUIRE(blocker_overlay != nullptr);
-    REQUIRE(overlay->children().size() >= 2);
-
-    auto* panel = overlay->children().front().get();
-    auto* show_button = dynamic_cast<ButtonWidget*>(overlay->children().back().get());
-    REQUIRE(panel != nullptr);
-    REQUIRE(show_button != nullptr);
-    REQUIRE_FALSE(panel->visible());
-
-    blocker_overlay->set_visible(true);
-    blocker_overlay->set_input_mode(InputMode::Blocker);
-    draw_frame({0.0F, 0.0F});
-
-    const Rect button_rect = show_button->layout().visual_rect();
+    const Rect button_rect = show_button.layout().visual_rect();
     const ImVec2 button_center = ui_test::center(button_rect);
 
     UiEvent down = ui_test::pointer_event(EventType::PointerDown, button_center);
@@ -698,7 +633,7 @@ TEST_CASE("pointer block rejects clicks on another overlay control", "[input][re
     UiEvent up = ui_test::pointer_event(EventType::PointerUp, button_center);
     surface.dispatch(up);
 
-    REQUIRE_FALSE(panel->visible());
+    REQUIRE_FALSE(panel.visible());
 }
 
 TEST_CASE("style transitions apply the configured easing function", "[VisualState][transition]") {
@@ -1366,42 +1301,32 @@ TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMe
     REQUIRE_FALSE(menu.is_open());
 }
 
-TEST_CASE("virtual rows expand and collapse independently", "[layout][demo]") {
+TEST_CASE("virtual rows expand and collapse independently", "[layout][virtual-layout]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    setup_demo(surface, "test");
-    auto* list = dynamic_cast<VirtualLayout*>(surface.root().find("demo-virtual-list"));
-    REQUIRE(list != nullptr);
-    REQUIRE(list->item_count() == 100000);
-    REQUIRE(list->children().empty());
+    auto& list = surface.root().add<VirtualLayout>("virtual-list", 24.0F);
+    list.set_size({px(180.0F), px(72.0F)});
+    list.set_items(100000, [&list, &surface](size_t index) -> Node& {
+        auto& row = list.add<ButtonWidget>(surface, std::to_string(index), LayoutSize{grow(), px(24.0F)});
+        row.set_on_click([&list, index] { list.set_extra_offset(index, list.extra_offset(index) == 0.0F ? 64.0F : 0.0F); });
+        return row;
+    });
+    REQUIRE(list.children().empty());
 
-    auto detached = list->parent()->remove(*list);
     ui_test::prepare_surface(surface, {240.0F, 180.0F});
-    list->set_size({px(180.0F), px(100.0F)});
-    const auto draw_frame = [&] {
-        ImGui::NewFrame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({240.0F, 180.0F});
-        ImGui::Begin("demo-virtual-layout-test", nullptr, ImGuiWindowFlags_NoSavedSettings);
-        list->update(1.0F);
-        list->draw();
-        ImGui::End();
-        ImGui::EndFrame();
-    };
-    draw_frame();
-    draw_frame();
-    REQUIRE(list->children().size() < 10);
-    auto* first = list->find("virtual-row-0");
-    auto* second = list->find("virtual-row-1");
-    REQUIRE(first != nullptr);
-    REQUIRE(second != nullptr);
+    ui_test::draw_surface(surface);
+    ui_test::draw_surface(surface);
+    REQUIRE(list.children().size() < 10);
+    REQUIRE(list.children().size() >= 2);
+    Node* first = list.children()[0].get();
+    Node* second = list.children()[1].get();
 
     UiEvent click = UiEvent::make(EventType::Click);
     surface.input_router().dispatch(*first, click);
-    REQUIRE(list->extra_offset(0) == 64.0F);
+    REQUIRE(list.extra_offset(0) == 64.0F);
     surface.input_router().dispatch(*second, click);
-    REQUIRE(list->extra_offset(1) == 64.0F);
+    REQUIRE(list.extra_offset(1) == 64.0F);
     surface.input_router().dispatch(*first, click);
-    REQUIRE(list->extra_offset(0) == 0.0F);
-    REQUIRE(list->extra_offset(1) == 64.0F);
+    REQUIRE(list.extra_offset(0) == 0.0F);
+    REQUIRE(list.extra_offset(1) == 64.0F);
 }

@@ -134,7 +134,7 @@ void VirtualLayout::on_measure() {
 
     // fit height is computable from the source count and offsets without creating any nodes.
     if (size.height.mode == LayoutSizeMode::Fit) {
-        set_measured_size({0.0F, content_height() + computed_style().padding().y * 2.0F}, false, true);
+        set_measured_size(outer_size({0.0F, content_height()}), false, true);
     }
 }
 
@@ -232,7 +232,7 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
                 continue;
             }
 
-            const ImVec2 margin = layout_margin(child);
+            const ImVec2 margin = child.layout_margin();
             const float y = offset + static_cast<float>(row) * stride;
 
             arrange_child(

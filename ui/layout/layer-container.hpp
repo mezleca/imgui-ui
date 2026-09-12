@@ -16,12 +16,6 @@ namespace ui {
     public:
         explicit LayerContainer(std::string id, LayerMode mode = LayerMode::Inline);
 
-        /// focuses a window layer on its next draw.
-        LayerContainer& request_focus() {
-            m_focus_requested = true;
-            return *this;
-        }
-
     protected:
         LayerContainer(std::string id, LayerMode mode, std::string_view type_name);
         void resolve_layout() override;
@@ -30,7 +24,6 @@ namespace ui {
 
     private:
         LayerMode m_mode;
-        bool m_focus_requested = false;
         bool m_window_initialized = false;
         bool m_inline_child_scope = false;
     };

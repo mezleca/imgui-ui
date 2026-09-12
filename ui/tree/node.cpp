@@ -38,7 +38,20 @@ void Node::set_input_state(InputState state) {
     }
 
     m_input_state = state;
-    input_state_changed();
+    for (Node* node = this; node != nullptr; node = node->m_parent) {
+        node->input_state_changed();
+    }
+}
+
+InputState Node::subtree_input_state() const {
+    InputState state = m_input_state;
+    for (const auto& child : m_children) {
+        const InputState child_state = child->subtree_input_state();
+        state.hovered |= child_state.hovered;
+        state.active |= child_state.active;
+    }
+
+    return state;
 }
 
 void Node::set_enabled(bool enabled) {
@@ -63,6 +76,10 @@ Node& Node::set_input_mode(InputMode mode, Rect area) {
     m_input_area = area;
     m_input_mode = mode;
     return *this;
+}
+
+ImVec2 Node::layout_margin() const {
+    return {};
 }
 
 void Node::dispatch_event(UiEvent& event) {
@@ -193,6 +210,29 @@ void Node::assign_size(ImVec2 size) {
 
 void Node::set_measured_size(ImVec2 size, bool measured_width, bool measured_height) {
     m_layout.set_measured_size(size, measured_width, measured_height);
+}
+
+void Node::set_measured_content_size(ImVec2 size, bool measured_width, bool measured_height) {
+    size.y = std::max(size.y, minimum_content_height());
+    set_measured_size(outer_size(size), measured_width, measured_height);
+}
+
+ImVec2 Node::content_size(ImVec2 size) const {
+    const ImVec2 padding = box_padding();
+    return {
+        std::max(0.0F, size.x - (padding.x * 2.0F)),
+        std::max(0.0F, size.y - (padding.y * 2.0F)),
+    };
+}
+
+ImVec2 Node::outer_size(ImVec2 size) const {
+    const ImVec2 padding = box_padding();
+    return {size.x + (padding.x * 2.0F), size.y + (padding.y * 2.0F)};
+}
+
+Rect Node::content_rect(Rect rect) const {
+    const ImVec2 padding = box_padding();
+    return Rect::from_position_size({rect.min.x + padding.x, rect.min.y + padding.y}, content_size(rect.size()));
 }
 
 void Node::set_visual_rect(Rect rect) {
@@ -400,3 +440,9 @@ void Node::on_measure() {}
 void Node::on_layout() {}
 void Node::on_draw_end() {}
 void Node::draw_after() {}
+ImVec2 Node::box_padding() const {
+    return {};
+}
+float Node::minimum_content_height() const {
+    return 0.0F;
+}

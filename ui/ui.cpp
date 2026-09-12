@@ -251,6 +251,18 @@ bool UI::debugger_blocks_pointer_input() const {
     return m_debugger != nullptr && m_debugger->blocks_pointer_input();
 }
 
+void UI::set_debug_inspect_mode(bool enabled) {
+    m_input_router.set_debug_inspect_mode(enabled);
+}
+
+void UI::set_debug_pointer_blocked(bool blocked) {
+    m_input_router.set_debug_pointer_blocked(blocked);
+}
+
+Node* UI::inspect_input_target(ImVec2 position, EventType type) const {
+    return m_input_router.inspect_node_at(position, type);
+}
+
 void UI::begin_frame() {
     if (!m_ready) {
         return;

@@ -22,9 +22,9 @@ namespace ui {
         template <typename T>
             requires std::constructible_from<NumberValue, T*>
         NumberInputWidget(UI& ui, T& value, std::string id = {})
-            : Widget(std::move(id), "NumberInput"), m_value(value), m_number(&value),
+            : Widget(std::move(id), "NumberInput"), m_ui(ui), m_value(value), m_number(&value),
               m_format(std::floating_point<T> ? "%.3f" : ""), m_speed(std::floating_point<T> ? 0.1F : 1.0F) {
-            initialize(ui);
+            initialize();
         }
 
         NumberInputWidget& set_label(std::string label);
@@ -66,17 +66,19 @@ namespace ui {
 
     private:
         bool paint() override;
+        void on_event(UiEvent& event) override;
         template <typename T>
         bool draw_value(T& value);
 
         void sync_value() const;
-        void initialize(UI& ui);
+        void initialize();
         void on_measure() override;
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;
 
     private:
+        UI& m_ui;
         mutable GenericValue m_value;
         NumberValue m_number;
         GenericValue m_label;

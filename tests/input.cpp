@@ -246,6 +246,7 @@ TEST_CASE("input router reports per-frame entry work") {
 TEST_CASE("owner-scoped blockers leave their descendants interactive") {
     std::vector<EventType> events;
     Node owner("overlay");
+    owner.set_input_mode(InputMode::Blocker);
     auto child = std::make_unique<PointerEventNode>("child", events);
     auto* child_ptr = child.get();
     owner.attach(std::move(child));
@@ -257,6 +258,31 @@ TEST_CASE("owner-scoped blockers leave their descendants interactive") {
     auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
     REQUIRE(router.dispatch(move));
     REQUIRE(events == std::vector<EventType>{EventType::PointerMove});
+    REQUIRE(child_ptr->input_state().hovered);
+    REQUIRE(owner.subtree_input_state().hovered);
+
+    auto down = event_of(EventType::PointerDown, {50.0F, 50.0F});
+    REQUIRE(router.dispatch(down));
+    REQUIRE(child_ptr->input_state().active);
+    REQUIRE(owner.subtree_input_state().active);
+}
+
+TEST_CASE("owner-scoped blockers receive hover and active state") {
+    Node owner("overlay");
+    InputRouter router;
+    router.register_blocker(owner, {{0.0F, 0.0F}, {100.0F, 100.0F}});
+
+    UiEvent move = event_of(EventType::PointerMove, {50.0F, 50.0F});
+    REQUIRE(router.dispatch(move));
+    REQUIRE(owner.input_state().hovered);
+
+    UiEvent down = event_of(EventType::PointerDown, {50.0F, 50.0F});
+    REQUIRE(router.dispatch(down));
+    REQUIRE(owner.input_state().active);
+
+    UiEvent up = event_of(EventType::PointerUp, {50.0F, 50.0F});
+    REQUIRE(router.dispatch(up));
+    REQUIRE_FALSE(owner.input_state().active);
 }
 
 TEST_CASE("input router restores focus to a blocker ancestor") {

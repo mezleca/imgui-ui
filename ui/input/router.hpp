@@ -1,22 +1,16 @@
 #pragma once
 
-#include "event.hpp"
-#include "../layout/geometry.hpp"
+#include "hit-test-index.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
-#include <functional>
-#include <limits>
 #include <vector>
 
 namespace ui {
-    class Debugger;
     class Node;
+    class UI;
 
-    /// receives an event matched by a manually registered target or blocker.
-    using InputCallback = std::function<void(UiEvent&)>;
     inline constexpr std::size_t POINTER_BUTTON_COUNT = 3;
 
     struct InputRouterStats {
@@ -26,6 +20,10 @@ namespace ui {
         std::size_t entry_checks = 0;
     };
 
+    /// routes one ui surface's input through its retained node tree.
+    ///
+    /// hit regions are rebuilt after layout because their screen bounds are frame-local.
+    /// focus, pointer capture, and pressed buttons are surface-wide state.
     class InputRouter {
     public:
         ~InputRouter();
@@ -87,7 +85,7 @@ namespace ui {
 
     private:
         friend class Node;
-        friend class Debugger;
+        friend class UI;
 
         enum class InputFlag : uint8_t {
             Hovered,
@@ -110,21 +108,6 @@ namespace ui {
         /// blocks application hover while the debugger owns the pointer.
         void set_debug_pointer_blocked(bool blocked);
 
-        enum class InputKind : unsigned char {
-            Target,
-            Blocker,
-        };
-
-        static constexpr uint32_t NO_CALLBACK = std::numeric_limits<uint32_t>::max();
-
-        struct InputEntry {
-            Node* node = nullptr;
-            Rect rect;
-            EventMask events = EventMask::Pointer;
-            uint32_t callback = NO_CALLBACK; /// index into m_callbacks, or NO_CALLBACK when no callback was registered.
-            InputKind kind = InputKind::Target;
-        };
-
         /// removes entries whose target or blocker owner is node.
         void erase_entries(Node& node);
         /// removes subtree entries and clears their hover and active flags.
@@ -137,8 +120,6 @@ namespace ui {
         void detach_node(Node& node);
         /// clears flag when current points into subtree.
         void clear_input_flag(Node& subtree, Node*& current, InputFlag flag);
-        /// appends one entry and stores its callback outside the entry vector.
-        void add_entry(Node* node, InputKind kind, Rect rect, EventMask events, InputCallback callback);
         /// resolves a node hit rect into one clipped screen-space entry.
         void register_node(Node& node, bool blocker, Rect input_rect, Rect visual_rect);
         /// clears focus, capture, hover, active, and press state for inactive nodes.
@@ -148,31 +129,20 @@ namespace ui {
         /// moves one input flag between nodes and resets the cursor when hover clears.
         void set_input_flag(Node*& current, Node* next, InputFlag flag);
         /// resolves a pointer entry, dispatches a matching blocker, and updates hover.
-        const InputEntry* pointer_target(UiEvent& event, bool& blocked);
+        const HitTestIndex::Entry* pointer_target(UiEvent& event, bool& blocked);
         /// returns the target or blocker owner visible to debugger inspection.
         Node* inspect_node_at(ImVec2 position, EventType type) const;
-        /// resolves a target and reports the blocker that rejects it, if any.
-        const InputEntry* resolve_target(ImVec2 position, EventType type, const InputEntry*& blocker) const;
-        /// returns an eligible target by registration order and descendant overlap.
-        const InputEntry* target_at(ImVec2 position, EventType type = EventType::PointerMove, const Node* scope = nullptr) const;
-        /// returns the latest matching blocker that rejects target at position.
-        const InputEntry* blocking_entry_at(ImVec2 position, EventType type, const Node* target = nullptr) const;
         /// runs the entry callback before bubbling the event from its target node.
-        bool dispatch_target(const InputEntry& target, UiEvent& event);
+        bool dispatch_target(const HitTestIndex::Entry& target, UiEvent& event);
 
-        /// frame-local targets and blockers in registration order.
-        std::vector<InputEntry> m_entries;
-        /// keeps function objects out of callback-free entries.
-        std::deque<InputCallback> m_callbacks;
+        HitTestIndex m_hit_test;
         Node* m_focused_node = nullptr;
         bool m_debug_inspect_mode = false;
         bool m_debug_pointer_blocked = false;
         Node* m_pointer_capture = nullptr;
         Node* m_hovered_node = nullptr;
         Node* m_active_node = nullptr;
-        bool m_has_blockers = false;
         std::array<PressedPointer, POINTER_BUTTON_COUNT> m_pressed{};
-        mutable InputRouterStats m_stats;
         std::vector<Node*> m_attached_nodes;
     };
 

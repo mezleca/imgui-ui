@@ -156,11 +156,16 @@ namespace ui {
         }
 
     private:
+        friend class Debugger;
+
         ImFont* resolve_font(Font* font, int size) const;
         void initialize();
         void configure_style(float main_scale);
         void apply_theme_metrics();
         void apply_theme_colors();
+        void set_debug_inspect_mode(bool enabled);
+        void set_debug_pointer_blocked(bool blocked);
+        Node* inspect_input_target(ImVec2 position, EventType type) const;
 
         Runtime& m_runtime;
         ImGuiContext* m_context = nullptr;
