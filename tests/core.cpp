@@ -24,6 +24,28 @@ using namespace ui;
 
 static void collect_shadow_callback(const ImDrawList*, const ImDrawCmd*) {}
 
+TEST_CASE("ui does not write to imgui's fallback window") {
+    Runtime runtime;
+    UI surface(runtime, {.backend = ui_test::make_backend()});
+    surface.root().add<Node>("content");
+
+    ui_test::prepare_surface(surface, {320.0F, 240.0F});
+    surface.begin_frame();
+
+    ImGuiWindow* fallback = ImGui::FindWindowByName("Debug##Default");
+    REQUIRE(fallback != nullptr);
+    REQUIRE_FALSE(fallback->WriteAccessed);
+
+    surface.update(ImGui::GetIO().DeltaTime);
+    REQUIRE_FALSE(fallback->WriteAccessed);
+
+    surface.draw();
+    REQUIRE_FALSE(fallback->WriteAccessed);
+
+    surface.end_frame();
+    REQUIRE_FALSE(fallback->Active);
+}
+
 TEST_CASE("rounded border paths split corners between adjacent sides") {
     const BorderPath path = rounded_rect_border_path({{10.0F, 20.0F}, {110.0F, 80.0F}}, 12.0F);
 

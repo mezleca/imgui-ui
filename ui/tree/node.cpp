@@ -88,8 +88,10 @@ void Node::dispatch_event(UiEvent& event) {
 
 void Node::resolve_position() {
     const ImVec2 size = m_layout.size();
+    ImGuiContext* context = ImGui::GetCurrentContext();
 
-    if (ImGui::GetCurrentContext() == nullptr) {
+    if (context == nullptr || context->CurrentWindow == nullptr ||
+        (m_parent == nullptr && context->CurrentWindow->IsFallbackWindow)) {
         const Rect rect = Rect::from_position_size(m_layout.active_placement().offset, size);
         m_layout.set_arranged_rects(rect, rect);
         return;
@@ -110,7 +112,9 @@ void Node::resolve_position() {
 }
 
 void Node::capture_parent_content() {
-    if (ImGui::GetCurrentContext() == nullptr) {
+    ImGuiContext* context = ImGui::GetCurrentContext();
+    if (context == nullptr || context->CurrentWindow == nullptr ||
+        (m_parent == nullptr && context->CurrentWindow->IsFallbackWindow)) {
         m_layout.set_parent_content_rect({});
         return;
     }
@@ -397,7 +401,8 @@ void Node::submit_positioned_item() {
     }
 
     ImGuiContext* context = ImGui::GetCurrentContext();
-    if (context == nullptr || context->CurrentWindow == nullptr || !context->CurrentWindow->DC.IsSetPos) {
+    if (context == nullptr || context->CurrentWindow == nullptr || context->CurrentWindow->IsFallbackWindow ||
+        !context->CurrentWindow->DC.IsSetPos) {
         return;
     }
 
