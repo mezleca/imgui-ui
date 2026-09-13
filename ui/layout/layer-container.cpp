@@ -10,7 +10,7 @@ static constexpr ImGuiWindowFlags LAYER_WINDOW_FLAGS = constants::WINDOW_FLAGS;
 
 static bool needs_child_scope(const ComputedStyle& style) {
     return style.background_color().value.Value.w > 0.0F || style.blur() > 0 || style.box_shadow().color.Value.w > 0.0F ||
-           style.border() != BORDER_NONE;
+           style.border() != BORDER_NONE || style.padding().x > 0.0F || style.padding().y > 0.0F;
 }
 
 LayerContainer::LayerContainer(std::string id, LayerMode mode) : LayerContainer(std::move(id), mode, "LayerContainer") {}
@@ -37,7 +37,7 @@ bool LayerContainer::paint() {
 
     const Rect viewport_rect = Rect::from_position_size(viewport->WorkPos, viewport->WorkSize);
     if (m_mode == LayerMode::Inline) {
-        // keep the child window after the first visual effect so native imgui items keep their parent while styles change.
+        // padding changes descendant layout, so it needs the same child scope as visible frame effects.
         m_inline_child_scope = m_inline_child_scope || needs_child_scope(computed_style());
         if (m_inline_child_scope) {
             return Container::paint();

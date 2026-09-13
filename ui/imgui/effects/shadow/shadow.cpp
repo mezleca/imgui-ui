@@ -63,9 +63,6 @@ void ui::draw_box_shadow(ImDrawList& draw_list, Rect rect, const BoxShadow& shad
     region.color = shadow.color.Value;
     region.color.w *= std::clamp(opacity, 0.0F, 1.0F);
 
-    ImDrawList* effect_draw_list = ImGui::GetForegroundDrawList();
-    effect_draw_list->PushClipRect(draw_list.GetClipRectMin(), draw_list.GetClipRectMax(), false);
-    effect_draw_list->AddCallback(current_pass->callback, &region);
-    effect_draw_list->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
-    effect_draw_list->PopClipRect();
+    draw_list.AddCallback(current_pass->callback, &region);
+    draw_list.AddCallback(ImDrawCallback_ResetRenderState, nullptr);
 }

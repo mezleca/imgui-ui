@@ -459,7 +459,7 @@ TEST_CASE("text line height interpolates between visual states", "[TextWidget][s
     REQUIRE(text.style().line_height() == Catch::Approx(1.5F));
 }
 
-TEST_CASE("value widgets notify changes", "[Widget][change]") {
+TEST_CASE("value widgets notify only when their value changes", "[Widget][change]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     bool checked = false;
@@ -560,7 +560,7 @@ TEST_CASE("pointer block prevents hover and clicks on content controls", "[input
     REQUIRE(dynamic_nodes.children().empty());
 }
 
-TEST_CASE("resizable lists keep their allocated box", "[ResizableContainer][layout][regression]") {
+TEST_CASE("resizable lists keep child layout valid after adding a row", "[ResizableContainer][layout][regression]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     auto& section = surface.root().add<StackContainer>("section", StackDirection::Horizontal);

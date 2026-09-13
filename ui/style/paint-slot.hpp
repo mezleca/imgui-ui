@@ -15,7 +15,7 @@ namespace ui {
         float opacity;
     };
 
-    /// a configurable layer rendered immediately before or after a styled node's contents.
+    /// a configurable layer rendered before a node or above its completed subtree.
     class PaintSlot final {
     public:
         using DrawCallback = std::function<void(const PaintContext&)>;
@@ -36,7 +36,7 @@ namespace ui {
     private:
         friend class StyledNode;
 
-        void paint(Rect rect, Rect content_rect);
+        void paint(ImDrawList& draw_list, Rect rect, Rect content_rect);
 
         Style m_style;
         DrawCallback m_draw_callback;

@@ -103,7 +103,7 @@ TEST_CASE("widget event handlers preserve internal behavior") {
     REQUIRE(events == std::vector<std::string>{"internal", "public"});
 }
 
-TEST_CASE("ui events flows from target to parents") {
+TEST_CASE("ui events bubble from the target to its ancestors") {
     std::vector<std::string> events;
     auto parent = std::make_unique<EventNode>("parent", events);
     auto child = std::make_unique<EventNode>("child", events);
@@ -533,7 +533,7 @@ TEST_CASE("pointer blockers leave focused keyboard input available") {
     REQUIRE(events == std::vector<std::string>{"content"});
 }
 
-TEST_CASE("input router resolves overlapping targets") {
+TEST_CASE("input router resolves overlapping targets by paint order and ancestry") {
     InputRouter router;
     Node bottom("bottom");
     Node top("top");

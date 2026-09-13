@@ -21,12 +21,12 @@ PaintSlot& PaintSlot::set_opacity(float opacity) {
     return *this;
 }
 
-void PaintSlot::paint(Rect rect, Rect content_rect) {
+void PaintSlot::paint(ImDrawList& draw_list, Rect rect, Rect content_rect) {
     if (m_opacity <= 0.0F || !rect.valid() || ImGui::GetCurrentContext() == nullptr) {
         return;
     }
 
-    const PaintContext context{rect, content_rect, *ImGui::GetWindowDrawList(), m_style, m_opacity};
+    const PaintContext context{rect, content_rect, draw_list, m_style, m_opacity};
     if (m_draw_callback) {
         m_draw_callback(context);
         return;

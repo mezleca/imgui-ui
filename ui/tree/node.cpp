@@ -372,8 +372,8 @@ void Node::draw() {
     const bool draw_content = on_draw();
     if (draw_content) {
         draw_children();
-        draw_after();
         on_draw_end();
+        draw_after();
     }
     submit_positioned_item();
 

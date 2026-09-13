@@ -25,7 +25,7 @@ public:
     FileDialogOptions received_options;
 };
 
-TEST_CASE("file dialog delegates to a custom backend") {
+TEST_CASE("file dialog forwards open-file options and returns the backend result") {
     auto backend = std::make_unique<TestFileDialogBackend>();
     TestFileDialogBackend* backend_ptr = backend.get();
     FileDialog dialog(std::move(backend));

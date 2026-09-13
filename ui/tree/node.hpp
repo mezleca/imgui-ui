@@ -246,11 +246,11 @@ namespace ui {
         /// paints children in the current scope.
         virtual void draw_children();
 
-        /// paints an optional decoration after children.
-        virtual void draw_after();
-
         /// closes the node's paint scope.
         virtual void on_draw_end();
+
+        /// paints an optional decoration above the completed node subtree.
+        virtual void draw_after();
 
         virtual ImVec2 box_padding() const;
         virtual float minimum_content_height() const;

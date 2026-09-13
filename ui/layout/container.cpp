@@ -86,6 +86,8 @@ bool Container::paint() {
     ImGui::BeginChild(child_id, layout().size(), child_flags, window_flags);
 
     const Rect child_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
+    set_layout_rect(child_rect);
+    set_visual_rect(child_rect);
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
     ImGui::PushClipRect(parent_clip_min, parent_clip_max, false);
     const float paint_opacity = std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
@@ -103,7 +105,7 @@ bool Container::paint() {
 }
 
 void Container::on_draw_end() {
-    // copy the actual child-window rect before closing it, then draw the border after its contents.
+    // capture fit-size changes before closing the child so input and deferred decorations use its final bounds.
     const ImVec2 window_position = ImGui::GetWindowPos();
     const ImVec2 window_size = ImGui::GetWindowSize();
 

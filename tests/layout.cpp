@@ -23,6 +23,23 @@
 
 using namespace ui;
 
+class LayoutProbeNode final : public Node {
+public:
+    explicit LayoutProbeNode(std::string id = {}) : Node(std::move(id)) {}
+
+    LayoutProbeNode(std::string id, ImVec2 size) : LayoutProbeNode(std::move(id)) {
+        set_size({px(size.x), px(size.y)});
+    }
+
+    explicit LayoutProbeNode(ImVec2 size) : LayoutProbeNode({}, size) {}
+
+private:
+    bool on_draw() override {
+        ImGui::Dummy(layout().size());
+        return true;
+    }
+};
+
 TEST_CASE("layout containers resolve themselves before arranging children", "[layout]") {
     class TestContainer final : public Container {
     public:
@@ -160,7 +177,7 @@ TEST_CASE("placement changes preserve implicit measured sizing") {
     REQUIRE(node.layout().size().y == Catch::Approx(18.0F));
 }
 
-TEST_CASE("layout geometry exposes resolved rectangles") {
+TEST_CASE("layout geometry resolves anchored rectangles and containment") {
     const Rect parent{{10.0F, 20.0F}, {110.0F, 100.0F}};
     const Rect child = resolve_layout_rect(
         parent, {20.0F, 10.0F}, {.anchor = Anchor::BottomRight, .origin = Anchor::TopLeft, .offset = {2.0F, -3.0F}}
@@ -239,33 +256,20 @@ TEST_CASE("stack layout centers flow content on requested axes") {
 }
 
 TEST_CASE("stack layout excludes explicitly positioned children from its flow") {
-    class FixedNode final : public Node {
-    public:
-        explicit FixedNode(ImVec2 size) {
-            set_size({px(size.x), px(size.y)});
-        }
-
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
     StackContainer stack("positioned-child-stack");
     stack.set_size({px(200.0F), px(100.0F)});
     stack.set_spacing(4.0F);
     stack.style().padding({});
-    auto& first = stack.add<FixedNode>(ImVec2{30.0F, 10.0F});
-    auto& positioned = stack.add<FixedNode>(ImVec2{80.0F, 40.0F});
+    auto& first = stack.add<LayoutProbeNode>(ImVec2{30.0F, 10.0F});
+    auto& positioned = stack.add<LayoutProbeNode>(ImVec2{80.0F, 40.0F});
     positioned.set_layout({
         .size = {px(80.0F), px(40.0F)},
         .placement = {.offset = {100.0F, 20.0F}},
         .in_flow = false,
     });
-    auto& second = stack.add<FixedNode>(ImVec2{30.0F, 10.0F});
+    auto& second = stack.add<LayoutProbeNode>(ImVec2{30.0F, 10.0F});
 
     ImGui::NewFrame();
     ImGui::Begin("positioned-child-stack-test");
@@ -279,27 +283,14 @@ TEST_CASE("stack layout excludes explicitly positioned children from its flow") 
 }
 
 TEST_CASE("fit content stack includes children spacing and padding") {
-    class FixedNode final : public Node {
-    public:
-        FixedNode(std::string id, ImVec2 size) : Node(std::move(id)) {
-            set_size({px(size.x), px(size.y)});
-        }
-
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
     StackContainer stack("fit-content-stack");
     stack.set_size({fit(), fit()});
     stack.set_spacing(4.0F);
     stack.configure_all_styles([](Style& style) { style.padding({7.0F, 5.0F}); });
-    stack.add<FixedNode>("first", ImVec2{30.0F, 10.0F});
-    stack.add<FixedNode>("second", ImVec2{50.0F, 20.0F});
+    stack.add<LayoutProbeNode>("first", ImVec2{30.0F, 10.0F});
+    stack.add<LayoutProbeNode>("second", ImVec2{50.0F, 20.0F});
 
     ImGui::NewFrame();
     ImGui::Begin("fit-content-stack-test");
@@ -337,19 +328,6 @@ TEST_CASE("fit content stack applies styled margins around flow children", "[Sta
 }
 
 TEST_CASE("fit-height stack fills its available width without stretching children", "[StackContainer][layout]") {
-    class FixedNode final : public Node {
-    public:
-        FixedNode() {
-            set_size({grow(), px(20.0F)});
-        }
-
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
     StackContainer root("fit-height-root");
@@ -359,7 +337,8 @@ TEST_CASE("fit-height stack fills its available width without stretching childre
     auto& field = root.add<StackContainer>("fit-height-field");
     field.set_size({grow(), fit()});
     field.style().padding({});
-    field.add<FixedNode>();
+    auto& child = field.add<LayoutProbeNode>();
+    child.set_size({grow(), px(20.0F)});
 
     ImGui::NewFrame();
     ImGui::Begin("fit-height-stack-test");
@@ -373,27 +352,14 @@ TEST_CASE("fit-height stack fills its available width without stretching childre
 }
 
 TEST_CASE("fit content stack remeasures after direction and spacing changes") {
-    class FixedNode final : public Node {
-    public:
-        explicit FixedNode(ImVec2 size) {
-            set_size({px(size.x), px(size.y)});
-        }
-
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
     StackContainer stack("fit-content-remeasure");
     stack.set_size({fit(), fit()});
     stack.set_spacing(4.0F);
     stack.style().padding({0.0F, 0.0F});
-    stack.add<FixedNode>(ImVec2{30.0F, 10.0F});
-    stack.add<FixedNode>(ImVec2{50.0F, 20.0F});
+    stack.add<LayoutProbeNode>(ImVec2{30.0F, 10.0F});
+    stack.add<LayoutProbeNode>(ImVec2{50.0F, 20.0F});
 
     const auto draw_frame = [&stack] {
         ImGui::NewFrame();
@@ -419,19 +385,6 @@ TEST_CASE("fit content stack remeasures after direction and spacing changes") {
 }
 
 TEST_CASE("visibility changes in an anchored overlay do not move its fixed sibling") {
-    class FixedNode final : public Node {
-    public:
-        explicit FixedNode(ImVec2 size) {
-            set_size({px(size.x), px(size.y)});
-        }
-
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
     ui_test::ImGuiContext context({640.0F, 360.0F});
 
     StackContainer overlay("overlay", StackDirection::Horizontal);
@@ -442,9 +395,9 @@ TEST_CASE("visibility changes in an anchored overlay do not move its fixed sibli
     });
     overlay.style().padding({});
 
-    auto& optional_panel = overlay.add<FixedNode>(ImVec2{120.0F, 80.0F});
+    auto& optional_panel = overlay.add<LayoutProbeNode>(ImVec2{120.0F, 80.0F});
     optional_panel.set_visible(false);
-    auto& dynamic_panel = overlay.add<FixedNode>(ImVec2{240.0F, 160.0F});
+    auto& dynamic_panel = overlay.add<LayoutProbeNode>(ImVec2{240.0F, 160.0F});
 
     const auto draw_frame = [&overlay] {
         ImGui::NewFrame();
@@ -525,14 +478,6 @@ TEST_CASE("horizontal stack places a fixed item after auto-sized text") {
 }
 
 TEST_CASE("stack divides remaining main-axis space between flexible children", "[layout][regression]") {
-    class LayoutItemNode final : public Node {
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
     ui_test::ImGuiContext context({360.0F, 140.0F});
 
     StackContainer stack("flexible-stack", StackDirection::Horizontal);
@@ -540,14 +485,14 @@ TEST_CASE("stack divides remaining main-axis space between flexible children", "
     stack.set_spacing(5.0F);
     stack.style().padding({10.0F, 10.0F});
 
-    auto& fixed = stack.add<LayoutItemNode>();
+    auto& fixed = stack.add<LayoutProbeNode>();
     fixed.set_size({px(60.0F), px(20.0F)});
-    auto& first_flexible = stack.add<LayoutItemNode>();
+    auto& first_flexible = stack.add<LayoutProbeNode>();
     first_flexible.set_size({grow(), px(20.0F)});
-    auto& hidden = stack.add<LayoutItemNode>();
+    auto& hidden = stack.add<LayoutProbeNode>();
     hidden.set_size({px(200.0F), px(20.0F)});
     hidden.set_visible(false);
-    auto& second_flexible = stack.add<LayoutItemNode>();
+    auto& second_flexible = stack.add<LayoutProbeNode>();
     second_flexible.set_size({grow(), px(20.0F)});
 
     ImGui::NewFrame();
@@ -563,14 +508,6 @@ TEST_CASE("stack divides remaining main-axis space between flexible children", "
 }
 
 TEST_CASE("stack distributes grow space by axis weight", "[layout]") {
-    class LayoutItemNode final : public Node {
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
     ui_test::ImGuiContext context({360.0F, 140.0F});
 
     StackContainer stack("weighted-stack", StackDirection::Horizontal);
@@ -578,9 +515,9 @@ TEST_CASE("stack distributes grow space by axis weight", "[layout]") {
     stack.set_spacing(5.0F);
     stack.style().padding({10.0F, 10.0F});
 
-    auto& fixed = stack.add<LayoutItemNode>();
+    auto& fixed = stack.add<LayoutProbeNode>();
     fixed.set_size({px(60.0F), px(20.0F)});
-    auto& narrow = stack.add<LayoutItemNode>();
+    auto& narrow = stack.add<LayoutProbeNode>();
     narrow.set_size({grow(), px(20.0F)});
     auto& wide = stack.add<TextWidget>("wide");
     wide.set_size({grow(2.0F), px(20.0F)});
@@ -621,23 +558,15 @@ TEST_CASE("explicit fit keeps a text widget intrinsic size", "[layout]") {
 }
 
 TEST_CASE("vertical stack flexible child reflows with available height", "[layout][regression]") {
-    class LayoutItemNode final : public Node {
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
     ui_test::ImGuiContext context({220.0F, 240.0F});
 
     StackContainer stack("vertical-flexible-stack");
     stack.set_size({px(120.0F), grow()});
     stack.set_spacing(8.0F);
     stack.style().padding({6.0F, 6.0F});
-    auto& fixed = stack.add<LayoutItemNode>();
+    auto& fixed = stack.add<LayoutProbeNode>();
     fixed.set_size({grow(), px(30.0F)});
-    auto& flexible = stack.add<LayoutItemNode>();
+    auto& flexible = stack.add<LayoutProbeNode>();
     flexible.set_size({grow(), grow()});
 
     const auto draw_frame = [&stack](float height) {
@@ -660,25 +589,14 @@ TEST_CASE("vertical stack flexible child reflows with available height", "[layou
 }
 
 TEST_CASE("changing stack direction rearranges existing children", "[layout][regression]") {
-    class LayoutItemNode final : public Node {
-    public:
-        using Node::Node;
-
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
     ui_test::ImGuiContext context({260.0F, 160.0F});
 
     StackContainer stack("direction-stack");
     stack.set_size({px(200.0F), px(100.0F)});
     stack.set_spacing(5.0F);
-    Node& first = stack.add<LayoutItemNode>("first");
+    Node& first = stack.add<LayoutProbeNode>("first");
     first.set_size({px(30.0F), px(20.0F)});
-    Node& second = stack.add<LayoutItemNode>("second");
+    Node& second = stack.add<LayoutProbeNode>("second");
     second.set_size({px(30.0F), px(20.0F)});
 
     const auto draw_frame = [&stack] {
@@ -810,6 +728,73 @@ TEST_CASE("resizable container stays within its parent bounds") {
     REQUIRE(resizable.layout().size().x > 80.0F);
     REQUIRE(resizable.layout().size().x <= 120.0F);
     REQUIRE(resizable.layout().size().y <= 90.0F);
+}
+
+TEST_CASE("container after decorations use final bounds above nested child windows") {
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+
+    ResizableContainer resizable("decorated-resizable");
+    resizable.set_size({px(180.0F), px(120.0F)});
+    auto& nested = resizable.add<StackContainer>("nested");
+    nested.set_size({grow(), grow()});
+    nested.add<TextWidget>("nested content");
+
+    Rect after_rect{};
+    ImDrawList* after_draw_list = nullptr;
+    resizable.after().set_draw_callback([&](const PaintContext& context) {
+        after_rect = context.rect;
+        after_draw_list = &context.draw_list;
+    });
+
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos({0.0F, 0.0F});
+    ImGui::SetNextWindowSize({320.0F, 220.0F});
+    ImGui::Begin("decorated-resizable-root");
+    resizable.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    const Rect visual_rect = resizable.layout().visual_rect();
+    REQUIRE(after_rect.min.x == Catch::Approx(visual_rect.min.x));
+    REQUIRE(after_rect.min.y == Catch::Approx(visual_rect.min.y));
+    REQUIRE(after_rect.max.x == Catch::Approx(visual_rect.max.x));
+    REQUIRE(after_rect.max.y == Catch::Approx(visual_rect.max.y));
+    REQUIRE(after_draw_list == ImGui::GetForegroundDrawList());
+}
+
+TEST_CASE("inline layer padding scopes descendant layout") {
+    class ProbeNode final : public Node {
+    public:
+        ProbeNode() {
+            set_size({px(20.0F), px(10.0F)});
+        }
+
+    private:
+        bool on_draw() override {
+            ImGui::Dummy(layout().size());
+            return true;
+        }
+    };
+
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+    Container root("padded-layer-root");
+    root.set_size({px(180.0F), px(120.0F)});
+    auto& layer = root.add<LayerContainer>("padded-layer", LayerMode::Inline);
+    layer.configure_all_styles([](Style& style) { style.padding({17.0F, 13.0F}); });
+    ProbeNode& probe = layer.add<ProbeNode>();
+
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos({0.0F, 0.0F});
+    ImGui::SetNextWindowSize({320.0F, 220.0F});
+    ImGui::Begin("padded-layer-window");
+    root.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    const Rect layer_rect = layer.layout().visual_rect();
+    const Rect probe_rect = probe.layout().visual_rect();
+    REQUIRE(probe_rect.min.x == Catch::Approx(layer_rect.min.x + 17.0F));
+    REQUIRE(probe_rect.min.y == Catch::Approx(layer_rect.min.y + 13.0F));
 }
 
 TEST_CASE("nodes without explicit positions follow the ImGui cursor") {

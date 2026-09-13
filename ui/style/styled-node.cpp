@@ -157,15 +157,15 @@ void StyledNode::update_cursor() {
 }
 
 void StyledNode::draw_before() {
-    if (m_before != nullptr) {
+    if (m_before != nullptr && ImGui::GetCurrentContext() != nullptr) {
         const Rect rect = layout().visual_rect();
-        m_before->paint(rect, rect.inset(computed_style().padding()));
+        m_before->paint(*ImGui::GetWindowDrawList(), rect, rect.inset(computed_style().padding()));
     }
 }
 
 void StyledNode::draw_after() {
-    if (m_after != nullptr) {
+    if (m_after != nullptr && ImGui::GetCurrentContext() != nullptr) {
         const Rect rect = layout().visual_rect();
-        m_after->paint(rect, rect.inset(computed_style().padding()));
+        m_after->paint(*ImGui::GetForegroundDrawList(), rect, rect.inset(computed_style().padding()));
     }
 }

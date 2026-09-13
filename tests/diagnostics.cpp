@@ -238,7 +238,7 @@ TEST_CASE("debugger exposes the content resize handle", "[Debugger][ResizableCon
     REQUIRE(surface.debugger()->layout().visual_rect().max.x == 900.0F);
 }
 
-TEST_CASE("effect registry manages lifecycle and draw submission") {
+TEST_CASE("effect registry invokes lifecycle callbacks and queues draw callbacks") {
     EffectProbe probe;
     ui::EffectRegistry effects;
     const ui::EffectId id = effects.register_effect(

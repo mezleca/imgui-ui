@@ -120,7 +120,7 @@ TEST_CASE("patterned borders keep every side visible") {
     ImGui::EndFrame();
 }
 
-TEST_CASE("style updates preserve and normalize non-visual fields") {
+TEST_CASE("style normalizes discrete fields and interpolates effect values") {
     Style style;
     style.border(BORDER_LEFT | BORDER_BOTTOM | 0x80).border_style(BorderStyle::Dashed);
 
@@ -178,7 +178,7 @@ TEST_CASE("style updates preserve and normalize non-visual fields") {
     REQUIRE(normalized.box_shadow().color.Value.w == 0.0F);
 }
 
-TEST_CASE("container shadows render above siblings while preserving their owner surface") {
+TEST_CASE("container shadows stay in their owner draw list") {
     ui_test::ImGuiContext context({320.0F, 240.0F});
     ImGui::NewFrame();
     ImGui::SetNextWindowPos({0.0F, 0.0F});
@@ -228,12 +228,12 @@ TEST_CASE("container shadows render above siblings while preserving their owner 
     REQUIRE(queued_region->shape.size().y == Catch::Approx(140.0F));
     REQUIRE(queued_region->cutout.size().x == Catch::Approx(100.0F));
     REQUIRE(queued_region->cutout.size().y == Catch::Approx(60.0F));
-    REQUIRE(callback_draw_list == foreground_draw_list);
+    REQUIRE(callback_draw_list != foreground_draw_list);
 
     shutdown_box_shadow();
 }
 
-TEST_CASE("styled paint slots render in before and after order") {
+TEST_CASE("styled paint slots render before the node and above completed subtrees") {
     ui_test::ImGuiContext context({160.0F, 120.0F});
     ImGui::NewFrame();
     ImGui::Begin("decoration-test");
@@ -246,8 +246,11 @@ TEST_CASE("styled paint slots render in before and after order") {
 
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     const int vertices_before = draw_list->VtxBuffer.Size;
+    ImDrawList* foreground_draw_list = ImGui::GetForegroundDrawList();
+    const int foreground_vertices_before = foreground_draw_list->VtxBuffer.Size;
     node.draw();
     REQUIRE(draw_list->VtxBuffer.Size > vertices_before);
+    REQUIRE(foreground_draw_list->VtxBuffer.Size > foreground_vertices_before);
 
     const ImU32 before_color = ImGui::GetColorU32(ImVec4{1.0F, 0.0F, 0.0F, 1.0F});
     const ImU32 after_color = ImGui::GetColorU32(ImVec4{1.0F, 1.0F, 1.0F, 1.0F});
@@ -257,19 +260,20 @@ TEST_CASE("styled paint slots render in before and after order") {
         if (draw_list->VtxBuffer[index].col == before_color && first_before < 0) {
             first_before = index;
         }
-        if (draw_list->VtxBuffer[index].col == after_color && first_after < 0) {
-            first_after = index;
-        }
+    }
+
+    for (int index = foreground_vertices_before; index < foreground_draw_list->VtxBuffer.Size; ++index) {
+        if (foreground_draw_list->VtxBuffer[index].col == after_color && first_after < 0) first_after = index;
     }
 
     REQUIRE(first_before >= 0);
-    REQUIRE(first_after > first_before);
+    REQUIRE(first_after >= foreground_vertices_before);
 
     ImGui::End();
     ImGui::EndFrame();
 }
 
-TEST_CASE("styled paint slots receive the owner rect and support custom drawing") {
+TEST_CASE("styled paint slots pass owner bounds and their target draw list to callbacks") {
     ui_test::ImGuiContext context({160.0F, 120.0F});
     ImGui::NewFrame();
     ImGui::Begin("decoration-callback-test");
@@ -281,12 +285,16 @@ TEST_CASE("styled paint slots receive the owner rect and support custom drawing"
     Rect after_rect{};
     Rect before_content_rect{};
     ImDrawList* before_draw_list = nullptr;
+    ImDrawList* after_draw_list = nullptr;
     node.before().set_draw_callback([&](const PaintContext& context) {
         before_rect = context.rect;
         before_content_rect = context.content_rect;
         before_draw_list = &context.draw_list;
     });
-    node.after().set_draw_callback([&after_rect](const PaintContext& context) { after_rect = context.rect; });
+    node.after().set_draw_callback([&](const PaintContext& context) {
+        after_rect = context.rect;
+        after_draw_list = &context.draw_list;
+    });
 
     node.update(1.0F);
     node.draw();
@@ -302,12 +310,13 @@ TEST_CASE("styled paint slots receive the owner rect and support custom drawing"
     REQUIRE(before_content_rect.max.x == Catch::Approx(before_rect.max.x - 8.0F));
     REQUIRE(before_content_rect.max.y == Catch::Approx(before_rect.max.y - 6.0F));
     REQUIRE(before_draw_list == ImGui::GetWindowDrawList());
+    REQUIRE(after_draw_list == ImGui::GetForegroundDrawList());
 
     ImGui::End();
     ImGui::EndFrame();
 }
 
-TEST_CASE("ui nodes draw children and after hooks before end hooks") {
+TEST_CASE("ui nodes close child scopes before drawing after hooks") {
     class DrawNode final : public Node {
     public:
         DrawNode(std::string id, std::vector<std::string>& events, bool skip = false)
@@ -347,7 +356,7 @@ TEST_CASE("ui nodes draw children and after hooks before end hooks") {
     REQUIRE(
         events ==
         std::vector<std::string>{
-            "root:layout", "root:begin", "child:layout", "child:begin", "child:after", "child:end", "root:after", "root:end"
+            "root:layout", "root:begin", "child:layout", "child:begin", "child:end", "child:after", "root:end", "root:after"
         }
     );
 
@@ -534,7 +543,7 @@ TEST_CASE("nodes register only explicitly configured local input entries") {
     REQUIRE(callbacks == 1);
 }
 
-TEST_CASE("positioned nodes keep imgui child boundaries valid") {
+TEST_CASE("positioned nodes preserve their cursor placement when drawing is skipped") {
     class SkippedNode final : public Node {
     private:
         bool on_draw() override {
