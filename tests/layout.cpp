@@ -910,60 +910,77 @@ TEST_CASE("node screen rectangles follow scrollable child windows") {
 
     class ScrollProbeContainer final : public Container {
     public:
-        ScrollProbeContainer() : Container("scroll-probe") {
+        explicit ScrollProbeContainer(bool horizontal)
+            : Container(horizontal ? "horizontal-scroll-probe" : "vertical-scroll-probe"), m_horizontal(horizontal) {
             set_size({px(100.0F), px(50.0F)});
             set_scrollable(true);
         }
 
         bool scroll_to_end = false;
-        float current_scroll_y = 0.0F;
+        ImVec2 current_scroll{};
+        float max_scroll_y = 0.0F;
 
     protected:
         bool paint() override {
-            ImGui::SetNextWindowContentSize({100.0F, 400.0F});
+            const float content_height = layout().size().y - ImGui::GetStyle().ScrollbarSize;
+            ImGui::SetNextWindowContentSize(m_horizontal ? ImVec2{400.0F, content_height} : ImVec2{100.0F, 400.0F});
             return Container::paint();
         }
 
         void on_draw_end() override {
             if (scroll_to_end) {
-                ImGui::SetScrollY(100.0F);
+                if (m_horizontal) {
+                    ImGui::SetScrollX(100.0F);
+                } else {
+                    ImGui::SetScrollY(100.0F);
+                }
             }
 
             Container::on_draw_end();
         }
 
         void draw_children() override {
-            current_scroll_y = ImGui::GetScrollY();
+            current_scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
+            max_scroll_y = ImGui::GetScrollMaxY();
             Node::draw_children();
         }
+
+    private:
+        bool m_horizontal = false;
     };
 
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
-    ScrollProbeContainer container;
-    ScrollProbeNode* target = nullptr;
-    for (int index = 0; index < 8; ++index) {
-        target = &container.add<ScrollProbeNode>(std::format("item-{}", index));
-    }
+    const auto verify_scroll = [](bool horizontal) {
+        ScrollProbeContainer container(horizontal);
+        ScrollProbeNode* target = nullptr;
+        for (int index = 0; index < (horizontal ? 1 : 8); ++index) {
+            target = &container.add<ScrollProbeNode>(std::format("item-{}", index));
+        }
 
-    const auto draw_frame = [&container] {
-        ImGui::NewFrame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({240.0F, 160.0F});
-        ImGui::Begin("scroll-root");
-        container.draw();
-        ImGui::End();
-        ImGui::EndFrame();
+        const auto draw_frame = [&container] {
+            ImGui::NewFrame();
+            ImGui::SetNextWindowPos({0.0F, 0.0F});
+            ImGui::SetNextWindowSize({240.0F, 160.0F});
+            ImGui::Begin("scroll-root");
+            container.draw();
+            ImGui::End();
+            ImGui::EndFrame();
+        };
+
+        draw_frame();
+        container.scroll_to_end = true;
+        draw_frame();
+        draw_frame();
+
+        REQUIRE((horizontal ? container.current_scroll.x : container.current_scroll.y) > 0.0F);
+        REQUIRE((!horizontal || container.max_scroll_y == 0.0F));
+        REQUIRE(target->layout().visual_rect().min.x == Catch::Approx(target->actual_position.x));
+        REQUIRE(target->layout().visual_rect().min.y == Catch::Approx(target->actual_position.y));
     };
 
-    draw_frame();
-    container.scroll_to_end = true;
-    draw_frame();
-    draw_frame();
-
-    REQUIRE(container.current_scroll_y > 0.0F);
-    REQUIRE(target->layout().visual_rect().min.x == Catch::Approx(target->actual_position.x));
-    REQUIRE(target->layout().visual_rect().min.y == Catch::Approx(target->actual_position.y));
+    verify_scroll(false);
+    verify_scroll(true);
 }
 
 TEST_CASE("stack auto-sized axes reflow when the parent grows", "[layout][regression]") {

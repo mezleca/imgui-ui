@@ -16,7 +16,9 @@ namespace ui {
 
         FileDialogResult select_file(const FileDialogOptions& options = {});
         FileDialogResult select_files(const FileDialogOptions& options = {});
-        FileDialogResult select_folder(const std::filesystem::path& default_path = {});
+        FileDialogResult save_file(const FileDialogOptions& options = {});
+        FileDialogResult select_folder(const FileDialogOptions& options = {});
+        FileDialogResult select_folders(const FileDialogOptions& options = {});
 
         [[nodiscard]] const std::string& value() const;
         bool set_value(std::string_view value);

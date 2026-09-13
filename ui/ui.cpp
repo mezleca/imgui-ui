@@ -56,7 +56,8 @@ private:
 };
 
 UI::UI(Runtime& runtime, UIConfig config)
-    : m_runtime(runtime), m_backend(std::move(config.backend)), m_file_dialog(std::move(config.file_dialog_backend)),
+    : m_runtime(runtime), m_backend(std::move(config.backend)),
+      m_file_dialog(config.file_dialog_backend != nullptr ? std::move(config.file_dialog_backend) : make_file_dialog_backend()),
       m_profiler(runtime.performance_directory()) {
     initialize();
 

@@ -10,6 +10,8 @@ namespace ui {
     public:
         explicit Container(std::string id, std::string_view type_name = "Container");
 
+        /// enables both scrollbars because imgui cannot disable its automatic vertical scrollbar when horizontal scrolling is
+        /// enabled.
         Container& set_scrollable(bool scrollable);
 
     protected:

@@ -139,8 +139,9 @@ void VirtualLayout::on_measure() {
 }
 
 bool VirtualLayout::paint() {
-    // reserve the full logical height so the child window exposes scrolling even when most rows are clipped.
-    ImGui::SetNextWindowContentSize({0.0F, content_height()});
+    // reserve padding and scrollbar width so vertically overflowing rows do not also create a horizontal scrollbar.
+    const float content_width = std::max(0.0F, (layout().size().x - computed_style().padding().x * 2.0F) - ImGui::GetStyle().ScrollbarSize);
+    ImGui::SetNextWindowContentSize({content_width, content_height()});
     return Container::paint();
 }
 

@@ -23,7 +23,7 @@ namespace ui {
         std::unique_ptr<Backend> backend;
         /// creates the debugger overlay when the surface initializes.
         bool enable_debugger = false;
-        /// replaces the native dialog backend selected by the build configuration.
+        /// replaces the default NFD file dialog backend for this surface.
         std::unique_ptr<FileDialogBackend> file_dialog_backend;
     };
     /// owns one imgui surface, its backend, input router, retained tree, and optional debugger.
@@ -95,9 +95,9 @@ namespace ui {
             return m_input_router;
         }
 
-        /// returns the native file dialog facade configured for this surface.
-        FileDialog& file_dialog() {
-            return m_file_dialog;
+        /// returns this surface's NFD or configured custom file dialog backend.
+        FileDialogBackend& file_dialog() {
+            return *m_file_dialog;
         }
 
         /// returns frame timing and node instrumentation for this surface.
@@ -166,12 +166,13 @@ namespace ui {
         void set_debug_inspect_mode(bool enabled);
         void set_debug_pointer_blocked(bool blocked);
         Node* inspect_input_target(ImVec2 position, EventType type) const;
+        static std::unique_ptr<FileDialogBackend> make_file_dialog_backend();
 
         Runtime& m_runtime;
         ImGuiContext* m_context = nullptr;
         ImGuiContext* m_previous_context = nullptr;
         std::unique_ptr<Backend> m_backend;
-        FileDialog m_file_dialog;
+        std::unique_ptr<FileDialogBackend> m_file_dialog;
         std::unique_ptr<Node> m_root;
         StackContainer* m_surface_layout = nullptr;
         Node* m_content_root = nullptr;

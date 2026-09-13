@@ -59,6 +59,7 @@ bool Container::paint() {
 
     if (m_scrollable) {
         window_flags &= ~(ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        window_flags |= ImGuiWindowFlags_HorizontalScrollbar;
     }
 
     const LayoutSize& size_spec = layout().size_spec();

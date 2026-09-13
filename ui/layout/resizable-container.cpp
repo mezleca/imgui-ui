@@ -75,6 +75,7 @@ void ResizableContainer::handle_resize(UiEvent& event) {
         m_dragging = false;
         m_resizing = ResizeAxes::None;
         release_pointer();
+        event.block_native_input();
         event.stop_propagation();
         return;
     }
@@ -90,6 +91,7 @@ void ResizableContainer::handle_resize(UiEvent& event) {
         m_previous_size = layout().size();
         m_resizing = m_resize;
         event.prevent_default();
+        event.block_native_input();
         event.stop_propagation();
         return;
     }
@@ -116,6 +118,7 @@ void ResizableContainer::handle_resize(UiEvent& event) {
     }
 
     set_size({px(size.x), px(size.y)});
+    event.block_native_input();
     event.stop_propagation();
 }
 

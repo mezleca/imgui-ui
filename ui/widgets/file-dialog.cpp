@@ -41,8 +41,16 @@ FileDialogResult FileDialogWidget::select_files(const FileDialogOptions& options
     return m_ui.file_dialog().open_files(options);
 }
 
-FileDialogResult FileDialogWidget::select_folder(const std::filesystem::path& default_path) {
-    return m_ui.file_dialog().select_folder(default_path);
+FileDialogResult FileDialogWidget::save_file(const FileDialogOptions& options) {
+    return m_ui.file_dialog().save_file(options);
+}
+
+FileDialogResult FileDialogWidget::select_folder(const FileDialogOptions& options) {
+    return m_ui.file_dialog().select_folder(options);
+}
+
+FileDialogResult FileDialogWidget::select_folders(const FileDialogOptions& options) {
+    return m_ui.file_dialog().select_folders(options);
 }
 
 const std::string& FileDialogWidget::value() const {

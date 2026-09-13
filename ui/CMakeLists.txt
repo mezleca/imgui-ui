@@ -24,11 +24,6 @@ endfunction()
 
 file(GLOB_RECURSE IMGUI_UI_CORE_SOURCES CONFIGURE_DEPENDS "*.cpp")
 list(FILTER IMGUI_UI_CORE_SOURCES EXCLUDE REGEX "/backends/")
-list(FILTER IMGUI_UI_CORE_SOURCES EXCLUDE REGEX "/file-dialog-nfd\\.cpp$")
-
-if(IMGUI_UI_USE_NFD)
-    list(APPEND IMGUI_UI_CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/file-dialog-nfd.cpp")
-endif()
 
 add_library(imgui-ui-core STATIC ${IMGUI_UI_CORE_SOURCES})
 add_library(imgui-ui::core ALIAS imgui-ui-core)
@@ -40,11 +35,7 @@ target_include_directories(imgui-ui-core
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glad/include"
 )
 target_link_libraries(imgui-ui-core PUBLIC imgui-ui::imgui)
-
-if(IMGUI_UI_USE_NFD)
-    target_compile_definitions(imgui-ui-core PRIVATE IMGUI_UI_USE_NFD)
-    target_link_libraries(imgui-ui-core PRIVATE imgui-ui::nfd)
-endif()
+target_link_libraries(imgui-ui-core PRIVATE imgui-ui::nfd)
 
 if(WIN32)
     target_compile_definitions(imgui-ui-core PRIVATE

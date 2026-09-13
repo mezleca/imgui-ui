@@ -1,7 +1,6 @@
 #pragma once
 
 #include <filesystem>
-#include <memory>
 #include <span>
 #include <string>
 #include <vector>
@@ -15,6 +14,18 @@ namespace ui {
     struct FileDialogOptions {
         std::span<const FileDialogFilter> filters;
         std::filesystem::path default_path;
+        std::string default_name;
+        std::string title;
+        std::string accept_label;
+        std::string cancel_label;
+    };
+
+    enum class FileDialogOperation {
+        OpenFile,
+        OpenFiles,
+        SaveFile,
+        SelectFolder,
+        SelectFolders,
     };
 
     enum class FileDialogStatus {
@@ -34,29 +45,33 @@ namespace ui {
         }
     };
 
+    /// defines NFD operations so applications can replace its implementation.
     class FileDialogBackend {
     public:
         virtual ~FileDialogBackend() = default;
 
-        virtual FileDialogResult open_file(const FileDialogOptions& options) = 0;
-        virtual FileDialogResult open_files(const FileDialogOptions& options) = 0;
-        virtual FileDialogResult select_folder(const std::filesystem::path& default_path) = 0;
+        FileDialogResult open_file(const FileDialogOptions& options = {}) {
+            return show(FileDialogOperation::OpenFile, options);
+        }
+
+        FileDialogResult open_files(const FileDialogOptions& options = {}) {
+            return show(FileDialogOperation::OpenFiles, options);
+        }
+
+        FileDialogResult save_file(const FileDialogOptions& options = {}) {
+            return show(FileDialogOperation::SaveFile, options);
+        }
+
+        FileDialogResult select_folder(const FileDialogOptions& options = {}) {
+            return show(FileDialogOperation::SelectFolder, options);
+        }
+
+        FileDialogResult select_folders(const FileDialogOptions& options = {}) {
+            return show(FileDialogOperation::SelectFolders, options);
+        }
+
+        /// receives every request so custom backends need one virtual implementation.
+        virtual FileDialogResult show(FileDialogOperation operation, const FileDialogOptions& options) = 0;
     };
 
-    class FileDialog {
-    public:
-        explicit FileDialog(std::unique_ptr<FileDialogBackend> backend = {});
-
-        FileDialog(const FileDialog&) = delete;
-        FileDialog& operator=(const FileDialog&) = delete;
-
-        FileDialogResult open_file(const FileDialogOptions& options = {});
-        FileDialogResult open_files(const FileDialogOptions& options = {});
-        FileDialogResult select_folder(const std::filesystem::path& default_path = {});
-
-    private:
-        static std::unique_ptr<FileDialogBackend> make_default_backend();
-
-        std::unique_ptr<FileDialogBackend> m_backend;
-    };
 } // namespace ui
