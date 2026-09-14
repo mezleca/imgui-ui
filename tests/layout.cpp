@@ -730,6 +730,41 @@ TEST_CASE("resizable container stays within its parent bounds") {
     REQUIRE(resizable.layout().size().y <= 90.0F);
 }
 
+TEST_CASE("resizing a container remeasures descendants", "[layout][regression]") {
+    class MeasureProbeNode final : public Node {
+    public:
+        MeasureProbeNode() : Node("measure-probe") {}
+
+        int measure_count = 0;
+
+    private:
+        void on_measure() override {
+            ++measure_count;
+            set_measured_size({20.0F, 20.0F}, true, true);
+        }
+    };
+
+    ui_test::ImGuiContext context({320.0F, 180.0F});
+    StackContainer container("resized-container");
+    container.set_size({px(120.0F), px(80.0F)});
+    auto& probe = container.add<MeasureProbeNode>();
+
+    const auto draw_frame = [&container] {
+        ImGui::NewFrame();
+        ImGui::Begin("container-resize-test");
+        container.draw();
+        ImGui::End();
+        ImGui::EndFrame();
+    };
+
+    draw_frame();
+    REQUIRE(probe.measure_count == 1);
+
+    container.set_size({px(220.0F), px(80.0F)});
+    draw_frame();
+    REQUIRE(probe.measure_count == 2);
+}
+
 TEST_CASE("container after decorations use final bounds above nested child windows") {
     ui_test::ImGuiContext context({320.0F, 220.0F});
 

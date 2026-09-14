@@ -155,6 +155,30 @@ TEST_CASE("image fit preserves the texture aspect ratio", "[ImageWidget][fit]") 
     const ImVec2 cover_size = draw(ImageFit::Cover);
     REQUIRE(cover_size.x == Catch::Approx(200.0F));
     REQUIRE(cover_size.y == Catch::Approx(100.0F));
+
+    ProbeTexture texture;
+    StackContainer container("responsive-image");
+    container.set_size({px(100.0F), px(100.0F)});
+    auto& image = container.add<ImageWidget>(&texture);
+    image.set_size({grow(), grow()});
+    image.set_fit(ImageFit::Contain);
+
+    const auto draw_container = [&container] {
+        ImGui::NewFrame();
+        ImGui::Begin("responsive-image-test");
+        container.draw();
+        ImGui::End();
+        ImGui::EndFrame();
+    };
+
+    draw_container();
+    REQUIRE(texture.requested_size.x == Catch::Approx(100.0F));
+    REQUIRE(texture.requested_size.y == Catch::Approx(50.0F));
+
+    container.set_size({px(200.0F), px(100.0F)});
+    draw_container();
+    REQUIRE(texture.requested_size.x == Catch::Approx(200.0F));
+    REQUIRE(texture.requested_size.y == Catch::Approx(100.0F));
 }
 
 TEST_CASE("dropdown opens from a nested container without extending its parent", "[dropdown][container][regression]") {

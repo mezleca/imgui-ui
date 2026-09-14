@@ -172,7 +172,7 @@ namespace ui {
             }
 
             m_layout.set_size(size);
-            invalidate_measure();
+            invalidate_measure_subtree();
             return *this;
         }
 
@@ -182,8 +182,13 @@ namespace ui {
                 return *this;
             }
 
+            const bool size_changed = m_layout.size_spec() != config.size;
             m_layout.set_config(config);
-            invalidate_measure();
+            if (size_changed) {
+                invalidate_measure_subtree();
+            } else {
+                invalidate_measure();
+            }
             return *this;
         }
 

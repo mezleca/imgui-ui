@@ -542,7 +542,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     profile.add<DemoColorPicker>(m_surface, m_color, "color", "color-picker");
 
     m_test_images = &profile.add<StackContainer>("demo-images", StackDirection::Horizontal);
-    m_test_images->set_size({grow(), fit()});
+    m_test_images->set_size({grow(), px(140.0F)});
     m_test_images->set_spacing(8.0F);
     m_test_images->set_scrollable(false, true);
 
@@ -744,7 +744,7 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
 
 ImageWidget& DemoScreen::add_test_image(Texture* texture) {
     auto& image = m_test_images->add<ImageWidget>(texture);
-    image.set_size({px(280.0F), px(140.0F)});
+    image.set_size({grow(), grow()});
     image.set_fit(image_fit());
     image.set_input_mode(InputMode::Target);
 

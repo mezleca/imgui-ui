@@ -80,24 +80,30 @@ bool Container::paint() {
     // child window so an animated position keeps the child and following content on the same pixel
     // instead of jumping when the animation reaches its final value.
     const ImVec2 position = ImGui::GetCursorScreenPos();
-    ImGui::SetCursorScreenPos({std::round(position.x), std::round(position.y)});
+    const ImVec2 child_position = {std::round(position.x), std::round(position.y)};
+    const Rect child_rect = Rect::from_position_size(child_position, layout().size());
+    ImGui::SetCursorScreenPos(child_position);
 
     const ImGuiID child_id = id().empty() ? ImGui::GetID(this) : ImGui::GetID(id().c_str());
     ImDrawList* parent_draw_list = ImGui::GetWindowDrawList();
+    draw_blur(
+        *parent_draw_list, child_rect, current_style.blur(), current_style.border_radius(), opacity() * current_style.alpha()
+    );
     const ImVec2 parent_clip_min = parent_draw_list->GetClipRectMin();
     const ImVec2 parent_clip_max = parent_draw_list->GetClipRectMax();
     ImGui::BeginChild(child_id, layout().size(), child_flags, window_flags);
 
-    const Rect child_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
-    set_layout_rect(child_rect);
-    set_visual_rect(child_rect);
+    const Rect resolved_child_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
+    set_layout_rect(resolved_child_rect);
+    set_visual_rect(resolved_child_rect);
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
     ImGui::PushClipRect(parent_clip_min, parent_clip_max, false);
     const float paint_opacity = std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
-    draw_box_shadow(*child_draw_list, child_rect, current_style.box_shadow(), current_style.border_radius(), paint_opacity);
-    draw_blur(*child_draw_list, child_rect, current_style.blur(), current_style.border_radius(), paint_opacity);
+    draw_box_shadow(
+        *child_draw_list, resolved_child_rect, current_style.box_shadow(), current_style.border_radius(), paint_opacity
+    );
     ImGui::PopClipRect();
-    draw_frame_surface(*child_draw_list, child_rect, current_style);
+    draw_frame_surface(*child_draw_list, resolved_child_rect, current_style);
 
     ImGui::PopStyleVar();
     return true;

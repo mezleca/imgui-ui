@@ -85,18 +85,7 @@ static constexpr const char* ALIGNMENT_NAMES[] = {
 
 static constexpr const char* STYLE_NAMES[] = {"all", "default", "hover", "active", "focus"};
 static constexpr const char* BORDER_STYLE_NAMES[] = {"solid", "dashed", "dotted"};
-
-static std::string_view size_mode_name(LayoutSizeMode mode) {
-    switch (mode) {
-        case LayoutSizeMode::Fixed:
-            return "fixed";
-        case LayoutSizeMode::Fit:
-            return "fit";
-        case LayoutSizeMode::Grow:
-            return "grow";
-    }
-    return "unknown";
-}
+static constexpr const char* SIZE_MODE_NAMES[] = {"fixed", "fit", "grow"};
 
 static constexpr float WINDOW_PADDING = 8.0F;
 static constexpr ImVec2 INSPECT_ICON_SIZE = {18.0F, 18.0F};
@@ -188,7 +177,7 @@ static void bring_debugger_to_front(ImGuiWindow& debugger_window) {
 template <typename... Args>
 static void draw_property_value(std::string_view label, std::string_view format, Args&&... args) {
     const std::string value = std::vformat(format, std::make_format_args(args...));
-    ImGui::Text("%.*s:", static_cast<int>(label.size()), label.data());
+    ImGui::TextDisabled("%.*s:", static_cast<int>(label.size()), label.data());
     ImGui::SameLine(0.0F, ITEM_SPACING);
     ImGui::TextDisabled("%s", value.c_str());
 }
@@ -257,7 +246,6 @@ static bool draw_labeled_input(std::string_view label, DrawInput draw_input, ImV
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, frame_background);
     ImGui::PushStyleColor(ImGuiCol_FrameBgActive, frame_background);
     ImGui::PushStyleColor(ImGuiCol_Border, transparent);
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, INPUT_PADDING);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0F);
     ImGui::AlignTextToFramePadding();
@@ -267,7 +255,7 @@ static bool draw_labeled_input(std::string_view label, DrawInput draw_input, ImV
     ImGui::SetNextItemWidth(input_width);
     const bool changed = draw_input();
     ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor(5);
+    ImGui::PopStyleColor(4);
     ImGui::PopID();
     return changed;
 }
@@ -943,16 +931,40 @@ void Debugger::render_layout_properties() {
     };
     draw_property_value("placement", "{}", request.in_flow ? "flow" : "explicit");
 
-    ImVec2 size = layout.size();
-    if (draw_number_input("size", &size.x, 2)) {
-        m_node_target->set_size({px(size.x), px(size.y)});
-    }
-
     const ImVec2 measured = layout.measured_size();
     const ImVec2 intrinsic = layout.intrinsic_size();
     const ImVec2 available = layout.available_size();
     const LayoutSize& size_spec = layout.size_spec();
-    draw_property_value("size rule", "{} / {}", size_mode_name(size_spec.width.mode), size_mode_name(size_spec.height.mode));
+    const auto update_size_axis = [this, &size_spec, &layout](bool width, LayoutSizeMode mode) {
+        LayoutSize size = size_spec;
+        LayoutAxis& axis = width ? size.width : size.height;
+        const float resolved = width ? layout.size().x : layout.size().y;
+
+        axis.mode = mode;
+        axis.value = mode == LayoutSizeMode::Fixed ? resolved : mode == LayoutSizeMode::Grow ? 1.0F : 0.0F;
+        m_node_target->set_size(size);
+    };
+
+    int width_mode = static_cast<int>(size_spec.width.mode);
+    if (draw_inline_combo("width rule", &width_mode, SIZE_MODE_NAMES, IM_ARRAYSIZE(SIZE_MODE_NAMES))) {
+        update_size_axis(true, static_cast<LayoutSizeMode>(width_mode));
+    }
+
+    int height_mode = static_cast<int>(size_spec.height.mode);
+    if (draw_inline_combo("height rule", &height_mode, SIZE_MODE_NAMES, IM_ARRAYSIZE(SIZE_MODE_NAMES))) {
+        update_size_axis(false, static_cast<LayoutSizeMode>(height_mode));
+    }
+
+    if (size_spec.width.mode == LayoutSizeMode::Fixed || size_spec.height.mode == LayoutSizeMode::Fixed) {
+        ImVec2 size = layout.size();
+        if (draw_number_input("fixed size", &size.x, 2)) {
+            LayoutSize updated = size_spec;
+            if (updated.width.mode == LayoutSizeMode::Fixed) updated.width = px(size.x);
+            if (updated.height.mode == LayoutSizeMode::Fixed) updated.height = px(size.y);
+            m_node_target->set_size(updated);
+        }
+    }
+
     draw_property_value("measured", "{:.1f} x {:.1f}", measured.x, measured.y);
     draw_property_value("intrinsic", "{:.1f} x {:.1f}", intrinsic.x, intrinsic.y);
     draw_property_value("available", "{:.1f} x {:.1f}", available.x, available.y);
@@ -1139,6 +1151,48 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
         ImVec2 margin = style.margin();
         if (draw_number_input("margin", &margin.x, 2, 0.1F, 0.0F, 128.0F)) {
             apply([margin](Style& target) { target.margin(margin); });
+        }
+
+        float scrollbar_size = style.scrollbar_size();
+        if (draw_number_input("scrollbar size", &scrollbar_size, 1, 0.1F, 0.0F, 64.0F)) {
+            apply([scrollbar_size](Style& target) { target.scrollbar_size(scrollbar_size); });
+        }
+
+        float scrollbar_rounding = style.scrollbar_rounding();
+        if (draw_number_input("scrollbar rounding", &scrollbar_rounding, 1, 0.1F, 0.0F, 64.0F)) {
+            apply([scrollbar_rounding](Style& target) { target.scrollbar_rounding(scrollbar_rounding); });
+        }
+
+        float scrollbar_grab_size = style.scrollbar_minimum_grab_size();
+        if (draw_number_input("scrollbar grab size", &scrollbar_grab_size, 1, 0.1F, 1.0F, 64.0F)) {
+            apply([scrollbar_grab_size](Style& target) { target.scrollbar_minimum_grab_size(scrollbar_grab_size); });
+        }
+
+        float scrollbar_grab_rounding = style.scrollbar_grab_rounding();
+        if (draw_number_input("scrollbar grab rounding", &scrollbar_grab_rounding, 1, 0.1F, 0.0F, 64.0F)) {
+            apply([scrollbar_grab_rounding](Style& target) { target.scrollbar_grab_rounding(scrollbar_grab_rounding); });
+        }
+
+        ImVec4 scrollbar_background = style.scrollbar_background_color().get();
+        if (draw_color_input("scrollbar background", scrollbar_background)) {
+            apply([scrollbar_background](Style& target) { target.scrollbar_background_color(ImColor{scrollbar_background}); });
+        }
+
+        ImVec4 scrollbar_grab = style.scrollbar_grab_color().get();
+        if (draw_color_input("scrollbar grab", scrollbar_grab)) {
+            apply([scrollbar_grab](Style& target) { target.scrollbar_grab_color(ImColor{scrollbar_grab}); });
+        }
+
+        ImVec4 scrollbar_grab_hovered = style.scrollbar_grab_hovered_color().get();
+        if (draw_color_input("scrollbar grab hovered", scrollbar_grab_hovered)) {
+            apply([scrollbar_grab_hovered](Style& target) {
+                target.scrollbar_grab_hovered_color(ImColor{scrollbar_grab_hovered});
+            });
+        }
+
+        ImVec4 scrollbar_grab_active = style.scrollbar_grab_active_color().get();
+        if (draw_color_input("scrollbar grab active", scrollbar_grab_active)) {
+            apply([scrollbar_grab_active](Style& target) { target.scrollbar_grab_active_color(ImColor{scrollbar_grab_active}); });
         }
 
         int blur = style.blur();
