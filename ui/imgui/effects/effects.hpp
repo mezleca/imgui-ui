@@ -23,6 +23,9 @@ namespace ui {
         void* user_data = nullptr;
     };
 
+    /// coordinates effect resources and deferred draw callbacks for one UI frame.
+    ///
+    /// backends register supported effects once; nodes enqueue work while painting and UI flushes it before frame rendering ends.
     class EffectRegistry {
     public:
         EffectRegistry() = default;

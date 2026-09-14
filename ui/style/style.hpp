@@ -9,8 +9,7 @@
 #include <utility>
 
 namespace ui {
-    // three box-blur passes sample at most 32 texels from either side.
-    inline constexpr int MAX_BLUR_STRENGTH = 32;
+    inline constexpr int MAX_BLUR_STRENGTH = 32;  // three box-blur passes sample at most 32 texels from either side.
 
     class StyledNode;
     class VisualState;
@@ -42,6 +41,9 @@ namespace ui {
         COUNT
     };
 
+    /// stores target visual values for one interaction state and optional transitions toward them.
+    ///
+    /// StyledNode resolves these values into a ComputedStyle each frame before measuring and painting.
     class Style : public ComputedStyle {
         template <typename Field>
         Style& set_property(Field ComputedStyle::* member, Field value) {

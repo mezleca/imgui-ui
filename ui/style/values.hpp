@@ -47,6 +47,7 @@ namespace ui {
         bool changed = false;
     };
 
+    /// stores one style value together with an optional transition toward a target value.
     template <typename T>
     struct Value {
         Value() = default;
@@ -175,10 +176,12 @@ namespace ui {
                 return step.changed;
             }
             const BoxShadow& start = transition_start();
+
             value.offset = {
                 std::lerp(start.offset.x, target.value.offset.x, step.progress),
                 std::lerp(start.offset.y, target.value.offset.y, step.progress),
             };
+
             value.blur = std::lerp(start.blur, target.value.blur, step.progress);
             value.spread = std::lerp(start.spread, target.value.spread, step.progress);
             value.color.Value = {
@@ -187,6 +190,7 @@ namespace ui {
                 std::lerp(start.color.Value.z, target.value.color.Value.z, step.progress),
                 std::lerp(start.color.Value.w, target.value.color.Value.w, step.progress),
             };
+
             return step.changed;
         }
     };
@@ -200,11 +204,13 @@ namespace ui {
                 value = target.value;
                 return step.changed;
             }
+
             const ImVec2& start = transition_start();
             value = {
                 std::lerp(start.x, target.value.x, step.progress),
                 std::lerp(start.y, target.value.y, step.progress),
             };
+
             return step.changed;
         }
     };
@@ -218,6 +224,7 @@ namespace ui {
                 value = target.value;
                 return step.changed;
             }
+
             value = static_cast<int>(
                 std::lround(std::lerp(static_cast<float>(transition_start()), static_cast<float>(target.value), step.progress))
             );

@@ -17,7 +17,6 @@ namespace ui {
         Cover,
     };
 
-    /// images are passive until input mode target is enabled.
     class ImageWidget : public DrawListWidget {
     public:
         explicit ImageWidget(Texture* texture = nullptr);

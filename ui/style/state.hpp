@@ -39,6 +39,7 @@ namespace ui {
         bool* layout_dirty = nullptr;
     };
 
+    /// tracks animated style property overrides layered on top of a StyledNode's active style.
     class VisualState {
     public:
         VisualState();

@@ -23,6 +23,7 @@ namespace ui {
         virtual void release_context(ImGuiContext* context) = 0;
     };
 
+    /// converts application file paths or encoded data into Texture instances for a Runtime registry.
     class TextureLoader {
     public:
         virtual ~TextureLoader() = default;
@@ -35,6 +36,7 @@ namespace ui {
     // add() stores one decoded texture per id. drawing calls get() so each context creates its gpu object only when the
     // texture becomes visible. runtime releases that object before destroying a context and keeps the decoded source for
     // later contexts.
+    /// provides Runtime-owned Texture resources keyed by application-defined identifiers.
     class TextureRegistry final : public AssetRegistry<Texture> {
     public:
         explicit TextureRegistry(std::unique_ptr<TextureLoader> loader = nullptr);

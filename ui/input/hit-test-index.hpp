@@ -15,6 +15,7 @@ namespace ui {
 
     using InputCallback = std::function<void(UiEvent&)>;
 
+    /// stores frame-local hit regions in paint order for InputRouter target and blocker queries.
     class HitTestIndex {
     public:
         static constexpr uint32_t no_callback = std::numeric_limits<uint32_t>::max();

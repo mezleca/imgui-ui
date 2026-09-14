@@ -24,6 +24,8 @@ static AnimationValue read_style_property(const ComputedStyle& style, StyleAnima
             return style.border_color().value;
         case StyleAnimationProperty::BackgroundColor:
             return style.background_color().value;
+        case StyleAnimationProperty::Count:
+            return 0.0F;
     }
 
     return 0.0F;
@@ -58,21 +60,20 @@ static void apply_style_property(Style& style, StyleAnimationProperty property, 
         case StyleAnimationProperty::BackgroundColor:
             style.background_color(std::get<ImColor>(value));
             return;
+        case StyleAnimationProperty::Count:
+            return;
     }
 }
 
 static AnimationValue read_style_animation_slot(void* context) {
-    // the generic animator reads the slot value instead of touching the configured style directly.
     return static_cast<StyleAnimationSlot*>(context)->current;
 }
 
 static AnimationValue read_style_animation_slot_base(void* context) {
-    // release tracks use the base captured from the active style before animation advances.
     return static_cast<StyleAnimationSlot*>(context)->base;
 }
 
 static void write_style_animation_slot(void* context, const AnimationValue& value) {
-    // writing a track marks the slot as overridden and invalidates layout only for inset properties.
     auto& slot = *static_cast<StyleAnimationSlot*>(context);
     slot.current = value;
     slot.override = value;
@@ -80,7 +81,6 @@ static void write_style_animation_slot(void* context, const AnimationValue& valu
 }
 
 static void release_style_animation_slot(void* context) {
-    // a completed release returns the slot to its captured base and removes the override marker.
     auto& slot = *static_cast<StyleAnimationSlot*>(context);
     slot.current = slot.base;
     slot.override.reset();
@@ -105,7 +105,6 @@ VisualState::VisualState() {
 
 StyleAnimationSequence VisualState::animate() {
     m_style_animator.cancel();
-    // preserve overrides from the canceled sequence so its visible value becomes the next sequence's interpolation start.
     m_has_presentation_style = has_animation_overrides();
     return StyleAnimationSequence{*this, m_style_animator.animate()};
 }
@@ -118,9 +117,11 @@ void VisualState::cancel_animations() {
 
     m_style_animator.cancel();
     m_animator.cancel();
+
     for (StyleAnimationSlot& slot : slots) {
         slot.override.reset();
     }
+
     m_has_presentation_style = false;
 
     // canceled inset tracks may have changed measured bounds and must trigger one layout pass.

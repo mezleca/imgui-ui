@@ -7,11 +7,9 @@ namespace ui {
     public:
         explicit StackContainer(std::string id, StackDirection direction = StackDirection::Vertical);
 
-        /// changes the main axis used to arrange visible children.
         StackContainer& set_direction(StackDirection direction);
         StackContainer& set_content_alignment(Anchor alignment);
         StackContainer& set_content_alignment(ImVec2 alignment);
-        /// sets the gap between visible children. negative values become zero.
         StackContainer& set_spacing(float spacing);
 
     protected:

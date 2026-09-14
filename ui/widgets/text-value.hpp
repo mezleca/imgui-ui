@@ -19,6 +19,7 @@ namespace ui {
     concept GenericNumber = std::integral<T> || std::floating_point<T>;
 
     /// stores text or a numeric value and lazily caches its imgui font metrics.
+    /// stores a display value as text, number, or callable text provider and caches its measured ImGui size.
     class GenericValue {
     public:
         /// stores every supported scalar type in one stable representation.

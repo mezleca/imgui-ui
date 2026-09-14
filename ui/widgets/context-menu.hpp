@@ -37,8 +37,6 @@ namespace ui {
 
         ContextMenuWidget& set_items(ContextMenuItems items);
         ContextMenuWidget& set_submenu_icon(Texture* icon);
-
-        /// waits this many seconds after opening before hover can close this menu or its submenus.
         ContextMenuWidget& set_hover_close_delay(float seconds);
 
         void open();

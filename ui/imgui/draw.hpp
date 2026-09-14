@@ -33,6 +33,7 @@ namespace ui {
         Arc,
     };
 
+    /// describes one straight or rounded section of a border path emitted for custom drawing.
     struct BorderPathSegment {
         BorderPathSegmentType type = BorderPathSegmentType::Line;
         ImVec2 start{};
@@ -44,6 +45,7 @@ namespace ui {
         uint8_t sides = BORDER_NONE;
     };
 
+    /// groups the ordered segments and corners that compose one bordered rectangle.
     struct BorderPath {
         // each corner is split between its adjacent sides so partial borders stop at the corner midpoint.
         std::array<BorderPathSegment, 12> segments;

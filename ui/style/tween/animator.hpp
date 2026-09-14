@@ -1,6 +1,6 @@
 #pragma once
 
-#include "transition.hpp"
+#include "../../transition.hpp"
 
 #include <concepts>
 #include <functional>
@@ -81,7 +81,6 @@ namespace ui {
         float m_end = 0.0F;
     };
 
-    /// owns timed value tracks and invokes their writes as callers advance elapsed frame time.
     class Animator final {
     public:
         Animator();

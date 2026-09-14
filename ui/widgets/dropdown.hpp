@@ -22,7 +22,6 @@ namespace ui {
         bool operator==(const DropdownOption&) const = default;
     };
 
-    /// exposes the label, trigger and popup body for styling and inspection.
     class DropdownWidget : public Widget {
     public:
         DropdownWidget(UI& ui, std::string& value, std::vector<DropdownOption> options, std::string id = {});

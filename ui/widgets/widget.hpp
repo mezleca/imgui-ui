@@ -55,6 +55,7 @@ namespace ui {
         virtual void on_click(UiEvent&) {}
     };
 
+    /// paints a widget directly into ImGui's draw list instead of emitting a native ImGui control.
     class DrawListWidget : public Widget {
     public:
         explicit DrawListWidget(

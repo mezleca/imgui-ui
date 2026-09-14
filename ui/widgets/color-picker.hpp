@@ -10,7 +10,6 @@ namespace ui {
     class TextWidget;
     class UI;
 
-    /// edits an rgba value through a preview and a compact hsv popup.
     class ColorPickerWidget : public StackContainer {
     public:
         ColorPickerWidget(UI& ui, ImColor& color, std::string label = {}, std::string id = {});

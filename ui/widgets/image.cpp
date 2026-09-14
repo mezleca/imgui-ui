@@ -1,5 +1,4 @@
 #include "image.hpp"
-#include "../imgui/draw.hpp"
 #include "../resources/texture-registry.hpp"
 
 #include <algorithm>

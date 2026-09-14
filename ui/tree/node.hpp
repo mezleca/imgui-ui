@@ -36,6 +36,8 @@ namespace ui {
         Blocker,
     };
 
+    /// Node coordinates lifecycle, layout, rendering, input registration, and propagation of the owning surface services to
+    /// descendants.
     class Node {
     public:
         explicit Node(std::string id = {});

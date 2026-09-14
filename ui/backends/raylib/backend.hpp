@@ -4,6 +4,7 @@
 
 namespace ui {
     class UI;
+
     class RaylibBackend final : public Backend {
     public:
         explicit RaylibBackend(BackendConfig config);

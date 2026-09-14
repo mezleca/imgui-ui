@@ -9,6 +9,10 @@ namespace ui {
     class Texture;
     class ImageWidget;
 
+    /// edits a bound UTF-8 string through ImGui while exposing it as one retained, stylable input node.
+    ///
+    /// the widget owns focus routing and an optional decorative icon; ImGui handles text editing, selection, clipboard, and IME
+    /// input.
     class TextInputWidget : public StackContainer {
     public:
         TextInputWidget(UI& ui, std::string& value, std::string label = {});

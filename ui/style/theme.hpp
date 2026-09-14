@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 namespace ui {
+    /// groups runtime theming colors, control defaults, and ImGui metrics shared by all surfaces.
     struct Theme {
         struct Controls {
             float rounding = 4.0F;

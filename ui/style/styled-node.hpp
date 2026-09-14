@@ -11,6 +11,7 @@
 #include <utility>
 
 namespace ui {
+    /// extended Node with style slots, animated computed values, and custom paint hooks.
     class StyledNode : public Node {
     public:
         explicit StyledNode(std::string id = {}, std::string_view type_name = "StyledNode");

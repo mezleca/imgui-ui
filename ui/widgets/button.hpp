@@ -9,6 +9,7 @@
 
 namespace ui {
     class UI;
+
     class ButtonWidget : public DrawListWidget {
     public:
         ButtonWidget(UI& ui, std::string text, LayoutSize size = {px(100.0F), px(60.0F)});

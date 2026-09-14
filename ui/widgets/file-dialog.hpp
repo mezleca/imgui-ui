@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../file-dialog.hpp"
+#include "../file-dialog/file-dialog.hpp"
 #include "../layout/stack-container.hpp"
 
 #include <string>

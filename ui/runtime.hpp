@@ -9,13 +9,16 @@
 
 namespace ui {
     class UI;
+
     struct RuntimeConfig {
         Theme theme{};
         std::filesystem::path performance_directory;
         std::unique_ptr<TextureLoader> texture_loader;
     };
 
-    /// assets and theme shared by independent ui surfaces.
+    /// owns assets and visual defaults shared by every UI surface created from it.
+    ///
+    /// Runtime outlives its surfaces so fonts and textures can safely cache data for each surface's ImGui context.
     class Runtime {
     public:
         explicit Runtime(RuntimeConfig config = {});

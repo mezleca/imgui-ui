@@ -35,17 +35,18 @@ namespace ui {
         Error,
     };
 
+    /// carries the selected paths or diagnostic text returned by a file dialog request.
     struct FileDialogResult {
         FileDialogStatus status = FileDialogStatus::Unavailable;
         std::vector<std::filesystem::path> paths;
         std::string error;
 
+        /// returns true when the backend reports that the dialog completed successfully.
         [[nodiscard]] bool accepted() const {
             return status == FileDialogStatus::Accepted;
         }
     };
 
-    /// defines NFD operations so applications can replace its implementation.
     class FileDialogBackend {
     public:
         virtual ~FileDialogBackend() = default;
@@ -70,7 +71,6 @@ namespace ui {
             return show(FileDialogOperation::SelectFolders, options);
         }
 
-        /// receives every request so custom backends need one virtual implementation.
         virtual FileDialogResult show(FileDialogOperation operation, const FileDialogOptions& options) = 0;
     };
 

@@ -39,6 +39,9 @@ namespace ui {
         int colors = 0;
     };
 
+    /// holds fully resolved visual values used by layout and paint during one frame.
+    ///
+    /// unlike Style, this type contains no transition targets and can be passed directly to draw helpers.
     class ComputedStyle {
     public:
         ComputedStyle();

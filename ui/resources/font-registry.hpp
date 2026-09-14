@@ -10,10 +10,12 @@
 #include <unordered_map>
 
 namespace ui {
+    /// stores the ImGui font instances materialized from one Font for a single ImGui context.
     struct ContextFonts {
         std::unordered_map<int, ImFont*> fonts;
     };
 
+    /// stores one font source and creates size-specific ImGui fonts only after a UI context needs them.
     class Font final {
     public:
         Font(std::filesystem::path location, ImFontConfig cfg);
@@ -29,6 +31,7 @@ namespace ui {
         ImFontConfig m_config;
     };
 
+    /// provides Runtime-owned Font resources keyed by application-defined identifiers.
     class FontRegistry final : public AssetRegistry<Font> {
     public:
         Font* add(std::string id, std::filesystem::path location);

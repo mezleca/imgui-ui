@@ -1,7 +1,7 @@
 #pragma once
 
 #include "backends/backend.hpp"
-#include "file-dialog.hpp"
+#include "file-dialog/file-dialog.hpp"
 #include "style/theme.hpp"
 #include "diagnostics/profiler.hpp"
 #include "imgui/effects/effects.hpp"
@@ -26,6 +26,7 @@ namespace ui {
         /// replaces the default NFD file dialog backend for this surface.
         std::unique_ptr<FileDialogBackend> file_dialog_backend;
     };
+
     /// owns one imgui surface, its backend, input router, retained tree, and optional debugger.
     class UI {
     public:

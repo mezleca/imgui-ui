@@ -18,6 +18,7 @@
 #include <utility>
 
 using namespace ui;
+
 struct RaylibKeyMapping {
     int raylib_key;
     ImGuiKey imgui_key;

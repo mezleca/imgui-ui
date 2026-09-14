@@ -1,4 +1,4 @@
-#include "../file-dialog.hpp"
+#include "file-dialog.hpp"
 #include "../ui.hpp"
 
 #include <nfd.hpp>
