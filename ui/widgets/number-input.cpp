@@ -13,7 +13,7 @@ void NumberInputWidget::initialize() {
 }
 
 void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
-    const TransitionSpec transition{theme.widgets.input_transition_duration, easing::out_quad};
+    const TransitionSpec transition{0.25F, easing::out_quad};
     m_thumb_color = theme.controls.mark_color;
     m_thumb_size = theme.controls.thumb_size;
 

@@ -22,7 +22,7 @@ FileDialogWidget::FileDialogWidget(UI& ui, std::string label, std::string id)
             .padding({14.0F, 18.0F})
             .background_color(theme.background_color)
             .border(BORDER_ALL)
-            .border_radius(theme.box_rounding)
+            .border_radius(4.0F)
             .border_style(BorderStyle::Dashed);
     });
     configure_style(StyleType::HOVER, [&theme](Style& style) {

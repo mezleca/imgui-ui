@@ -53,9 +53,9 @@ Font* FontRegistry::add(std::string id, std::filesystem::path location, ImFontCo
 }
 
 Font* FontRegistry::find(std::string_view id) {
-    return find_asset<Font>(id);
+    return find_asset(id);
 }
 
 const Font* FontRegistry::find(std::string_view id) const {
-    return find_asset<Font>(id);
+    return find_asset(id);
 }

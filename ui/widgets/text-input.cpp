@@ -76,18 +76,17 @@ void TextInputWidget::on_event(UiEvent& event) {
 }
 
 void TextInputWidget::apply_theme_defaults(const Theme& theme) {
-    const ImVec2 icon_size = theme.widgets.text_input_icon_size;
-    const TransitionSpec transition{theme.widgets.input_transition_duration, easing::out_quad};
-    set_spacing(theme.widgets.text_input_icon_spacing);
-    m_icon_node->set_size({px(icon_size.x), px(icon_size.y)});
-    m_field_node->set_size({grow(), px(icon_size.y)});
+    const TransitionSpec transition{0.25F, easing::out_quad};
+    set_spacing(10.0F);
+    m_icon_node->set_size({px(18.0F), px(18.0F)});
+    m_field_node->set_size({grow(), px(18.0F)});
 
     configure_all_styles([&theme, transition](Style& style) {
         style.border_color(theme.controls.border_color, transition)
-            .padding(theme.widgets.text_input_padding)
+            .padding({12.0F, 14.0F})
             .background_color(theme.controls.background_color, transition)
             .border(BORDER_ALL)
-            .border_radius(theme.box_rounding)
+            .border_radius(4.0F)
             .border_thickness(theme.controls.border_thickness);
     });
 

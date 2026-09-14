@@ -3,6 +3,7 @@
 #include "../input/event.hpp"
 #include "../layout/geometry.hpp"
 
+#include <concepts>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -15,6 +16,7 @@ namespace ui {
     class InputRouter;
     class HitTestIndex;
     class Profiler;
+    class UI;
     struct Theme;
 
     struct InputState {
@@ -48,7 +50,14 @@ namespace ui {
         /// constructs and owns a child.
         template <typename T, typename... Args>
         T& add(Args&&... args) {
-            auto child = std::make_unique<T>(std::forward<Args>(args)...);
+            std::unique_ptr<T> child;
+            if constexpr (std::constructible_from<T, Args...>) {
+                child = std::make_unique<T>(std::forward<Args>(args)...);
+            } else {
+                static_assert(std::constructible_from<T, UI&, Args...>);
+                child = std::make_unique<T>(surface(), std::forward<Args>(args)...);
+            }
+
             T* result = child.get();
             if (!attach(std::move(child))) {
                 throw std::logic_error("failed to add node child");
@@ -258,9 +267,12 @@ namespace ui {
         void set_input_state(InputState state);
 
     private:
+        friend class UI;
         friend class InputRouter;
         friend class HitTestIndex;
 
+        UI& surface() const;
+        void set_surface(UI* surface);
         void measure_tree();
         void detach_input_router(InputRouter& router);
         void clear_input_state();
@@ -277,6 +289,7 @@ namespace ui {
         bool m_enabled = true;
         bool m_measure_dirty = true;
         NodeLayout m_layout;
+        UI* m_surface = nullptr;
         InputRouter* m_input_router = nullptr;
         Profiler* m_profiler = nullptr;
         Rect m_input_area{};

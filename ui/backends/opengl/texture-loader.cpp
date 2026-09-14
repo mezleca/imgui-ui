@@ -170,6 +170,9 @@ public:
         plutovg_surface_destroy(m_surface);
     }
 
+    OpenGLRasterTexture(const OpenGLRasterTexture&) = delete;
+    OpenGLRasterTexture& operator=(const OpenGLRasterTexture&) = delete;
+
     ImVec2 size() const override {
         return {
             static_cast<float>(plutovg_surface_get_width(m_surface)),

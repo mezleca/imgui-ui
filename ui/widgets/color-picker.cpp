@@ -160,12 +160,10 @@ public:
 
 private:
     void apply_theme_defaults(const Theme& theme) override {
-        const ImVec2 padding = {theme.content_padding, theme.content_padding};
+        const ImVec2 padding = {12.0F, 12.0F};
         const float bar_size = std::max(1.0F, theme.controls.thumb_size);
 
-        set_size(
-            {px(theme.widgets.color_picker_selector_size + theme.metrics.item_spacing.x + bar_size + padding.x * 2.0F), fit()}
-        );
+        set_size({px(196.0F + theme.metrics.item_spacing.x + bar_size + padding.x * 2.0F), fit()});
 
         configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
@@ -174,7 +172,7 @@ private:
                 .border_color(theme.controls.border_color)
                 .border_radius(theme.metrics.popup_rounding)
                 .border_thickness(theme.controls.border_thickness)
-                .padding({theme.content_padding, theme.content_padding});
+                .padding({12.0F, 12.0F});
         });
     }
 

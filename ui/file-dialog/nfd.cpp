@@ -29,6 +29,9 @@ public:
         if (m_initialized) NFD::Quit();
     }
 
+    NfdSession(const NfdSession&) = delete;
+    NfdSession& operator=(const NfdSession&) = delete;
+
     [[nodiscard]] bool initialized() const {
         return m_initialized;
     }

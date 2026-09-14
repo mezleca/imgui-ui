@@ -61,7 +61,7 @@ UI::UI(Runtime& runtime, UIConfig config)
       m_profiler(runtime.performance_directory()) {
     initialize();
 
-    if (m_ready && config.enable_debugger) {
+    if (config.enable_debugger) {
         m_debugger = &m_surface_layout->add<Debugger>(*this);
     }
 }
@@ -86,18 +86,12 @@ UI::~UI() {
 void UI::set_theme(Theme theme) {
     m_runtime.set_theme(theme);
 
-    if (!m_ready || m_context == nullptr) {
-        return;
-    }
-
     const ImGuiContextScope scope(m_context);
 
     apply_theme_metrics();
     apply_theme_colors();
 
-    if (m_root != nullptr) {
-        m_root->apply_theme(m_runtime.theme());
-    }
+    m_root->apply_theme(m_runtime.theme());
 }
 
 ImFont* UI::resolve_font(Font* font, int size) const {
@@ -107,16 +101,22 @@ ImFont* UI::resolve_font(Font* font, int size) const {
         }
     }
 
-    return ImGui::GetCurrentContext() == nullptr ? nullptr : ImGui::GetFont();
+    return ImGui::GetFont();
 }
 
 ImFont* UI::get_font(std::string_view id, int size) const {
-    if (m_context == nullptr) {
-        return nullptr;
-    }
-
     const ImGuiContextScope scope(m_context);
     return resolve_font(m_runtime.fonts().find(id), size);
+}
+
+ImFont* UI::get_primary_font(int size) const {
+    const ImGuiContextScope scope(m_context);
+    return resolve_font(m_primary_font, size);
+}
+
+ImFont* UI::get_secondary_font(int size) const {
+    const ImGuiContextScope scope(m_context);
+    return resolve_font(m_secondary_font, size);
 }
 
 void UI::initialize() {
@@ -146,9 +146,8 @@ void UI::initialize() {
         throw std::runtime_error("failed to initialize effects");
     }
 
-    m_ready = true;
-
     m_root = std::make_unique<LayerContainer>("ui-surface", LayerMode::Window);
+    m_root->set_surface(this);
     m_root->set_input_router(&m_input_router);
     m_root->set_profiler(&m_profiler);
 
@@ -236,10 +235,6 @@ void UI::apply_theme_colors() {
 }
 
 bool UI::dispatch(UiEvent& event) {
-    if (!m_ready) {
-        return false;
-    }
-
     const ImGuiContextScope scope(m_context);
     if (m_debugger != nullptr && m_debugger->handle_input(event)) {
         return true;
@@ -265,10 +260,6 @@ Node* UI::inspect_input_target(ImVec2 position, EventType type) const {
 }
 
 void UI::begin_frame() {
-    if (!m_ready) {
-        return;
-    }
-
     m_previous_context = ImGui::GetCurrentContext();
     ImGui::SetCurrentContext(m_context);
 
@@ -286,22 +277,14 @@ void UI::begin_frame() {
 }
 
 void UI::update(float dt) {
-    if (m_ready) {
-        m_content_root->update(dt);
-    }
+    m_content_root->update(dt);
 }
 
 void UI::draw() {
-    if (m_ready) {
-        m_content_root->draw();
-    }
+    m_content_root->draw();
 }
 
 void UI::end_frame() {
-    if (!m_ready) {
-        return;
-    }
-
     m_backend->set_mouse_cursor(ImGui::GetMouseCursor());
 
     ImGui::Render();

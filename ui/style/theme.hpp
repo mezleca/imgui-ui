@@ -33,31 +33,6 @@ namespace ui {
             bool anti_aliased_lines_use_tex = false;
         } metrics;
 
-        struct Widgets {
-            ImVec2 dropdown_item_padding = {10.0F, 4.0F};
-            ImVec2 dropdown_arrow_size = {8.0F, 4.0F};
-            float dropdown_popup_gap = 4.0F;
-            float dropdown_transition_duration = 0.06F;
-
-            float context_menu_width = 184.0F;
-            float context_menu_item_height = 28.0F;
-            ImVec2 context_menu_padding = {4.0F, 4.0F};
-            ImVec2 context_menu_item_padding = {8.0F, 4.0F};
-            float context_menu_gap = 6.0F;
-            float context_menu_icon_size = 13.0F;
-
-            ImVec2 text_input_padding = {12.0F, 14.0F};
-            ImVec2 text_input_icon_size = {18.0F, 18.0F};
-            float text_input_icon_spacing = 10.0F;
-            float input_transition_duration = 0.25F;
-
-            float color_picker_selector_size = 196.0F;
-        } widgets;
-
-        float content_padding = 12.0F;
-        float box_rounding = 4.0F;
-        float checkbox_rounding = 2.0F;
-
         ImVec4 accent_color = {0.26F, 0.59F, 0.98F, 1.0F};
         ImVec4 accent_hover_color = {0.42F, 0.70F, 1.0F, 1.0F};
         ImVec4 background_color = {0.06F, 0.065F, 0.085F, 0.94F};

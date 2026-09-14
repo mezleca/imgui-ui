@@ -22,7 +22,7 @@ PaintSlot& PaintSlot::set_opacity(float opacity) {
 }
 
 void PaintSlot::paint(ImDrawList& draw_list, Rect rect, Rect content_rect) {
-    if (m_opacity <= 0.0F || !rect.valid() || ImGui::GetCurrentContext() == nullptr) {
+    if (m_opacity <= 0.0F || !rect.valid()) {
         return;
     }
 

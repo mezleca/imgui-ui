@@ -26,7 +26,10 @@ namespace ui {
     /// focus, pointer capture, and pressed buttons are surface-wide state.
     class InputRouter {
     public:
+        InputRouter() = default;
         ~InputRouter();
+        InputRouter(const InputRouter&) = delete;
+        InputRouter& operator=(const InputRouter&) = delete;
 
         /// starts a frame by clearing entries, callbacks, statistics, and stale input state.
         void begin_frame();

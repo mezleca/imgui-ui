@@ -63,8 +63,6 @@ TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regre
         .swap_interval = 0,
     });
     ui::UI surface(runtime, {.backend = std::move(backend)});
-    REQUIRE(surface.ready());
-
     auto& panel = surface.root().add<ui::Container>("shadow-panel");
     panel.set_layout({
         .size = {ui::px(40.0F), ui::px(40.0F)},
@@ -120,8 +118,6 @@ TEST_CASE("gif texture data decodes into an opengl texture", "[texture][gif]") {
         .swap_interval = 0,
     });
     ui::UI surface(runtime, {.backend = std::move(backend)});
-    REQUIRE(surface.ready());
-
     ui::Texture* texture = runtime.textures().add("gif", gif);
     REQUIRE(texture != nullptr);
     REQUIRE(texture->size().x == 1.0F);
@@ -141,11 +137,10 @@ TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regr
         .visible = false,
     });
     ui::UI surface(runtime, {.backend = std::move(backend)});
-    REQUIRE(surface.ready());
-    ui_test::prepare_surface(surface);
+    const auto surface_context = ui_test::prepare_surface(surface);
 
     int click_count = 0;
-    auto& button = surface.root().add<ui::ButtonWidget>(surface, "test button", ui::LayoutSize{ui::px(160.0F), ui::px(36.0F)});
+    auto& button = surface.root().add<ui::ButtonWidget>("test button", ui::LayoutSize{ui::px(160.0F), ui::px(36.0F)});
     button.set_on_event([&click_count](ui::UiEvent& event) {
         if (event.type == ui::EventType::Click) {
             ++click_count;
@@ -192,8 +187,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
         .visible = false,
     });
     ui::UI surface(runtime, {.backend = std::move(backend)});
-    REQUIRE(surface.ready());
-    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
 
     auto& modal_layer = surface.root().add<ui::LayerContainer>("modal-layer");
     modal_layer.set_input_mode(ui::InputMode::Blocker);
@@ -211,7 +205,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
     modal.set_spacing(10.0F);
 
     int value = 5;
-    auto& input = modal.add<ui::NumberInputWidget>(surface, value, "modal-blur");
+    auto& input = modal.add<ui::NumberInputWidget>(value, "modal-blur");
     input.set_label("backdrop blur").set_range(0, 32).set_size({ui::px(180.0F), ui::px(48.0F)});
     input.set_on_change([&modal_layer, &value] {
         modal_layer.configure_all_styles([&value](ui::Style& style) { style.blur(value); });
@@ -293,10 +287,9 @@ TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regres
                      .enable_debugger = true,
                  }
     );
-    REQUIRE(surface.ready());
     REQUIRE(surface.debugger() != nullptr);
     surface.debugger()->set_open(false);
-    ui_test::prepare_surface(surface);
+    const auto surface_context = ui_test::prepare_surface(surface);
 
     const SDL_WindowID window_id = surface.backend().window_id();
     SDL_Event shift_down{};
@@ -325,13 +318,12 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
         .visible = false,
     });
     ui::UI surface(runtime, {.backend = std::move(backend)});
-    REQUIRE(surface.ready());
-    ui_test::prepare_surface(surface);
+    const auto surface_context = ui_test::prepare_surface(surface);
 
     bool content_value = false;
     bool overlay_value = false;
     std::string dropdown_value = "one";
-    auto& content_checkbox = surface.root().add<ui::CheckboxWidget>(surface, content_value, "content");
+    auto& content_checkbox = surface.root().add<ui::CheckboxWidget>(content_value, "content");
     content_checkbox.set_layout({
         .size = {ui::fit(), ui::fit()},
         .placement = {.offset = {20.0F, 20.0F}},
@@ -349,7 +341,7 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
 
     auto& blocker = surface.root().add<ui::LayerContainer>("blocker", ui::LayerMode::Inline);
     blocker.set_input_mode(ui::InputMode::Blocker);
-    auto& overlay_checkbox = blocker.add<ui::CheckboxWidget>(surface, overlay_value, "overlay");
+    auto& overlay_checkbox = blocker.add<ui::CheckboxWidget>(overlay_value, "overlay");
     overlay_checkbox.set_layout({
         .size = {ui::fit(), ui::fit()},
         .placement = {.offset = {20.0F, 130.0F}},
@@ -412,8 +404,7 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
         .visible = false,
     });
     ui::UI surface(runtime, {.backend = std::move(backend)});
-    REQUIRE(surface.ready());
-    ui_test::prepare_surface(surface);
+    const auto surface_context = ui_test::prepare_surface(surface);
 
     std::string value = "one";
     int changes = 0;

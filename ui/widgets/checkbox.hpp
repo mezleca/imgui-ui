@@ -17,7 +17,7 @@ namespace ui {
         Radio,
     };
 
-    class CheckboxWidget final : public Widget {
+    class CheckboxWidget : public Widget {
     public:
         CheckboxWidget(UI& ui, bool& value, std::string label, std::string id = {});
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ui/backends/backend.hpp>
+#include <ui/imgui/context-scope.hpp>
 #include <ui/layout/geometry.hpp>
 #include <ui/tree/node.hpp>
 #include <ui/ui.hpp>
@@ -75,14 +76,26 @@ namespace ui_test {
         ::ImGuiContext* m_context = nullptr;
     };
 
-    inline void prepare_surface(ui::UI& surface) {
-        ImGui::SetCurrentContext(surface.imgui_context());
-        ImGuiContext::build_fonts();
+    class SurfaceContext {
+    public:
+        explicit SurfaceContext(ui::UI& surface, ImVec2 display_size) : m_scope(surface.imgui_context()) {
+            ImGui::GetIO().DisplaySize = display_size;
+            ImGuiContext::build_fonts();
+        }
+
+        SurfaceContext(const SurfaceContext&) = delete;
+        SurfaceContext& operator=(const SurfaceContext&) = delete;
+
+    private:
+        ui::ImGuiContextScope m_scope;
+    };
+
+    [[nodiscard]] inline SurfaceContext prepare_surface(ui::UI& surface) {
+        return SurfaceContext(surface, surface.backend().display_size());
     }
 
-    inline void prepare_surface(ui::UI& surface, ImVec2 display_size) {
-        prepare_surface(surface);
-        ImGui::GetIO().DisplaySize = display_size;
+    [[nodiscard]] inline SurfaceContext prepare_surface(ui::UI& surface, ImVec2 display_size) {
+        return SurfaceContext(surface, display_size);
     }
 
     inline void draw_surface(ui::UI& surface, std::optional<float> delta_time = std::nullopt) {

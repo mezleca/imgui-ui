@@ -36,15 +36,25 @@ static constexpr std::string_view DEMO_INLINE_ICON_SVG = R"(
         <circle cx="12" cy="12" r="8" stroke="white" stroke-width="2"/>
         <path d="M12 8V12L15 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
     </svg>)";
+enum class DemoThemeVariant {
+    Default,
+    Pastel,
+    Material,
+};
+
+static DemoThemeVariant s_demo_theme_variant = DemoThemeVariant::Default;
+
+static DemoThemeVariant demo_theme_variant(std::string_view variant) {
+    if (variant == "pastel") return DemoThemeVariant::Pastel;
+    if (variant == "material") return DemoThemeVariant::Material;
+    return DemoThemeVariant::Default;
+}
 
 static Theme make_demo_theme(std::string_view variant) {
     Theme theme{};
 
     if (variant == "pastel") {
-        theme.content_padding = 15.0F;
-        theme.box_rounding = 6.0F;
         theme.controls.rounding = 10.0F;
-        theme.checkbox_rounding = 6.0F;
         theme.controls.border_thickness = 1.0F;
         theme.controls.thumb_size = 14.0F;
         theme.accent_color = {226.0F / 255.0F, 180.0F / 255.0F, 189.0F / 255.0F, 1.0F};
@@ -66,23 +76,8 @@ static Theme make_demo_theme(std::string_view variant) {
         theme.metrics.popup_rounding = 10.0F;
         theme.metrics.tab_rounding = 8.0F;
         theme.metrics.item_spacing = {12.0F, 10.0F};
-        theme.widgets.dropdown_item_padding = {12.0F, 7.0F};
-        theme.widgets.dropdown_arrow_size = {10.0F, 5.0F};
-        theme.widgets.dropdown_popup_gap = 6.0F;
-        theme.widgets.context_menu_width = 196.0F;
-        theme.widgets.context_menu_item_height = 36.0F;
-        theme.widgets.context_menu_padding = {8.0F, 8.0F};
-        theme.widgets.context_menu_item_padding = {12.0F, 6.0F};
-        theme.widgets.context_menu_gap = 8.0F;
-        theme.widgets.context_menu_icon_size = 16.0F;
-        theme.widgets.text_input_padding = {14.0F, 12.0F};
-        theme.widgets.text_input_icon_size = {20.0F, 20.0F};
-        theme.widgets.text_input_icon_spacing = 12.0F;
     } else if (variant == "material") {
-        theme.content_padding = 18.0F;
-        theme.box_rounding = 12.0F;
         theme.controls.rounding = 12.0F;
-        theme.checkbox_rounding = 5.0F;
         theme.controls.border_thickness = 1.0F;
         theme.controls.thumb_size = 16.0F;
         theme.accent_color = {0.82F, 0.74F, 1.0F, 1.0F};
@@ -108,24 +103,122 @@ static Theme make_demo_theme(std::string_view variant) {
         theme.metrics.frame_padding = {14.0F, 10.0F};
         theme.metrics.item_spacing = {12.0F, 12.0F};
         theme.metrics.item_inner_spacing = {8.0F, 8.0F};
-        theme.widgets.dropdown_item_padding = {16.0F, 8.0F};
-        theme.widgets.dropdown_arrow_size = {10.0F, 5.0F};
-        theme.widgets.dropdown_popup_gap = 2.0F;
-        theme.widgets.dropdown_transition_duration = 0.06F;
-        theme.widgets.context_menu_width = 220.0F;
-        theme.widgets.context_menu_item_height = 48.0F;
-        theme.widgets.context_menu_padding = {8.0F, 8.0F};
-        theme.widgets.context_menu_item_padding = {16.0F, 8.0F};
-        theme.widgets.context_menu_gap = 4.0F;
-        theme.widgets.context_menu_icon_size = 18.0F;
-        theme.widgets.text_input_padding = {16.0F, 12.0F};
-        theme.widgets.text_input_icon_size = {20.0F, 20.0F};
-        theme.widgets.text_input_icon_spacing = 12.0F;
     }
 
     theme.controls.mark_color = theme.accent_color;
     return theme;
 }
+
+class DemoTextInput final : public TextInputWidget {
+public:
+    using TextInputWidget::TextInputWidget;
+
+protected:
+    void apply_theme_defaults(const Theme& theme) override {
+        TextInputWidget::apply_theme_defaults(theme);
+
+        switch (s_demo_theme_variant) {
+            case DemoThemeVariant::Default:
+                return;
+            case DemoThemeVariant::Pastel:
+                set_spacing(12.0F);
+                configure_all_styles([](Style& style) { style.padding({14.0F, 12.0F}).border_radius(6.0F); });
+                return;
+            case DemoThemeVariant::Material:
+                set_spacing(12.0F);
+                configure_all_styles([](Style& style) { style.padding({16.0F, 12.0F}).border_radius(12.0F); });
+                return;
+        }
+    }
+};
+
+class DemoDropdown final : public DropdownWidget {
+public:
+    using DropdownWidget::DropdownWidget;
+
+protected:
+    void apply_theme_defaults(const Theme& theme) override {
+        DropdownWidget::apply_theme_defaults(theme);
+
+        switch (s_demo_theme_variant) {
+            case DemoThemeVariant::Default:
+                return;
+            case DemoThemeVariant::Pastel:
+                trigger().configure_all_styles([](Style& style) { style.padding({12.0F, 7.0F}).border_radius(10.0F); });
+                return;
+            case DemoThemeVariant::Material:
+                trigger().configure_all_styles([](Style& style) { style.padding({16.0F, 8.0F}).border_radius(12.0F); });
+                return;
+        }
+    }
+};
+
+class DemoCheckbox final : public CheckboxWidget {
+public:
+    using CheckboxWidget::CheckboxWidget;
+
+protected:
+    void apply_theme_defaults(const Theme& theme) override {
+        CheckboxWidget::apply_theme_defaults(theme);
+
+        switch (s_demo_theme_variant) {
+            case DemoThemeVariant::Default:
+                return;
+            case DemoThemeVariant::Pastel:
+                set_box_size(22.0F);
+                frame().configure_all_styles([](Style& style) { style.border_radius(6.0F); });
+                fill().configure_all_styles([](Style& style) { style.border_radius(6.0F); });
+                return;
+            case DemoThemeVariant::Material:
+                set_box_size(24.0F);
+                frame().configure_all_styles([](Style& style) { style.border_radius(5.0F); });
+                fill().configure_all_styles([](Style& style) { style.border_radius(5.0F); });
+                return;
+        }
+    }
+};
+
+class DemoNumberInput final : public NumberInputWidget {
+public:
+    using NumberInputWidget::NumberInputWidget;
+
+protected:
+    void apply_theme_defaults(const Theme& theme) override {
+        NumberInputWidget::apply_theme_defaults(theme);
+
+        switch (s_demo_theme_variant) {
+            case DemoThemeVariant::Default:
+                return;
+            case DemoThemeVariant::Pastel:
+                configure_all_styles([](Style& style) { style.padding({12.0F, 7.0F}).border_radius(10.0F); });
+                return;
+            case DemoThemeVariant::Material:
+                configure_all_styles([](Style& style) { style.padding({16.0F, 8.0F}).border_radius(12.0F); });
+                return;
+        }
+    }
+};
+
+class DemoColorPicker final : public ColorPickerWidget {
+public:
+    using ColorPickerWidget::ColorPickerWidget;
+
+protected:
+    void apply_theme_defaults(const Theme& theme) override {
+        ColorPickerWidget::apply_theme_defaults(theme);
+
+        switch (s_demo_theme_variant) {
+            case DemoThemeVariant::Default:
+                return;
+            case DemoThemeVariant::Pastel:
+                preview().configure_all_styles([](Style& style) { style.border_radius(6.0F); });
+                return;
+            case DemoThemeVariant::Material:
+                preview().configure_all_styles([](Style& style) { style.border_radius(12.0F); });
+                return;
+        }
+    }
+};
 
 void configure_demo_runtime(RuntimeConfig& config) {
     config.theme = make_demo_theme("default");
@@ -162,7 +255,7 @@ protected:
                 .background_color(background)
                 .border(m_border)
                 .border_color(m_accent_border ? theme.accent_color : theme.border_color)
-                .border_radius(theme.box_rounding)
+                .border_radius(4.0F)
                 .box_shadow(m_shadow ? BoxShadow{
                                            .offset = {0.0F, 8.0F},
                                            .blur = 18.0F,
@@ -338,7 +431,7 @@ protected:
         configure_all_styles([&theme](Style& style) {
             style.background_color(theme.background_tertiary_color)
                 .border(BORDER_NONE)
-                .border_radius(theme.box_rounding)
+                .border_radius(4.0F)
                 .padding({20.0F, 20.0F})
                 .cursor(ImGuiMouseCursor_ResizeNWSE);
         });
@@ -353,10 +446,7 @@ public:
 protected:
     void apply_theme_defaults(const Theme& theme) override {
         configure_all_styles([&theme](Style& style) {
-            style.padding({8.0F, 8.0F})
-                .background_color(theme.background_tertiary_color)
-                .border(BORDER_NONE)
-                .border_radius(theme.box_rounding);
+            style.padding({8.0F, 8.0F}).background_color(theme.background_tertiary_color).border(BORDER_NONE).border_radius(4.0F);
         });
     }
 };
@@ -377,7 +467,7 @@ private:
 protected:
     void apply_theme_defaults(const Theme& theme) override {
         configure_all_styles([&theme](Style& style) {
-            style.padding({theme.content_padding, theme.content_padding}).background_color(theme.background_secondary_color);
+            style.padding({12.0F, 12.0F}).background_color(theme.background_secondary_color);
         });
     }
 
@@ -433,7 +523,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     overview.add<TextWidget>(std::format("backend: {}", backend));
     m_fps = &overview.add<TextWidget>("fps: 0.0");
     overview.add<TextWidget>("debugger: shift + d");
-    auto& random_slider = overview.add<NumberInputWidget>(m_surface, m_random_value);
+    auto& random_slider = overview.add<DemoNumberInput>(m_surface, m_random_value);
     random_slider.set_label("random value");
     random_slider.set_maximum(10);
 
@@ -441,11 +531,11 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     profile.set_size({grow(), fit()});
     profile.set_spacing(8.0F);
     profile.add<TextWidget>("profile");
-    auto& name_input = profile.add<TextInputWidget>(surface, m_name, "name");
+    auto& name_input = profile.add<DemoTextInput>(m_surface, m_name, "name");
     name_input.set_size({px(360.0F), px(42.0F)});
     name_input.set_icon(m_surface.runtime().textures().find("demo-file-icon"));
-    profile.add<CheckboxWidget>(surface, m_enabled, "enabled").set_size({px(360.0F), px(32.0F)});
-    profile.add<ColorPickerWidget>(surface, m_color, "color", "color-picker");
+    profile.add<DemoCheckbox>(m_surface, m_enabled, "enabled").set_size({px(360.0F), px(32.0F)});
+    profile.add<DemoColorPicker>(m_surface, m_color, "color", "color-picker");
 
     m_test_images = &profile.add<StackContainer>("demo-images", StackDirection::Horizontal);
     m_test_images->set_size({grow(), fit()});
@@ -464,14 +554,14 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     add_test_image(m_surface.runtime().textures().find("demo-test-image"));
     add_test_image(m_surface.runtime().textures().find("demo-test-gif"));
 
-    auto& add_image = profile.add<ButtonWidget>(surface, "add test image", LayoutSize{px(140.0F), px(36.0F)});
+    auto& add_image = profile.add<ButtonWidget>(m_surface, "add test image", LayoutSize{px(140.0F), px(36.0F)});
     add_image.set_on_click([this] { add_test_image(m_surface.runtime().textures().find("demo-test-image")); });
 
-    auto& select_image = profile.add<ButtonWidget>(surface, "add image from file", LayoutSize{px(140.0F), px(36.0F)});
+    auto& select_image = profile.add<ButtonWidget>(m_surface, "add image from file", LayoutSize{px(140.0F), px(36.0F)});
     select_image.set_on_click([this] { select_test_image(); });
 
-    auto& image_fit = profile.add<DropdownWidget>(
-        surface, m_image_fit, std::vector<DropdownOption>{{"fill", "fill"}, {"contain", "contain"}, {"cover", "cover"}},
+    auto& image_fit = profile.add<DemoDropdown>(
+        m_surface, m_image_fit, std::vector<DropdownOption>{{"fill", "fill"}, {"contain", "contain"}, {"cover", "cover"}},
         "image-fit"
     );
 
@@ -490,16 +580,19 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     appearance.set_spacing(8.0F);
     appearance.add<TextWidget>("appearance");
 
-    auto& theme = appearance.add<DropdownWidget>(
-        surface, m_theme, std::vector<DropdownOption>{{"default", "default"}, {"pastel", "pastel"}, {"material 3", "material"}},
+    auto& theme = appearance.add<DemoDropdown>(
+        m_surface, m_theme, std::vector<DropdownOption>{{"default", "default"}, {"pastel", "pastel"}, {"material 3", "material"}},
         "theme"
     );
 
     theme.set_label("theme").set_size({px(360.0F), px(68.0F)});
-    theme.set_on_change([this] { m_surface.set_theme(make_demo_theme(m_theme)); });
+    theme.set_on_change([this] {
+        s_demo_theme_variant = demo_theme_variant(m_theme);
+        m_surface.set_theme(make_demo_theme(m_theme));
+    });
 
-    auto& border_style = appearance.add<DropdownWidget>(
-        surface, m_border_style, std::vector<DropdownOption>{{"solid", "solid"}, {"dashed", "dashed"}, {"dotted", "dotted"}},
+    auto& border_style = appearance.add<DemoDropdown>(
+        m_surface, m_border_style, std::vector<DropdownOption>{{"solid", "solid"}, {"dashed", "dashed"}, {"dotted", "dotted"}},
         "border-style"
     );
 
@@ -516,7 +609,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     actions.set_spacing(8.0F);
     actions.add<TextWidget>("actions");
     auto& status = actions.add<TextWidget>("no clicks yet");
-    auto& button = actions.add<ButtonWidget>(surface, "click me", LayoutSize{px(140.0F), px(44.0F)});
+    auto& button = actions.add<ButtonWidget>(m_surface, "click me", LayoutSize{px(140.0F), px(44.0F)});
 
     auto& list_section = add<DemoPanel>("list-section", surface.theme());
     list_section.set_size({grow(), fit()});
@@ -527,7 +620,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     );
 
     auto& text_list_orientation =
-        list_section.add<ButtonWidget>(surface, "list orientation: vertical", LayoutSize{px(240.0F), px(36.0F)});
+        list_section.add<ButtonWidget>(m_surface, "list orientation: vertical", LayoutSize{px(240.0F), px(36.0F)});
     text_list_orientation.set_on_click([this, &text_list_orientation] {
         m_text_list_horizontal = !m_text_list_horizontal;
         m_text_list->set_direction(m_text_list_horizontal ? StackDirection::Horizontal : StackDirection::Vertical);
@@ -552,7 +645,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
                 return *found->second;
             }
 
-            auto& row = virtual_list.add<ButtonWidget>(surface, std::format("item {} - expand", index + 1));
+            auto& row = virtual_list.add<ButtonWidget>(std::format("item {} - expand", index + 1));
             row.set_id(std::format("virtual-row-{}", index));
             row.set_on_click([&virtual_list, &row, index] {
                 const bool expanded = virtual_list.extra_offset(index) == 0.0F;
@@ -781,7 +874,7 @@ void setup_demo(UI& surface, std::string backend) {
     });
 
     auto& context_status = demo.add<TextWidget>("context menu: no selection");
-    auto& context_button = demo.add<ButtonWidget>(surface, "open context menu", LayoutSize{px(220.0F), px(40.0F)});
+    auto& context_button = demo.add<ButtonWidget>("open context menu", LayoutSize{px(220.0F), px(40.0F)});
     ContextMenuItems context_items = {
         ContextMenuItem::action(
             "first action", [&context_status](auto&) { context_status.set_text("context menu: first action"); }
@@ -791,7 +884,7 @@ void setup_demo(UI& surface, std::string backend) {
                                  })}),
     };
 
-    auto& context_menu = surface.root().add<ContextMenuWidget>(surface, std::move(context_items), inline_icon);
+    auto& context_menu = surface.root().add<ContextMenuWidget>(std::move(context_items), inline_icon);
     context_menu.set_hover_close_delay(2.0f);
 
     context_button.set_on_click([&context_menu] { context_menu.open(); });
@@ -810,8 +903,8 @@ void setup_demo(UI& surface, std::string backend) {
     blocker_panel.set_spacing(10.0F);
     blocker_panel.add<TextWidget>("pointer input is blocked below this panel");
 
-    auto& block_button = demo.add<ButtonWidget>(surface, "block pointer input", LayoutSize{px(220.0F), px(40.0F)});
-    auto& unblock_button = blocker_panel.add<ButtonWidget>(surface, "disable pointer block", LayoutSize{px(284.0F), px(40.0F)});
+    auto& block_button = demo.add<ButtonWidget>("block pointer input", LayoutSize{px(220.0F), px(40.0F)});
+    auto& unblock_button = blocker_panel.add<ButtonWidget>("disable pointer block", LayoutSize{px(284.0F), px(40.0F)});
 
     LayerContainer* blocker_ptr = &input_blocker;
     ButtonWidget* block_button_ptr = &block_button;
@@ -860,19 +953,19 @@ void setup_demo(UI& surface, std::string backend) {
     });
 
     modal.add<TextWidget>("modal overlay");
-    auto& blur = modal.add<NumberInputWidget>(surface, demo.blur(), "modal-blur");
+    auto& blur = modal.add<NumberInputWidget>(demo.blur(), "modal-blur");
     blur.set_label("backdrop blur").set_range(0, 32).set_size({px(180.0F), px(48.0F)});
     blur.set_on_change([&demo, &modal_layer] {
         modal_layer.configure_all_styles([&demo](Style& style) { style.blur(demo.blur()); });
     });
 
-    auto& close_button = modal.add<ButtonWidget>(surface, "close modal", LayoutSize{px(180.0F), px(40.0F)});
+    auto& close_button = modal.add<ButtonWidget>("close modal", LayoutSize{px(180.0F), px(40.0F)});
     close_button.set_on_click([&modal_layer, &modal] {
         modal.set_visible(false);
         modal_layer.set_visible(false);
     });
 
-    auto& modal_button = demo.add<ButtonWidget>(surface, "open modal", LayoutSize{px(220.0F), px(40.0F)});
+    auto& modal_button = demo.add<ButtonWidget>("open modal", LayoutSize{px(220.0F), px(40.0F)});
     modal_button.set_on_click([&modal_layer, &modal, &surface] {
         if (modal.visible()) {
             return;

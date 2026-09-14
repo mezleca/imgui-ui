@@ -62,11 +62,6 @@ namespace ui {
             return m_done;
         }
 
-        /// returns whether backend, imgui, and the retained tree are ready.
-        bool ready() const {
-            return m_ready;
-        }
-
         /// returns a registered font variation, or imgui's current font when it is unavailable.
         ImFont* get_font(std::string_view id, int size) const;
 
@@ -76,9 +71,7 @@ namespace ui {
         }
 
         /// resolves a size from the primary font, falling back to imgui's current font.
-        ImFont* get_primary_font(int size) const {
-            return resolve_font(m_primary_font, size);
-        }
+        ImFont* get_primary_font(int size) const;
 
         /// sets the font inherited by widgets that use the secondary font.
         void set_secondary_font(Font* font) {
@@ -86,9 +79,7 @@ namespace ui {
         }
 
         /// resolves a size from the secondary font, falling back to imgui's current font.
-        ImFont* get_secondary_font(int size) const {
-            return resolve_font(m_secondary_font, size);
-        }
+        ImFont* get_secondary_font(int size) const;
 
         /// returns the router used by the surface tree.
         InputRouter& input_router() {
@@ -184,6 +175,5 @@ namespace ui {
         Font* m_secondary_font = nullptr;
         float m_content_scale = 1.0F;
         bool m_done = false;
-        bool m_ready = false;
     };
 } // namespace ui

@@ -138,8 +138,7 @@ namespace ui {
 
         /// remeasures descendants because they may inherit this font.
         StyledNode& set_font(ImFont* font) {
-            ImFont* resolved_font = font != nullptr || ImGui::GetCurrentContext() == nullptr ? font : ImGui::GetFont();
-            configure_all_styles([resolved_font](Style& style) { style.font(resolved_font); });
+            configure_all_styles([font](Style& style) { style.font(font); });
             invalidate_measure_subtree();
             return *this;
         }
@@ -163,7 +162,7 @@ namespace ui {
                 }
             }
 
-            return ImGui::GetCurrentContext() == nullptr ? nullptr : ImGui::GetFont();
+            return ImGui::GetFont();
         }
 
         void draw() override;
@@ -187,10 +186,6 @@ namespace ui {
             return computed_style().padding();
         }
         float minimum_content_height() const override {
-            if (ImGui::GetCurrentContext() == nullptr) {
-                return 0.0F;
-            }
-
             ImGui::PushFont(font());
             const float line_height = ImGui::GetTextLineHeight();
             ImGui::PopFont();

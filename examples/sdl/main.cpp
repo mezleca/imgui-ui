@@ -18,7 +18,6 @@ int main() {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
-    int result = 0;
     {
         // configure the demo before runtime construction because runtime owns the theme and asset registries.
         ui::RuntimeConfig runtime_config;
@@ -39,28 +38,23 @@ int main() {
                      }
         );
 
-        // use this constructor when the application already owns the window and context.
-        if (!surface.ready()) {
-            result = 1;
-        } else {
-            setup_demo(surface, "sdl");
+        setup_demo(surface, "sdl");
 
-            while (!surface.is_done()) {
-                SDL_Event event;
+        while (!surface.is_done()) {
+            SDL_Event event;
 
-                while (SDL_PollEvent(&event)) {
-                    ui::process_sdl_event(surface, event);
-                }
-
-                surface.begin_frame();
-                const float dt = ImGui::GetIO().DeltaTime;
-                surface.update(dt);
-                surface.draw();
-                surface.end_frame();
+            while (SDL_PollEvent(&event)) {
+                ui::process_sdl_event(surface, event);
             }
+
+            surface.begin_frame();
+            const float dt = ImGui::GetIO().DeltaTime;
+            surface.update(dt);
+            surface.draw();
+            surface.end_frame();
         }
     }
 
     SDL_Quit();
-    return result;
+    return 0;
 }

@@ -29,7 +29,7 @@ namespace ui {
         ImFontConfig m_config;
     };
 
-    class FontRegistry final : public AssetRegistry {
+    class FontRegistry final : public AssetRegistry<Font> {
     public:
         Font* add(std::string id, std::filesystem::path location);
         Font* add(std::string id, std::filesystem::path location, ImFontConfig config);

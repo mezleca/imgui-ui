@@ -10,15 +10,15 @@
 
 using namespace ui;
 
-static float menu_height(const Theme& theme, std::size_t item_count) {
-    return theme.widgets.context_menu_item_height * static_cast<float>(item_count);
+static float menu_height(std::size_t item_count) {
+    return 28.0F * static_cast<float>(item_count);
 }
 
 class ui::ContextMenuItemNode final : public DrawListWidget {
 public:
     ContextMenuItemNode(ContextMenuWidget& menu, std::string label, ContextMenuCallback callback)
         : DrawListWidget("item", "ContextMenuItem"), m_menu(menu), m_label(std::move(label)), m_callback(std::move(callback)) {
-        set_size({grow(), px(m_menu.m_theme.widgets.context_menu_item_height)});
+        set_size({grow(), px(28.0F)});
         apply_theme_defaults(m_menu.m_theme);
     }
 
@@ -31,7 +31,7 @@ protected:
         configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
                 .background_color(theme.transparent)
-                .padding(theme.widgets.context_menu_item_padding)
+                .padding({8.0F, 4.0F})
                 .border(BORDER_NONE)
                 .border_radius(theme.controls.rounding)
                 .cursor(ImGuiMouseCursor_Hand);
@@ -72,8 +72,7 @@ private:
     }
 
     void draw_submenu_icon(ImDrawList& draw_list, Rect content, const ComputedStyle& style) const {
-        const float icon_size =
-            std::min(m_menu.m_theme.widgets.context_menu_icon_size, std::min(content.size().x, content.size().y));
+        const float icon_size = std::min(13.0F, std::min(content.size().x, content.size().y));
         const Rect icon = Rect::from_position_size(
             {content.max.x - icon_size, content.min.y + (content.size().y - icon_size) * 0.5F}, {icon_size, icon_size}
         );
@@ -125,14 +124,14 @@ void ContextMenuWidget::on_event(UiEvent& event) {
 }
 
 void ContextMenuWidget::apply_theme_defaults(const Theme& theme) {
-    set_size({px(theme.widgets.context_menu_width), px(menu_height(theme, m_items.size()))});
+    set_size({px(184.0F), px(menu_height(m_items.size()))});
 
     configure_all_styles([&theme](Style& style) {
-        style.padding({theme.widgets.context_menu_padding.x, 0.0F})
+        style.padding({4.0F, 0.0F})
             .background_color(theme.background_secondary_color)
             .border(BORDER_ALL)
             .border_thickness(theme.controls.border_thickness)
-            .border_radius(theme.box_rounding)
+            .border_radius(4.0F)
             .border_color(theme.border_color);
     });
 }
@@ -140,7 +139,7 @@ void ContextMenuWidget::apply_theme_defaults(const Theme& theme) {
 ContextMenuWidget& ContextMenuWidget::set_items(ContextMenuItems items) {
     m_items.clear();
     clear();
-    set_size({px(m_theme.widgets.context_menu_width), px(menu_height(m_theme, items.size()))});
+    set_size({px(184.0F), px(menu_height(items.size()))});
 
     for (ContextMenuItem& item : items) {
         const bool has_submenu = !item.children.empty();
@@ -369,7 +368,7 @@ void ContextMenuWidget::position_submenu(ContextMenuWidget& submenu, const Conte
     const Rect work_area = viewport_work_area();
     const ImVec2 submenu_size = submenu.layout().intrinsic_size();
 
-    const float submenu_gap = m_theme.widgets.context_menu_gap;
+    const float submenu_gap = 6.0F;
     float screen_x = item_rect.max.x + submenu_gap;
     if (screen_x + submenu_size.x > work_area.max.x) {
         screen_x = item_rect.min.x - submenu_size.x - submenu_gap;

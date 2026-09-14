@@ -17,7 +17,7 @@ static constexpr float HALF_PI = PI * 0.5F;
 static constexpr float ARC_MAX_ERROR = 0.25F; // maximum sagitta error, matching imgui adaptive circle tessellation model.
 
 static float current_draw_alpha() {
-    return ImGui::GetCurrentContext() == nullptr ? 1.0F : std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
+    return std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
 }
 
 static ImColor apply_draw_alpha(ImColor color) {
@@ -306,10 +306,6 @@ ImDrawList& ui::draw_list(DrawListTarget target) {
 }
 
 Rect ui::viewport_work_area() {
-    if (ImGui::GetCurrentContext() == nullptr) {
-        return {};
-    }
-
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     if (viewport == nullptr) {
         return {};

@@ -58,11 +58,6 @@ void StyledNode::draw() {
         return;
     }
 
-    if (ImGui::GetCurrentContext() == nullptr) {
-        Node::draw();
-        return;
-    }
-
     update_cursor();
     const ComputedStyle& current_style = computed_style();
     const PushState push_state = current_style.push(opacity(), font());
@@ -144,10 +139,6 @@ void StyledNode::input_state_changed() {
 }
 
 void StyledNode::update_cursor() {
-    if (ImGui::GetCurrentContext() == nullptr) {
-        return;
-    }
-
     if (!input_state().hovered) {
         return;
     }
@@ -157,14 +148,14 @@ void StyledNode::update_cursor() {
 }
 
 void StyledNode::draw_before() {
-    if (m_before != nullptr && ImGui::GetCurrentContext() != nullptr) {
+    if (m_before != nullptr) {
         const Rect rect = layout().visual_rect();
         m_before->paint(*ImGui::GetWindowDrawList(), rect, rect.inset(computed_style().padding()));
     }
 }
 
 void StyledNode::draw_after() {
-    if (m_after != nullptr && ImGui::GetCurrentContext() != nullptr) {
+    if (m_after != nullptr) {
         const Rect rect = layout().visual_rect();
         m_after->paint(*ImGui::GetForegroundDrawList(), rect, rect.inset(computed_style().padding()));
     }

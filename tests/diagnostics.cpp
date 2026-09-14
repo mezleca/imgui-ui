@@ -58,7 +58,7 @@ TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
     REQUIRE(surface.debugger() != nullptr);
     REQUIRE_FALSE(surface.debugger()->is_open());
 
-    ui_test::prepare_surface(surface, {320.0F, 240.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
 
     surface.begin_frame();
     surface.end_frame();
@@ -107,7 +107,7 @@ TEST_CASE("debugger hotkey toggles on the target surface") {
     REQUIRE(surface.debugger() != nullptr);
     REQUIRE_FALSE(surface.debugger()->is_open());
 
-    ui_test::prepare_surface(surface, {320.0F, 240.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
     ImGui::GetIO().AddKeyEvent(ImGuiMod_Shift, true);
     ImGui::GetIO().AddKeyEvent(ImGuiKey_D, true);
 
@@ -121,9 +121,9 @@ TEST_CASE("debugger clicks preserve an open popup") {
     ui::Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     ImColor color = {0.26F, 0.59F, 0.98F, 1.0F};
-    auto& picker = surface.root().add<ui::ColorPickerWidget>(surface, color);
+    auto& picker = surface.root().add<ui::ColorPickerWidget>(color);
 
-    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
     ui_test::draw_surface(surface);
 
     const ImVec2 preview = ui_test::center(picker.preview().layout().visual_rect());
@@ -159,14 +159,14 @@ TEST_CASE("focused debugger blocks application hover") {
     ui::Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     bool value = false;
-    auto& checkbox = surface.root().add<ui::CheckboxWidget>(surface, value, "application");
+    auto& checkbox = surface.root().add<ui::CheckboxWidget>(value, "application");
     checkbox.set_layout({
         .size = {ui::px(120.0F), ui::px(40.0F)},
         .placement = {.offset = {20.0F, 20.0F}},
         .in_flow = false,
     });
 
-    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
 
     const auto draw_frame = [&surface] {
         ImGui::GetIO().MousePos = {30.0F, 30.0F};
@@ -195,7 +195,7 @@ TEST_CASE("debugger renders as a panel in the surface layout") {
     ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     surface.debugger()->set_open(true);
 
-    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
     ui_test::draw_surface(surface);
 
     ImGui::SetCurrentContext(surface.imgui_context());
@@ -212,7 +212,7 @@ TEST_CASE("debugger exposes the content resize handle", "[Debugger][ResizableCon
     ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
     surface.debugger()->set_open(true);
 
-    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
     ui_test::draw_surface(surface);
 
     auto* content = dynamic_cast<ui::ResizableContainer*>(&surface.root());

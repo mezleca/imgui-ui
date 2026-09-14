@@ -31,9 +31,6 @@ int main() {
                  }
     );
 
-    // use the attached constructor when raylib was initialized by the application.
-    if (!surface.ready()) return 1;
-
     setup_demo(surface, "raylib");
     while (!surface.is_done()) {
         // raylib input is not polled by the framework automatically, so forward it before update and draw each frame.

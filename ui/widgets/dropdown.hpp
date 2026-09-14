@@ -23,7 +23,7 @@ namespace ui {
     };
 
     /// exposes the label, trigger and popup body for styling and inspection.
-    class DropdownWidget final : public Widget {
+    class DropdownWidget : public Widget {
     public:
         DropdownWidget(UI& ui, std::string& value, std::vector<DropdownOption> options, std::string id = {});
 

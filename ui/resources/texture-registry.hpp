@@ -35,7 +35,7 @@ namespace ui {
     // add() stores one decoded texture per id. drawing calls get() so each context creates its gpu object only when the
     // texture becomes visible. runtime releases that object before destroying a context and keeps the decoded source for
     // later contexts.
-    class TextureRegistry final : public AssetRegistry {
+    class TextureRegistry final : public AssetRegistry<Texture> {
     public:
         explicit TextureRegistry(std::unique_ptr<TextureLoader> loader = nullptr);
 

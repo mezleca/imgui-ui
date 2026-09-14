@@ -36,9 +36,9 @@ TEST_CASE("checkbox input is limited to its box", "[CheckboxWidget][input][regre
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     bool checked = false;
-    auto& checkbox = surface.root().add<CheckboxWidget>(surface, checked, "checkbox");
+    auto& checkbox = surface.root().add<CheckboxWidget>(checked, "checkbox");
 
-    ui_test::prepare_surface(surface, {400.0F, 180.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
 
     ui_test::draw_surface(surface);
 
@@ -66,9 +66,7 @@ TEST_CASE("checkbox input is limited to its box", "[CheckboxWidget][input][regre
 }
 
 TEST_CASE("nested containers keep default padding empty and route checkbox clicks", "[container][input][regression]") {
-    RuntimeConfig config;
-    config.theme.content_padding = 20.0F;
-    Runtime runtime(std::move(config));
+    Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     bool checked = false;
 
@@ -76,9 +74,9 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
     page.set_size({px(320.0F), px(120.0F)});
     auto& section = page.add<Container>("section");
     auto& form = section.add<StackContainer>("form");
-    auto& checkbox = form.add<CheckboxWidget>(surface, checked, "enabled");
+    auto& checkbox = form.add<CheckboxWidget>(checked, "enabled");
 
-    ui_test::prepare_surface(surface, {400.0F, 180.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
 
     ui_test::draw_surface(surface);
 
@@ -101,9 +99,9 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
 TEST_CASE("buttons flash their active background after click", "[ButtonWidget][animation]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    auto& button = surface.root().add<ButtonWidget>(surface, "button", LayoutSize{px(120.0F), px(36.0F)});
+    auto& button = surface.root().add<ButtonWidget>("button", LayoutSize{px(120.0F), px(36.0F)});
 
-    ui_test::prepare_surface(surface, {400.0F, 180.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
     ui_test::draw_surface(surface);
 
     const ImVec2 position = ui_test::center(button.layout().visual_rect());
@@ -168,14 +166,13 @@ TEST_CASE("dropdown opens from a nested container without extending its parent",
     page.set_size({px(360.0F), px(200.0F)});
     auto& section = page.add<Container>("section");
     auto& form = section.add<StackContainer>("form");
-    auto& dropdown =
-        form.add<DropdownWidget>(surface, value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "theme");
+    auto& dropdown = form.add<DropdownWidget>(value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "theme");
     dropdown.set_size({px(180.0F), px(32.0F)});
     bool checked = false;
-    auto& checkbox = surface.root().add<CheckboxWidget>(surface, checked, "enabled");
+    auto& checkbox = surface.root().add<CheckboxWidget>(checked, "enabled");
     checkbox.set_size({px(180.0F), px(32.0F)});
 
-    ui_test::prepare_surface(surface, {400.0F, 240.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 240.0F});
 
     ui_test::draw_surface(surface);
     const Rect trigger_rect = dropdown.trigger().layout().visual_rect();
@@ -212,10 +209,10 @@ TEST_CASE("color picker opens outside its parent and blocks content input", "[co
     auto& page = surface.root().add<StackContainer>("page");
     page.set_size({px(360.0F), px(200.0F)});
     auto& section = page.add<Container>("section");
-    auto& picker = section.add<ColorPickerWidget>(surface, color, "color");
-    auto& checkbox = surface.root().add<CheckboxWidget>(surface, checked, "enabled");
+    auto& picker = section.add<ColorPickerWidget>(color, "color");
+    auto& checkbox = surface.root().add<CheckboxWidget>(checked, "enabled");
 
-    ui_test::prepare_surface(surface, {400.0F, 300.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 300.0F});
     ui_test::draw_surface(surface);
 
     const ImVec2 preview_center = ui_test::center(picker.layout().visual_rect());
@@ -264,10 +261,10 @@ TEST_CASE("color pickers do not replace each other", "[color-picker][regression]
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     ImColor first_color = {0.26F, 0.59F, 0.98F, 1.0F};
     ImColor second_color = {0.98F, 0.59F, 0.26F, 1.0F};
-    auto& first = surface.root().add<ColorPickerWidget>(surface, first_color, "first");
-    auto& second = surface.root().add<ColorPickerWidget>(surface, second_color, "second");
+    auto& first = surface.root().add<ColorPickerWidget>(first_color, "first");
+    auto& second = surface.root().add<ColorPickerWidget>(second_color, "second");
 
-    ui_test::prepare_surface(surface, {640.0F, 480.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {640.0F, 480.0F});
     first.open();
     second.open();
     ui_test::draw_surface(surface);
@@ -287,7 +284,7 @@ TEST_CASE("dropdown options use framework input and select their value", "[Dropd
     dropdown.set_size({px(180.0F), px(32.0F)});
     dropdown.set_on_change([&changes] { ++changes; });
 
-    ui_test::prepare_surface(surface, {400.0F, 240.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 240.0F});
 
     ui_test::draw_surface(surface);
     const Rect trigger_rect = dropdown.trigger().layout().visual_rect();
@@ -336,7 +333,7 @@ TEST_CASE("dropdown rows expose their complete visual hit boxes", "[DropdownWidg
     );
     dropdown.set_size({px(240.0F), px(40.0F)});
 
-    ui_test::prepare_surface(surface, {900.0F, 1200.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 1200.0F});
     ui_test::draw_surface(surface);
     const Rect trigger_rect = dropdown.trigger().layout().visual_rect();
     const ImVec2 trigger_center = ui_test::center(trigger_rect);
@@ -372,7 +369,7 @@ TEST_CASE("inline layer centers inside content beside the debugger", "[LayerCont
     });
     surface.debugger()->set_open(true);
 
-    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
     ui_test::draw_surface(surface);
 
     const Rect content_rect = surface.root().layout().visual_rect();
@@ -397,7 +394,7 @@ TEST_CASE("text measurement and drawing include style padding", "[TextWidget][la
         style.padding({5.0F, 3.0F}).background_color(ImColor{10, 20, 30, 255}).border(BORDER_ALL);
     });
 
-    ui_test::prepare_surface(surface, {400.0F, 180.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
 
     surface.begin_frame();
     ImFont* font = ImGui::GetFont();
@@ -417,7 +414,7 @@ TEST_CASE("animated padding updates text measurement", "[TextWidget][layout][ani
     TextWidget text("animated text");
     text.configure_all_styles([](Style& style) { style.padding({}); });
 
-    ui_test::prepare_surface(surface, {400.0F, 180.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
 
     surface.begin_frame();
     const ImVec2 raw_size = ImGui::GetFont()->CalcTextSizeA(ImGui::GetFont()->LegacySize, FLT_MAX, 0.0F, "animated text");
@@ -437,7 +434,7 @@ TEST_CASE("text line height scales multi-line text layout", "[TextWidget][layout
     TextWidget text("first line\nsecond line");
     text.configure_all_styles([](Style& style) { style.padding({}).line_height(1.5F); });
 
-    ui_test::prepare_surface(surface, {400.0F, 180.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
 
     surface.begin_frame();
     const float native_line_height = ImGui::GetTextLineHeight();
@@ -502,7 +499,7 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
     parent.set_size({px(180.0F), px(80.0F)});
     auto& input = parent.add<TextInputWidget>(surface, value, "input");
 
-    ui_test::prepare_surface(surface, {400.0F, 180.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
 
     const auto draw_frame = [&surface, &parent] {
         surface.begin_frame();
@@ -534,14 +531,14 @@ TEST_CASE("pointer block prevents hover and clicks on content controls", "[input
     auto& content = surface.root().add<StackContainer>("content");
     auto& controls = content.add<StackContainer>("controls");
     auto& dynamic_nodes = content.add<StackContainer>("dynamic-nodes");
-    auto& add_button = controls.add<ButtonWidget>(surface, "add node", LayoutSize{px(120.0F), px(36.0F)});
+    auto& add_button = controls.add<ButtonWidget>("add node", LayoutSize{px(120.0F), px(36.0F)});
     add_button.set_on_click([&dynamic_nodes, &surface] {
-        dynamic_nodes.add<ButtonWidget>(surface, "node", LayoutSize{px(120.0F), px(36.0F)});
+        dynamic_nodes.add<ButtonWidget>("node", LayoutSize{px(120.0F), px(36.0F)});
     });
     auto& blocker = surface.root().add<LayerContainer>("input-blocker");
     blocker.set_visible(false);
 
-    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
     ui_test::draw_surface(surface);
 
     blocker.set_visible(true);
@@ -573,12 +570,12 @@ TEST_CASE("resizable lists keep child layout valid after adding a row", "[Resiza
     auto& dynamic_nodes = list.add<ResizableContainer>("dynamic-nodes");
     dynamic_nodes.set_size({px(240.0F), grow()});
     dynamic_nodes.set_resize(ResizeAxes::Both);
-    auto& add_button = controls.add<ButtonWidget>(surface, "add node", LayoutSize{px(120.0F), px(36.0F)});
+    auto& add_button = controls.add<ButtonWidget>("add node", LayoutSize{px(120.0F), px(36.0F)});
     add_button.set_on_click([&dynamic_nodes, &surface] {
-        dynamic_nodes.add<ButtonWidget>(surface, "node", LayoutSize{grow(), px(36.0F)});
+        dynamic_nodes.add<ButtonWidget>("node", LayoutSize{grow(), px(36.0F)});
     });
 
-    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
     ui_test::draw_surface(surface);
 
     REQUIRE(dynamic_nodes.layout().visual_rect().valid());
@@ -612,12 +609,12 @@ TEST_CASE("pointer block rejects clicks on another overlay control", "[input][re
     auto& overlay = surface.root().add<LayerContainer>("overlay");
     auto& panel = overlay.add<Container>("panel");
     panel.set_visible(false);
-    auto& show_button = overlay.add<ButtonWidget>(surface, "show overlay", LayoutSize{px(160.0F), px(40.0F)});
+    auto& show_button = overlay.add<ButtonWidget>("show overlay", LayoutSize{px(160.0F), px(40.0F)});
     show_button.set_on_click([&panel] { panel.set_visible(true); });
     auto& blocker = surface.root().add<LayerContainer>("input-blocker");
     blocker.set_visible(false);
 
-    ui_test::prepare_surface(surface, {900.0F, 600.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
     ui_test::draw_surface(surface);
 
     blocker.set_visible(true);
@@ -1156,11 +1153,11 @@ TEST_CASE("style variables stay local to their declared state", "[VisualState][v
 TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    ui_test::prepare_surface(surface, {320.0F, 240.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
 
     ContextMenuItems items;
     items.push_back({.label = "item"});
-    auto& menu = surface.root().add<ContextMenuWidget>(surface, std::move(items));
+    auto& menu = surface.root().add<ContextMenuWidget>(std::move(items));
 
     REQUIRE_FALSE(menu.visible());
     menu.open_at({300.0F, 220.0F});
@@ -1186,7 +1183,7 @@ TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]
 TEST_CASE("context menu item callbacks can keep the root menu open", "[ContextMenuWidget]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    ui_test::prepare_surface(surface, {320.0F, 240.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
 
     bool callback_called = false;
     ContextMenuItems items;
@@ -1197,7 +1194,7 @@ TEST_CASE("context menu item callbacks can keep the root menu open", "[ContextMe
             menu.cancel_close();
         },
     });
-    auto& menu = surface.root().add<ContextMenuWidget>(surface, std::move(items));
+    auto& menu = surface.root().add<ContextMenuWidget>(std::move(items));
     menu.open_at({20.0F, 20.0F});
     ui_test::draw_surface(surface, 0.2F);
 
@@ -1216,10 +1213,10 @@ TEST_CASE("context menu item callbacks can keep the root menu open", "[ContextMe
 TEST_CASE("context menu blocks and closes on outside pointer input", "[ContextMenuWidget]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    ui_test::prepare_surface(surface, {320.0F, 240.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
 
     int click_count = 0;
-    auto& button = surface.root().add<ButtonWidget>(surface, "under menu", LayoutSize{px(100.0F), px(32.0F)});
+    auto& button = surface.root().add<ButtonWidget>("under menu", LayoutSize{px(100.0F), px(32.0F)});
     button.set_layout({
         .size = {px(100.0F), px(32.0F)},
         .placement = {.offset = {8.0F, 8.0F}},
@@ -1229,7 +1226,7 @@ TEST_CASE("context menu blocks and closes on outside pointer input", "[ContextMe
 
     ContextMenuItems items;
     items.push_back({.label = "item"});
-    auto& menu = surface.root().add<ContextMenuWidget>(surface, std::move(items));
+    auto& menu = surface.root().add<ContextMenuWidget>(std::move(items));
     menu.open_at({160.0F, 120.0F});
     ui_test::draw_surface(surface, 0.2F);
 
@@ -1247,13 +1244,13 @@ TEST_CASE("context menu blocks and closes on outside pointer input", "[ContextMe
 TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMenuWidget]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    ui_test::prepare_surface(surface, {480.0F, 240.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {480.0F, 240.0F});
 
     ContextMenuItems children;
     children.push_back({.label = "child"});
     ContextMenuItems items;
     items.push_back({.label = "parent", .children = std::move(children)});
-    auto& menu = surface.root().add<ContextMenuWidget>(surface, std::move(items));
+    auto& menu = surface.root().add<ContextMenuWidget>(std::move(items));
     menu.open_at({20.0F, 20.0F});
     ui_test::draw_surface(surface, 0.2F);
 
@@ -1307,13 +1304,13 @@ TEST_CASE("virtual rows expand and collapse independently", "[layout][virtual-la
     auto& list = surface.root().add<VirtualLayout>("virtual-list", 24.0F);
     list.set_size({px(180.0F), px(72.0F)});
     list.set_items(100000, [&list, &surface](size_t index) -> Node& {
-        auto& row = list.add<ButtonWidget>(surface, std::to_string(index), LayoutSize{grow(), px(24.0F)});
+        auto& row = list.add<ButtonWidget>(std::to_string(index), LayoutSize{grow(), px(24.0F)});
         row.set_on_click([&list, index] { list.set_extra_offset(index, list.extra_offset(index) == 0.0F ? 64.0F : 0.0F); });
         return row;
     });
     REQUIRE(list.children().empty());
 
-    ui_test::prepare_surface(surface, {240.0F, 180.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {240.0F, 180.0F});
     ui_test::draw_surface(surface);
     ui_test::draw_surface(surface);
     REQUIRE(list.children().size() < 10);

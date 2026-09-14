@@ -69,7 +69,7 @@ protected:
         configure_all_styles([&theme, rounding](Style& style) {
             style.color(theme.text_color)
                 .background_color(theme.transparent)
-                .padding(theme.widgets.dropdown_item_padding)
+                .padding({10.0F, 4.0F})
                 .border(BORDER_NONE)
                 .border_radius(rounding)
                 .cursor(ImGuiMouseCursor_Hand);
@@ -341,9 +341,9 @@ void DropdownWidget::on_event(UiEvent& event) {
 }
 
 void DropdownWidget::apply_theme_defaults(const Theme& theme) {
-    m_state.arrow_size = theme.widgets.dropdown_arrow_size;
-    m_state.popup_gap = std::max(0.0F, theme.widgets.dropdown_popup_gap);
-    m_state.transition_duration = std::max(0.0F, theme.widgets.dropdown_transition_duration);
+    m_state.arrow_size = {8.0F, 4.0F};
+    m_state.popup_gap = 4.0F;
+    m_state.transition_duration = 0.06F;
 
     configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color)

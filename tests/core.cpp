@@ -29,7 +29,7 @@ TEST_CASE("ui does not write to imgui's fallback window") {
     UI surface(runtime, {.backend = ui_test::make_backend()});
     surface.root().add<Node>("content");
 
-    ui_test::prepare_surface(surface, {320.0F, 240.0F});
+    const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
     surface.begin_frame();
 
     ImGuiWindow* fallback = ImGui::FindWindowByName("Debug##Default");
@@ -339,6 +339,8 @@ TEST_CASE("styled paint slots pass owner bounds and their target draw list to ca
 }
 
 TEST_CASE("ui nodes close child scopes before drawing after hooks") {
+    ui_test::ImGuiContext context({100.0F, 100.0F});
+
     class DrawNode final : public Node {
     public:
         DrawNode(std::string id, std::vector<std::string>& events, bool skip = false)
@@ -391,6 +393,8 @@ TEST_CASE("ui nodes close child scopes before drawing after hooks") {
 }
 
 TEST_CASE("node measurement only reruns after invalidation") {
+    ui_test::ImGuiContext context({100.0F, 100.0F});
+
     class MeasureNode final : public Node {
     public:
         explicit MeasureNode(int& count) : m_count(count) {}

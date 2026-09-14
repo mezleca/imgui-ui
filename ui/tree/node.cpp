@@ -54,6 +54,21 @@ InputState Node::subtree_input_state() const {
     return state;
 }
 
+UI& Node::surface() const {
+    if (m_surface == nullptr) {
+        throw std::logic_error("node is not attached to a UI surface");
+    }
+
+    return *m_surface;
+}
+
+void Node::set_surface(UI* surface) {
+    m_surface = surface;
+    for (const auto& child : m_children) {
+        child->set_surface(surface);
+    }
+}
+
 void Node::set_enabled(bool enabled) {
     if (m_enabled == enabled) {
         return;
@@ -187,6 +202,7 @@ bool Node::attach(std::unique_ptr<Node> child) {
     }
 
     child->m_parent = this;
+    child->set_surface(m_surface);
     child->set_input_router(m_input_router);
     child->set_profiler(m_profiler);
 
@@ -272,6 +288,7 @@ std::unique_ptr<Node> Node::remove(Node& child) {
     std::unique_ptr<Node> result = std::move(*it);
     m_children.erase(it);
     result->m_parent = nullptr;
+    result->set_surface(nullptr);
     result->set_input_router(nullptr);
     result->set_profiler(nullptr);
     invalidate_measure();

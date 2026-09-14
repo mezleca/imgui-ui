@@ -68,12 +68,10 @@ void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
 
     configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({4.0F, 4.0F}); });
 
-    m_frame_node->configure_all_styles([&theme](Style& style) {
-        style.control(theme, {}).border_radius(theme.checkbox_rounding);
-    });
+    m_frame_node->configure_all_styles([&theme](Style& style) { style.control(theme, {}).border_radius(2.0F); });
 
     m_fill_node->configure_all_styles([&theme](Style& style) {
-        style.background_color(theme.controls.mark_color).border_radius(theme.checkbox_rounding);
+        style.background_color(theme.controls.mark_color).border_radius(2.0F);
     });
 
     m_frame_node->configure_style(StyleType::HOVER, [&theme](Style& style) {

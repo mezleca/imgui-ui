@@ -17,7 +17,7 @@ namespace ui {
         char*, signed char*, unsigned char*, short*, unsigned short*, int*, unsigned int*, long*, unsigned long*, long long*,
         unsigned long long*, float*, double*>;
 
-    class NumberInputWidget final : public Widget {
+    class NumberInputWidget : public Widget {
     public:
         template <typename T>
             requires std::constructible_from<NumberValue, T*>
