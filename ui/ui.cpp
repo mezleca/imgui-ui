@@ -45,6 +45,7 @@ public:
     }
 
     void apply_theme_defaults(const Theme& theme) override {
+        ResizableContainer::apply_theme_defaults(theme);
         configure_all_styles([&theme](Style& style) {
             style.background_color(theme.background_color).border_color(theme.controls.border_color).border(BORDER_NONE);
         });
@@ -190,8 +191,6 @@ void UI::apply_theme_metrics() {
     style.FramePadding = scaled_size(theme.metrics.frame_padding);
     style.FrameRounding = scaled(theme.controls.rounding);
     style.FrameBorderSize = scaled(theme.metrics.frame_border_size);
-    style.GrabMinSize = std::max(1.0F, theme.controls.thumb_size) * scale;
-    style.GrabRounding = scaled(theme.controls.rounding);
     style.ItemSpacing = scaled_size(theme.metrics.item_spacing);
     style.ItemInnerSpacing = scaled_size(theme.metrics.item_inner_spacing);
     style.CircleTessellationMaxError = std::max(0.0F, theme.metrics.circle_tessellation_max_error);
@@ -225,7 +224,6 @@ void UI::apply_theme_colors() {
     colors[ImGuiCol_FrameBgHovered] = theme.controls.hover_color;
     colors[ImGuiCol_FrameBgActive] = theme.controls.active_color;
     colors[ImGuiCol_PopupBg] = theme.controls.background_color;
-    colors[ImGuiCol_ScrollbarBg] = theme.scrollbar_background_color;
     colors[ImGuiCol_CheckboxSelectedBg] = theme.controls.background_color;
     colors[ImGuiCol_TitleBg] = theme.background_secondary_color;
     colors[ImGuiCol_TitleBgActive] = theme.background_secondary_color;

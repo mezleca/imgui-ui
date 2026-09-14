@@ -360,6 +360,7 @@ ColorPickerWidget& ColorPickerWidget::set_label(std::string label) {
 }
 
 void ColorPickerWidget::apply_theme_defaults(const Theme& theme) {
+    StackContainer::apply_theme_defaults(theme);
     set_spacing(theme.metrics.item_spacing.y);
 
     const ImVec2 preview_size = {

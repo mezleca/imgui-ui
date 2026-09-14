@@ -20,6 +20,10 @@ Container& Container::set_scrollable(bool vertical, bool horizontal) {
     return *this;
 }
 
+void Container::apply_theme_defaults(const Theme& theme) {
+    configure_all_styles([&theme](Style& style) { style.scrollbar(theme.scrollbar); });
+}
+
 void Container::on_layout() {
     // resolve this container before arranging children against its size and padding.
     resolve_layout();
@@ -72,12 +76,6 @@ bool Container::paint() {
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, current_style.padding());
 
-    if (current_style.use_background_for_scrollbar()) {
-        ImVec4 background = current_style.background_color().value.Value;
-        background.w *= opacity() * current_style.alpha();
-        ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, background);
-    }
-
     // imgui truncates child window positions to integer pixels. round the origin before opening the
     // child window so an animated position keeps the child and following content on the same pixel
     // instead of jumping when the animation reaches its final value.
@@ -100,10 +98,6 @@ bool Container::paint() {
     draw_blur(*child_draw_list, child_rect, current_style.blur(), current_style.border_radius(), paint_opacity);
     ImGui::PopClipRect();
     draw_frame_surface(*child_draw_list, child_rect, current_style);
-
-    if (current_style.use_background_for_scrollbar()) {
-        ImGui::PopStyleColor();
-    }
 
     ImGui::PopStyleVar();
     return true;

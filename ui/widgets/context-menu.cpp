@@ -124,6 +124,7 @@ void ContextMenuWidget::on_event(UiEvent& event) {
 }
 
 void ContextMenuWidget::apply_theme_defaults(const Theme& theme) {
+    StackContainer::apply_theme_defaults(theme);
     set_size({px(184.0F), px(menu_height(m_items.size()))});
 
     configure_all_styles([&theme](Style& style) {

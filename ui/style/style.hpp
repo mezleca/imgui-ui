@@ -94,7 +94,14 @@ namespace ui {
         using ComputedStyle::padding;
         using ComputedStyle::rotation;
         using ComputedStyle::scale;
-        using ComputedStyle::use_background_for_scrollbar;
+        using ComputedStyle::scrollbar_background_color;
+        using ComputedStyle::scrollbar_grab_active_color;
+        using ComputedStyle::scrollbar_grab_color;
+        using ComputedStyle::scrollbar_grab_hovered_color;
+        using ComputedStyle::scrollbar_grab_rounding;
+        using ComputedStyle::scrollbar_minimum_grab_size;
+        using ComputedStyle::scrollbar_rounding;
+        using ComputedStyle::scrollbar_size;
         using ComputedStyle::variables;
 
         Style() = default;
@@ -154,8 +161,53 @@ namespace ui {
             return set_property(&ComputedStyle::m_cursor, value);
         }
 
-        Style& use_background_for_scrollbar(bool value = true) {
-            return set_property(&ComputedStyle::m_use_background_for_scrollbar, value);
+        Style& scrollbar(const Theme::Scrollbar& value) {
+            return scrollbar_size(value.size)
+                .scrollbar_rounding(value.rounding)
+                .scrollbar_minimum_grab_size(value.minimum_grab_size)
+                .scrollbar_grab_rounding(value.grab_rounding)
+                .scrollbar_background_color(value.background_color)
+                .scrollbar_grab_color(value.grab_color)
+                .scrollbar_grab_hovered_color(value.grab_hovered_color)
+                .scrollbar_grab_active_color(value.grab_active_color);
+        }
+
+        Style& scrollbar_size(float value) {
+            return set_property(&ComputedStyle::m_scrollbar_size, value, [](float size) { return std::max(0.0F, size); });
+        }
+
+        Style& scrollbar_rounding(float value) {
+            return set_property(&ComputedStyle::m_scrollbar_rounding, value, [](float rounding) {
+                return std::max(0.0F, rounding);
+            });
+        }
+
+        Style& scrollbar_minimum_grab_size(float value) {
+            return set_property(&ComputedStyle::m_scrollbar_minimum_grab_size, value, [](float size) {
+                return std::max(1.0F, size);
+            });
+        }
+
+        Style& scrollbar_grab_rounding(float value) {
+            return set_property(&ComputedStyle::m_scrollbar_grab_rounding, value, [](float rounding) {
+                return std::max(0.0F, rounding);
+            });
+        }
+
+        Style& scrollbar_background_color(ImColor value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_scrollbar_background_color, value, transition);
+        }
+
+        Style& scrollbar_grab_color(ImColor value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_color, value, transition);
+        }
+
+        Style& scrollbar_grab_hovered_color(ImColor value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_hovered_color, value, transition);
+        }
+
+        Style& scrollbar_grab_active_color(ImColor value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_active_color, value, transition);
         }
 
         Style& color(ImColor value, TransitionSpec transition = {}) {

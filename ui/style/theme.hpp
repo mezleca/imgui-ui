@@ -5,6 +5,18 @@
 namespace ui {
     /// groups runtime theming colors, control defaults, and ImGui metrics shared by all surfaces.
     struct Theme {
+        struct Scrollbar {
+            float size = 14.0F;
+            float rounding = 9.0F;
+            float minimum_grab_size = 12.0F;
+            float grab_rounding = 9.0F;
+
+            ImVec4 background_color = {0.02F, 0.025F, 0.04F, 0.53F};
+            ImVec4 grab_color = {0.35F, 0.42F, 0.58F, 1.0F};
+            ImVec4 grab_hovered_color = {0.42F, 0.70F, 1.0F, 1.0F};
+            ImVec4 grab_active_color = {0.26F, 0.59F, 0.98F, 1.0F};
+        } scrollbar;
+
         struct Controls {
             float rounding = 4.0F;
             float border_thickness = 1.0F;
@@ -39,7 +51,6 @@ namespace ui {
         ImVec4 background_color = {0.06F, 0.065F, 0.085F, 0.94F};
         ImVec4 background_secondary_color = {0.10F, 0.11F, 0.14F, 1.0F};
         ImVec4 background_tertiary_color = {0.045F, 0.05F, 0.07F, 1.0F};
-        ImVec4 scrollbar_background_color = {0.02F, 0.025F, 0.04F, 0.53F};
         ImVec4 header_background_color = {0.13F, 0.17F, 0.24F, 1.0F};
         ImVec4 text_color = {1.0F, 1.0F, 1.0F, 1.0F};
         ImVec4 text_secondary_color = {0.62F, 0.67F, 0.78F, 1.0F};

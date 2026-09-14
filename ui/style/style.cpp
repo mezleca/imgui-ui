@@ -17,7 +17,11 @@ using namespace ui;
     X(box_shadow, false)                                                                                                         \
     X(color, false)                                                                                                              \
     X(border_color, false)                                                                                                       \
-    X(background_color, false)
+    X(background_color, false)                                                                                                   \
+    X(scrollbar_background_color, false)                                                                                         \
+    X(scrollbar_grab_color, false)                                                                                               \
+    X(scrollbar_grab_hovered_color, false)                                                                                       \
+    X(scrollbar_grab_active_color, false)
 
 // expands the property list into one tick per animated property and records layout-affecting changes.
 #define UI_STYLE_TICK_PROPERTY(name, affects_measure)                                                                            \
@@ -36,7 +40,10 @@ bool Style::lerp(Style& style, const Style& target, float dt) {
     style.m_font = target.m_font;
     style.m_alpha = target.m_alpha;
     style.m_cursor = target.m_cursor;
-    style.m_use_background_for_scrollbar = target.m_use_background_for_scrollbar;
+    style.m_scrollbar_size = target.m_scrollbar_size;
+    style.m_scrollbar_rounding = target.m_scrollbar_rounding;
+    style.m_scrollbar_minimum_grab_size = target.m_scrollbar_minimum_grab_size;
+    style.m_scrollbar_grab_rounding = target.m_scrollbar_grab_rounding;
     style.m_blur = target.m_blur;
     style.m_border_thickness = target.m_border_thickness;
     style.m_border_radius = target.m_border_radius;

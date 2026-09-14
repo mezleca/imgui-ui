@@ -14,6 +14,10 @@ ComputedStyle::ComputedStyle() {
     m_color.set(theme.text_color);
     m_border_color.set(theme.border_color);
     m_background_color.set(theme.transparent);
+    m_scrollbar_background_color.set(theme.scrollbar.background_color);
+    m_scrollbar_grab_color.set(theme.scrollbar.grab_color);
+    m_scrollbar_grab_hovered_color.set(theme.scrollbar.grab_hovered_color);
+    m_scrollbar_grab_active_color.set(theme.scrollbar.grab_active_color);
 }
 
 PushState ComputedStyle::push(float opacity, ImFont* effective_font) const {
@@ -42,6 +46,10 @@ PushState ComputedStyle::push(float opacity, ImFont* effective_font) const {
     }
     if (current.FrameRounding != m_border_radius) push_var(ImGuiStyleVar_FrameRounding, m_border_radius);
     if (current.FrameBorderSize != 0.0F) push_var(ImGuiStyleVar_FrameBorderSize, 0.0F);
+    if (current.ScrollbarSize != m_scrollbar_size) push_var(ImGuiStyleVar_ScrollbarSize, m_scrollbar_size);
+    if (current.ScrollbarRounding != m_scrollbar_rounding) push_var(ImGuiStyleVar_ScrollbarRounding, m_scrollbar_rounding);
+    if (current.GrabMinSize != m_scrollbar_minimum_grab_size) push_var(ImGuiStyleVar_GrabMinSize, m_scrollbar_minimum_grab_size);
+    if (current.GrabRounding != m_scrollbar_grab_rounding) push_var(ImGuiStyleVar_GrabRounding, m_scrollbar_grab_rounding);
 
     const float alpha = current.Alpha * m_alpha * opacity;
     if (current.Alpha != alpha) push_var(ImGuiStyleVar_Alpha, alpha);
@@ -49,6 +57,10 @@ PushState ComputedStyle::push(float opacity, ImFont* effective_font) const {
     const ImVec4 text = m_color.get();
     const ImVec4 border = m_border_color.get();
     const ImVec4 background = m_background_color.get();
+    const ImVec4 scrollbar_background = m_scrollbar_background_color.get();
+    const ImVec4 scrollbar_grab = m_scrollbar_grab_color.get();
+    const ImVec4 scrollbar_grab_hovered = m_scrollbar_grab_hovered_color.get();
+    const ImVec4 scrollbar_grab_active = m_scrollbar_grab_active_color.get();
 
     push_color(ImGuiCol_Text, text);
     push_color(ImGuiCol_Border, border);
@@ -58,6 +70,10 @@ PushState ComputedStyle::push(float opacity, ImFont* effective_font) const {
     push_color(ImGuiCol_Button, background);
     push_color(ImGuiCol_ButtonHovered, background);
     push_color(ImGuiCol_ButtonActive, background);
+    push_color(ImGuiCol_ScrollbarBg, scrollbar_background);
+    push_color(ImGuiCol_ScrollbarGrab, scrollbar_grab);
+    push_color(ImGuiCol_ScrollbarGrabHovered, scrollbar_grab_hovered);
+    push_color(ImGuiCol_ScrollbarGrabActive, scrollbar_grab_active);
     return state;
 }
 

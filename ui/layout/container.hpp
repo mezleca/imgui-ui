@@ -16,6 +16,7 @@ namespace ui {
 
     protected:
         void on_layout() final;
+        void apply_theme_defaults(const Theme& theme) override;
 
         virtual void resolve_layout();
         virtual void arrange_children() {}

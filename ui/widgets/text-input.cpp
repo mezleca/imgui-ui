@@ -76,6 +76,7 @@ void TextInputWidget::on_event(UiEvent& event) {
 }
 
 void TextInputWidget::apply_theme_defaults(const Theme& theme) {
+    StackContainer::apply_theme_defaults(theme);
     const TransitionSpec transition{0.25F, easing::out_quad};
     set_spacing(10.0F);
     m_icon_node->set_size({px(18.0F), px(18.0F)});

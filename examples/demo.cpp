@@ -62,7 +62,7 @@ static Theme make_demo_theme(std::string_view variant) {
         theme.background_color = {255.0F / 255.0F, 245.0F / 255.0F, 245.0F / 255.0F, 1.0F};
         theme.background_secondary_color = {255.0F / 255.0F, 250.0F / 255.0F, 250.0F / 255.0F, 1.0F};
         theme.background_tertiary_color = {247.0F / 255.0F, 214.0F / 255.0F, 208.0F / 255.0F, 1.0F};
-        theme.scrollbar_background_color = {226.0F / 255.0F, 180.0F / 255.0F, 189.0F / 255.0F, 0.55F};
+        theme.scrollbar.background_color = {226.0F / 255.0F, 180.0F / 255.0F, 189.0F / 255.0F, 0.55F};
         theme.header_background_color = {247.0F / 255.0F, 214.0F / 255.0F, 208.0F / 255.0F, 1.0F};
         theme.text_color = {74.0F / 255.0F, 74.0F / 255.0F, 74.0F / 255.0F, 1.0F};
         theme.text_secondary_color = {106.0F / 255.0F, 87.0F / 255.0F, 90.0F / 255.0F, 1.0F};
@@ -85,7 +85,7 @@ static Theme make_demo_theme(std::string_view variant) {
         theme.background_color = {0.078F, 0.071F, 0.094F, 1.0F};
         theme.background_secondary_color = {0.129F, 0.122F, 0.149F, 1.0F};
         theme.background_tertiary_color = {0.059F, 0.051F, 0.075F, 1.0F};
-        theme.scrollbar_background_color = {0.059F, 0.051F, 0.075F, 1.0F};
+        theme.scrollbar.background_color = {0.059F, 0.051F, 0.075F, 1.0F};
         theme.header_background_color = {0.169F, 0.161F, 0.188F, 1.0F};
         theme.text_color = {0.902F, 0.878F, 0.914F, 1.0F};
         theme.text_secondary_color = {0.792F, 0.769F, 0.816F, 1.0F};
@@ -247,6 +247,7 @@ public:
 
 protected:
     void apply_theme_defaults(const Theme& theme) override {
+        StackContainer::apply_theme_defaults(theme);
         const ImVec4& background = m_tone == DemoPanelTone::Secondary  ? theme.background_secondary_color
                                    : m_tone == DemoPanelTone::Tertiary ? theme.background_tertiary_color
                                                                        : theme.background_color;
@@ -428,6 +429,7 @@ public:
 
 protected:
     void apply_theme_defaults(const Theme& theme) override {
+        ResizableContainer::apply_theme_defaults(theme);
         configure_all_styles([&theme](Style& style) {
             style.background_color(theme.background_tertiary_color)
                 .border(BORDER_NONE)
@@ -445,6 +447,7 @@ public:
 
 protected:
     void apply_theme_defaults(const Theme& theme) override {
+        StackContainer::apply_theme_defaults(theme);
         configure_all_styles([&theme](Style& style) {
             style.padding({8.0F, 8.0F}).background_color(theme.background_tertiary_color).border(BORDER_NONE).border_radius(4.0F);
         });
@@ -466,6 +469,7 @@ private:
 
 protected:
     void apply_theme_defaults(const Theme& theme) override {
+        StackContainer::apply_theme_defaults(theme);
         configure_all_styles([&theme](Style& style) {
             style.padding({12.0F, 12.0F}).background_color(theme.background_secondary_color);
         });

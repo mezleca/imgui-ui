@@ -432,6 +432,7 @@ Debugger::Debugger(UI& target)
 }
 
 void Debugger::apply_theme_defaults(const Theme& theme) {
+    Container::apply_theme_defaults(theme);
     configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color)
             .background_color(theme.background_secondary_color)

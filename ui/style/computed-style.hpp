@@ -78,8 +78,36 @@ namespace ui {
             return m_cursor;
         }
 
-        bool use_background_for_scrollbar() const {
-            return m_use_background_for_scrollbar;
+        float scrollbar_size() const {
+            return m_scrollbar_size;
+        }
+
+        float scrollbar_rounding() const {
+            return m_scrollbar_rounding;
+        }
+
+        float scrollbar_minimum_grab_size() const {
+            return m_scrollbar_minimum_grab_size;
+        }
+
+        float scrollbar_grab_rounding() const {
+            return m_scrollbar_grab_rounding;
+        }
+
+        const ColorValue& scrollbar_background_color() const {
+            return m_scrollbar_background_color;
+        }
+
+        const ColorValue& scrollbar_grab_color() const {
+            return m_scrollbar_grab_color;
+        }
+
+        const ColorValue& scrollbar_grab_hovered_color() const {
+            return m_scrollbar_grab_hovered_color;
+        }
+
+        const ColorValue& scrollbar_grab_active_color() const {
+            return m_scrollbar_grab_active_color;
         }
 
         const ColorValue& color() const {
@@ -141,7 +169,10 @@ namespace ui {
         Vec2Value m_scale{ImVec2{1.0F, 1.0F}};
         float m_alpha = 1.0F;
         ImGuiMouseCursor m_cursor = ImGuiMouseCursor_None;
-        bool m_use_background_for_scrollbar = true;
+        float m_scrollbar_size = 14.0F;
+        float m_scrollbar_rounding = 9.0F;
+        float m_scrollbar_minimum_grab_size = 12.0F;
+        float m_scrollbar_grab_rounding = 9.0F;
         int m_blur = 0;
         float m_border_thickness = 1.0F;
         float m_border_radius = 4.0F;
@@ -149,6 +180,10 @@ namespace ui {
         ColorValue m_color;
         ColorValue m_border_color;
         ColorValue m_background_color;
+        ColorValue m_scrollbar_background_color;
+        ColorValue m_scrollbar_grab_color;
+        ColorValue m_scrollbar_grab_hovered_color;
+        ColorValue m_scrollbar_grab_active_color;
         uint8_t m_border = BORDER_NONE;
         BorderStyle m_border_style = BorderStyle::Solid;
         StyleVariableStore m_vars;
