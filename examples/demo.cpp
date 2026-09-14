@@ -540,7 +540,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     m_test_images = &profile.add<StackContainer>("demo-images", StackDirection::Horizontal);
     m_test_images->set_size({grow(), fit()});
     m_test_images->set_spacing(8.0F);
-    m_test_images->set_scrollable(true);
+    m_test_images->set_scrollable(false, true);
 
     m_test_images->configure_all_styles([](Style& style) {
         style.box_shadow({

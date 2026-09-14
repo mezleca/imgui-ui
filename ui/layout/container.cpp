@@ -14,8 +14,9 @@ Container::Container(std::string id, std::string_view type_name) : Widget(std::m
     configure_all_styles([](Style& style) { style.padding({}); });
 }
 
-Container& Container::set_scrollable(bool scrollable) {
-    m_scrollable = scrollable;
+Container& Container::set_scrollable(bool vertical, bool horizontal) {
+    m_scroll_vertical = vertical;
+    m_scroll_horizontal = horizontal;
     return *this;
 }
 
@@ -57,8 +58,11 @@ bool Container::paint() {
     ImGuiChildFlags child_flags = ImGuiChildFlags_AlwaysUseWindowPadding;
     ImGuiWindowFlags window_flags = constants::WIDGET_WINDOW_FLAGS | ImGuiWindowFlags_NoBackground;
 
-    if (m_scrollable) {
+    if (m_scroll_vertical || m_scroll_horizontal) {
         window_flags &= ~(ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    }
+
+    if (m_scroll_horizontal) {
         window_flags |= ImGuiWindowFlags_HorizontalScrollbar;
     }
 

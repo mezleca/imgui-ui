@@ -913,7 +913,7 @@ TEST_CASE("node screen rectangles follow scrollable child windows") {
         explicit ScrollProbeContainer(bool horizontal)
             : Container(horizontal ? "horizontal-scroll-probe" : "vertical-scroll-probe"), m_horizontal(horizontal) {
             set_size({px(100.0F), px(50.0F)});
-            set_scrollable(true);
+            set_scrollable(!horizontal, horizontal);
         }
 
         bool scroll_to_end = false;
