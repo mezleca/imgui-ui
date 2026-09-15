@@ -151,7 +151,7 @@ namespace ui {
 
         virtual ImVec2 layout_margin() const;
 
-        /// replaces the width and height sizing modes.
+        /// replaces the width and height sizing modes. fixed axes define content size; padding expands the final layout box.
         Node& set_size(LayoutSize size) {
             const LayoutSize& current = m_layout.size_spec();
             if (m_layout.m_has_explicit_size_request && current == size) {

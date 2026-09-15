@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../layout/stack-container.hpp"
+#include "../layout/container.hpp"
 
 #include <functional>
 #include <string>
@@ -30,7 +30,7 @@ namespace ui {
 
     using ContextMenuItems = std::vector<ContextMenuItem>;
 
-    class ContextMenuWidget : public StackContainer {
+    class ContextMenuWidget : public Container {
     public:
         ContextMenuWidget(ContextMenuItems items = {}, Texture* submenu_icon = nullptr);
 

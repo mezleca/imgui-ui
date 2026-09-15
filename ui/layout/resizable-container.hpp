@@ -1,9 +1,9 @@
 #pragma once
 
-#include "stack-container.hpp"
+#include "container.hpp"
 
 namespace ui {
-    class ResizableContainer : public StackContainer {
+    class ResizableContainer : public Container {
     public:
         explicit ResizableContainer(std::string id);
 

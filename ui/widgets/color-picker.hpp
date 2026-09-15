@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../layout/stack-container.hpp"
+#include "../layout/container.hpp"
 
 #include <string>
 
@@ -9,7 +9,7 @@ namespace ui {
     class ColorPickerPreviewNode;
     class TextWidget;
 
-    class ColorPickerWidget : public StackContainer {
+    class ColorPickerWidget : public Container {
     public:
         ColorPickerWidget(ImColor& color, std::string label = {}, std::string id = {});
 

@@ -38,6 +38,7 @@ protected:
 
         configure_style(StyleType::HOVER, [&theme](Style& style) { style.background_color(theme.controls.hover_color); });
         configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.background_color(theme.controls.active_color); });
+        set_size({grow(), px(20.0F)});
     }
 
 private:
@@ -99,7 +100,7 @@ private:
 };
 
 ContextMenuWidget::ContextMenuWidget(ContextMenuItems items, Texture* submenu_icon)
-    : StackContainer({}, StackDirection::Vertical), m_submenu_icon(submenu_icon) {
+    : Container({}, StackDirection::Vertical), m_submenu_icon(submenu_icon) {
     set_type_name("ContextMenu");
     set_layout({.in_flow = false});
     set_visible(false);
@@ -116,7 +117,7 @@ void ContextMenuWidget::on_event(UiEvent& event) {
 }
 
 void ContextMenuWidget::apply_theme_defaults(const Theme& theme) {
-    StackContainer::apply_theme_defaults(theme);
+    Container::apply_theme_defaults(theme);
     if (m_submenu_icon == nullptr) {
         set_submenu_icon(surface().runtime().textures().find("context-menu-chevron"));
     }
@@ -268,7 +269,7 @@ void ContextMenuWidget::draw_children() {
 }
 
 void ContextMenuWidget::on_draw_end() {
-    StackContainer::on_draw_end();
+    Container::on_draw_end();
 
     for (ContextMenuItemNode* item : m_items) {
         if (item->m_submenu == nullptr || !item->m_submenu->is_open()) {

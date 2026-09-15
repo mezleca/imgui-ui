@@ -9,10 +9,15 @@ namespace ui {
     class Container : public Widget {
     public:
         explicit Container(std::string id, std::string_view type_name = "Container");
+        Container(std::string id, StackDirection direction, std::string_view type_name = "Container");
 
         /// enables the requested scrollbars. imgui may still show a vertical scrollbar when horizontal scrolling is enabled,
         /// even if vertical is false.
         Container& set_scrollable(bool vertical, bool horizontal = false);
+        Container& set_direction(StackDirection direction);
+        Container& set_content_alignment(Anchor alignment);
+        Container& set_content_alignment(ImVec2 alignment);
+        Container& set_spacing(float spacing);
 
     protected:
         void on_layout() final;
@@ -26,14 +31,15 @@ namespace ui {
         bool paint() override;
         void on_draw_end() override;
 
-        virtual StackDirection stack_direction() const;
-        virtual float stack_spacing() const;
-        virtual ImVec2 stack_content_alignment() const;
         const ImVec2& arranged_content_size() const;
+        virtual ImVec2 child_window_content_size() const;
 
     private:
         bool m_scroll_vertical = false;
         bool m_scroll_horizontal = false;
+        StackDirection m_direction = StackDirection::Vertical;
+        float m_spacing = 0.0F;
+        ImVec2 m_content_alignment{};
         ImVec2 m_content_size{};
     };
 } // namespace ui

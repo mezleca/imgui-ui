@@ -6,7 +6,6 @@
 #include <ui/imgui/context-scope.hpp>
 #include <ui/layout/container.hpp>
 #include <ui/layout/layer-container.hpp>
-#include <ui/layout/stack-container.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
 #include <ui/widgets/checkbox.hpp>
@@ -199,7 +198,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
         style.background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F}).blur(5.0F);
     });
 
-    auto& modal = modal_layer.add<ui::StackContainer>("modal");
+    auto& modal = modal_layer.add<ui::Container>("modal");
     modal.set_size({ui::px(480.0F), ui::px(220.0F)});
     modal.set_layout({
         .size = {ui::px(480.0F), ui::px(220.0F)},
@@ -270,12 +269,17 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
     REQUIRE(GImGui->ActiveId == slider_id);
     REQUIRE(value > 0);
 
+    const int value_before_leaving_modal = value;
     send_pointer(SDL_EVENT_MOUSE_MOTION, {850.0F, press.y});
     ui_test::draw_surface(surface);
     const int outside_value = value;
+    REQUIRE(outside_value != value_before_leaving_modal);
+    send_pointer(SDL_EVENT_MOUSE_BUTTON_UP, {850.0F, press.y});
+    ui_test::draw_surface(surface);
+    REQUIRE(GImGui->ActiveId == 0);
     send_pointer(SDL_EVENT_MOUSE_MOTION, {rect.min.x + rect.size().x * 0.80F, press.y});
     ui_test::draw_surface(surface);
-    REQUIRE(value != outside_value);
+    REQUIRE(value == outside_value);
 }
 
 TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regression]") {

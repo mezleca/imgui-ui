@@ -2,12 +2,18 @@
 
 #include "../style/styled-node.hpp"
 
+#include <cstdint>
 #include <functional>
 #include <imgui.h>
 #include <string>
 #include <string_view>
 
 namespace ui {
+    enum class LabelPlacement : uint8_t {
+        Inline,
+        Above,
+    };
+
     class Widget : public StyledNode {
     public:
         explicit Widget(std::string id, std::string_view type_name = "Widget", InputMode input_mode = InputMode::Target)

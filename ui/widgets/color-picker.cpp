@@ -145,10 +145,9 @@ public:
 
 private:
     void apply_theme_defaults(const Theme& theme) override {
-        const ImVec2 padding = {12.0F, 12.0F};
         const float bar_size = std::max(1.0F, theme.controls.thumb_size);
 
-        set_size({px(196.0F + theme.metrics.item_spacing.x + bar_size + padding.x * 2.0F), fit()});
+        set_size({px(196.0F + theme.metrics.item_spacing.x + bar_size), fit()});
 
         configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
@@ -323,7 +322,7 @@ private:
 
         ImGui::SetCursorScreenPos({alpha_bar.min.x, alpha_bar.max.y + spacing.y});
 
-        m_hex_input->set_size({px(alpha_bar.size().x), fit()});
+        arrange_child(*m_hex_input, {alpha_bar.size().x, m_hex_input->layout().intrinsic_size().y});
         m_hex_input->draw();
     }
 
@@ -341,7 +340,7 @@ private:
 };
 
 ColorPickerWidget::ColorPickerWidget(ImColor& color, std::string label, std::string id)
-    : StackContainer(std::move(id), StackDirection::Vertical), m_color(&color) {
+    : Container(std::move(id), StackDirection::Vertical), m_color(&color) {
     m_label_node = &add<TextWidget>(std::move(label));
     m_label_node->set_visible(!m_label_node->empty());
     m_preview = &add<ColorPickerPreviewNode>(*this, color);
@@ -355,7 +354,7 @@ ColorPickerWidget& ColorPickerWidget::set_label(std::string label) {
 }
 
 void ColorPickerWidget::apply_theme_defaults(const Theme& theme) {
-    StackContainer::apply_theme_defaults(theme);
+    Container::apply_theme_defaults(theme);
     set_spacing(theme.metrics.item_spacing.y);
 
     const ImVec2 preview_size = {

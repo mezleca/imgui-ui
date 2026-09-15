@@ -12,6 +12,7 @@ void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
     const TransitionSpec transition{0.25F, easing::out_quad};
     m_thumb_color = theme.controls.mark_color;
     m_thumb_size = theme.controls.thumb_size;
+    m_label_spacing = theme.metrics.item_spacing.y;
 
     configure_all_styles([&theme, transition](Style& style) { style.control(theme, {}, transition); });
 
@@ -37,6 +38,16 @@ NumberInputWidget& NumberInputWidget::set_label(std::string label) {
         return *this;
     }
 
+    invalidate_measure();
+    return *this;
+}
+
+NumberInputWidget& NumberInputWidget::set_label_placement(LabelPlacement placement) {
+    if (m_label_placement == placement) {
+        return *this;
+    }
+
+    m_label_placement = placement;
     invalidate_measure();
     return *this;
 }
@@ -93,13 +104,16 @@ void NumberInputWidget::sync_value() const {
 }
 
 void NumberInputWidget::on_measure() {
-    ImVec2 size = layout().intrinsic_size();
+    ImVec2 size{};
     sync_value();
     m_value.set_font(font());
     m_label.set_font(font());
 
     if (layout().size_spec().height.mode != LayoutSizeMode::Fixed) {
         size.y = m_value.line_height();
+        if (!m_label.str().empty() && m_label_placement == LabelPlacement::Above) {
+            size.y += m_label.line_height() + m_label_spacing;
+        }
     }
 
     set_measured_content_size(size, false, true);
@@ -146,16 +160,26 @@ bool NumberInputWidget::paint() {
     ImVec2 frame_padding = current_style.padding();
     m_label.set_font(font());
     const ImVec2 label_size = m_label.text_size();
+    float input_height = layout().size().y;
+    if (label_size.x > 0.0F && m_label_placement == LabelPlacement::Above) {
+        input_height = std::max(0.0F, input_height - label_size.y - m_label_spacing);
+    }
 
-    if (layout().size().y > 0.0F) {
-        frame_padding.y = std::max(0.0F, (layout().size().y - ImGui::GetTextLineHeight()) * 0.5F);
+    if (input_height > 0.0F) {
+        frame_padding.y = std::max(0.0F, (input_height - ImGui::GetTextLineHeight()) * 0.5F);
     }
 
     ImGui::PushID(this);
     ImGui::BeginGroup();
 
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, m_thumb_size);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, current_style.border_radius());
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, m_thumb_color.Value);
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, m_thumb_color.Value);
+
     float input_width = layout().size().x;
-    if (label_size.x > 0.0F) {
+    if (label_size.x > 0.0F && m_label_placement == LabelPlacement::Inline) {
         const float label_width = label_size.x + ImGui::GetStyle().ItemInnerSpacing.x;
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted(m_label.c_str());
@@ -163,14 +187,12 @@ bool NumberInputWidget::paint() {
         if (input_width > 0.0F) {
             input_width = std::max(1.0F, input_width - label_width);
         }
+    } else if (label_size.x > 0.0F) {
+        ImGui::TextUnformatted(m_label.c_str());
+        ImGui::Dummy({0.0F, m_label_spacing});
     }
 
     ImGui::SetNextItemWidth(input_width > 0.0F ? input_width : -1.0F);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, m_thumb_size);
-    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, current_style.border_radius());
-    ImGui::PushStyleColor(ImGuiCol_SliderGrab, m_thumb_color.Value);
-    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, m_thumb_color.Value);
 
     if (std::visit([this](auto* value) { return draw_value(*value); }, m_number)) {
         notify_change();

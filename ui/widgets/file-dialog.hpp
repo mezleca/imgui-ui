@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../file-dialog/file-dialog.hpp"
-#include "../layout/stack-container.hpp"
+#include "../layout/container.hpp"
 
 #include <string>
 #include <string_view>
@@ -9,7 +9,7 @@
 namespace ui {
     class TextWidget;
 
-    class FileDialogWidget final : public StackContainer {
+    class FileDialogWidget final : public Container {
     public:
         explicit FileDialogWidget(std::string label, std::string id = "FileDialog");
 

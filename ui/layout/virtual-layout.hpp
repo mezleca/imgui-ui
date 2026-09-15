@@ -45,8 +45,8 @@ namespace ui {
     protected:
         void on_measure() override;
         void arrange_children() override {}
-        bool paint() override;
         void draw_children() override;
+        ImVec2 child_window_content_size() const override;
 
     private:
         using ItemRange = std::pair<size_t, size_t>;

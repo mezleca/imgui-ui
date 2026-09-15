@@ -7,7 +7,7 @@
 using namespace ui;
 
 FileDialogWidget::FileDialogWidget(std::string label, std::string id)
-    : StackContainer(std::move(id), StackDirection::Horizontal), m_value(std::move(label)), m_field(add<TextWidget>(m_value)) {
+    : Container(std::move(id), StackDirection::Horizontal), m_value(std::move(label)), m_field(add<TextWidget>(m_value)) {
     set_input_mode(InputMode::Target);
     set_type_name("FileDialog");
     set_content_alignment({0.5F, 0.5F});
@@ -15,7 +15,7 @@ FileDialogWidget::FileDialogWidget(std::string label, std::string id)
 }
 
 void FileDialogWidget::apply_theme_defaults(const Theme& theme) {
-    StackContainer::apply_theme_defaults(theme);
+    Container::apply_theme_defaults(theme);
     set_font(surface().get_primary_font(18));
 
     configure_all_styles([&theme](Style& style) {

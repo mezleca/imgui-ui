@@ -3,6 +3,7 @@
 #include "../style/theme.hpp"
 #include "../ui.hpp"
 #include "image.hpp"
+#include "text.hpp"
 
 #include <cfloat>
 #include <imgui_stdlib.h>
@@ -42,18 +43,27 @@ private:
     bool m_changed = false;
 };
 
-TextInputWidget::TextInputWidget(std::string& value, std::string label)
-    : StackContainer(std::move(label), StackDirection::Horizontal), m_value(&value) {
+TextInputWidget::TextInputWidget(std::string& value, std::string id)
+    : Container(std::move(id), StackDirection::Horizontal), m_value(&value) {
     set_input_mode(InputMode::Target);
+    set_size({grow(), fit()});
 
     set_type_name("TextInput");
     set_content_alignment(Anchor::CenterLeft);
-    m_icon_node = &add<ImageWidget>();
+    m_label_node = &add<TextWidget>("");
+    m_label_node->set_id("label");
+    m_label_node->set_visible(false);
+
+    m_input_node = &add<Container>("input", StackDirection::Horizontal, "TextInputField");
+    m_input_node->set_size({grow(), fit()});
+    m_input_node->set_content_alignment(Anchor::CenterLeft);
+
+    m_icon_node = &m_input_node->add<ImageWidget>();
     m_icon_node->set_id("icon");
     m_icon_node->set_enabled(false);
     m_icon_node->set_visible(false);
 
-    m_field_node = &add<FieldNode>(value, m_focus_requested);
+    m_field_node = &m_input_node->add<FieldNode>(value, m_focus_requested);
 }
 
 void TextInputWidget::on_event(UiEvent& event) {
@@ -73,10 +83,12 @@ void TextInputWidget::on_event(UiEvent& event) {
 }
 
 void TextInputWidget::apply_theme_defaults(const Theme& theme) {
-    StackContainer::apply_theme_defaults(theme);
+    Container::apply_theme_defaults(theme);
     set_font(surface().get_primary_font(18));
     const TransitionSpec transition{0.25F, easing::out_quad};
-    set_spacing(10.0F);
+    m_label_spacing = {theme.metrics.item_inner_spacing.x, theme.metrics.item_spacing.y};
+    update_label_layout();
+    m_input_node->set_spacing(theme.metrics.item_inner_spacing.x);
     m_icon_node->set_size({px(18.0F), px(18.0F)});
     m_field_node->set_size({grow(), px(18.0F)});
 
@@ -103,6 +115,24 @@ void TextInputWidget::apply_theme_defaults(const Theme& theme) {
     });
 }
 
+TextInputWidget& TextInputWidget::set_label(std::string label) {
+    m_label_node->set_text(std::move(label));
+    m_label_node->set_visible(!m_label_node->empty());
+    update_label_layout();
+    invalidate_measure();
+    return *this;
+}
+
+TextInputWidget& TextInputWidget::set_label_placement(LabelPlacement placement) {
+    if (m_label_placement == placement) {
+        return *this;
+    }
+
+    m_label_placement = placement;
+    update_label_layout();
+    return *this;
+}
+
 TextInputWidget& TextInputWidget::set_icon(Texture* icon) {
     m_icon_node->set_texture(icon);
     m_icon_node->set_visible(icon != nullptr);
@@ -119,15 +149,12 @@ bool TextInputWidget::set_value(std::string value) {
     return true;
 }
 
-void TextInputWidget::on_measure() {
-    ImVec2 size = layout().intrinsic_size();
-    if (layout().size_spec().height.mode != LayoutSizeMode::Fixed && font() != nullptr && ImGui::GetCurrentContext() != nullptr) {
-        ImGui::PushFont(font());
-        size.y = ImGui::GetTextLineHeight();
-        ImGui::PopFont();
-    }
-
-    set_measured_content_size(size, false, true);
+void TextInputWidget::update_label_layout() {
+    const bool above = m_label_placement == LabelPlacement::Above;
+    set_direction(above ? StackDirection::Vertical : StackDirection::Horizontal);
+    set_spacing(above ? m_label_spacing.y : m_label_spacing.x);
+    m_label_node->set_size({fit(), fit()});
+    m_input_node->set_size({grow(), fit()});
 }
 
 void TextInputWidget::on_draw_end() {

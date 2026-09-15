@@ -235,18 +235,18 @@ void configure_demo_runtime(RuntimeConfig& config) {
 #endif
 }
 
-class DemoPanel : public StackContainer {
+class DemoPanel : public Container {
 public:
     DemoPanel(
         std::string id, DemoPanelTone tone = DemoPanelTone::Base, ImVec2 padding = {14.0F, 14.0F}, uint8_t border = BORDER_NONE,
         bool accent_border = false, bool shadow = false
     )
-        : StackContainer(std::move(id)), m_tone(tone), m_padding(padding), m_border(border), m_accent_border(accent_border),
+        : Container(std::move(id)), m_tone(tone), m_padding(padding), m_border(border), m_accent_border(accent_border),
           m_shadow(shadow) {}
 
 protected:
     void apply_theme_defaults(const Theme& theme) override {
-        StackContainer::apply_theme_defaults(theme);
+        Container::apply_theme_defaults(theme);
         const ImVec4& background = m_tone == DemoPanelTone::Secondary  ? theme.background_secondary_color
                                    : m_tone == DemoPanelTone::Tertiary ? theme.background_tertiary_color
                                                                        : theme.background_color;
@@ -453,21 +453,21 @@ protected:
     }
 };
 
-class DemoTextListWidget final : public StackContainer {
+class DemoTextListWidget final : public Container {
 public:
     explicit DemoTextListWidget(std::vector<std::string> items);
     DemoTextListWidget& set_items(std::vector<std::string> items);
 
 protected:
     void apply_theme_defaults(const Theme& theme) override {
-        StackContainer::apply_theme_defaults(theme);
+        Container::apply_theme_defaults(theme);
         configure_all_styles([&theme](Style& style) {
             style.padding({8.0F, 8.0F}).background_color(theme.background_tertiary_color).border(BORDER_NONE).border_radius(4.0F);
         });
     }
 };
 
-class DemoScreen final : public StackContainer {
+class DemoScreen final : public Container {
 public:
     DemoScreen();
     void setup(std::string backend);
@@ -483,7 +483,7 @@ private:
 
 protected:
     void apply_theme_defaults(const Theme& theme) override {
-        StackContainer::apply_theme_defaults(theme);
+        Container::apply_theme_defaults(theme);
         configure_all_styles([&theme](Style& style) {
             style.padding({12.0F, 12.0F}).background_color(theme.background_secondary_color);
         });
@@ -493,7 +493,7 @@ private:
     ResizableContainer* m_dynamic_nodes = nullptr;
     TextWidget* m_dynamic_status = nullptr;
     TextWidget* m_fps = nullptr;
-    StackContainer* m_test_images = nullptr;
+    Container* m_test_images = nullptr;
     std::vector<Node*> m_pending_image_removals;
     Node* m_pending_remove = nullptr;
     bool m_enabled = true;
@@ -511,7 +511,7 @@ private:
     int m_blur = 5;
 };
 
-DemoTextListWidget::DemoTextListWidget(std::vector<std::string> items) : StackContainer("demo-text-list") {
+DemoTextListWidget::DemoTextListWidget(std::vector<std::string> items) : Container("demo-text-list") {
     set_spacing(8.0F);
     set_size({fit(), fit()});
     set_items(std::move(items));
@@ -525,7 +525,7 @@ DemoTextListWidget& DemoTextListWidget::set_items(std::vector<std::string> items
     return *this;
 }
 
-DemoScreen::DemoScreen() : StackContainer("demo", StackDirection::Vertical) {
+DemoScreen::DemoScreen() : Container("demo", StackDirection::Vertical) {
     set_size({grow(), grow()});
     set_scrollable(true);
     set_spacing(16.0F);
@@ -550,12 +550,13 @@ void DemoScreen::setup(std::string backend) {
     profile.set_spacing(8.0F);
     profile.add<TextWidget>("profile");
     auto& name_input = profile.add<DemoTextInput>(m_name, "name");
-    name_input.set_size({px(360.0F), px(42.0F)});
-    name_input.set_icon(ui.runtime().textures().find("demo-file-icon"));
+    name_input.set_label("name")
+        .set_label_placement(LabelPlacement::Above)
+        .set_icon(ui.runtime().textures().find("demo-file-icon"));
     profile.add<DemoCheckbox>(m_enabled, "enabled").set_size({px(360.0F), px(32.0F)});
     profile.add<DemoColorPicker>(m_color, "color", "color-picker");
 
-    m_test_images = &profile.add<StackContainer>("demo-images", StackDirection::Horizontal);
+    m_test_images = &profile.add<Container>("demo-images", StackDirection::Horizontal);
     m_test_images->set_size({grow(), px(140.0F)});
     m_test_images->set_spacing(8.0F);
     m_test_images->set_scrollable(false, true);
@@ -582,7 +583,7 @@ void DemoScreen::setup(std::string backend) {
         m_image_fit, std::vector<DropdownOption>{{"fill", "fill"}, {"contain", "contain"}, {"cover", "cover"}}, "image-fit"
     );
 
-    image_fit.set_label("image fit").set_size({px(280.0F), px(68.0F)});
+    image_fit.set_label("image fit").set_size({px(280.0F), fit()});
     image_fit.set_on_change([this] { apply_image_fit(); });
 
     profile.add<DemoAnimatedText>("hover for cool animation");
@@ -601,7 +602,7 @@ void DemoScreen::setup(std::string backend) {
         m_theme, std::vector<DropdownOption>{{"default", "default"}, {"pastel", "pastel"}, {"material 3", "material"}}, "theme"
     );
 
-    theme.set_label("theme").set_size({px(360.0F), px(68.0F)});
+    theme.set_label("theme").set_size({px(360.0F), fit()});
     theme.set_on_change([this] {
         s_demo_theme_variant = demo_theme_variant(m_theme);
         surface().set_theme(make_demo_theme(m_theme));
@@ -612,7 +613,7 @@ void DemoScreen::setup(std::string backend) {
         "border-style"
     );
 
-    border_style.set_label("border style").set_size({px(360.0F), px(68.0F)});
+    border_style.set_label("border style").set_size({px(360.0F), fit()});
     border_style.set_on_change([this] {
         const BorderStyle style = m_border_style == "dashed"   ? BorderStyle::Dashed
                                   : m_border_style == "dotted" ? BorderStyle::Dotted
@@ -693,11 +694,11 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
         .in_flow = false,
     });
 
-    auto& node_controls = dynamic_section.add<StackContainer>("dynamic-node-controls", StackDirection::Vertical);
-    node_controls.set_size({px(120.0F), grow()});
+    auto& node_controls = dynamic_section.add<Container>("dynamic-node-controls", StackDirection::Vertical);
+    node_controls.set_size({grow(), grow()});
     node_controls.set_spacing(8.0F);
 
-    auto& dynamic_list = dynamic_section.add<StackContainer>("dynamic-list", StackDirection::Vertical);
+    auto& dynamic_list = dynamic_section.add<Container>("dynamic-list", StackDirection::Vertical);
     dynamic_list.set_size({px(300.0F), grow()});
     dynamic_list.set_spacing(8.0F);
     m_dynamic_status = &dynamic_list.add<TextWidget>("dynamic nodes: 0");
@@ -861,29 +862,7 @@ void setup_demo(UI& surface, std::string backend) {
     demo.setup(std::move(backend));
 
     auto& overlay = demo.add<LayerContainer>("##demo-overlay");
-    auto& panel = overlay.add<DemoPanel>("overlay-panel");
-
-    panel.set_layout({
-        .size = {fit(), fit()},
-        .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-(460.0F + 12.0F + 20.0F), 72.0F}},
-        .in_flow = false,
-    });
-    panel.add<TextWidget>("this panel is on the overlay layer");
-    panel.set_visible(false);
-
     demo.setup_dynamic_nodes(overlay);
-
-    auto& overlay_button = overlay.add<DemoAccentButton>("show overlay", LayoutSize{px(160.0F), px(40.0F)});
-
-    overlay_button.set_layout({
-        .size = {px(160.0F), px(40.0F)},
-        .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-20.0F, 20.0F}},
-        .in_flow = false,
-    });
-    overlay_button.set_on_click([&overlay_button, &panel] {
-        panel.set_visible(!panel.visible());
-        overlay_button.set_text(panel.visible() ? "hide overlay" : "show overlay");
-    });
 
     auto& context_status = demo.add<TextWidget>("context menu: no selection");
     auto& context_button = demo.add<ButtonWidget>("open context menu", LayoutSize{px(220.0F), px(40.0F)});

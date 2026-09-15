@@ -168,8 +168,10 @@ TEST_CASE("focused debugger blocks application hover") {
 
     const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
 
-    const auto draw_frame = [&surface] {
-        ImGui::GetIO().MousePos = {30.0F, 30.0F};
+    ui_test::draw_surface(surface);
+    const ImVec2 checkbox_position = ui_test::center(checkbox.frame().layout().visual_rect());
+    const auto draw_frame = [&surface, checkbox_position] {
+        ImGui::GetIO().MousePos = checkbox_position;
         ui_test::draw_surface(surface);
     };
 
@@ -180,7 +182,7 @@ TEST_CASE("focused debugger blocks application hover") {
     draw_frame();
     REQUIRE_FALSE(checkbox.input_state().hovered);
 
-    ui::UiEvent down = ui_test::pointer_event(ui::EventType::PointerDown, {30.0F, 30.0F});
+    ui::UiEvent down = ui_test::pointer_event(ui::EventType::PointerDown, checkbox_position);
     REQUIRE(surface.dispatch(down));
 
     ui::UiEvent up = ui_test::pointer_event(ui::EventType::PointerUp, down.position);

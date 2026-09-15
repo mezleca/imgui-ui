@@ -303,8 +303,12 @@ bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
         ImGui::GetIO().AddMousePosEvent(event.button.x, event.button.y);
     }
 
-    // a blocked click keeps the last pointer position while blocked motion hides it from imgui.
-    if (native_input_blocked && translated.has_value() && translated->type == EventType::PointerMove) {
+    const bool native_drag_active = ImGui::IsAnyItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    const bool blocked_pointer_move =
+        native_input_blocked && translated.has_value() && translated->type == EventType::PointerMove;
+
+    // a blocked click keeps the last pointer position while a native drag retains its pointer capture.
+    if (blocked_pointer_move && !native_drag_active) {
         ImGui::GetIO().AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     }
 
@@ -315,6 +319,9 @@ bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
         imgui_event.wheel.y *= constants::SCROLL_WHEEL_SCALE;
     }
 
-    if (!native_input_blocked) ImGui_ImplSDL3_ProcessEvent(&imgui_event);
+    // a release clears a retained native control; an active drag continues after crossing a blocking layer.
+    if (!native_input_blocked || event.type == SDL_EVENT_MOUSE_BUTTON_UP || (blocked_pointer_move && native_drag_active)) {
+        ImGui_ImplSDL3_ProcessEvent(&imgui_event);
+    }
     return handled;
 }

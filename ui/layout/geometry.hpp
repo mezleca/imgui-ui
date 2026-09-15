@@ -47,9 +47,9 @@ namespace ui {
     };
 
     enum class LayoutSizeMode : uint8_t {
-        /// uses the configured value.
+        /// uses the configured content size plus the node padding.
         Fixed,
-        /// uses a percentage of available parent space.
+        /// uses a percentage of available parent content space plus the node padding.
         Percent,
         /// uses the measured content size.
         Fit,
@@ -293,7 +293,31 @@ namespace ui {
 
         /// returns fixed and fit size without grow allocation.
         ImVec2 intrinsic_size() const {
-            return m_config.size.intrinsic(m_measured_size);
+            return {
+                intrinsic_axis(m_config.size.width, m_measured_size.x, m_box_padding.x),
+                intrinsic_axis(m_config.size.height, m_measured_size.y, m_box_padding.y),
+            };
+        }
+
+        /// returns the natural size used by a fit-sized parent.
+        ImVec2 preferred_size() const {
+            return {
+                preferred_axis(m_config.size.width, m_measured_size.x, m_box_padding.x),
+                preferred_axis(m_config.size.height, m_measured_size.y, m_box_padding.y),
+            };
+        }
+
+        /// resolves this node's size from its parent allocation.
+        ImVec2 resolved_size() const {
+            return resolve_size(m_available_size);
+        }
+
+        /// resolves this node's size against a content allocation.
+        ImVec2 resolve_size(ImVec2 available_size) const {
+            return {
+                resolved_axis(m_config.size.width, m_measured_size.x, available_size.x, m_box_padding.x),
+                resolved_axis(m_config.size.height, m_measured_size.y, available_size.y, m_box_padding.y),
+            };
         }
 
         /// returns the arranged bounds passed to the imgui cursor.
@@ -352,6 +376,15 @@ namespace ui {
             invalidate_resolved_size();
         }
 
+        void set_box_padding(ImVec2 padding) {
+            if (m_box_padding.x == padding.x && m_box_padding.y == padding.y) {
+                return;
+            }
+
+            m_box_padding = padding;
+            invalidate_resolved_size();
+        }
+
         void set_arranged_placement(Placement placement) {
             m_arranged_placement = placement;
             m_has_arranged_position = true;
@@ -400,12 +433,42 @@ namespace ui {
             m_available_size = available_size;
         }
 
+        static float intrinsic_axis(LayoutAxis axis, float measured, float padding) {
+            if (axis.mode == LayoutSizeMode::Fixed) {
+                return axis.value + padding * 2.0F;
+            }
+
+            return axis.intrinsic(measured);
+        }
+
+        static float resolved_axis(LayoutAxis axis, float measured, float available, float padding) {
+            const float resolved = axis.resolve(measured, available);
+            if (axis.mode == LayoutSizeMode::Fixed || axis.mode == LayoutSizeMode::Percent) {
+                return resolved + padding * 2.0F;
+            }
+
+            return resolved;
+        }
+
+        static float preferred_axis(LayoutAxis axis, float measured, float padding) {
+            if (axis.mode == LayoutSizeMode::Percent) {
+                return 0.0F;
+            }
+
+            if (axis.mode == LayoutSizeMode::Fixed) {
+                return axis.value + padding * 2.0F;
+            }
+
+            return std::max(0.0F, measured);
+        }
+
         const Placement& active_placement() const {
             return m_has_arranged_position ? m_arranged_placement : m_config.placement;
         }
 
         LayoutConfig m_config{};
         ImVec2 m_measured_size{};
+        ImVec2 m_box_padding{};
         ImVec2 m_size = {};
         Rect m_local_rect{};
         Rect m_layout_rect{};

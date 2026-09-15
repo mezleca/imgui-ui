@@ -24,6 +24,7 @@ namespace ui {
               m_format(std::floating_point<T> ? "%.3f" : ""), m_speed(std::floating_point<T> ? 0.1F : 1.0F) {}
 
         NumberInputWidget& set_label(std::string label);
+        NumberInputWidget& set_label_placement(LabelPlacement placement);
         NumberInputWidget& set_minimum(double minimum);
         NumberInputWidget& set_maximum(double maximum);
         NumberInputWidget& set_range(double minimum, double maximum);
@@ -80,6 +81,8 @@ namespace ui {
         std::optional<double> m_minimum = 0;
         std::optional<double> m_maximum = 100;
         ImColor m_thumb_color;
+        LabelPlacement m_label_placement = LabelPlacement::Inline;
+        float m_label_spacing = 0.0F;
         float m_speed;
         float m_thumb_size = 10.0F;
         bool m_thumb_visible = true;

@@ -310,7 +310,8 @@ void RaylibBackend::process_events(UI& surface) {
         m_has_pointer_position = true;
     }
 
-    if (pointer_move_blocked) {
+    const bool native_drag_active = ImGui::IsAnyItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    if (pointer_move_blocked && !native_drag_active) {
         io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     } else {
         io.AddMousePosEvent(input_position.x, input_position.y);
@@ -329,11 +330,13 @@ void RaylibBackend::process_events(UI& surface) {
             dispatch_pointer(surface, EventType::PointerDown, mouse_position, core_button, native_input_blocked);
         }
 
-        if (IsMouseButtonReleased(raylib_button)) {
+        const bool released = IsMouseButtonReleased(raylib_button);
+        if (released) {
             dispatch_pointer(surface, EventType::PointerUp, mouse_position, core_button, native_input_blocked);
         }
 
-        if (!native_input_blocked) io.AddMouseButtonEvent(static_cast<int>(index), IsMouseButtonDown(raylib_button));
+        // a release clears an active native imgui item even when the retained input layer consumes the pointer event.
+        if (!native_input_blocked || released) io.AddMouseButtonEvent(static_cast<int>(index), IsMouseButtonDown(raylib_button));
     }
 
     const Vector2 wheel = GetMouseWheelMoveV();

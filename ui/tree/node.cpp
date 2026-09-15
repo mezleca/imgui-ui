@@ -342,11 +342,13 @@ void Node::apply_theme(const Theme& theme) {
 }
 
 void Node::invalidate_measure() {
+    m_layout.set_box_padding(box_padding());
     m_measure_dirty = true;
     if (m_parent != nullptr && !m_parent->m_measure_dirty) m_parent->invalidate_measure();
 }
 
 void Node::invalidate_measure_subtree() {
+    m_layout.set_box_padding(box_padding());
     m_measure_dirty = true;
     for (const auto& child : m_children) {
         child->invalidate_measure_subtree();

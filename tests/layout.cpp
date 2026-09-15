@@ -5,7 +5,6 @@
 #include <ui/layout/geometry.hpp>
 #include <ui/layout/layer-container.hpp>
 #include <ui/layout/resizable-container.hpp>
-#include <ui/layout/stack-container.hpp>
 #include <ui/layout/virtual-layout.hpp>
 #include <ui/input/router.hpp>
 #include <ui/widgets/text.hpp>
@@ -231,7 +230,7 @@ TEST_CASE("layout size resolves each axis from its sizing rule") {
 TEST_CASE("stack layout places auto-sized children after their measured height") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
-    StackContainer stack("auto-size-stack");
+    Container stack("auto-size-stack");
     stack.set_size({px(200.0F), px(100.0F)});
     stack.set_spacing(4.0F);
     stack.add<TextWidget>("first");
@@ -258,7 +257,7 @@ TEST_CASE("stack layout places auto-sized children after their measured height")
 
 TEST_CASE("stack layout centers flow content on requested axes") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
-    StackContainer stack("centered-stack", StackDirection::Horizontal);
+    Container stack("centered-stack", StackDirection::Horizontal);
     stack.set_size({px(200.0F), px(100.0F)});
     stack.style().padding({});
     stack.set_content_alignment(Anchor::Center);
@@ -281,7 +280,7 @@ TEST_CASE("stack layout centers flow content on requested axes") {
 TEST_CASE("stack layout excludes explicitly positioned children from its flow") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
-    StackContainer stack("positioned-child-stack");
+    Container stack("positioned-child-stack");
     stack.set_size({px(200.0F), px(100.0F)});
     stack.set_spacing(4.0F);
     stack.style().padding({});
@@ -308,7 +307,7 @@ TEST_CASE("stack layout excludes explicitly positioned children from its flow") 
 TEST_CASE("fit content stack includes children spacing and padding") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
-    StackContainer stack("fit-content-stack");
+    Container stack("fit-content-stack");
     stack.set_size({fit(), fit()});
     stack.set_spacing(4.0F);
     stack.configure_all_styles([](Style& style) { style.padding({7.0F, 5.0F}); });
@@ -325,10 +324,10 @@ TEST_CASE("fit content stack includes children spacing and padding") {
     REQUIRE(stack.layout().size().y == Catch::Approx(44.0F));
 }
 
-TEST_CASE("fit content stack applies styled margins around flow children", "[StackContainer][layout][style]") {
+TEST_CASE("fit content container applies styled margins around flow children", "[Container][layout][style]") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
-    StackContainer stack("fit-content-margin-stack");
+    Container stack("fit-content-margin-stack");
     stack.set_size({fit(), fit()});
     stack.set_spacing(4.0F);
     auto& first = stack.add<TextWidget>("first");
@@ -350,14 +349,14 @@ TEST_CASE("fit content stack applies styled margins around flow children", "[Sta
     REQUIRE(second.layout().local_rect().min.y == Catch::Approx(24.0F));
 }
 
-TEST_CASE("fit-height stack fills its available width without stretching children", "[StackContainer][layout]") {
+TEST_CASE("fit-height container fills its available width without stretching children", "[Container][layout]") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
-    StackContainer root("fit-height-root");
+    Container root("fit-height-root");
     root.set_size({px(200.0F), px(100.0F)});
     root.style().padding({});
 
-    auto& field = root.add<StackContainer>("fit-height-field");
+    auto& field = root.add<Container>("fit-height-field");
     field.set_size({grow(), fit()});
     field.style().padding({});
     auto& child = field.add<LayoutProbeNode>();
@@ -377,7 +376,7 @@ TEST_CASE("fit-height stack fills its available width without stretching childre
 TEST_CASE("fit content stack remeasures after direction and spacing changes") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
-    StackContainer stack("fit-content-remeasure");
+    Container stack("fit-content-remeasure");
     stack.set_size({fit(), fit()});
     stack.set_spacing(4.0F);
     stack.style().padding({0.0F, 0.0F});
@@ -410,7 +409,7 @@ TEST_CASE("fit content stack remeasures after direction and spacing changes") {
 TEST_CASE("visibility changes in an anchored overlay do not move its fixed sibling") {
     ui_test::ImGuiContext context({640.0F, 360.0F});
 
-    StackContainer overlay("overlay", StackDirection::Horizontal);
+    Container overlay("overlay", StackDirection::Horizontal);
     overlay.set_layout({
         .size = {fit(), fit()},
         .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-20.0F, 20.0F}},
@@ -466,7 +465,7 @@ TEST_CASE("horizontal stack places a fixed item after auto-sized text") {
     ui_test::ImGuiContext context({640.0F, 180.0F});
 
     Node root("root");
-    auto& stack = root.add<StackContainer>("notification-test", StackDirection::Horizontal);
+    auto& stack = root.add<Container>("notification-test", StackDirection::Horizontal);
     stack.set_size({px(620.0F), px(120.0F)});
     stack.set_spacing(8.0F);
     stack.configure_all_styles([](Style& style) { style.padding({8.0F, 8.0F}); });
@@ -503,7 +502,7 @@ TEST_CASE("horizontal stack places a fixed item after auto-sized text") {
 TEST_CASE("stack divides remaining main-axis space between flexible children", "[layout][regression]") {
     ui_test::ImGuiContext context({360.0F, 140.0F});
 
-    StackContainer stack("flexible-stack", StackDirection::Horizontal);
+    Container stack("flexible-stack", StackDirection::Horizontal);
     stack.set_size({px(300.0F), px(80.0F)});
     stack.set_spacing(5.0F);
     stack.style().padding({10.0F, 10.0F});
@@ -525,15 +524,15 @@ TEST_CASE("stack divides remaining main-axis space between flexible children", "
     ImGui::EndFrame();
 
     REQUIRE(fixed.layout().size().x == Catch::Approx(60.0F));
-    REQUIRE(first_flexible.layout().size().x == Catch::Approx(105.0F));
-    REQUIRE(second_flexible.layout().size().x == Catch::Approx(105.0F));
-    REQUIRE(second_flexible.layout().local_rect().min.x == Catch::Approx(first_flexible.layout().local_rect().min.x + 110.0F));
+    REQUIRE(first_flexible.layout().size().x == Catch::Approx(115.0F));
+    REQUIRE(second_flexible.layout().size().x == Catch::Approx(115.0F));
+    REQUIRE(second_flexible.layout().local_rect().min.x == Catch::Approx(first_flexible.layout().local_rect().min.x + 120.0F));
 }
 
 TEST_CASE("stack distributes grow space by axis weight", "[layout]") {
     ui_test::ImGuiContext context({360.0F, 140.0F});
 
-    StackContainer stack("weighted-stack", StackDirection::Horizontal);
+    Container stack("weighted-stack", StackDirection::Horizontal);
     stack.set_size({px(300.0F), px(80.0F)});
     stack.set_spacing(5.0F);
     stack.style().padding({10.0F, 10.0F});
@@ -552,18 +551,19 @@ TEST_CASE("stack distributes grow space by axis weight", "[layout]") {
     ImGui::EndFrame();
 
     REQUIRE(fixed.layout().size().x == Catch::Approx(60.0F));
-    REQUIRE(narrow.layout().size().x == Catch::Approx(70.0F));
-    REQUIRE(wide.layout().size().x == Catch::Approx(140.0F));
+    REQUIRE(narrow.layout().size().x == Catch::Approx(230.0F / 3.0F));
+    REQUIRE(wide.layout().size().x == Catch::Approx(460.0F / 3.0F));
 }
 
 TEST_CASE("stack resolves percentage children from its content box", "[layout]") {
     ui_test::ImGuiContext context({360.0F, 140.0F});
 
-    StackContainer stack("percentage-stack", StackDirection::Horizontal);
+    Container stack("percentage-stack", StackDirection::Horizontal);
     stack.set_size({px(300.0F), px(80.0F)});
     stack.style().padding({});
-    auto& child = stack.add<LayoutProbeNode>();
+    auto& child = stack.add<TextWidget>("percentage");
     child.set_size({percent(50.0F), percent(50.0F)});
+    child.configure_all_styles([](Style& style) { style.padding({10.0F, 5.0F}); });
 
     ImGui::NewFrame();
     ImGui::Begin("percentage-stack-test");
@@ -571,14 +571,14 @@ TEST_CASE("stack resolves percentage children from its content box", "[layout]")
     ImGui::End();
     ImGui::EndFrame();
 
-    REQUIRE(child.layout().size().x == Catch::Approx(150.0F));
-    REQUIRE(child.layout().size().y == Catch::Approx(40.0F));
+    REQUIRE(child.layout().size().x == Catch::Approx(170.0F));
+    REQUIRE(child.layout().size().y == Catch::Approx(50.0F));
 }
 
 TEST_CASE("explicit fit keeps a text widget intrinsic size", "[layout]") {
     ui_test::ImGuiContext context({240.0F, 140.0F});
 
-    StackContainer stack("fit-text-stack", StackDirection::Horizontal);
+    Container stack("fit-text-stack", StackDirection::Horizontal);
     stack.set_size({px(200.0F), px(80.0F)});
     stack.style().padding({});
 
@@ -623,8 +623,8 @@ TEST_CASE("containers vertically stack flexible children by default", "[layout][
     const float initial_height = flexible.layout().size().y;
     draw_frame(220.0F);
 
-    REQUIRE(fixed.layout().size().x == Catch::Approx(108.0F));
-    REQUIRE(flexible.layout().size().x == Catch::Approx(108.0F));
+    REQUIRE(fixed.layout().size().x == Catch::Approx(120.0F));
+    REQUIRE(flexible.layout().size().x == Catch::Approx(120.0F));
     REQUIRE(flexible.layout().size().y > initial_height);
     REQUIRE(fixed.layout().size().y + flexible.layout().size().y == Catch::Approx(stack.layout().size().y - 12.0F));
 }
@@ -632,7 +632,7 @@ TEST_CASE("containers vertically stack flexible children by default", "[layout][
 TEST_CASE("changing stack direction rearranges existing children", "[layout][regression]") {
     ui_test::ImGuiContext context({260.0F, 160.0F});
 
-    StackContainer stack("direction-stack");
+    Container stack("direction-stack");
     stack.set_size({px(200.0F), px(100.0F)});
     stack.set_spacing(5.0F);
     Node& first = stack.add<LayoutProbeNode>("first");
@@ -684,7 +684,7 @@ TEST_CASE("text measurement uses the font inherited from its parent", "[layout][
 
     Container parent("font-parent");
     parent.set_size({px(460.0F), px(100.0F)});
-    auto& stack = parent.add<StackContainer>("font-stack", StackDirection::Horizontal);
+    auto& stack = parent.add<Container>("font-stack", StackDirection::Horizontal);
     stack.set_size({px(440.0F), px(60.0F)});
     stack.set_spacing(8.0F);
     stack.add<TextWidget>("notifications: 0");
@@ -786,7 +786,7 @@ TEST_CASE("resizing a container remeasures descendants", "[layout][regression]")
     };
 
     ui_test::ImGuiContext context({320.0F, 180.0F});
-    StackContainer container("resized-container");
+    Container container("resized-container");
     container.set_size({px(120.0F), px(80.0F)});
     auto& probe = container.add<MeasureProbeNode>();
 
@@ -811,7 +811,7 @@ TEST_CASE("container after decorations use final bounds above nested child windo
 
     ResizableContainer resizable("decorated-resizable");
     resizable.set_size({px(180.0F), px(120.0F)});
-    auto& nested = resizable.add<StackContainer>("nested");
+    auto& nested = resizable.add<Container>("nested");
     nested.set_size({grow(), grow()});
     nested.add<TextWidget>("nested content");
 
@@ -1061,7 +1061,7 @@ TEST_CASE("node screen rectangles follow scrollable child windows") {
 TEST_CASE("stack auto-sized axes reflow when the parent grows", "[layout][regression]") {
     ui_test::ImGuiContext context({400.0F, 180.0F});
 
-    StackContainer stack("responsive-stack");
+    Container stack("responsive-stack");
     stack.set_size({grow(), px(80.0F)});
     Node& hidden = stack.add<Node>("hidden-child");
     hidden.set_size({px(40.0F), px(40.0F)});
@@ -1175,7 +1175,7 @@ TEST_CASE("virtual layout creates visible rows lazily and reuses the caller cach
     REQUIRE(drawn.front() == 0);
     REQUIRE(drawn.size() <= 6);
     REQUIRE(cache.size() <= 6);
-    REQUIRE(list.max_scroll == Catch::Approx(1000.0F * 23.0F - 3.0F + 10.0F - 100.0F));
+    REQUIRE(list.max_scroll == Catch::Approx(1000.0F * 23.0F - 3.0F - 100.0F));
     REQUIRE(router.stats().entry_count <= 6);
     const auto& first = *cache.at(0);
     REQUIRE(first.layout().size().y == Catch::Approx(20.0F));
@@ -1364,7 +1364,7 @@ TEST_CASE("virtual layout measures newly created subtrees on their first draw", 
     VirtualListProbe list;
     ui::TextWidget* text = nullptr;
     list.set_items(1, [&list, &text](size_t) -> ui::Node& {
-        auto& row = list.add<ui::StackContainer>("lazy-row");
+        auto& row = list.add<ui::Container>("lazy-row");
         text = &row.add<ui::TextWidget>("lazy text");
         return row;
     });

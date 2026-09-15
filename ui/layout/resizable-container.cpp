@@ -10,7 +10,7 @@ static constexpr float CHILD_RESIZE_HANDLE_INSET = 1.0F;
 
 using namespace ui;
 
-ResizableContainer::ResizableContainer(std::string id) : StackContainer(std::move(id)) {
+ResizableContainer::ResizableContainer(std::string id) : Container(std::move(id)) {
     set_type_name("ResizableContainer");
 }
 
@@ -34,7 +34,7 @@ ImGuiMouseCursor ResizableContainer::resize_cursor() const {
 void ResizableContainer::on_draw_end() {
     set_visual_rect(Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize()));
     draw_resize_indicator();
-    StackContainer::on_draw_end();
+    Container::on_draw_end();
 
     if (m_dragging) {
         ImGui::SetMouseCursor(resize_cursor());

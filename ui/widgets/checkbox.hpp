@@ -1,12 +1,12 @@
 #pragma once
 
-#include "widget.hpp"
+#include "../layout/container.hpp"
+#include "box.hpp"
 
 #include <cstdint>
 #include <string>
 
 namespace ui {
-    class CheckboxVisualNode;
     class TextWidget;
 
     enum class CheckboxType : uint8_t {
@@ -14,7 +14,7 @@ namespace ui {
         Radio,
     };
 
-    class CheckboxWidget : public Widget {
+    class CheckboxWidget : public Container {
     public:
         CheckboxWidget(bool& value, std::string label, std::string id = {});
 
@@ -33,17 +33,20 @@ namespace ui {
         void apply_theme_defaults(const Theme& theme) override;
 
     private:
-        bool paint() override;
         void on_click(UiEvent&) override;
-        void on_measure() override;
-        void arrange_children();
+        void input_state_changed() override;
+        void on_update(float) override;
         Rect hit_rect(Rect visual_rect) const override;
+        void update_mark_visibility();
+        void update_shape();
 
         bool* m_value;
-        CheckboxVisualNode* m_frame_node = nullptr;
-        CheckboxVisualNode* m_fill_node = nullptr;
+        BoxWidget* m_box_node = nullptr;
+        BoxWidget* m_frame_node = nullptr;
+        BoxWidget* m_fill_node = nullptr;
         TextWidget* m_label_node = nullptr;
         CheckboxType m_type = CheckboxType::Standard;
         float m_box_size = 20.0F;
+        bool m_mark_visible = false;
     };
 } // namespace ui

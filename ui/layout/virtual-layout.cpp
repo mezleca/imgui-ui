@@ -138,12 +138,10 @@ void VirtualLayout::on_measure() {
     }
 }
 
-bool VirtualLayout::paint() {
-    // reserve padding and scrollbar width so vertically overflowing rows do not also create a horizontal scrollbar.
+ImVec2 VirtualLayout::child_window_content_size() const {
     const float content_width =
         std::max(0.0F, (layout().size().x - computed_style().padding().x * 2.0F) - ImGui::GetStyle().ScrollbarSize);
-    ImGui::SetNextWindowContentSize({content_width, content_height()});
-    return Container::paint();
+    return {content_width, content_height()};
 }
 
 void VirtualLayout::draw_children() {

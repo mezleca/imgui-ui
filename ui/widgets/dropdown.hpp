@@ -1,6 +1,6 @@
 #pragma once
 
-#include "widget.hpp"
+#include "../layout/container.hpp"
 
 #include <cstdint>
 #include <string>
@@ -21,7 +21,7 @@ namespace ui {
         bool operator==(const DropdownOption&) const = default;
     };
 
-    class DropdownWidget : public Widget {
+    class DropdownWidget : public Container {
     public:
         DropdownWidget(std::string& value, std::vector<DropdownOption> options, std::string id = {});
 
@@ -50,7 +50,6 @@ namespace ui {
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;
-        bool paint() override;
 
     private:
         struct State {
@@ -99,11 +98,7 @@ namespace ui {
         friend class DropdownOptionNode;
         friend class DropdownTriggerNode;
 
-        void draw_children() override;
-        void on_measure() override;
-        void on_layout() override;
         void on_event(UiEvent& event) override;
-        bool has_label() const;
 
         TextWidget* m_label_node = nullptr;
         DropdownTriggerNode* m_trigger = nullptr;

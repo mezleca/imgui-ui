@@ -5,7 +5,6 @@
 #include <ui/layout/container.hpp>
 #include <ui/layout/layer-container.hpp>
 #include <ui/layout/resizable-container.hpp>
-#include <ui/layout/stack-container.hpp>
 #include <ui/layout/virtual-layout.hpp>
 #include <ui/resources/texture-registry.hpp>
 #include <ui/ui.hpp>
@@ -70,10 +69,10 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     bool checked = false;
 
-    auto& page = surface.root().add<StackContainer>("page");
+    auto& page = surface.root().add<Container>("page");
     page.set_size({px(320.0F), px(120.0F)});
     auto& section = page.add<Container>("section");
-    auto& form = section.add<StackContainer>("form");
+    auto& form = section.add<Container>("form");
     auto& checkbox = form.add<CheckboxWidget>(checked, "enabled");
 
     const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
@@ -157,7 +156,7 @@ TEST_CASE("image fit preserves the texture aspect ratio", "[ImageWidget][fit]") 
     REQUIRE(cover_size.y == Catch::Approx(100.0F));
 
     ProbeTexture texture;
-    StackContainer container("responsive-image");
+    Container container("responsive-image");
     container.set_size({px(100.0F), px(100.0F)});
     auto& image = container.add<ImageWidget>(&texture);
     image.set_size({grow(), grow()});
@@ -186,10 +185,10 @@ TEST_CASE("dropdown opens from a nested container without extending its parent",
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     std::string value = "light";
 
-    auto& page = surface.root().add<StackContainer>("page");
+    auto& page = surface.root().add<Container>("page");
     page.set_size({px(360.0F), px(200.0F)});
     auto& section = page.add<Container>("section");
-    auto& form = section.add<StackContainer>("form");
+    auto& form = section.add<Container>("form");
     auto& dropdown = form.add<DropdownWidget>(value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "theme");
     dropdown.set_size({px(180.0F), px(32.0F)});
     bool checked = false;
@@ -230,7 +229,7 @@ TEST_CASE("color picker opens outside its parent and blocks content input", "[co
     ImColor color = {0.26F, 0.59F, 0.98F, 1.0F};
     bool checked = false;
 
-    auto& page = surface.root().add<StackContainer>("page");
+    auto& page = surface.root().add<Container>("page");
     page.set_size({px(360.0F), px(200.0F)});
     auto& section = page.add<Container>("section");
     auto& picker = section.add<ColorPickerWidget>(color, "color");
@@ -408,7 +407,7 @@ TEST_CASE("inline layer centers inside content beside the debugger", "[LayerCont
 TEST_CASE("text measurement and drawing include style padding", "[TextWidget][layout][style]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    StackContainer stack("text-padding-stack");
+    Container stack("text-padding-stack");
     stack.set_size({fit(), fit()});
     stack.style().padding({});
     auto& text = stack.add<TextWidget>("padded text");
@@ -542,9 +541,9 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
 TEST_CASE("pointer block prevents hover and clicks on content controls", "[input][regression]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    auto& content = surface.root().add<StackContainer>("content");
-    auto& controls = content.add<StackContainer>("controls");
-    auto& dynamic_nodes = content.add<StackContainer>("dynamic-nodes");
+    auto& content = surface.root().add<Container>("content");
+    auto& controls = content.add<Container>("controls");
+    auto& dynamic_nodes = content.add<Container>("dynamic-nodes");
     auto& add_button = controls.add<ButtonWidget>("add node", LayoutSize{px(120.0F), px(36.0F)});
     add_button.set_on_click([&dynamic_nodes, &surface] {
         dynamic_nodes.add<ButtonWidget>("node", LayoutSize{px(120.0F), px(36.0F)});
@@ -574,12 +573,12 @@ TEST_CASE("pointer block prevents hover and clicks on content controls", "[input
 TEST_CASE("resizable lists keep child layout valid after adding a row", "[ResizableContainer][layout][regression]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    auto& section = surface.root().add<StackContainer>("section", StackDirection::Horizontal);
+    auto& section = surface.root().add<Container>("section", StackDirection::Horizontal);
     section.set_size({px(460.0F), px(220.0F)});
     section.style().padding({14.0F, 14.0F});
-    auto& controls = section.add<StackContainer>("controls");
+    auto& controls = section.add<Container>("controls");
     controls.set_size({px(120.0F), grow()});
-    auto& list = section.add<StackContainer>("list");
+    auto& list = section.add<Container>("list");
     list.set_size({px(300.0F), grow()});
     auto& dynamic_nodes = list.add<ResizableContainer>("dynamic-nodes");
     dynamic_nodes.set_size({px(240.0F), grow()});
@@ -1178,7 +1177,7 @@ TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]
     ui_test::draw_surface(surface, 0.2F);
 
     REQUIRE(menu.is_open());
-    REQUIRE(menu.layout().visual_rect().min.x == Catch::Approx(136.0F));
+    REQUIRE(menu.layout().visual_rect().min.x == Catch::Approx(128.0F));
     REQUIRE(menu.layout().visual_rect().min.y == Catch::Approx(212.0F));
 
     ImGui::GetIO().MousePos = {140.0F, 216.0F};
@@ -1279,7 +1278,6 @@ TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMe
     REQUIRE(submenu != nullptr);
     REQUIRE(submenu->visible());
     REQUIRE(submenu->layout().visual_rect().min.x == Catch::Approx(item_rect.max.x + 6.0F));
-
     auto cross_gap = ui_test::pointer_event(
         EventType::PointerMove, {(item_rect.max.x + submenu->layout().visual_rect().min.x) * 0.5F, item_rect.min.y + 4.0F}
     );

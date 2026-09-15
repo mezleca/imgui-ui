@@ -4,7 +4,6 @@
 #include "diagnostics/debugger.hpp"
 #include "layout/layer-container.hpp"
 #include "layout/resizable-container.hpp"
-#include "layout/stack-container.hpp"
 #include "style/theme.hpp"
 
 #include <algorithm>
@@ -157,7 +156,7 @@ void UI::initialize() {
     m_root->set_input_router(&m_input_router);
     m_root->set_profiler(&m_profiler);
 
-    auto& surface_layout = m_root->add<StackContainer>("ui-root", StackDirection::Horizontal);
+    auto& surface_layout = m_root->add<Container>("ui-root", StackDirection::Horizontal);
     surface_layout.set_size({grow(), grow()});
     m_surface_layout = &surface_layout;
 
