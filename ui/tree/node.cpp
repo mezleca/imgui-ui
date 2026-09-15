@@ -329,8 +329,9 @@ void Node::update(float dt) {
     advance_frame_state(dt);
     on_update(dt);
 
-    for (const auto& child : m_children) {
-        child->update(dt);
+    const size_t child_count = m_children.size();
+    for (size_t index = 0; index < child_count && index < m_children.size(); ++index) {
+        m_children[index]->update(dt);
     }
 }
 
