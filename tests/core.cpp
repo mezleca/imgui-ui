@@ -374,7 +374,7 @@ TEST_CASE("ui nodes close child scopes before drawing after hooks") {
 
     std::vector<std::string> events;
     DrawNode root("root", events);
-    root.attach(std::make_unique<DrawNode>("child", events));
+    root.add<DrawNode>("child", events);
 
     root.draw();
     REQUIRE(
@@ -386,7 +386,7 @@ TEST_CASE("ui nodes close child scopes before drawing after hooks") {
 
     events.clear();
     DrawNode hidden_root("hidden", events, true);
-    hidden_root.attach(std::make_unique<DrawNode>("child", events));
+    hidden_root.add<DrawNode>("child", events);
 
     hidden_root.draw();
     REQUIRE(events == std::vector<std::string>{"hidden:layout", "hidden:begin"});

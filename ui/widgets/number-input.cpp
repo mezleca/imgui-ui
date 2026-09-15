@@ -8,10 +8,6 @@
 
 using namespace ui;
 
-void NumberInputWidget::initialize() {
-    apply_theme_defaults(m_ui.theme());
-}
-
 void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
     const TransitionSpec transition{0.25F, easing::out_quad};
     m_thumb_color = theme.controls.mark_color;
@@ -32,7 +28,7 @@ void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
 
 void NumberInputWidget::on_event(UiEvent& event) {
     if (event.type == EventType::PointerDown && event.button == PointerButton::Left) {
-        m_ui.input_router().set_focus(*this);
+        surface().input_router().set_focus(*this);
     }
 }
 

@@ -8,11 +8,10 @@
 
 namespace ui {
     class TextWidget;
-    class UI;
 
     class FileDialogWidget final : public StackContainer {
     public:
-        explicit FileDialogWidget(UI& ui, std::string label, std::string id = "FileDialog");
+        explicit FileDialogWidget(std::string label, std::string id = "FileDialog");
 
         FileDialogResult select_file(const FileDialogOptions& options = {});
         FileDialogResult select_files(const FileDialogOptions& options = {});
@@ -23,8 +22,10 @@ namespace ui {
         [[nodiscard]] const std::string& value() const;
         bool set_value(std::string_view value);
 
+    protected:
+        void apply_theme_defaults(const Theme& theme) override;
+
     private:
-        UI& m_ui;
         std::string m_value;
         TextWidget& m_field;
     };

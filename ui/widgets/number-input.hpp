@@ -11,8 +11,6 @@
 #include <variant>
 
 namespace ui {
-    class UI;
-
     using NumberValue = std::variant<
         char*, signed char*, unsigned char*, short*, unsigned short*, int*, unsigned int*, long*, unsigned long*, long long*,
         unsigned long long*, float*, double*>;
@@ -21,11 +19,9 @@ namespace ui {
     public:
         template <typename T>
             requires std::constructible_from<NumberValue, T*>
-        NumberInputWidget(UI& ui, T& value, std::string id = {})
-            : Widget(std::move(id), "NumberInput"), m_ui(ui), m_value(value), m_number(&value),
-              m_format(std::floating_point<T> ? "%.3f" : ""), m_speed(std::floating_point<T> ? 0.1F : 1.0F) {
-            initialize();
-        }
+        NumberInputWidget(T& value, std::string id = {})
+            : Widget(std::move(id), "NumberInput"), m_value(value), m_number(&value),
+              m_format(std::floating_point<T> ? "%.3f" : ""), m_speed(std::floating_point<T> ? 0.1F : 1.0F) {}
 
         NumberInputWidget& set_label(std::string label);
         NumberInputWidget& set_minimum(double minimum);
@@ -71,14 +67,12 @@ namespace ui {
         bool draw_value(T& value);
 
         void sync_value() const;
-        void initialize();
         void on_measure() override;
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;
 
     private:
-        UI& m_ui;
         mutable GenericValue m_value;
         NumberValue m_number;
         GenericValue m_label;

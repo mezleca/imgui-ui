@@ -8,11 +8,10 @@ namespace ui {
     class ColorPickerPopup;
     class ColorPickerPreviewNode;
     class TextWidget;
-    class UI;
 
     class ColorPickerWidget : public StackContainer {
     public:
-        ColorPickerWidget(UI& ui, ImColor& color, std::string label = {}, std::string id = {});
+        ColorPickerWidget(ImColor& color, std::string label = {}, std::string id = {});
 
         ColorPickerWidget& set_label(std::string label);
         bool set_color(ImColor color);

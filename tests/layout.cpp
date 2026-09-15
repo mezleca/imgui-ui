@@ -910,8 +910,7 @@ TEST_CASE("nodes without explicit positions follow the ImGui cursor") {
     REQUIRE(same_line_rect.min.x > second_rect.min.x);
 
     Node logical_root("logical-root");
-    auto routed_child = std::make_unique<FlowNode>("routed-child");
-    logical_root.attach(std::move(routed_child));
+    logical_root.add<FlowNode>("routed-child");
 
     ImGui::SetCursorPos({0.0F, 60.0F});
     logical_root.draw();

@@ -19,7 +19,6 @@ public:
     ContextMenuItemNode(ContextMenuWidget& menu, std::string label, ContextMenuCallback callback)
         : DrawListWidget("item", "ContextMenuItem"), m_menu(menu), m_label(std::move(label)), m_callback(std::move(callback)) {
         set_size({grow(), px(28.0F)});
-        apply_theme_defaults(m_menu.m_theme);
     }
 
     bool accepts_input() const override {
@@ -99,21 +98,14 @@ private:
     Texture* m_submenu_icon = nullptr;
 };
 
-ContextMenuWidget::ContextMenuWidget(UI& ui, ContextMenuItems items, Texture* submenu_icon)
-    : ContextMenuWidget(
-          ui.input_router(), ui.theme(),
-          submenu_icon != nullptr ? submenu_icon : ui.runtime().textures().find("context-menu-chevron"), std::move(items)
-      ) {}
-
-ContextMenuWidget::ContextMenuWidget(InputRouter& router, const Theme& theme, Texture* submenu_icon, ContextMenuItems items)
-    : StackContainer({}, StackDirection::Vertical), m_router(router), m_theme(theme), m_submenu_icon(submenu_icon) {
+ContextMenuWidget::ContextMenuWidget(ContextMenuItems items, Texture* submenu_icon)
+    : StackContainer({}, StackDirection::Vertical), m_submenu_icon(submenu_icon) {
     set_type_name("ContextMenu");
     set_layout({.in_flow = false});
     set_visible(false);
     set_enabled(false);
     set_input_mode(InputMode::Target);
 
-    apply_theme_defaults(theme);
     set_items(std::move(items));
 }
 
@@ -125,6 +117,9 @@ void ContextMenuWidget::on_event(UiEvent& event) {
 
 void ContextMenuWidget::apply_theme_defaults(const Theme& theme) {
     StackContainer::apply_theme_defaults(theme);
+    if (m_submenu_icon == nullptr) {
+        set_submenu_icon(surface().runtime().textures().find("context-menu-chevron"));
+    }
     set_size({px(184.0F), px(menu_height(m_items.size()))});
 
     configure_all_styles([&theme](Style& style) {
@@ -151,13 +146,10 @@ ContextMenuWidget& ContextMenuWidget::set_items(ContextMenuItems items) {
             continue;
         }
 
-        auto submenu = std::unique_ptr<ContextMenuWidget>(
-            new ContextMenuWidget(m_router, m_theme, m_submenu_icon, std::move(item.children))
-        );
-        submenu->m_parent_menu = this;
-        menu_item.m_submenu = submenu.get();
+        auto& submenu = add<ContextMenuWidget>(std::move(item.children), m_submenu_icon);
+        submenu.m_parent_menu = this;
+        menu_item.m_submenu = &submenu;
         menu_item.m_submenu_icon = m_submenu_icon;
-        attach(std::move(submenu));
     }
 
     return *this;
@@ -294,7 +286,7 @@ void ContextMenuWidget::on_draw_end() {
     if (!work_area.valid()) {
         return;
     }
-    m_router.register_blocker(*this, work_area, [this](UiEvent& event) {
+    surface().input_router().register_blocker(*this, work_area, [this](UiEvent& event) {
         if (event.type == EventType::PointerMove) {
             update_pointer_hover(event.position);
             return;

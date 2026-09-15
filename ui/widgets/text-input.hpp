@@ -5,7 +5,6 @@
 #include <string>
 
 namespace ui {
-    class UI;
     class Texture;
     class ImageWidget;
 
@@ -15,7 +14,7 @@ namespace ui {
     /// input.
     class TextInputWidget : public StackContainer {
     public:
-        TextInputWidget(UI& ui, std::string& value, std::string label = {});
+        TextInputWidget(std::string& value, std::string label = {});
 
         TextInputWidget& set_icon(Texture* icon);
         bool set_value(std::string value);
@@ -29,7 +28,6 @@ namespace ui {
 
         void on_measure() override;
         void on_draw_end() override;
-        UI& m_ui;
         std::string* m_value;
         ImageWidget* m_icon_node = nullptr;
         FieldNode* m_field_node = nullptr;

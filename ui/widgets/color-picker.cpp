@@ -125,33 +125,18 @@ private:
 
 class ui::ColorPickerPopup final : public Widget {
 public:
-    ColorPickerPopup(ColorPickerWidget& owner, UI& ui)
-        : Widget("popup", "ColorPickerPopup", InputMode::None), m_owner(owner), m_ui(ui),
+    explicit ColorPickerPopup(ColorPickerWidget& owner)
+        : Widget("popup", "ColorPickerPopup", InputMode::None), m_owner(owner),
           m_window_name(std::format("##color-picker-{}", identity())) {
         set_layout({.in_flow = false});
 
-        m_hex_input = &add<TextInputWidget>(ui, m_hex, "hex");
-        const Theme& theme = ui.theme();
-        m_hex_input->configure_all_styles([&theme](Style& style) {
-            style.color(theme.text_color)
-                .background_color(theme.background_tertiary_color)
-                .border(BORDER_ALL)
-                .border_color(theme.controls.border_color)
-                .border_radius(theme.controls.rounding)
-                .border_thickness(theme.controls.border_thickness)
-                .padding(theme.metrics.item_inner_spacing);
-        });
-        m_hex_input->configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_hover_color); });
-        m_hex_input->configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color); });
-        m_hex_input->configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
+        m_hex_input = &add<TextInputWidget>(m_hex, "hex");
         m_hex_input->set_on_change([this] {
             ImColor parsed;
             if (parse_hex(m_hex, parsed)) {
                 m_owner.set_color(parsed);
             }
         });
-
-        apply_theme_defaults(ui.theme());
     }
 
     void show() {
@@ -174,6 +159,19 @@ private:
                 .border_thickness(theme.controls.border_thickness)
                 .padding({12.0F, 12.0F});
         });
+
+        m_hex_input->configure_all_styles([&theme](Style& style) {
+            style.color(theme.text_color)
+                .background_color(theme.background_tertiary_color)
+                .border(BORDER_ALL)
+                .border_color(theme.controls.border_color)
+                .border_radius(theme.controls.rounding)
+                .border_thickness(theme.controls.border_thickness)
+                .padding(theme.metrics.item_inner_spacing);
+        });
+        m_hex_input->configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_hover_color); });
+        m_hex_input->configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color); });
+        m_hex_input->configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
     }
 
     bool paint() override {
@@ -182,7 +180,7 @@ private:
         }
 
         const Rect preview_rect = m_owner.preview().layout().visual_rect();
-        const ImVec2 position = {preview_rect.min.x, preview_rect.max.y + m_ui.theme().metrics.item_spacing.y};
+        const ImVec2 position = {preview_rect.min.x, preview_rect.max.y + surface().theme().metrics.item_spacing.y};
         const ComputedStyle& style = computed_style();
 
         ImGui::SetNextWindowPos(position, ImGuiCond_Always);
@@ -205,10 +203,10 @@ private:
             set_visual_rect(popup_rect);
             draw_surface(*ImGui::GetWindowDrawList(), popup_rect);
 
-            m_ui.input_router().register_target(*this, popup_rect);
+            surface().input_router().register_target(*this, popup_rect);
 
             // block the whole work area so an empty outside press can close the popup without click synthesis.
-            m_ui.input_router().register_blocker(*this, viewport_work_area(), [this, popup_rect](UiEvent& event) {
+            surface().input_router().register_blocker(*this, viewport_work_area(), [this, popup_rect](UiEvent& event) {
                 if (event.type == EventType::PointerDown && event.button == PointerButton::Left &&
                     !popup_rect.contains(event.position)) {
                     m_owner.close();
@@ -225,7 +223,7 @@ private:
     }
 
     void draw_picker() {
-        const Theme& theme = m_ui.theme();
+        const Theme& theme = surface().theme();
         const ImVec2 spacing = theme.metrics.item_spacing;
         const float bar_size = std::max(1.0F, theme.controls.thumb_size);
 
@@ -337,20 +335,17 @@ private:
     void draw_children() override {}
 
     ColorPickerWidget& m_owner;
-    UI& m_ui;
     std::string m_window_name;
     std::string m_hex;
     TextInputWidget* m_hex_input = nullptr;
 };
 
-ColorPickerWidget::ColorPickerWidget(UI& ui, ImColor& color, std::string label, std::string id)
+ColorPickerWidget::ColorPickerWidget(ImColor& color, std::string label, std::string id)
     : StackContainer(std::move(id), StackDirection::Vertical), m_color(&color) {
     m_label_node = &add<TextWidget>(std::move(label));
     m_label_node->set_visible(!m_label_node->empty());
     m_preview = &add<ColorPickerPreviewNode>(*this, color);
-    m_popup = &add<ColorPickerPopup>(*this, ui);
-
-    apply_theme_defaults(ui.theme());
+    m_popup = &add<ColorPickerPopup>(*this);
 }
 
 ColorPickerWidget& ColorPickerWidget::set_label(std::string label) {

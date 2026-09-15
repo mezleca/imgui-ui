@@ -3,12 +3,10 @@
 #include "../input/event.hpp"
 #include "../layout/geometry.hpp"
 
-#include <concepts>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -45,30 +43,16 @@ namespace ui {
         virtual ~Node();
         Node& operator=(const Node&) = delete;
 
-        /// takes ownership of a detached child.
-        /// returns false for null, attached, or cyclic children.
-        bool attach(std::unique_ptr<Node> child);
-
-        /// constructs and owns a child, prepending this node's UI when the child requires it.
+        /// constructs and owns a child.
         template <typename T, typename... Args>
         T& add(Args&&... args) {
-            std::unique_ptr<T> child;
-            if constexpr (std::constructible_from<T, Args...>) {
-                child = std::make_unique<T>(std::forward<Args>(args)...);
-            } else {
-                static_assert(
-                    std::constructible_from<T, UI&, Args...>,
-                    "child constructor must be public and accept the supplied arguments, optionally with UI& prepended"
-                );
-                child = std::make_unique<T>(surface(), std::forward<Args>(args)...);
-            }
+            auto child = std::make_unique<T>(std::forward<Args>(args)...);
 
-            T* result = child.get();
-            if (!attach(std::move(child))) {
-                throw std::logic_error("failed to add node child");
-            }
-
-            return *result;
+            T& result = *child;
+            prepare_child(result);
+            m_children.emplace_back(std::move(child));
+            invalidate_measure();
+            return result;
         }
 
         /// updates this node and its visible descendants.
@@ -284,6 +268,7 @@ namespace ui {
         friend class InputRouter;
         friend class HitTestIndex;
 
+        void prepare_child(Node& child);
         void set_surface(UI* surface);
         void measure_tree();
         void detach_input_router(InputRouter& router);

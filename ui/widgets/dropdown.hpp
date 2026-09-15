@@ -8,7 +8,6 @@
 #include <vector>
 
 namespace ui {
-    class UI;
     class DropdownBodyNode;
     class DropdownOptionNode;
     class DropdownTriggerNode;
@@ -24,7 +23,7 @@ namespace ui {
 
     class DropdownWidget : public Widget {
     public:
-        DropdownWidget(UI& ui, std::string& value, std::vector<DropdownOption> options, std::string id = {});
+        DropdownWidget(std::string& value, std::vector<DropdownOption> options, std::string id = {});
 
         DropdownWidget& set_label(std::string label);
         DropdownWidget& set_placeholder(std::string placeholder);

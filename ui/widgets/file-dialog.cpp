@@ -6,16 +6,17 @@
 
 using namespace ui;
 
-FileDialogWidget::FileDialogWidget(UI& ui, std::string label, std::string id)
-    : StackContainer(std::move(id), StackDirection::Horizontal), m_ui(ui), m_value(std::move(label)),
-      m_field(add<TextWidget>(m_value)) {
-    const Theme& theme = m_ui.theme();
-
+FileDialogWidget::FileDialogWidget(std::string label, std::string id)
+    : StackContainer(std::move(id), StackDirection::Horizontal), m_value(std::move(label)), m_field(add<TextWidget>(m_value)) {
     set_input_mode(InputMode::Target);
     set_type_name("FileDialog");
     set_content_alignment({0.5F, 0.5F});
     set_size({grow(), fit()});
-    set_font(ui.get_primary_font(18));
+}
+
+void FileDialogWidget::apply_theme_defaults(const Theme& theme) {
+    StackContainer::apply_theme_defaults(theme);
+    set_font(surface().get_primary_font(18));
 
     configure_all_styles([&theme](Style& style) {
         style.border_color(theme.border_color, 0.15F)
@@ -34,23 +35,23 @@ FileDialogWidget::FileDialogWidget(UI& ui, std::string label, std::string id)
 }
 
 FileDialogResult FileDialogWidget::select_file(const FileDialogOptions& options) {
-    return m_ui.file_dialog().open_file(options);
+    return surface().file_dialog().open_file(options);
 }
 
 FileDialogResult FileDialogWidget::select_files(const FileDialogOptions& options) {
-    return m_ui.file_dialog().open_files(options);
+    return surface().file_dialog().open_files(options);
 }
 
 FileDialogResult FileDialogWidget::save_file(const FileDialogOptions& options) {
-    return m_ui.file_dialog().save_file(options);
+    return surface().file_dialog().save_file(options);
 }
 
 FileDialogResult FileDialogWidget::select_folder(const FileDialogOptions& options) {
-    return m_ui.file_dialog().select_folder(options);
+    return surface().file_dialog().select_folder(options);
 }
 
 FileDialogResult FileDialogWidget::select_folders(const FileDialogOptions& options) {
-    return m_ui.file_dialog().select_folders(options);
+    return surface().file_dialog().select_folders(options);
 }
 
 const std::string& FileDialogWidget::value() const {

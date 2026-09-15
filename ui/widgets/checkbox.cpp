@@ -53,17 +53,15 @@ private:
     CheckboxType m_type;
 };
 
-CheckboxWidget::CheckboxWidget(UI& ui, bool& value, std::string label, std::string id)
+CheckboxWidget::CheckboxWidget(bool& value, std::string label, std::string id)
     : Widget(std::move(id), "Checkbox"), m_value(&value) {
-    set_font(ui.get_primary_font(16));
-
     m_frame_node = &add<CheckboxVisualNode>("frame", nullptr, false, m_type);
     m_fill_node = &add<CheckboxVisualNode>("fill", &value, true, m_type);
     m_label_node = &add<TextWidget>(std::move(label));
-    apply_theme_defaults(ui.theme());
 }
 
 void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
+    set_font(surface().get_primary_font(16));
     m_label_node->configure_all_styles([&theme](Style& style) { style.color(theme.text_color); });
 
     configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({4.0F, 4.0F}); });

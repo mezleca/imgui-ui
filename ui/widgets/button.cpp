@@ -7,13 +7,12 @@
 
 using namespace ui;
 
-ButtonWidget::ButtonWidget(UI& ui, std::string text, LayoutSize size) : DrawListWidget({}, "Button"), m_text(text) {
+ButtonWidget::ButtonWidget(std::string text, LayoutSize size) : DrawListWidget({}, "Button"), m_text(text) {
     set_size(size);
-    set_font(ui.get_primary_font(16));
-    apply_theme_defaults(ui.theme());
 }
 
 void ButtonWidget::apply_theme_defaults(const Theme& theme) {
+    set_font(surface().get_primary_font(16));
     configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color)
             .background_color(theme.background_secondary_color)

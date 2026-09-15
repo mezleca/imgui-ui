@@ -8,11 +8,9 @@
 #include <utility>
 
 namespace ui {
-    class UI;
-
     class ButtonWidget : public DrawListWidget {
     public:
-        ButtonWidget(UI& ui, std::string text, LayoutSize size = {px(100.0F), px(60.0F)});
+        ButtonWidget(std::string text, LayoutSize size = {px(100.0F), px(60.0F)});
 
         ButtonWidget& set_text_alignment(ImVec2 alignment) {
             m_text_alignment = alignment;

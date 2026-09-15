@@ -8,7 +8,6 @@
 #include <vector>
 
 namespace ui {
-    class UI;
     class Texture;
     class ContextMenuItemNode;
     class ContextMenuWidget;
@@ -33,7 +32,7 @@ namespace ui {
 
     class ContextMenuWidget : public StackContainer {
     public:
-        ContextMenuWidget(UI& ui, ContextMenuItems items = {}, Texture* submenu_icon = nullptr);
+        ContextMenuWidget(ContextMenuItems items = {}, Texture* submenu_icon = nullptr);
 
         ContextMenuWidget& set_items(ContextMenuItems items);
         ContextMenuWidget& set_submenu_icon(Texture* icon);
@@ -58,8 +57,6 @@ namespace ui {
     private:
         friend class ContextMenuItemNode;
 
-        ContextMenuWidget(InputRouter& router, const Theme& theme, Texture* submenu_icon, ContextMenuItems items);
-
         void on_update(float) override;
         void on_event(UiEvent& event) override;
         void draw_children() override;
@@ -75,8 +72,6 @@ namespace ui {
         ContextMenuWidget& root_menu();
         void close_children();
 
-        InputRouter& m_router;
-        const Theme& m_theme;
         Texture* m_submenu_icon = nullptr;
         std::vector<ContextMenuItemNode*> m_items;
         ContextMenuWidget* m_parent_menu = nullptr;

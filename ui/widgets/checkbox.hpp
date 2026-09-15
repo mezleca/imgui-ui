@@ -6,7 +6,6 @@
 #include <string>
 
 namespace ui {
-    class UI;
     class CheckboxVisualNode;
     class TextWidget;
 
@@ -17,7 +16,7 @@ namespace ui {
 
     class CheckboxWidget : public Widget {
     public:
-        CheckboxWidget(UI& ui, bool& value, std::string label, std::string id = {});
+        CheckboxWidget(bool& value, std::string label, std::string id = {});
 
         CheckboxWidget& set_label(std::string label);
         bool set_checked(bool checked);

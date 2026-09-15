@@ -14,7 +14,7 @@ using namespace ui;
 
 class ui::DropdownBodyNode final : public Widget {
 public:
-    DropdownBodyNode(DropdownWidget::State& state, UI& ui, InputRouter& input_router);
+    explicit DropdownBodyNode(DropdownWidget::State& state);
 
     void place_below(const Node& trigger) {
         const Rect rect = trigger.layout().visual_rect();
@@ -34,18 +34,16 @@ private:
     void on_update(float dt) override;
 
     DropdownWidget::State& m_state;
-    UI& m_ui;
     ImVec2 m_popup_position{};
     float m_popup_width = 0.0F;
     float m_item_height = 0.0F;
     bool m_popup_opened = false;
-    InputRouter& m_input_router;
 };
 
 class ui::DropdownOptionNode final : public ButtonWidget {
 public:
-    DropdownOptionNode(UI& ui, DropdownWidget::State& state, std::size_t index, const Theme& theme)
-        : ButtonWidget(ui, state.options[index].label, {grow(), px(0.0F)}), m_state(state), m_index(index) {
+    DropdownOptionNode(DropdownWidget::State& state, std::size_t index)
+        : ButtonWidget(state.options[index].label, {grow(), px(0.0F)}), m_state(state), m_index(index) {
         set_type_name("DropdownOption");
         set_text_alignment({0.0F, 0.5F});
 
@@ -55,7 +53,6 @@ public:
                 m_state.owner->select_value(m_state.options[m_index].value);
             }
         });
-        apply_theme_defaults(theme);
     }
 
     bool accepts_input() const override {
@@ -138,11 +135,10 @@ private:
     DropdownWidget::State& m_state;
 };
 
-DropdownBodyNode::DropdownBodyNode(DropdownWidget::State& state, UI& ui, InputRouter& input_router)
-    : Widget("body", "DropdownBody", InputMode::None), m_state(state), m_ui(ui), m_input_router(input_router) {
+DropdownBodyNode::DropdownBodyNode(DropdownWidget::State& state)
+    : Widget("body", "DropdownBody", InputMode::None), m_state(state) {
     set_layout({.size = {px(0.0F), px(0.0F)}, .in_flow = false});
     fade_out();
-    apply_theme_defaults(ui.theme());
     rebuild_options();
 }
 
@@ -168,7 +164,7 @@ void DropdownBodyNode::rebuild_options() {
 
     clear();
     for (std::size_t index = 0; index < m_state.options.size(); ++index) {
-        add<DropdownOptionNode>(m_ui, m_state, index, m_ui.theme());
+        add<DropdownOptionNode>(m_state, index);
     }
 }
 
@@ -203,7 +199,7 @@ bool DropdownBodyNode::paint() {
         draw_surface(*ImGui::GetWindowDrawList(), body_rect);
 
         // block the body while keeping its option rows targetable.
-        m_input_router.register_blocker(*this, body_rect);
+        surface().input_router().register_blocker(*this, body_rect);
         return true;
     } else if (m_state.is_open()) {
         m_state.close();
@@ -319,18 +315,16 @@ void DropdownWidget::State::finish_close() {
     body->set_enabled(false);
 }
 
-DropdownWidget::DropdownWidget(UI& ui, std::string& value, std::vector<DropdownOption> options, std::string id)
+DropdownWidget::DropdownWidget(std::string& value, std::vector<DropdownOption> options, std::string id)
     : Widget(std::move(id), "Dropdown"), m_state{.value = &value, .options = std::move(options)} {
     m_state.owner = this;
 
     m_label_node = &add<TextWidget>("");
     m_trigger = &add<DropdownTriggerNode>(m_state);
-    m_body = &add<DropdownBodyNode>(m_state, ui, ui.input_router());
+    m_body = &add<DropdownBodyNode>(m_state);
     m_state.body = m_body;
     m_state.trigger = m_trigger;
     m_body->set_enabled(false);
-
-    apply_theme_defaults(ui.theme());
 }
 
 void DropdownWidget::on_event(UiEvent& event) {

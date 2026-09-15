@@ -328,7 +328,7 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
         .in_flow = false,
     });
     auto& content_dropdown = surface.root().add<ui::DropdownWidget>(
-        surface, dropdown_value, std::vector<ui::DropdownOption>{{"one", "one"}, {"two", "two"}}, "dropdown"
+        dropdown_value, std::vector<ui::DropdownOption>{{"one", "one"}, {"two", "two"}}, "dropdown"
     );
     content_dropdown.set_size({ui::px(180.0F), ui::px(52.0F)});
     content_dropdown.set_layout({
@@ -404,7 +404,7 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
     std::string value = "one";
     int changes = 0;
     auto& dropdown = surface.root().add<ui::DropdownWidget>(
-        surface, value, std::vector<ui::DropdownOption>{{"one", "one"}, {"two", "two"}}, "dropdown"
+        value, std::vector<ui::DropdownOption>{{"one", "one"}, {"two", "two"}}, "dropdown"
     );
     dropdown.set_layout({
         .size = {ui::px(180.0F), ui::px(36.0F)},

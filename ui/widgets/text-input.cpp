@@ -42,32 +42,29 @@ private:
     bool m_changed = false;
 };
 
-TextInputWidget::TextInputWidget(UI& ui, std::string& value, std::string label)
-    : StackContainer(std::move(label), StackDirection::Horizontal), m_ui(ui), m_value(&value) {
+TextInputWidget::TextInputWidget(std::string& value, std::string label)
+    : StackContainer(std::move(label), StackDirection::Horizontal), m_value(&value) {
     set_input_mode(InputMode::Target);
 
     set_type_name("TextInput");
     set_content_alignment(Anchor::CenterLeft);
-    set_font(ui.get_primary_font(18));
-
     m_icon_node = &add<ImageWidget>();
     m_icon_node->set_id("icon");
     m_icon_node->set_enabled(false);
     m_icon_node->set_visible(false);
 
     m_field_node = &add<FieldNode>(value, m_focus_requested);
-    apply_theme_defaults(ui.theme());
 }
 
 void TextInputWidget::on_event(UiEvent& event) {
     if (event.type == EventType::PointerDown && event.button == PointerButton::Left) {
-        m_focus_requested = m_ui.input_router().set_focus(*this);
+        m_focus_requested = surface().input_router().set_focus(*this);
     }
 
     if (event.type == EventType::Cancel || (event.type == EventType::KeyDown && event.key == Key::Escape)) {
         const bool focused = input_state().focused;
         if (focused) {
-            m_ui.input_router().restore_focus(*this);
+            surface().input_router().restore_focus(*this);
             event.stop_propagation();
         } else {
             event.mark_handled();
@@ -77,6 +74,7 @@ void TextInputWidget::on_event(UiEvent& event) {
 
 void TextInputWidget::apply_theme_defaults(const Theme& theme) {
     StackContainer::apply_theme_defaults(theme);
+    set_font(surface().get_primary_font(18));
     const TransitionSpec transition{0.25F, easing::out_quad};
     set_spacing(10.0F);
     m_icon_node->set_size({px(18.0F), px(18.0F)});
@@ -135,7 +133,7 @@ void TextInputWidget::on_measure() {
 void TextInputWidget::on_draw_end() {
     if (m_icon_node->visible()) {
         const ImVec4 icon_color =
-            input_state().hovered || input_state().active ? m_ui.theme().text_color : m_ui.theme().text_secondary_color;
+            input_state().hovered || input_state().active ? surface().theme().text_color : surface().theme().text_secondary_color;
         m_icon_node->style().color(ImColor(icon_color));
     }
 

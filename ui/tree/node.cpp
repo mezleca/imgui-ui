@@ -2,10 +2,12 @@
 
 #include "../diagnostics/profiler.hpp"
 #include "../input/router.hpp"
+#include "../ui.hpp"
 
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <stdexcept>
 #include <utility>
 
 using namespace ui;
@@ -196,20 +198,15 @@ void Node::set_profiler(Profiler* profiler) {
     }
 }
 
-bool Node::attach(std::unique_ptr<Node> child) {
-    if (child == nullptr || child.get() == this || child->m_parent != nullptr || child->contains(this)) {
-        return false;
+void Node::prepare_child(Node& child) {
+    child.m_parent = this;
+    child.set_surface(m_surface);
+    child.set_input_router(m_input_router);
+    child.set_profiler(m_profiler);
+
+    if (m_surface != nullptr) {
+        child.apply_theme(m_surface->theme());
     }
-
-    child->m_parent = this;
-    child->set_surface(m_surface);
-    child->set_input_router(m_input_router);
-    child->set_profiler(m_profiler);
-
-    m_children.emplace_back(std::move(child));
-    invalidate_measure();
-
-    return true;
 }
 
 void Node::clear_input_state() {

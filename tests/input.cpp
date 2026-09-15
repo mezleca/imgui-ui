@@ -106,9 +106,7 @@ TEST_CASE("widget event handlers preserve internal behavior") {
 TEST_CASE("ui events bubble from the target to its ancestors") {
     std::vector<std::string> events;
     auto parent = std::make_unique<EventNode>("parent", events);
-    auto child = std::make_unique<EventNode>("child", events);
-    EventNode* child_ptr = child.get();
-    parent->attach(std::move(child));
+    EventNode* child_ptr = &parent->add<EventNode>("child", events);
 
     InputRouter router;
     UiEvent event = click_event();
@@ -121,10 +119,8 @@ TEST_CASE("ui events bubble from the target to its ancestors") {
 TEST_CASE("ui events can stop propagation") {
     std::vector<std::string> events;
     auto parent = std::make_unique<EventNode>("parent", events);
-    auto child = std::make_unique<EventNode>("child", events);
-    EventNode* child_ptr = child.get();
+    EventNode* child_ptr = &parent->add<EventNode>("child", events);
     child_ptr->stop_events = true;
-    parent->attach(std::move(child));
 
     InputRouter router;
     UiEvent event = click_event();
@@ -247,9 +243,7 @@ TEST_CASE("owner-scoped blockers leave their descendants interactive") {
     std::vector<EventType> events;
     Node owner("overlay");
     owner.set_input_mode(InputMode::Blocker);
-    auto child = std::make_unique<PointerEventNode>("child", events);
-    auto* child_ptr = child.get();
-    owner.attach(std::move(child));
+    auto* child_ptr = &owner.add<PointerEventNode>("child", events);
 
     InputRouter router;
     router.register_target(*child_ptr, {{0.0F, 0.0F}, {100.0F, 100.0F}});
@@ -288,11 +282,8 @@ TEST_CASE("owner-scoped blockers receive hover and active state") {
 TEST_CASE("input router restores focus to a blocker ancestor") {
     Node modal("modal");
     modal.set_input_mode(InputMode::Blocker);
-    auto panel = std::make_unique<Node>("panel");
-    auto input = std::make_unique<Node>("input");
-    Node* input_ptr = input.get();
-    panel->attach(std::move(input));
-    modal.attach(std::move(panel));
+    Node& panel = modal.add<Node>("panel");
+    Node* input_ptr = &panel.add<Node>("input");
 
     InputRouter router;
     REQUIRE(router.set_focus(*input_ptr));
@@ -357,10 +348,8 @@ TEST_CASE("pointer down outside a focused node clears focus") {
 TEST_CASE("input router clears targets when a node is detached") {
     std::vector<std::string> events;
     Node parent("parent");
-    auto child = std::make_unique<EventNode>("child", events);
-    EventNode* child_ptr = child.get();
+    EventNode* child_ptr = &parent.add<EventNode>("child", events);
     child_ptr->handle_events = true;
-    parent.attach(std::move(child));
 
     InputRouter router;
     parent.set_input_router(&router);
@@ -556,9 +545,7 @@ TEST_CASE("input router resolves overlapping targets by paint order and ancestry
     REQUIRE(router.node_at({10.0F, 10.0F}) == &second);
 
     Node parent("parent");
-    auto child = std::make_unique<Node>("child");
-    Node* child_ptr = child.get();
-    parent.attach(std::move(child));
+    Node* child_ptr = &parent.add<Node>("child");
 
     router.begin_frame();
     router.register_target(*child_ptr, {{0.0F, 0.0F}, {100.0F, 100.0F}});

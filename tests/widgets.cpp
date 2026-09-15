@@ -302,9 +302,8 @@ TEST_CASE("dropdown options use framework input and select their value", "[Dropd
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     std::string value = "light";
     int changes = 0;
-    auto& dropdown = surface.root().add<DropdownWidget>(
-        surface, value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "theme"
-    );
+    auto& dropdown =
+        surface.root().add<DropdownWidget>(value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "theme");
     dropdown.set_size({px(180.0F), px(32.0F)});
     dropdown.set_on_change([&changes] { ++changes; });
 
@@ -352,9 +351,8 @@ TEST_CASE("dropdown rows expose their complete visual hit boxes", "[DropdownWidg
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     std::string value;
-    auto& dropdown = surface.root().add<DropdownWidget>(
-        surface, value, std::vector<DropdownOption>{{"dark", "dark"}, {"light", "light"}}, "theme"
-    );
+    auto& dropdown =
+        surface.root().add<DropdownWidget>(value, std::vector<DropdownOption>{{"dark", "dark"}, {"light", "light"}}, "theme");
     dropdown.set_size({px(240.0F), px(40.0F)});
 
     const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 1200.0F});
@@ -489,10 +487,10 @@ TEST_CASE("value widgets notify only when their value changes", "[Widget][change
     std::string text = "before";
     int changes = 0;
 
-    CheckboxWidget checkbox(surface, checked, "checked");
-    NumberInputWidget input(surface, number);
-    DropdownWidget dropdown(surface, choice, {{"one", "one"}, {"two", "two"}});
-    TextInputWidget text_input(surface, text);
+    CheckboxWidget checkbox(checked, "checked");
+    NumberInputWidget input(number);
+    DropdownWidget dropdown(choice, {{"one", "one"}, {"two", "two"}});
+    TextInputWidget text_input(text);
 
     checkbox.set_on_change([&changes] { ++changes; });
     input.set_on_change([&changes] { ++changes; });
