@@ -19,14 +19,21 @@ namespace ui {
         void apply_theme_defaults(const Theme& theme) override;
 
         virtual void resolve_layout();
-        virtual void arrange_children() {}
+        void on_measure() override;
+        virtual void arrange_children();
         void draw_children() override;
 
         bool paint() override;
         void on_draw_end() override;
 
+        virtual StackDirection stack_direction() const;
+        virtual float stack_spacing() const;
+        virtual ImVec2 stack_content_alignment() const;
+        const ImVec2& arranged_content_size() const;
+
     private:
         bool m_scroll_vertical = false;
         bool m_scroll_horizontal = false;
+        ImVec2 m_content_size{};
     };
 } // namespace ui

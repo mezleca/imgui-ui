@@ -599,12 +599,11 @@ TEST_CASE("explicit fit keeps a text widget intrinsic size", "[layout]") {
     REQUIRE(fill.layout().size().x > 0.0F);
 }
 
-TEST_CASE("vertical stack flexible child reflows with available height", "[layout][regression]") {
+TEST_CASE("containers vertically stack flexible children by default", "[layout][regression]") {
     ui_test::ImGuiContext context({220.0F, 240.0F});
 
-    StackContainer stack("vertical-flexible-stack");
+    Container stack("vertical-flexible-stack");
     stack.set_size({px(120.0F), grow()});
-    stack.set_spacing(8.0F);
     stack.style().padding({6.0F, 6.0F});
     auto& fixed = stack.add<LayoutProbeNode>();
     fixed.set_size({grow(), px(30.0F)});
@@ -627,7 +626,7 @@ TEST_CASE("vertical stack flexible child reflows with available height", "[layou
     REQUIRE(fixed.layout().size().x == Catch::Approx(108.0F));
     REQUIRE(flexible.layout().size().x == Catch::Approx(108.0F));
     REQUIRE(flexible.layout().size().y > initial_height);
-    REQUIRE(fixed.layout().size().y + flexible.layout().size().y + 8.0F == Catch::Approx(stack.layout().size().y - 12.0F));
+    REQUIRE(fixed.layout().size().y + flexible.layout().size().y == Catch::Approx(stack.layout().size().y - 12.0F));
 }
 
 TEST_CASE("changing stack direction rearranges existing children", "[layout][regression]") {

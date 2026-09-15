@@ -117,7 +117,14 @@ void ResizableContainer::handle_resize(UiEvent& event) {
         size.y = std::clamp(m_previous_size.y + event.position.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y);
     }
 
-    set_size({px(size.x), px(size.y)});
+    LayoutSize updated = layout().size_spec();
+    if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) {
+        updated.width = px(size.x);
+    }
+    if ((m_resizing & ResizeAxes::Y) != ResizeAxes::None) {
+        updated.height = px(size.y);
+    }
+    set_size(updated);
     event.block_native_input();
     event.stop_propagation();
 }
