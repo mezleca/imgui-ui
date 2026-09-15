@@ -519,21 +519,13 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     std::string value;
-    ResizableContainer parent("resizable");
+    auto& parent = surface.root().add<ResizableContainer>("resizable");
     parent.set_size({px(180.0F), px(80.0F)});
-    auto& input = parent.add<TextInputWidget>(surface, value, "input");
+    auto& input = parent.add<TextInputWidget>(value, "input");
 
     const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
 
-    const auto draw_frame = [&surface, &parent] {
-        surface.begin_frame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({400.0F, 180.0F});
-        ImGui::Begin("text-input-resize-test");
-        parent.draw();
-        ImGui::End();
-        surface.end_frame();
-    };
+    const auto draw_frame = [&surface] { ui_test::draw_surface(surface); };
 
     draw_frame();
     const float initial_width = input.layout().size().x;

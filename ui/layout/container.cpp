@@ -50,7 +50,12 @@ void Container::draw_children() {
         const ImVec2 origin = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
         placement.offset.x += margin.x * (1.0F - 2.0F * origin.x);
         placement.offset.y += margin.y * (1.0F - 2.0F * origin.y);
-        arrange_child(*child, child->layout().intrinsic_size(), placement);
+        const LayoutSize& size_spec = child->layout().size_spec();
+        ImVec2 size = child->layout().intrinsic_size();
+        const ImVec2 available = content_size(layout().size());
+        if (size_spec.width.mode == LayoutSizeMode::Percent) size.x = size_spec.width.resolve(size.x, available.x);
+        if (size_spec.height.mode == LayoutSizeMode::Percent) size.y = size_spec.height.resolve(size.y, available.y);
+        arrange_child(*child, size, placement);
         child->draw();
     }
 }

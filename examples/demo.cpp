@@ -301,9 +301,9 @@ protected:
 
 class DemoAnimatedText final : public TextWidget {
 public:
-    DemoAnimatedText(UI& ui, std::string text) : TextWidget(std::move(text)), m_ui(ui) {
+    DemoAnimatedText(std::string text, const Theme& theme) : TextWidget(std::move(text)) {
         set_input_mode(InputMode::Target);
-        apply_theme_defaults(ui.theme());
+        apply_theme_defaults(theme);
     }
 
 protected:
@@ -327,15 +327,13 @@ private:
                 .padding_y(10.0F, {0.2F, easing::out_quad})
                 .then(0.1F)
                 .padding_x(20.0F, {0.24F, easing::out_cubic})
-                .background_color(m_ui.theme().accent_color, {0.24F, easing::out_cubic})
+                .background_color(surface().theme().accent_color, {0.24F, easing::out_cubic})
                 .then(0.1F)
                 .rotation(180.0F, {0.25F, easing::out_cubic});
         } else {
             animate().release_all({0.15F, easing::linear});
         }
     }
-
-    UI& m_ui;
     bool m_hovered = false;
 };
 
@@ -456,7 +454,8 @@ protected:
 
 class DemoScreen final : public StackContainer {
 public:
-    DemoScreen(UI& surface, std::string backend);
+    explicit DemoScreen(UI& surface);
+    void setup(std::string backend);
     void setup_dynamic_nodes(Node& parent);
     int& blur();
 
@@ -513,13 +512,15 @@ DemoTextListWidget& DemoTextListWidget::set_items(std::vector<std::string> items
     return *this;
 }
 
-DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo", StackDirection::Vertical), m_surface(surface) {
+DemoScreen::DemoScreen(UI& surface) : StackContainer("demo", StackDirection::Vertical), m_surface(surface) {
     set_size({grow(), grow()});
     set_scrollable(true);
     set_spacing(16.0F);
     apply_theme_defaults(surface.theme());
+}
 
-    auto& overview = add<DemoPanel>("overview", surface.theme());
+void DemoScreen::setup(std::string backend) {
+    auto& overview = add<DemoPanel>("overview", m_surface.theme());
     overview.set_size({grow(), fit()});
     overview.set_spacing(4.0F);
     overview.add<TextWidget>("imgui-ui example");
@@ -531,7 +532,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     random_slider.set_label("random value");
     random_slider.set_maximum(10);
 
-    auto& profile = add<DemoPanel>("profile", surface.theme());
+    auto& profile = add<DemoPanel>("profile", m_surface.theme());
     profile.set_size({grow(), fit()});
     profile.set_spacing(8.0F);
     profile.add<TextWidget>("profile");
@@ -558,10 +559,10 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     add_test_image(m_surface.runtime().textures().find("demo-test-image"));
     add_test_image(m_surface.runtime().textures().find("demo-test-gif"));
 
-    auto& add_image = profile.add<ButtonWidget>(m_surface, "add test image", LayoutSize{px(140.0F), px(36.0F)});
+    auto& add_image = profile.add<ButtonWidget>("add test image", LayoutSize{px(140.0F), px(36.0F)});
     add_image.set_on_click([this] { add_test_image(m_surface.runtime().textures().find("demo-test-image")); });
 
-    auto& select_image = profile.add<ButtonWidget>(m_surface, "add image from file", LayoutSize{px(140.0F), px(36.0F)});
+    auto& select_image = profile.add<ButtonWidget>("add image from file", LayoutSize{px(140.0F), px(36.0F)});
     select_image.set_on_click([this] { select_test_image(); });
 
     auto& image_fit = profile.add<DemoDropdown>(
@@ -572,14 +573,14 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     image_fit.set_label("image fit").set_size({px(280.0F), px(68.0F)});
     image_fit.set_on_change([this] { apply_image_fit(); });
 
-    profile.add<DemoAnimatedText>(surface, "hover for cool animation");
+    profile.add<DemoAnimatedText>("hover for cool animation", m_surface.theme());
 
     profile.add<TextWidget>("ellipsis: this text is longer than the available width")
         .set_size({px(220.0F), px(20.0F)})
         .set_overflow(TextOverflow::Ellipsis);
     profile.add<TextWidget>("clip: this text is longer than the available width").set_size({px(220.0F), px(20.0F)});
 
-    auto& appearance = add<DemoPanel>("appearance", surface.theme());
+    auto& appearance = add<DemoPanel>("appearance", m_surface.theme());
     appearance.set_size({grow(), fit()});
     appearance.set_spacing(8.0F);
     appearance.add<TextWidget>("appearance");
@@ -608,30 +609,29 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
         apply_border_style(m_surface.root(), style);
     });
 
-    auto& actions = add<DemoPanel>("actions", surface.theme());
+    auto& actions = add<DemoPanel>("actions", m_surface.theme());
     actions.set_size({grow(), fit()});
     actions.set_spacing(8.0F);
     actions.add<TextWidget>("actions");
     auto& status = actions.add<TextWidget>("no clicks yet");
-    auto& button = actions.add<ButtonWidget>(m_surface, "click me", LayoutSize{px(140.0F), px(44.0F)});
+    auto& button = actions.add<ButtonWidget>("click me", LayoutSize{px(140.0F), px(44.0F)});
 
-    auto& list_section = add<DemoPanel>("list-section", surface.theme());
+    auto& list_section = add<DemoPanel>("list-section", m_surface.theme());
     list_section.set_size({grow(), fit()});
     list_section.set_spacing(8.0F);
     list_section.add<TextWidget>("dynamic stack layout");
     m_text_list = &list_section.add<DemoTextListWidget>(
-        surface.theme(), std::vector<std::string>{"first item", "second item", "third item"}
+        m_surface.theme(), std::vector<std::string>{"first item", "second item", "third item"}
     );
 
-    auto& text_list_orientation =
-        list_section.add<ButtonWidget>(m_surface, "list orientation: vertical", LayoutSize{px(240.0F), px(36.0F)});
+    auto& text_list_orientation = list_section.add<ButtonWidget>("list orientation: vertical", LayoutSize{px(240.0F), px(36.0F)});
     text_list_orientation.set_on_click([this, &text_list_orientation] {
         m_text_list_horizontal = !m_text_list_horizontal;
         m_text_list->set_direction(m_text_list_horizontal ? StackDirection::Horizontal : StackDirection::Vertical);
         text_list_orientation.set_text(m_text_list_horizontal ? "list orientation: horizontal" : "list orientation: vertical");
     });
 
-    auto& virtual_section = add<DemoPanel>("virtual-section", surface.theme());
+    auto& virtual_section = add<DemoPanel>("virtual-section", m_surface.theme());
     virtual_section.set_size({grow(), fit()});
     virtual_section.set_spacing(8.0F);
     virtual_section.add<TextWidget>("virtual list (100000 items)");
@@ -642,7 +642,7 @@ DemoScreen::DemoScreen(UI& surface, std::string backend) : StackContainer("demo"
     virtual_list.set_spacing(4.0F);
     virtual_list.set_overscan(5);
     virtual_list.set_items(
-        100000, [&surface, &virtual_list, cache = std::unordered_map<size_t, ButtonWidget*>{}](size_t index) mutable -> Node& {
+        100000, [&virtual_list, cache = std::unordered_map<size_t, ButtonWidget*>{}](size_t index) mutable -> Node& {
             const auto found = cache.find(index);
 
             if (found != cache.end()) {
@@ -700,27 +700,26 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
     m_dynamic_nodes->set_size({px(240.0F), grow()});
     m_dynamic_nodes->set_resize(ResizeAxes::Both).set_spacing(8.0F).set_scrollable(true);
 
-    auto& add_node = node_controls.add<ButtonWidget>(m_surface, "add node", LayoutSize{px(120.0F), px(36.0F)});
+    auto& add_node = node_controls.add<ButtonWidget>("add node", LayoutSize{px(120.0F), px(36.0F)});
     add_node.set_on_click([this] {
         ++m_dynamic_count;
 
         const int item_id = ++m_next_dynamic_id;
-        auto& item =
-            m_dynamic_nodes->add<ButtonWidget>(m_surface, std::format("list item {}", item_id), LayoutSize{grow(), px(36.0F)});
+        auto& item = m_dynamic_nodes->add<ButtonWidget>(std::format("list item {}", item_id), LayoutSize{grow(), px(36.0F)});
         ButtonWidget* item_ptr = &item;
         item.set_on_click([this, item_ptr] { m_pending_remove = item_ptr; });
 
         m_dynamic_status->set_text(std::format("dynamic nodes: {}", m_dynamic_count));
     });
 
-    auto& show_progress = node_controls.add<ButtonWidget>(m_surface, "show progress", LayoutSize{px(120.0F), px(36.0F)});
+    auto& show_progress = node_controls.add<ButtonWidget>("show progress", LayoutSize{px(120.0F), px(36.0F)});
     show_progress.set_on_click([this] {
         ++m_dynamic_count;
         m_dynamic_nodes->add<DemoProgressWidget>(m_surface);
         m_dynamic_status->set_text(std::format("dynamic nodes: {}", m_dynamic_count));
     });
 
-    auto& remove_node = node_controls.add<ButtonWidget>(m_surface, "remove node", LayoutSize{px(120.0F), px(36.0F)});
+    auto& remove_node = node_controls.add<ButtonWidget>("remove node", LayoutSize{px(120.0F), px(36.0F)});
     remove_node.set_on_click([this] {
         if (m_dynamic_nodes->children().empty()) {
             return;
@@ -733,7 +732,7 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
         m_dynamic_status->set_text(std::format("dynamic nodes: {}", m_dynamic_count));
     });
 
-    auto& clear_nodes = node_controls.add<ButtonWidget>(m_surface, "clear nodes", LayoutSize{px(120.0F), px(36.0F)});
+    auto& clear_nodes = node_controls.add<ButtonWidget>("clear nodes", LayoutSize{px(120.0F), px(36.0F)});
     clear_nodes.set_on_click([this] {
         m_pending_remove = nullptr;
         m_dynamic_nodes->clear();
@@ -850,7 +849,8 @@ void setup_demo(UI& surface, std::string backend) {
 #endif
     Texture* inline_icon = runtime.textures().find("demo-inline-icon");
 
-    auto& demo = surface.root().add<DemoScreen>(surface, std::move(backend));
+    auto& demo = surface.root().add<DemoScreen>();
+    demo.setup(std::move(backend));
 
     auto& overlay = demo.add<LayerContainer>("##demo-overlay");
     auto& panel = overlay.add<DemoPanel>("overlay-panel", surface.theme());

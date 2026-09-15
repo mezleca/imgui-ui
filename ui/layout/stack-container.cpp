@@ -148,19 +148,19 @@ void StackContainer::arrange_children() {
         const LayoutAxis& cross_axis = horizontal ? child_layout_size.height : child_layout_size.width;
         const ImVec2 child_size = child->layout().intrinsic_size();
         const ImVec2 margin = child->layout_margin();
+        const float main_available = std::max(0.0F, available_main - axis_extent(margin, horizontal) * 2.0F);
 
         fixed_main += axis_extent(margin, horizontal) * 2.0F;
         if (main_axis.mode != LayoutSizeMode::Grow) {
-            fixed_main += axis_extent(child_size, horizontal);
+            fixed_main += main_axis.resolve(axis_extent(child_size, horizontal), main_available);
         } else {
             flexible_weight += main_axis.value;
         }
 
         if (aligns_content) {
-            const float cross_size =
-                cross_axis.mode == LayoutSizeMode::Grow
-                    ? std::max(0.0F, axis_extent(content_size, !horizontal) - axis_extent(margin, !horizontal) * 2.0F)
-                    : axis_extent(child_size, !horizontal);
+            const float cross_available =
+                std::max(0.0F, axis_extent(content_size, !horizontal) - axis_extent(margin, !horizontal) * 2.0F);
+            const float cross_size = cross_axis.resolve(axis_extent(child_size, !horizontal), cross_available);
             flow_cross = std::max(flow_cross, cross_size + axis_extent(margin, !horizontal) * 2.0F);
         }
 
@@ -207,7 +207,7 @@ void StackContainer::arrange_children() {
 }
 
 ImVec2 StackContainer::resolve_child_size(const Node& child, ImVec2 content_size, float flexible_main) const {
-    // grow fills the main axis by weight and the cross axis by the content box.
+    // grow consumes weighted main-axis space while every other rule resolves against the content box.
     ImVec2 size = child.layout().intrinsic_size();
 
     const bool horizontal = m_direction == StackDirection::Horizontal;
@@ -216,12 +216,16 @@ ImVec2 StackContainer::resolve_child_size(const Node& child, ImVec2 content_size
     const LayoutAxis& cross_axis = horizontal ? layout_size.height : layout_size.width;
     const ImVec2 margin = child.layout_margin();
 
-    if (main_axis.mode == LayoutSizeMode::Grow) set_axis_extent(size, horizontal, flexible_main * main_axis.value);
-    if (cross_axis.mode == LayoutSizeMode::Grow) {
-        set_axis_extent(
-            size, !horizontal, std::max(0.0F, axis_extent(content_size, !horizontal) - axis_extent(margin, !horizontal) * 2.0F)
-        );
-    }
+    const float main_available = std::max(0.0F, axis_extent(content_size, horizontal) - axis_extent(margin, horizontal) * 2.0F);
+    const float cross_available =
+        std::max(0.0F, axis_extent(content_size, !horizontal) - axis_extent(margin, !horizontal) * 2.0F);
+
+    set_axis_extent(
+        size, horizontal,
+        main_axis.mode == LayoutSizeMode::Grow ? flexible_main * main_axis.value
+                                               : main_axis.resolve(axis_extent(size, horizontal), main_available)
+    );
+    set_axis_extent(size, !horizontal, cross_axis.resolve(axis_extent(size, !horizontal), cross_available));
 
     return size;
 }

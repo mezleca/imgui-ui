@@ -85,15 +85,17 @@ static constexpr const char* ALIGNMENT_NAMES[] = {
 
 static constexpr const char* STYLE_NAMES[] = {"all", "default", "hover", "active", "focus"};
 static constexpr const char* BORDER_STYLE_NAMES[] = {"solid", "dashed", "dotted"};
-static constexpr const char* SIZE_MODE_NAMES[] = {"fixed", "fit", "grow"};
+static constexpr const char* SIZE_MODE_NAMES[] = {"fixed", "percent", "fit", "grow"};
 
 static constexpr float WINDOW_PADDING = 8.0F;
 static constexpr ImVec2 INSPECT_ICON_SIZE = {18.0F, 18.0F};
 static constexpr ImVec2 CLOSE_ICON_SIZE = {18.0F, 18.0F};
 static constexpr float ITEM_SPACING = 12.0F;
 static constexpr float INPUT_MAX_WIDTH = 180.0F;
-static constexpr ImVec2 INPUT_PADDING = {0.0F, 0.0F};
+static constexpr ImVec2 INPUT_PADDING = {6.0F, 3.0F};
+static constexpr float INPUT_BORDER_THICKNESS = 1.0F;
 static constexpr ImVec2 SECTION_PADDING = {10.0F, 8.0F};
+static constexpr float PROPERTY_ITEM_SPACING = 6.0F;
 static constexpr float DEBUGGER_SPLITTER_HEIGHT = 6.0F;
 static constexpr float DEBUGGER_MIN_PANE_HEIGHT = 72.0F;
 
@@ -220,7 +222,7 @@ void Debugger::draw_property_section(std::string_view label) {
     m_property_section_open = true;
 
     const ImVec2 item_spacing = ImGui::GetStyle().ItemSpacing;
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {item_spacing.x, 2.0F});
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {item_spacing.x, PROPERTY_ITEM_SPACING});
     ImGui::Indent(SECTION_PADDING.x);
     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_CheckMark]);
     ImGui::TextUnformatted(label.data(), label.data() + label.size());
@@ -241,13 +243,14 @@ static bool draw_labeled_input(std::string_view label, DrawInput draw_input, ImV
     }
 
     ImGui::PushID(label.data(), label.data() + label.size());
-    const ImVec4 transparent = {0.0F, 0.0F, 0.0F, 0.0F};
+    ImVec4 border_color = ImGui::GetStyle().Colors[ImGuiCol_Border];
+    border_color.w *= 0.7F;
     ImGui::PushStyleColor(ImGuiCol_FrameBg, frame_background);
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, frame_background);
     ImGui::PushStyleColor(ImGuiCol_FrameBgActive, frame_background);
-    ImGui::PushStyleColor(ImGuiCol_Border, transparent);
+    ImGui::PushStyleColor(ImGuiCol_Border, border_color);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, INPUT_PADDING);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0F);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, INPUT_BORDER_THICKNESS);
     ImGui::AlignTextToFramePadding();
     ImGui::Text("%.*s:", static_cast<int>(label.size()), label.data());
     ImGui::SameLine(0.0F, ITEM_SPACING);
@@ -940,8 +943,10 @@ void Debugger::render_layout_properties() {
         LayoutAxis& axis = width ? size.width : size.height;
         const float resolved = width ? layout.size().x : layout.size().y;
 
-        axis.mode = mode;
-        axis.value = mode == LayoutSizeMode::Fixed ? resolved : mode == LayoutSizeMode::Grow ? 1.0F : 0.0F;
+        axis = mode == LayoutSizeMode::Fixed     ? px(resolved)
+               : mode == LayoutSizeMode::Percent ? percent(100.0F)
+               : mode == LayoutSizeMode::Fit     ? fit()
+                                                 : grow();
         m_node_target->set_size(size);
     };
 
@@ -955,12 +960,38 @@ void Debugger::render_layout_properties() {
         update_size_axis(false, static_cast<LayoutSizeMode>(height_mode));
     }
 
-    if (size_spec.width.mode == LayoutSizeMode::Fixed || size_spec.height.mode == LayoutSizeMode::Fixed) {
-        ImVec2 size = layout.size();
-        if (draw_number_input("fixed size", &size.x, 2)) {
+    if (size_spec.width.mode == LayoutSizeMode::Fixed) {
+        float width = size_spec.width.value;
+        if (draw_number_input("width", &width)) {
             LayoutSize updated = size_spec;
-            if (updated.width.mode == LayoutSizeMode::Fixed) updated.width = px(size.x);
-            if (updated.height.mode == LayoutSizeMode::Fixed) updated.height = px(size.y);
+            updated.width = px(width);
+            m_node_target->set_size(updated);
+        }
+    }
+
+    if (size_spec.height.mode == LayoutSizeMode::Fixed) {
+        float height = size_spec.height.value;
+        if (draw_number_input("height", &height)) {
+            LayoutSize updated = size_spec;
+            updated.height = px(height);
+            m_node_target->set_size(updated);
+        }
+    }
+
+    if (size_spec.width.mode == LayoutSizeMode::Percent) {
+        float width = size_spec.width.value;
+        if (draw_number_input("width", &width, 1, 0.1F, 0.0F, 100.0F)) {
+            LayoutSize updated = size_spec;
+            updated.width = percent(width);
+            m_node_target->set_size(updated);
+        }
+    }
+
+    if (size_spec.height.mode == LayoutSizeMode::Percent) {
+        float height = size_spec.height.value;
+        if (draw_number_input("height", &height, 1, 0.1F, 0.0F, 100.0F)) {
+            LayoutSize updated = size_spec;
+            updated.height = percent(height);
             m_node_target->set_size(updated);
         }
     }

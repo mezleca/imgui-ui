@@ -129,6 +129,25 @@ TEST_CASE("positioned styled children apply margins around their placement") {
     REQUIRE(child.layout().local_rect().min.y == Catch::Approx(37.0F));
 }
 
+TEST_CASE("positioned children resolve percentage sizes from their container") {
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+
+    Container container("positioned-percent-container");
+    container.set_size({px(200.0F), px(100.0F)});
+    container.style().padding({});
+    auto& child = container.add<LayoutProbeNode>();
+    child.set_layout({.size = {percent(50.0F), percent(25.0F)}, .in_flow = false});
+
+    ImGui::NewFrame();
+    ImGui::Begin("positioned-percent-test");
+    container.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    REQUIRE(child.layout().size().x == Catch::Approx(100.0F));
+    REQUIRE(child.layout().size().y == Catch::Approx(25.0F));
+}
+
 TEST_CASE("layout anchors resolve the child origin against the parent") {
     const ImVec2 centered = resolve_layout_position({100.0F, 80.0F}, {20.0F, 10.0F}, Anchor::Center, Anchor::Center);
     REQUIRE(centered.x == 40.0F);
@@ -203,6 +222,10 @@ TEST_CASE("layout size resolves each axis from its sizing rule") {
     const ImVec2 fixed_zero = LayoutSize{px(0.0F), px(0.0F)}.resolve({40.0F, 30.0F}, {120.0F, 80.0F});
     REQUIRE(fixed_zero.x == 0.0F);
     REQUIRE(fixed_zero.y == 0.0F);
+
+    const ImVec2 percentage = LayoutSize{percent(25.0F), percent(50.0F)}.resolve({}, {120.0F, 80.0F});
+    REQUIRE(percentage.x == 30.0F);
+    REQUIRE(percentage.y == 40.0F);
 }
 
 TEST_CASE("stack layout places auto-sized children after their measured height") {
@@ -531,6 +554,25 @@ TEST_CASE("stack distributes grow space by axis weight", "[layout]") {
     REQUIRE(fixed.layout().size().x == Catch::Approx(60.0F));
     REQUIRE(narrow.layout().size().x == Catch::Approx(70.0F));
     REQUIRE(wide.layout().size().x == Catch::Approx(140.0F));
+}
+
+TEST_CASE("stack resolves percentage children from its content box", "[layout]") {
+    ui_test::ImGuiContext context({360.0F, 140.0F});
+
+    StackContainer stack("percentage-stack", StackDirection::Horizontal);
+    stack.set_size({px(300.0F), px(80.0F)});
+    stack.style().padding({});
+    auto& child = stack.add<LayoutProbeNode>();
+    child.set_size({percent(50.0F), percent(50.0F)});
+
+    ImGui::NewFrame();
+    ImGui::Begin("percentage-stack-test");
+    stack.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    REQUIRE(child.layout().size().x == Catch::Approx(150.0F));
+    REQUIRE(child.layout().size().y == Catch::Approx(40.0F));
 }
 
 TEST_CASE("explicit fit keeps a text widget intrinsic size", "[layout]") {

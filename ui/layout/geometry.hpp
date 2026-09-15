@@ -49,6 +49,8 @@ namespace ui {
     enum class LayoutSizeMode : uint8_t {
         /// uses the configured value.
         Fixed,
+        /// uses a percentage of available parent space.
+        Percent,
         /// uses the measured content size.
         Fit,
         /// consumes the available parent space.
@@ -62,6 +64,10 @@ namespace ui {
 
         static constexpr LayoutAxis fixed(float value) {
             return {LayoutSizeMode::Fixed, std::max(0.0F, value)};
+        }
+
+        static constexpr LayoutAxis percent(float value) {
+            return {LayoutSizeMode::Percent, std::clamp(value, 0.0F, 100.0F)};
         }
 
         static constexpr LayoutAxis fit() {
@@ -79,6 +85,10 @@ namespace ui {
         float resolve(float measured, float available) const {
             if (mode == LayoutSizeMode::Grow) {
                 return std::max(0.0F, available);
+            }
+
+            if (mode == LayoutSizeMode::Percent) {
+                return std::max(0.0F, available) * value / 100.0F;
             }
 
             return intrinsic(measured);
@@ -107,6 +117,11 @@ namespace ui {
 
     constexpr LayoutAxis px(float value) {
         return LayoutAxis::fixed(value);
+    }
+
+    /// returns an axis sized to a percentage in the inclusive 0–100 range of its available parent space.
+    constexpr LayoutAxis percent(float value) {
+        return LayoutAxis::percent(value);
     }
 
     constexpr LayoutAxis grow(float weight = 1.0F) {

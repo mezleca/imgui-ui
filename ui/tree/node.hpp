@@ -49,14 +49,17 @@ namespace ui {
         /// returns false for null, attached, or cyclic children.
         bool attach(std::unique_ptr<Node> child);
 
-        /// constructs and owns a child.
+        /// constructs and owns a child, prepending this node's UI when the child requires it.
         template <typename T, typename... Args>
         T& add(Args&&... args) {
             std::unique_ptr<T> child;
             if constexpr (std::constructible_from<T, Args...>) {
                 child = std::make_unique<T>(std::forward<Args>(args)...);
             } else {
-                static_assert(std::constructible_from<T, UI&, Args...>);
+                static_assert(
+                    std::constructible_from<T, UI&, Args...>,
+                    "child constructor must be public and accept the supplied arguments, optionally with UI& prepended"
+                );
                 child = std::make_unique<T>(surface(), std::forward<Args>(args)...);
             }
 
@@ -196,6 +199,9 @@ namespace ui {
         void invalidate_measure();
 
     protected:
+        /// returns the UI that owns this attached node.
+        UI& surface() const;
+
         /// dispatches an event to this node.
         virtual void dispatch_event(UiEvent& event);
 
@@ -278,7 +284,6 @@ namespace ui {
         friend class InputRouter;
         friend class HitTestIndex;
 
-        UI& surface() const;
         void set_surface(UI* surface);
         void measure_tree();
         void detach_input_router(InputRouter& router);
