@@ -4,19 +4,19 @@
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
-#include <memory>
 
 namespace ui {
     class UI;
-    class Window;
 
     class SdlBackend final : public Backend {
     public:
-        explicit SdlBackend(BackendConfig config);
+        /// uses the application's existing SDL OpenGL window and context.
+        /// both must outlive this backend and stay valid until after UI destruction.
         SdlBackend(SDL_Window* window, SDL_GLContext context);
         ~SdlBackend() override;
 
         bool initialize() override;
+        void process_events(UI& surface) override;
         void register_effects(EffectRegistry& effects) override;
         bool initialize_imgui() override;
         void shutdown_imgui() override;
@@ -33,12 +33,11 @@ namespace ui {
     private:
         void apply_mouse_cursor(ImGuiMouseCursor cursor);
 
-        std::unique_ptr<Window> m_window;
+        SDL_Window* m_window = nullptr;
+        SDL_GLContext m_context = nullptr;
         SDL_Cursor* m_mouse_cursor = nullptr;
         ImGuiMouseCursor m_mouse_cursor_type = ImGuiMouseCursor_Arrow;
-        bool m_attached = false;
         bool m_imgui_initialized = false;
     };
 
-    bool process_sdl_event(UI& surface, const SDL_Event& event);
 } // namespace ui

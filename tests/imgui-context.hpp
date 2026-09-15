@@ -19,6 +19,8 @@ namespace ui_test {
             return true;
         }
 
+        void process_events(ui::UI&) override {}
+
         bool initialize_imgui() override {
             return true;
         }
@@ -37,7 +39,7 @@ namespace ui_test {
         }
 
         ImVec2 display_size() const override {
-            return config().size;
+            return {};
         }
     };
 

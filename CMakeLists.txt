@@ -166,6 +166,10 @@ if(IMGUI_UI_BUILD_SDL)
 endif()
 
 if(IMGUI_UI_BUILD_RAYLIB AND NOT TARGET raylib)
+    if(UNIX AND NOT APPLE)
+        set(GLFW_BUILD_WAYLAND ON CACHE BOOL "")
+    endif()
+
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     add_subdirectory(vendor/raylib EXCLUDE_FROM_ALL)
 endif()

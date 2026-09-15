@@ -36,10 +36,17 @@ static constexpr std::string_view DEMO_INLINE_ICON_SVG = R"(
         <circle cx="12" cy="12" r="8" stroke="white" stroke-width="2"/>
         <path d="M12 8V12L15 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
     </svg>)";
+
 enum class DemoThemeVariant {
     Default,
     Pastel,
     Material,
+};
+
+enum class DemoPanelTone {
+    Base,
+    Secondary,
+    Tertiary,
 };
 
 static DemoThemeVariant s_demo_theme_variant = DemoThemeVariant::Default;
@@ -228,12 +235,6 @@ void configure_demo_runtime(RuntimeConfig& config) {
 #endif
 }
 
-enum class DemoPanelTone {
-    Base,
-    Secondary,
-    Tertiary,
-};
-
 class DemoPanel : public StackContainer {
 public:
     DemoPanel(
@@ -273,6 +274,30 @@ private:
     uint8_t m_border;
     bool m_accent_border;
     bool m_shadow;
+};
+
+class InputBlocker final : public DemoPanel {
+public:
+    InputBlocker(const Theme& theme) : DemoPanel("InputBlocker", theme) {
+        set_spacing(10.0F);
+        set_layout({
+            .size = {px(320.0F), px(150.0F)},
+            .placement = {.anchor = Anchor::Center, .origin = Anchor::Center},
+            .in_flow = false,
+        });
+
+        apply_theme_defaults(theme);
+    }
+
+    void apply_theme_defaults(const Theme& theme) override {
+        DemoPanel::apply_theme_defaults(theme);
+
+        configure_all_styles([&theme](Style& style) {
+            style.background_color({});
+            style.blur(11);
+            style.border(BORDER_ALL);
+        });
+    }
 };
 
 class DemoAccentButton final : public ButtonWidget {
@@ -897,14 +922,7 @@ void setup_demo(UI& surface, std::string backend) {
     auto& input_blocker = surface.root().add<LayerContainer>("##input-blocker");
     input_blocker.set_visible(false);
 
-    auto& blocker_panel = input_blocker.add<DemoPanel>("input-blocker-panel", surface.theme());
-
-    blocker_panel.set_layout({
-        .size = {px(320.0F), px(150.0F)},
-        .placement = {.anchor = Anchor::Center, .origin = Anchor::Center},
-        .in_flow = false,
-    });
-    blocker_panel.set_spacing(10.0F);
+    auto& blocker_panel = input_blocker.add<InputBlocker>(surface.theme());
     blocker_panel.add<TextWidget>("pointer input is blocked below this panel");
 
     auto& block_button = demo.add<ButtonWidget>("block pointer input", LayoutSize{px(220.0F), px(40.0F)});

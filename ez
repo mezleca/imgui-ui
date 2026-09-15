@@ -73,6 +73,8 @@ def configure(name: str, build_type: str, backend: str, tests: bool) -> Path:
         f"-DIMGUI_UI_BUILD_SDL={'ON' if backend in ('sdl', 'all') else 'OFF'}",
         f"-DIMGUI_UI_BUILD_RAYLIB={'ON' if backend in ('raylib', 'all') else 'OFF'}",
     ]
+    if backend in ("raylib", "all") and SYSTEM == "Linux":
+        command.append("-DGLFW_BUILD_WAYLAND=ON")
     if IS_CI and SYSTEM != "Windows":
         command.extend([
             "-DCMAKE_C_COMPILER_LAUNCHER=sccache",

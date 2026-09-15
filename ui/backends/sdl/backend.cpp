@@ -1,5 +1,4 @@
 #include "backend.hpp"
-#include "window.hpp"
 
 #include "../../constants.hpp"
 #include "../../imgui/context-scope.hpp"
@@ -14,9 +13,9 @@
 
 #include <cfloat>
 #include <optional>
-#include <utility>
 
 using namespace ui;
+
 static GLADapiproc load_opengl(const char* name) {
     return reinterpret_cast<GLADapiproc>(SDL_GL_GetProcAddress(name));
 }
@@ -150,10 +149,7 @@ static std::optional<UiEvent> event_from_sdl(const SDL_Event& event) {
     return result;
 }
 
-SdlBackend::SdlBackend(BackendConfig config) : Backend(std::move(config)) {}
-
-SdlBackend::SdlBackend(SDL_Window* window, SDL_GLContext context)
-    : Backend(), m_window(std::make_unique<Window>(window, context)), m_attached(true) {}
+SdlBackend::SdlBackend(SDL_Window* window, SDL_GLContext context) : m_window(window), m_context(context) {}
 
 SdlBackend::~SdlBackend() {
     if (m_mouse_cursor != nullptr) {
@@ -190,38 +186,23 @@ void SdlBackend::set_mouse_cursor(ImGuiMouseCursor cursor) {
 }
 
 bool SdlBackend::initialize() {
-    if (m_attached) {
-        if (m_window == nullptr || !m_window->valid()) {
-            return false;
-        }
-
-        m_window->make_current();
-        return true;
-    }
-
-    SDL_WindowFlags flags = SDL_WINDOW_OPENGL;
-    if (config().resizable) flags |= SDL_WINDOW_RESIZABLE;
-    if (!config().visible) flags |= SDL_WINDOW_HIDDEN;
-
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
-    m_window = std::make_unique<Window>(config().title, config().size, flags);
-    if (!m_window->valid()) {
-        SDL_Log("failed to create window '%s'", config().title.c_str());
+    if (m_window == nullptr || m_context == nullptr) {
         return false;
     }
 
-    m_window->make_current();
-    if (!SDL_GL_SetSwapInterval(config().swap_interval)) {
-        SDL_Log("failed to set OpenGL swap interval: %s", SDL_GetError());
-    }
+    SDL_GL_MakeCurrent(m_window, m_context);
     if (gladLoadGL(load_opengl) == 0 || !GLAD_GL_VERSION_3_3) {
         SDL_Log("OpenGL 3.3 or newer is required");
         return false;
     }
     return true;
+}
+
+void SdlBackend::process_events(UI& surface) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        process_event(surface, event);
+    }
 }
 
 void SdlBackend::register_effects(EffectRegistry& effects) {
@@ -230,7 +211,7 @@ void SdlBackend::register_effects(EffectRegistry& effects) {
 }
 
 bool SdlBackend::initialize_imgui() {
-    if (!ImGui_ImplSDL3_InitForOpenGL(m_window->handle(), m_window->context())) {
+    if (!ImGui_ImplSDL3_InitForOpenGL(m_window, m_context)) {
         return false;
     }
 
@@ -254,13 +235,11 @@ void SdlBackend::shutdown_imgui() {
 }
 
 void SdlBackend::begin_frame(ImVec4 clear_color) {
-    if (m_window != nullptr) m_window->make_current();
+    SDL_GL_MakeCurrent(m_window, m_context);
     const ImVec2 size = display_size();
-    if (!m_attached) {
-        glViewport(0, 0, static_cast<int>(size.x), static_cast<int>(size.y));
-        glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
-        glClear(GL_COLOR_BUFFER_BIT);
-    }
+    glViewport(0, 0, static_cast<int>(size.x), static_cast<int>(size.y));
+    glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
@@ -269,21 +248,27 @@ void SdlBackend::begin_frame(ImVec4 clear_color) {
 void SdlBackend::render(ImDrawData* draw_data) {
     ImGui_ImplOpenGL3_RenderDrawData(draw_data);
     apply_mouse_cursor(m_mouse_cursor_type);
-    if (!m_attached) {
-        m_window->swap();
-    }
+    SDL_GL_SwapWindow(m_window);
 }
 
 float SdlBackend::content_scale() const {
-    return SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+    const SDL_DisplayID display = SDL_GetDisplayForWindow(m_window);
+    return display == 0 ? 1.0F : SDL_GetDisplayContentScale(display);
 }
 
 uint64_t SdlBackend::window_id() const {
-    return m_window == nullptr ? 0 : m_window->id();
+    return m_window == nullptr ? 0 : SDL_GetWindowID(m_window);
 }
 
 ImVec2 SdlBackend::display_size() const {
-    return m_window == nullptr ? ImVec2{} : m_window->display_size();
+    if (m_window == nullptr) {
+        return {};
+    }
+
+    int width = 0;
+    int height = 0;
+    SDL_GetWindowSizeInPixels(m_window, &width, &height);
+    return {static_cast<float>(width), static_cast<float>(height)};
 }
 
 bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
@@ -293,7 +278,7 @@ bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
     }
 
     const SDL_WindowID window_id = event_window_id(event);
-    if (window_id != 0 && window_id != m_window->id()) {
+    if (window_id != 0 && window_id != SDL_GetWindowID(m_window)) {
         return false;
     }
 
@@ -332,9 +317,4 @@ bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
 
     if (!native_input_blocked) ImGui_ImplSDL3_ProcessEvent(&imgui_event);
     return handled;
-}
-
-bool ui::process_sdl_event(UI& surface, const SDL_Event& event) {
-    auto* backend = dynamic_cast<SdlBackend*>(&surface.backend());
-    return backend != nullptr && backend->process_event(surface, event);
 }

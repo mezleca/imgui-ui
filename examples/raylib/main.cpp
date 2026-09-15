@@ -1,47 +1,46 @@
 #include <ui/backends/raylib/backend.hpp>
 #include <ui/tree/node.hpp>
 #include <ui/ui.hpp>
-
 #include "../demo.hpp"
 
 #include <raylib.h>
-
 #include <memory>
 #include <utility>
 
+using namespace ui;
+
 int main() {
-    // configure the demo before runtime construction because runtime owns the theme and asset registries.
-    ui::RuntimeConfig runtime_config;
-    configure_demo_runtime(runtime_config);
-    ui::Runtime runtime(std::move(runtime_config));
+    // window configuration belongs to the application before the backend attaches to it.
+    SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
+    InitWindow(1120, 920, "imgui-ui raylib");
 
-    SetConfigFlags(FLAG_VSYNC_HINT);
+    {
+        // configure the demo before runtime construction because runtime owns the theme and asset registries.
+        RuntimeConfig runtime_config;
+        configure_demo_runtime(runtime_config);
+        Runtime runtime(std::move(runtime_config));
 
-    // let the backend create and own the raylib window.
-    auto backend = std::make_unique<ui::RaylibBackend>(ui::BackendConfig{
-        .title = "imgui-ui raylib",
-        .size = {1120.0F, 920.0F},
-        .resizable = true,
-    });
+        // the backend only initializes imgui against the current raylib window.
+        auto backend = std::make_unique<RaylibBackend>();
+        UI surface(
+            runtime, {
+                         .backend = std::move(backend),
+                         .enable_debugger = true,
+                     }
+        );
 
-    ui::UI surface(
-        runtime, {
-                     .backend = std::move(backend),
-                     .enable_debugger = true,
-                 }
-    );
+        setup_demo(surface, "raylib");
 
-    setup_demo(surface, "raylib");
-    while (!surface.is_done()) {
-        // raylib input is not polled by the framework automatically, so forward it before update and draw each frame.
-        ui::process_raylib_events(surface);
+        while (!surface.is_done()) {
+            surface.process_events();
 
-        surface.begin_frame();
-        const float dt = ImGui::GetIO().DeltaTime;
-        surface.update(dt);
-        surface.draw();
-        surface.end_frame();
+            surface.begin_frame();
+            surface.update(ImGui::GetIO().DeltaTime);
+            surface.draw();
+            surface.end_frame();
+        }
     }
 
+    CloseWindow();
     return 0;
 }

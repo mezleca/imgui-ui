@@ -27,22 +27,22 @@
 
 class SdlVideoSession final {
 public:
-    SdlVideoSession() {
+    explicit SdlVideoSession(ImVec2 size) {
         REQUIRE(SDL_Init(SDL_INIT_VIDEO));
 
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-        SDL_Window* window = SDL_CreateWindow("imgui-ui test", 1, 1, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
-        SDL_GLContext context = window == nullptr ? nullptr : SDL_GL_CreateContext(window);
-        bool supports_opengl = context != nullptr;
+        m_window = SDL_CreateWindow(
+            "imgui-ui test", static_cast<int>(size.x), static_cast<int>(size.y), SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN
+        );
+        m_context = m_window == nullptr ? nullptr : SDL_GL_CreateContext(m_window);
+        bool supports_opengl = m_context != nullptr;
         if (supports_opengl) {
-            SDL_GL_MakeCurrent(window, context);
+            SDL_GL_MakeCurrent(m_window, m_context);
             supports_opengl = gladLoadGL(SDL_GL_GetProcAddress) != 0 && GLAD_GL_VERSION_3_3;
         }
-        if (context != nullptr) SDL_GL_DestroyContext(context);
-        if (window != nullptr) SDL_DestroyWindow(window);
 
         if (!supports_opengl) {
             SKIP("OpenGL 3.3 is unavailable on this runner");
@@ -50,18 +50,32 @@ public:
     }
 
     ~SdlVideoSession() {
+        if (m_context != nullptr) SDL_GL_DestroyContext(m_context);
+        if (m_window != nullptr) SDL_DestroyWindow(m_window);
         SDL_Quit();
     }
+
+    SDL_Window* window() const {
+        return m_window;
+    }
+
+    SDL_GLContext context() const {
+        return m_context;
+    }
+
+private:
+    SDL_Window* m_window = nullptr;
+    SDL_GLContext m_context = nullptr;
 };
 
+static bool process_sdl_event(ui::UI& surface, const SDL_Event& event) {
+    return static_cast<ui::SdlBackend&>(surface.backend()).process_event(surface, event);
+}
+
 TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regression]") {
-    SdlVideoSession sdl;
+    SdlVideoSession sdl({128.0F, 128.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
-        .size = {128.0F, 128.0F},
-        .visible = false,
-        .swap_interval = 0,
-    });
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
     ui::UI surface(runtime, {.backend = std::move(backend)});
     auto& panel = surface.root().add<ui::Container>("shadow-panel");
     panel.set_layout({
@@ -110,13 +124,9 @@ TEST_CASE("gif texture data decodes into an opengl texture", "[texture][gif]") {
                                        "\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;";
     constexpr std::string_view gif{gif_data, sizeof(gif_data) - 1U};
 
-    SdlVideoSession sdl;
+    SdlVideoSession sdl({128.0F, 128.0F});
     ui::Runtime runtime({.texture_loader = std::make_unique<ui::OpenGLTextureLoader>()});
-    auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
-        .size = {128.0F, 128.0F},
-        .visible = false,
-        .swap_interval = 0,
-    });
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
     ui::UI surface(runtime, {.backend = std::move(backend)});
     ui::Texture* texture = runtime.textures().add("gif", gif);
     REQUIRE(texture != nullptr);
@@ -130,12 +140,9 @@ TEST_CASE("gif texture data decodes into an opengl texture", "[texture][gif]") {
 }
 
 TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regression]") {
-    SdlVideoSession sdl;
+    SdlVideoSession sdl({320.0F, 240.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
-        .size = {320.0F, 240.0F},
-        .visible = false,
-    });
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
     ui::UI surface(runtime, {.backend = std::move(backend)});
     const auto surface_context = ui_test::prepare_surface(surface);
 
@@ -159,11 +166,11 @@ TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regr
     down.button.x = click_position.x;
     down.button.y = click_position.y;
     down.button.button = SDL_BUTTON_LEFT;
-    REQUIRE_FALSE(ui::process_sdl_event(surface, down));
+    REQUIRE_FALSE(process_sdl_event(surface, down));
 
     SDL_Event up = down;
     up.type = SDL_EVENT_MOUSE_BUTTON_UP;
-    REQUIRE(ui::process_sdl_event(surface, up));
+    REQUIRE(process_sdl_event(surface, up));
     REQUIRE(click_count == 1);
 
     ui_test::draw_surface(surface);
@@ -180,12 +187,9 @@ TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regr
 }
 
 TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input][regression]") {
-    SdlVideoSession sdl;
+    SdlVideoSession sdl({900.0F, 600.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
-        .size = {900.0F, 600.0F},
-        .visible = false,
-    });
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
     ui::UI surface(runtime, {.backend = std::move(backend)});
     const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
 
@@ -225,7 +229,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
             event.button.y = position.y;
             event.button.button = SDL_BUTTON_LEFT;
         }
-        ui::process_sdl_event(surface, event);
+        process_sdl_event(surface, event);
     };
 
     ui_test::draw_surface(surface);
@@ -275,12 +279,9 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
 }
 
 TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regression]") {
-    SdlVideoSession sdl;
+    SdlVideoSession sdl({320.0F, 240.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
-        .size = {320.0F, 240.0F},
-        .visible = false,
-    });
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
     ui::UI surface(
         runtime, {
                      .backend = std::move(backend),
@@ -298,12 +299,12 @@ TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regres
     shift_down.key.key = SDLK_LSHIFT;
     shift_down.key.scancode = SDL_SCANCODE_LSHIFT;
     shift_down.key.mod = SDL_KMOD_SHIFT;
-    REQUIRE_FALSE(ui::process_sdl_event(surface, shift_down));
+    REQUIRE_FALSE(process_sdl_event(surface, shift_down));
 
     SDL_Event d_down = shift_down;
     d_down.key.key = SDLK_D;
     d_down.key.scancode = SDL_SCANCODE_D;
-    REQUIRE_FALSE(ui::process_sdl_event(surface, d_down));
+    REQUIRE_FALSE(process_sdl_event(surface, d_down));
 
     surface.begin_frame();
     REQUIRE(surface.debugger()->is_open());
@@ -311,12 +312,9 @@ TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regres
 }
 
 TEST_CASE("pointer blocker prevents native content mutation but keeps descendants interactive", "[input][regression]") {
-    SdlVideoSession sdl;
+    SdlVideoSession sdl({320.0F, 240.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
-        .size = {320.0F, 240.0F},
-        .visible = false,
-    });
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
     ui::UI surface(runtime, {.backend = std::move(backend)});
     const auto surface_context = ui_test::prepare_surface(surface);
 
@@ -368,7 +366,7 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
         motion.motion.windowID = window_id;
         motion.motion.x = position.x;
         motion.motion.y = position.y;
-        CHECK(ui::process_sdl_event(surface, motion) == expected_handled);
+        CHECK(process_sdl_event(surface, motion) == expected_handled);
 
         SDL_Event down{};
         down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
@@ -376,11 +374,11 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
         down.button.x = position.x;
         down.button.y = position.y;
         down.button.button = SDL_BUTTON_LEFT;
-        CHECK(ui::process_sdl_event(surface, down) == expected_handled);
+        CHECK(process_sdl_event(surface, down) == expected_handled);
 
         SDL_Event up = down;
         up.type = SDL_EVENT_MOUSE_BUTTON_UP;
-        CHECK(ui::process_sdl_event(surface, up) == expected_handled);
+        CHECK(process_sdl_event(surface, up) == expected_handled);
         ui_test::draw_surface(surface);
         ui_test::draw_surface(surface);
     };
@@ -397,12 +395,9 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
 }
 
 TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][input][regression]") {
-    SdlVideoSession sdl;
+    SdlVideoSession sdl({320.0F, 240.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
-        .size = {320.0F, 240.0F},
-        .visible = false,
-    });
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
     ui::UI surface(runtime, {.backend = std::move(backend)});
     const auto surface_context = ui_test::prepare_surface(surface);
 
@@ -432,7 +427,7 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
             event.button.y = position.y;
             event.button.button = SDL_BUTTON_LEFT;
         }
-        return ui::process_sdl_event(surface, event);
+        return process_sdl_event(surface, event);
     };
 
     ui_test::draw_surface(surface);

@@ -214,30 +214,8 @@ static bool dispatch_pointer(UI& surface, EventType type, ImVec2 position, Point
     return handled;
 }
 
-RaylibBackend::RaylibBackend(BackendConfig config) : Backend(std::move(config)) {}
-RaylibBackend::RaylibBackend() : Backend(), m_attached(true) {}
-
-RaylibBackend::~RaylibBackend() {
-    if (m_owns_window && IsWindowReady()) CloseWindow();
-}
-
 bool RaylibBackend::initialize() {
-    if (m_attached) {
-        return IsWindowReady();
-    }
-
-    if (IsWindowReady()) {
-        return true;
-    }
-
-    unsigned int flags = 0;
-    if (config().resizable) flags |= FLAG_WINDOW_RESIZABLE;
-    if (!config().visible) flags |= FLAG_WINDOW_HIDDEN;
-    if (flags != 0) SetConfigFlags(flags);
-
-    InitWindow(static_cast<int>(config().size.x), static_cast<int>(config().size.y), config().title.c_str());
-    m_owns_window = IsWindowReady();
-    return m_owns_window;
+    return IsWindowReady();
 }
 
 void RaylibBackend::register_effects(EffectRegistry& effects) {
@@ -262,10 +240,8 @@ void RaylibBackend::shutdown_imgui() {
 }
 
 void RaylibBackend::begin_frame(ImVec4 clear_color) {
-    if (!m_attached) {
-        BeginDrawing();
-        ClearBackground(raylib_color(clear_color));
-    }
+    BeginDrawing();
+    ClearBackground(raylib_color(clear_color));
 
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = display_size();
@@ -293,9 +269,7 @@ void RaylibBackend::render(ImDrawData* draw_data) {
     rlDrawRenderBatchActive();
     ImGui_ImplOpenGL3_RenderDrawData(draw_data);
     apply_mouse_cursor();
-    if (!m_attached) {
-        EndDrawing();
-    }
+    EndDrawing();
 }
 
 float RaylibBackend::content_scale() const {
@@ -310,10 +284,10 @@ ImVec2 RaylibBackend::display_size() const {
     return IsWindowReady() ? ImVec2{static_cast<float>(GetScreenWidth()), static_cast<float>(GetScreenHeight())} : ImVec2{};
 }
 
-bool RaylibBackend::process_events(UI& surface) {
+void RaylibBackend::process_events(UI& surface) {
     if (WindowShouldClose()) {
         surface.exit();
-        return true;
+        return;
     }
 
     const ImGuiContextScope scope(surface.imgui_context());
@@ -324,14 +298,13 @@ bool RaylibBackend::process_events(UI& surface) {
     const ImVec2 input_position = pointer_inside ? mouse_position : ImVec2{-FLT_MAX, -FLT_MAX};
 
     ImGuiIO& io = ImGui::GetIO();
-    bool handled = false;
 
     bool native_input_blocked = false;
     bool pointer_move_blocked = false;
     if (surface.debugger_blocks_pointer_input() || !m_has_pointer_position || mouse_position.x != m_pointer_position.x ||
         mouse_position.y != m_pointer_position.y) {
         // update the pointer state when it moves or debugger ownership may have changed.
-        handled = dispatch_pointer(surface, EventType::PointerMove, input_position, PointerButton::None, pointer_move_blocked);
+        dispatch_pointer(surface, EventType::PointerMove, input_position, PointerButton::None, pointer_move_blocked);
         native_input_blocked |= pointer_move_blocked;
         m_pointer_position = mouse_position;
         m_has_pointer_position = true;
@@ -353,13 +326,11 @@ bool RaylibBackend::process_events(UI& surface) {
         const auto [raylib_button, core_button] = mouse_buttons[index];
 
         if (IsMouseButtonPressed(raylib_button)) {
-            handled =
-                dispatch_pointer(surface, EventType::PointerDown, mouse_position, core_button, native_input_blocked) || handled;
+            dispatch_pointer(surface, EventType::PointerDown, mouse_position, core_button, native_input_blocked);
         }
 
         if (IsMouseButtonReleased(raylib_button)) {
-            handled =
-                dispatch_pointer(surface, EventType::PointerUp, mouse_position, core_button, native_input_blocked) || handled;
+            dispatch_pointer(surface, EventType::PointerUp, mouse_position, core_button, native_input_blocked);
         }
 
         if (!native_input_blocked) io.AddMouseButtonEvent(static_cast<int>(index), IsMouseButtonDown(raylib_button));
@@ -370,7 +341,7 @@ bool RaylibBackend::process_events(UI& surface) {
         UiEvent event = UiEvent::make(EventType::Scroll);
         event.position = mouse_position;
         event.scroll = {wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE};
-        handled = surface.dispatch(event) || handled;
+        surface.dispatch(event);
         native_input_blocked |= event.native_input_blocked;
         if (!native_input_blocked)
             io.AddMouseWheelEvent(wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE);
@@ -389,20 +360,13 @@ bool RaylibBackend::process_events(UI& surface) {
 
         UiEvent event = UiEvent::make(pressed ? EventType::KeyDown : EventType::KeyUp);
         event.key = core_key(mapping.raylib_key);
-        handled = surface.dispatch(event) || handled;
+        surface.dispatch(event);
     }
 
     for (int codepoint = GetCharPressed(); codepoint > 0; codepoint = GetCharPressed()) {
         io.AddInputCharacter(static_cast<unsigned int>(codepoint));
         UiEvent event = UiEvent::make(EventType::TextInput);
         event.text = utf8_from_codepoint(codepoint);
-        handled = surface.dispatch(event) || handled;
+        surface.dispatch(event);
     }
-
-    return handled;
-}
-
-bool ui::process_raylib_events(UI& surface) {
-    auto* backend = dynamic_cast<RaylibBackend*>(&surface.backend());
-    return backend != nullptr && backend->process_events(surface);
 }

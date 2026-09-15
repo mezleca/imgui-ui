@@ -19,7 +19,7 @@ namespace ui {
     class StackContainer;
 
     struct UIConfig {
-        /// backend that creates the platform window and renders imgui draw data.
+        /// backend that drives the application's platform window and renders imgui draw data.
         std::unique_ptr<Backend> backend;
         /// creates the debugger overlay when the surface initializes.
         bool enable_debugger = false;
@@ -40,6 +40,9 @@ namespace ui {
         void exit() {
             m_done = true;
         }
+
+        /// forwards pending platform events through the active backend.
+        void process_events();
 
         /// starts an imgui frame and clears the previous frame's routed input.
         /// call after platform events and before update() or draw().
@@ -122,7 +125,7 @@ namespace ui {
         }
 
         const Theme& theme() const {
-            return m_runtime.theme();
+            return m_theme;
         }
 
         /// updates imgui metrics and colors, then reapplies theme defaults across the retained tree.
@@ -161,6 +164,7 @@ namespace ui {
         static std::unique_ptr<FileDialogBackend> make_file_dialog_backend();
 
         Runtime& m_runtime;
+        Theme m_theme;
         ImGuiContext* m_context = nullptr;
         ImGuiContext* m_previous_context = nullptr;
         std::unique_ptr<Backend> m_backend;

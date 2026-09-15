@@ -57,7 +57,7 @@ private:
 };
 
 UI::UI(Runtime& runtime, UIConfig config)
-    : m_runtime(runtime), m_backend(std::move(config.backend)),
+    : m_runtime(runtime), m_theme(runtime.theme()), m_backend(std::move(config.backend)),
       m_file_dialog(config.file_dialog_backend != nullptr ? std::move(config.file_dialog_backend) : make_file_dialog_backend()),
       m_profiler(runtime.performance_directory()) {
     initialize();
@@ -77,22 +77,27 @@ UI::~UI() {
     m_debugger = nullptr;
 
     m_effects.shutdown();
-    m_runtime.release_context(m_context);
+    m_runtime.fonts().release_context(m_context);
+    m_runtime.textures().release_context(m_context);
     m_backend->shutdown_imgui();
     ImGui::DestroyContext(m_context);
     ImGui::SetCurrentContext(previous_context == m_context ? nullptr : previous_context);
     m_context = nullptr;
 }
 
+void UI::process_events() {
+    m_backend->process_events(*this);
+}
+
 void UI::set_theme(Theme theme) {
-    m_runtime.set_theme(theme);
+    m_theme = std::move(theme);
 
     const ImGuiContextScope scope(m_context);
 
     apply_theme_metrics();
     apply_theme_colors();
 
-    m_root->apply_theme(m_runtime.theme());
+    m_root->apply_theme(m_theme);
 }
 
 ImFont* UI::resolve_font(Font* font, int size) const {
@@ -156,7 +161,7 @@ void UI::initialize() {
     surface_layout.set_size({grow(), grow()});
     m_surface_layout = &surface_layout;
 
-    auto& content = surface_layout.add<SurfaceContent>(*m_root, m_runtime.theme());
+    auto& content = surface_layout.add<SurfaceContent>(*m_root, m_theme);
     m_content_root = &content;
     m_profiler.set_root_node(content.identity());
 }
@@ -175,7 +180,7 @@ void UI::configure_style(float main_scale) {
 
 void UI::apply_theme_metrics() {
     ImGuiStyle& style = ImGui::GetStyle();
-    const Theme& theme = m_runtime.theme();
+    const Theme& theme = m_theme;
     const float scale = m_content_scale;
     const auto scaled = [scale](float value) { return std::max(0.0F, value) * scale; };
     const auto scaled_size = [scale](ImVec2 value) {
@@ -198,7 +203,7 @@ void UI::apply_theme_metrics() {
 }
 
 void UI::apply_theme_colors() {
-    const Theme& theme = m_runtime.theme();
+    const Theme& theme = m_theme;
     ImVec4* colors = ImGui::GetStyle().Colors;
 
     colors[ImGuiCol_WindowBg] = theme.background_color;
@@ -265,7 +270,7 @@ void UI::begin_frame() {
     m_profiler.begin_frame();
 
     m_effects.begin_frame();
-    m_backend->begin_frame(m_runtime.theme().background_color);
+    m_backend->begin_frame(m_theme.background_color);
 
     ImGui::NewFrame();
 

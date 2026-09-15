@@ -7,11 +7,12 @@ namespace ui {
 
     class RaylibBackend final : public Backend {
     public:
-        explicit RaylibBackend(BackendConfig config);
-        RaylibBackend();
-        ~RaylibBackend() override;
+        /// uses the application's initialized raylib window.
+        /// the application must close that window after UI destruction.
+        RaylibBackend() = default;
 
         bool initialize() override;
+        void process_events(UI& surface) override;
         void register_effects(EffectRegistry& effects) override;
         bool initialize_imgui() override;
         void shutdown_imgui() override;
@@ -23,18 +24,12 @@ namespace ui {
         ImVec2 display_size() const override;
 
         /// forwards the current raylib input state to the retained tree.
-        bool process_events(UI& surface);
-
     private:
         void apply_mouse_cursor();
 
-        bool m_attached = false;
-        bool m_owns_window = false;
         bool m_imgui_initialized = false;
         ImGuiMouseCursor m_mouse_cursor = ImGuiMouseCursor_Arrow;
         ImVec2 m_pointer_position{};
         bool m_has_pointer_position = false;
     };
-
-    bool process_raylib_events(UI& surface);
 } // namespace ui
