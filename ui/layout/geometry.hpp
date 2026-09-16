@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../style/box-sizing.hpp"
+
 #include <imgui.h>
 #include <algorithm>
 #include <cstdint>
@@ -47,9 +49,9 @@ namespace ui {
     };
 
     enum class LayoutSizeMode : uint8_t {
-        /// uses the configured content size plus the node padding.
+        /// uses the configured size according to the node box sizing.
         Fixed,
-        /// uses a percentage of available parent content space plus the node padding.
+        /// uses a percentage of available parent content space according to the node box sizing.
         Percent,
         /// uses the measured content size.
         Fit,
@@ -190,6 +192,31 @@ namespace ui {
         }
     };
 
+    struct BoxInsets {
+        float left = 0.0F;
+        float top = 0.0F;
+        float right = 0.0F;
+        float bottom = 0.0F;
+
+        float horizontal() const {
+            return left + right;
+        }
+
+        float vertical() const {
+            return top + bottom;
+        }
+
+        float axis(bool horizontal_axis) const {
+            return horizontal_axis ? horizontal() : vertical();
+        }
+
+        ImVec2 window_padding() const {
+            return {std::max(left, right), std::max(top, bottom)};
+        }
+
+        constexpr bool operator==(const BoxInsets&) const = default;
+    };
+
     /// converts a named anchor or origin to normalized coordinates.
     inline ImVec2 alignment_factor(Anchor alignment) {
         switch (alignment) {
@@ -294,16 +321,16 @@ namespace ui {
         /// returns fixed and fit size without grow allocation.
         ImVec2 intrinsic_size() const {
             return {
-                intrinsic_axis(m_config.size.width, m_measured_size.x, m_box_padding.x),
-                intrinsic_axis(m_config.size.height, m_measured_size.y, m_box_padding.y),
+                intrinsic_axis(m_config.size.width, m_measured_size.x, m_box_insets.horizontal(), m_box_sizing),
+                intrinsic_axis(m_config.size.height, m_measured_size.y, m_box_insets.vertical(), m_box_sizing),
             };
         }
 
         /// returns the natural size used by a fit-sized parent.
         ImVec2 preferred_size() const {
             return {
-                preferred_axis(m_config.size.width, m_measured_size.x, m_box_padding.x),
-                preferred_axis(m_config.size.height, m_measured_size.y, m_box_padding.y),
+                preferred_axis(m_config.size.width, m_measured_size.x, m_box_insets.horizontal(), m_box_sizing),
+                preferred_axis(m_config.size.height, m_measured_size.y, m_box_insets.vertical(), m_box_sizing),
             };
         }
 
@@ -315,9 +342,13 @@ namespace ui {
         /// resolves this node's size against a content allocation.
         ImVec2 resolve_size(ImVec2 available_size) const {
             return {
-                resolved_axis(m_config.size.width, m_measured_size.x, available_size.x, m_box_padding.x),
-                resolved_axis(m_config.size.height, m_measured_size.y, available_size.y, m_box_padding.y),
+                resolved_axis(m_config.size.width, m_measured_size.x, available_size.x, m_box_insets.horizontal(), m_box_sizing),
+                resolved_axis(m_config.size.height, m_measured_size.y, available_size.y, m_box_insets.vertical(), m_box_sizing),
             };
+        }
+
+        const BoxInsets& box_insets() const {
+            return m_box_insets;
         }
 
         /// returns the arranged bounds passed to the imgui cursor.
@@ -376,12 +407,21 @@ namespace ui {
             invalidate_resolved_size();
         }
 
-        void set_box_padding(ImVec2 padding) {
-            if (m_box_padding.x == padding.x && m_box_padding.y == padding.y) {
+        void set_box_insets(BoxInsets insets) {
+            if (m_box_insets == insets) {
                 return;
             }
 
-            m_box_padding = padding;
+            m_box_insets = insets;
+            invalidate_resolved_size();
+        }
+
+        void set_box_sizing(BoxSizing sizing) {
+            if (m_box_sizing == sizing) {
+                return;
+            }
+
+            m_box_sizing = sizing;
             invalidate_resolved_size();
         }
 
@@ -433,33 +473,38 @@ namespace ui {
             m_available_size = available_size;
         }
 
-        static float intrinsic_axis(LayoutAxis axis, float measured, float padding) {
+        static float border_box_extent(float value, float insets) {
+            return std::max(value, insets);
+        }
+
+        static float intrinsic_axis(LayoutAxis axis, float measured, float insets, BoxSizing box_sizing) {
             if (axis.mode == LayoutSizeMode::Fixed) {
-                return axis.value + padding * 2.0F;
+                return box_sizing == BoxSizing::ContentBox ? axis.value + insets : border_box_extent(axis.value, insets);
             }
 
+            if (axis.mode == LayoutSizeMode::Grow) return border_box_extent(measured, insets);
             return axis.intrinsic(measured);
         }
 
-        static float resolved_axis(LayoutAxis axis, float measured, float available, float padding) {
+        static float resolved_axis(LayoutAxis axis, float measured, float available, float insets, BoxSizing box_sizing) {
             const float resolved = axis.resolve(measured, available);
-            if (axis.mode == LayoutSizeMode::Fixed || axis.mode == LayoutSizeMode::Percent) {
-                return resolved + padding * 2.0F;
+            if (box_sizing == BoxSizing::ContentBox &&
+                (axis.mode == LayoutSizeMode::Fixed || axis.mode == LayoutSizeMode::Percent)) {
+                return resolved + insets;
             }
+
+            if (box_sizing == BoxSizing::BorderBox &&
+                (axis.mode == LayoutSizeMode::Fixed || axis.mode == LayoutSizeMode::Percent)) {
+                return border_box_extent(resolved, insets);
+            }
+
+            if (axis.mode == LayoutSizeMode::Grow) return border_box_extent(resolved, insets);
 
             return resolved;
         }
 
-        static float preferred_axis(LayoutAxis axis, float measured, float padding) {
-            if (axis.mode == LayoutSizeMode::Percent) {
-                return 0.0F;
-            }
-
-            if (axis.mode == LayoutSizeMode::Fixed) {
-                return axis.value + padding * 2.0F;
-            }
-
-            return std::max(0.0F, measured);
+        static float preferred_axis(LayoutAxis axis, float measured, float insets, BoxSizing box_sizing) {
+            return axis.mode == LayoutSizeMode::Percent ? 0.0F : intrinsic_axis(axis, measured, insets, box_sizing);
         }
 
         const Placement& active_placement() const {
@@ -468,7 +513,8 @@ namespace ui {
 
         LayoutConfig m_config{};
         ImVec2 m_measured_size{};
-        ImVec2 m_box_padding{};
+        BoxInsets m_box_insets{};
+        BoxSizing m_box_sizing = BoxSizing::ContentBox;
         ImVec2 m_size = {};
         Rect m_local_rect{};
         Rect m_layout_rect{};

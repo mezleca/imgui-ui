@@ -1,5 +1,6 @@
 #pragma once
 
+#include "box-sizing.hpp"
 #include "variables.hpp"
 
 #include <cstdint>
@@ -52,6 +53,10 @@ namespace ui {
 
         const ImVec2& padding() const {
             return m_padding.value;
+        }
+
+        BoxSizing box_sizing() const {
+            return m_box_sizing;
         }
 
         const ImVec2& margin() const {
@@ -162,6 +167,7 @@ namespace ui {
         friend class StyledNode;
 
         ImFont* m_font = nullptr;
+        BoxSizing m_box_sizing = BoxSizing::ContentBox;
         Vec2Value m_margin;
         Vec2Value m_padding;
         FloatValue m_line_height{1.0F};

@@ -85,6 +85,7 @@ static constexpr const char* ALIGNMENT_NAMES[] = {
 
 static constexpr const char* STYLE_NAMES[] = {"all", "default", "hover", "active", "focus"};
 static constexpr const char* BORDER_STYLE_NAMES[] = {"solid", "dashed", "dotted"};
+static constexpr const char* BOX_SIZING_NAMES[] = {"content-box", "border-box"};
 static constexpr const char* SIZE_MODE_NAMES[] = {"fixed", "percent", "fit", "grow"};
 
 static constexpr float WINDOW_PADDING = 8.0F;
@@ -416,7 +417,6 @@ Debugger::Debugger(UI& target)
     : Container("ui debugger", "Debugger"), m_target(target), m_popup_state(std::make_unique<DebuggerPopupState>()) {
     set_size({grow(), grow()});
     set_visible(false);
-    apply_theme_defaults(target.theme());
 
     m_inspect_icon = m_target.runtime().textures().add("debugger-inspect", INSPECT_SVG);
     m_close_icon = m_target.runtime().textures().add("debugger-close", CLOSE_SVG);
@@ -762,12 +762,12 @@ void Debugger::refresh_highlight() {
     m_highlight_valid = true;
 }
 
-bool Debugger::should_restore_flow_position() const {
+bool Debugger::should_restore_flow_position(const LayoutConfig& config) const {
     if (m_node_target == nullptr || !m_target_was_flow_position) {
         return false;
     }
 
-    const Placement& placement = m_node_target->layout().placement();
+    const Placement& placement = config.placement;
     return placement.anchor == Anchor::TopLeft && placement.origin == Anchor::TopLeft && placement.offset.x == 0.0F &&
            placement.offset.y == 0.0F;
 }
@@ -1021,7 +1021,7 @@ void Debugger::render_layout_properties() {
     if (draw_inline_combo("anchor (parent)", &anchor, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
         update_request([&](LayoutConfig& config) {
             config.placement.anchor = static_cast<Anchor>(anchor);
-            config.in_flow = should_restore_flow_position();
+            config.in_flow = should_restore_flow_position(config);
         });
     }
 
@@ -1029,7 +1029,7 @@ void Debugger::render_layout_properties() {
     if (draw_inline_combo("origin (node)", &origin, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
         update_request([&](LayoutConfig& config) {
             config.placement.origin = static_cast<Anchor>(origin);
-            config.in_flow = should_restore_flow_position();
+            config.in_flow = should_restore_flow_position(config);
         });
     }
 
@@ -1177,6 +1177,11 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
         ImVec2 padding = style.padding();
         if (draw_number_input("padding", &padding.x, 2, 0.1F, 0.0F, 128.0F)) {
             apply([padding](Style& target) { target.padding(padding); });
+        }
+
+        int box_sizing = static_cast<int>(style.box_sizing());
+        if (draw_inline_combo("box sizing", &box_sizing, BOX_SIZING_NAMES, IM_ARRAYSIZE(BOX_SIZING_NAMES))) {
+            apply([box_sizing](Style& target) { target.box_sizing(static_cast<BoxSizing>(box_sizing)); });
         }
 
         ImVec2 margin = style.margin();

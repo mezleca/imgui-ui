@@ -235,21 +235,21 @@ void Node::set_measured_content_size(ImVec2 size, bool measured_width, bool meas
 }
 
 ImVec2 Node::content_size(ImVec2 size) const {
-    const ImVec2 padding = box_padding();
+    const BoxInsets insets = box_insets();
     return {
-        std::max(0.0F, size.x - (padding.x * 2.0F)),
-        std::max(0.0F, size.y - (padding.y * 2.0F)),
+        std::max(0.0F, size.x - insets.horizontal()),
+        std::max(0.0F, size.y - insets.vertical()),
     };
 }
 
 ImVec2 Node::outer_size(ImVec2 size) const {
-    const ImVec2 padding = box_padding();
-    return {size.x + (padding.x * 2.0F), size.y + (padding.y * 2.0F)};
+    const BoxInsets insets = box_insets();
+    return {size.x + insets.horizontal(), size.y + insets.vertical()};
 }
 
 Rect Node::content_rect(Rect rect) const {
-    const ImVec2 padding = box_padding();
-    return Rect::from_position_size({rect.min.x + padding.x, rect.min.y + padding.y}, content_size(rect.size()));
+    const BoxInsets insets = box_insets();
+    return Rect::from_position_size({rect.min.x + insets.left, rect.min.y + insets.top}, content_size(rect.size()));
 }
 
 void Node::set_visual_rect(Rect rect) {
@@ -343,13 +343,15 @@ void Node::apply_theme(const Theme& theme) {
 }
 
 void Node::invalidate_measure() {
-    m_layout.set_box_padding(box_padding());
+    m_layout.set_box_insets(box_insets());
+    m_layout.set_box_sizing(box_sizing());
     m_measure_dirty = true;
     if (m_parent != nullptr && !m_parent->m_measure_dirty) m_parent->invalidate_measure();
 }
 
 void Node::invalidate_measure_subtree() {
-    m_layout.set_box_padding(box_padding());
+    m_layout.set_box_insets(box_insets());
+    m_layout.set_box_sizing(box_sizing());
     m_measure_dirty = true;
     for (const auto& child : m_children) {
         child->invalidate_measure_subtree();
@@ -469,9 +471,15 @@ void Node::on_measure() {}
 void Node::on_layout() {}
 void Node::on_draw_end() {}
 void Node::draw_after() {}
-ImVec2 Node::box_padding() const {
+
+BoxInsets Node::box_insets() const {
     return {};
 }
+
+BoxSizing Node::box_sizing() const {
+    return BoxSizing::ContentBox;
+}
+
 float Node::minimum_content_height() const {
     return 0.0F;
 }

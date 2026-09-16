@@ -202,11 +202,7 @@ bool Profiler::save_report() const {
     output << "latest.input_ms = " << metrics.input_ms << '\n';
     output << "latest.render_ms = " << metrics.render_ms << '\n';
 
-    if (!output.good()) {
-        return false;
-    }
-
-    return true;
+    return output.good();
 }
 
 const std::filesystem::path& Profiler::output_path() const {

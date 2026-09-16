@@ -279,7 +279,7 @@ public:
     InputBlocker() : DemoPanel("InputBlocker") {
         set_spacing(10.0F);
         set_layout({
-            .size = {px(320.0F), px(150.0F)},
+            .size = {fit(), fit()},
             .placement = {.anchor = Anchor::Center, .origin = Anchor::Center},
             .in_flow = false,
         });
@@ -497,6 +497,7 @@ private:
     std::vector<Node*> m_pending_image_removals;
     Node* m_pending_remove = nullptr;
     bool m_enabled = true;
+    bool m_radio_selected = true;
     ImColor m_color = {0.26F, 0.59F, 0.98F, 1.0F};
     int m_clicks = 0;
     DemoTextListWidget* m_text_list = nullptr;
@@ -551,9 +552,10 @@ void DemoScreen::setup(std::string backend) {
     profile.add<TextWidget>("profile");
     auto& name_input = profile.add<DemoTextInput>(m_name, "name");
     name_input.set_label("name")
-        .set_label_placement(LabelPlacement::Above)
+        .set_label_placement(LabelPlacement::Inline)
         .set_icon(ui.runtime().textures().find("demo-file-icon"));
     profile.add<DemoCheckbox>(m_enabled, "enabled").set_size({px(360.0F), px(32.0F)});
+    profile.add<DemoCheckbox>(m_radio_selected, "radio").set_type(CheckboxType::Radio).set_size({px(360.0F), px(32.0F)});
     profile.add<DemoColorPicker>(m_color, "color", "color-picker");
 
     m_test_images = &profile.add<Container>("demo-images", StackDirection::Horizontal);
@@ -689,13 +691,13 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
     dynamic_section.set_direction(StackDirection::Horizontal);
     dynamic_section.set_spacing(8.0F);
     dynamic_section.set_layout({
-        .size = {px(460.0F), px(220.0F)},
+        .size = {fit(), fit()},
         .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-20.0F, 72.0F}},
         .in_flow = false,
     });
 
     auto& node_controls = dynamic_section.add<Container>("dynamic-node-controls", StackDirection::Vertical);
-    node_controls.set_size({grow(), grow()});
+    node_controls.set_size({fit(), fit()});
     node_controls.set_spacing(8.0F);
 
     auto& dynamic_list = dynamic_section.add<Container>("dynamic-list", StackDirection::Vertical);
@@ -937,12 +939,13 @@ void setup_demo(UI& surface, std::string backend) {
 
     modal.add<TextWidget>("modal overlay");
     auto& blur = modal.add<NumberInputWidget>(demo.blur(), "modal-blur");
-    blur.set_label("backdrop blur").set_range(0, 32).set_size({px(180.0F), px(48.0F)});
+    blur.set_label("backdrop blur").set_range(0, 32);
     blur.set_on_change([&demo, &modal_layer] {
         modal_layer.configure_all_styles([&demo](Style& style) { style.blur(demo.blur()); });
     });
 
     auto& close_button = modal.add<ButtonWidget>("close modal", LayoutSize{px(180.0F), px(40.0F)});
+    close_button.set_anchor(Anchor::BottomCenter, Anchor::BottomCenter);
     close_button.set_on_click([&modal_layer, &modal] {
         modal.set_visible(false);
         modal_layer.set_visible(false);

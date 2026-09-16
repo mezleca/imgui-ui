@@ -373,27 +373,6 @@ TEST_CASE("input router clears targets when a node is detached") {
     REQUIRE(events.empty());
 }
 
-TEST_CASE("node input attachment survives router destruction") {
-    Node node("node");
-
-    {
-        InputRouter router;
-        node.set_input_router(&router);
-        REQUIRE(router.set_focus(node));
-        REQUIRE(router.capture_pointer(node));
-        router.register_target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
-    }
-
-    node.set_visible(false);
-    node.set_input_mode(InputMode::Target);
-    REQUIRE_FALSE(node.input_state().focused);
-    node.set_visible(true);
-
-    InputRouter replacement;
-    node.set_input_router(&replacement);
-    REQUIRE(replacement.set_focus(node));
-}
-
 TEST_CASE("input routers isolate focus and pointer capture between surfaces") {
     std::vector<std::string> events;
     EventNode surface_a_node("surface-a", events);

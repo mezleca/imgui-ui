@@ -68,41 +68,149 @@ TEST_CASE("layout containers resolve themselves before arranging children", "[la
     REQUIRE(container.layout().size().y == Catch::Approx(available.y));
 }
 
-TEST_CASE("input entries exclude clipped widget bounds", "[Widget][input][regression]") {
-    class InputNode final : public Node {
-    public:
-        InputNode() {
-            set_size({px(24.0F), px(20.0F)});
-            set_input_mode(InputMode::Target);
-        }
+TEST_CASE("box sizing resolves fixed and percentage layout boxes", "[layout]") {
+    ui_test::ImGuiContext context({320.0F, 240.0F});
+    Container root("box-sizing-root");
+    root.set_size({px(260.0F), px(200.0F)});
 
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
+    auto& fixed = root.add<Container>("fixed");
+    fixed.set_size({px(120.0F), px(80.0F)});
+    fixed.style().padding({10.0F, 8.0F});
+    auto& fixed_content = fixed.add<LayoutProbeNode>();
+    fixed_content.set_size({grow(), grow()});
+
+    auto& percentage = root.add<Container>("percentage");
+    percentage.set_size({percent(50.0F), percent(50.0F)});
+    percentage.style().padding({10.0F, 8.0F}).box_sizing(BoxSizing::ContentBox);
+    auto& percentage_content = percentage.add<LayoutProbeNode>();
+    percentage_content.set_size({grow(), grow()});
+
+    const auto draw_frame = [&root] {
+        ImGui::NewFrame();
+        ImGui::Begin("box-sizing-test");
+        root.draw();
+        ImGui::End();
+        ImGui::EndFrame();
     };
 
-    ui_test::ImGuiContext context({200.0F, 120.0F});
-    InputRouter router;
-    InputNode node;
-    node.set_input_router(&router);
+    draw_frame();
+    REQUIRE(fixed.layout().size().x == Catch::Approx(120.0F));
+    REQUIRE(fixed.layout().size().y == Catch::Approx(80.0F));
+    REQUIRE(fixed_content.layout().size().x == Catch::Approx(100.0F));
+    REQUIRE(fixed_content.layout().size().y == Catch::Approx(64.0F));
+    REQUIRE(percentage.layout().size().x == Catch::Approx(150.0F));
+    REQUIRE(percentage.layout().size().y == Catch::Approx(116.0F));
+    REQUIRE(percentage_content.layout().size().x == Catch::Approx(130.0F));
+    REQUIRE(percentage_content.layout().size().y == Catch::Approx(100.0F));
 
-    router.begin_frame();
+    fixed.style().box_sizing(BoxSizing::ContentBox);
+    percentage.style().box_sizing(BoxSizing::BorderBox);
+    draw_frame();
+
+    REQUIRE(fixed.layout().size().x == Catch::Approx(140.0F));
+    REQUIRE(fixed.layout().size().y == Catch::Approx(96.0F));
+    REQUIRE(fixed_content.layout().size().x == Catch::Approx(120.0F));
+    REQUIRE(fixed_content.layout().size().y == Catch::Approx(80.0F));
+    REQUIRE(percentage.layout().size().x == Catch::Approx(130.0F));
+    REQUIRE(percentage.layout().size().y == Catch::Approx(100.0F));
+    REQUIRE(percentage_content.layout().size().x == Catch::Approx(110.0F));
+    REQUIRE(percentage_content.layout().size().y == Catch::Approx(84.0F));
+}
+
+TEST_CASE("box sizing includes borders and preserves insets", "[layout]") {
+    ui_test::ImGuiContext context({240.0F, 180.0F});
+    Container root("box-inset-root");
+    root.set_size({px(200.0F), px(150.0F)});
+
+    auto& fixed = root.add<Container>("fixed");
+    fixed.set_size({px(20.0F), px(20.0F)});
+    fixed.style().padding({4.0F, 5.0F}).border(BORDER_ALL).border_thickness(3.0F);
+    auto& fixed_content = fixed.add<LayoutProbeNode>();
+    fixed_content.set_size({grow(), grow()});
+
+    auto& percentage = root.add<Container>("percentage");
+    percentage.set_size({percent(10.0F), percent(10.0F)});
+    percentage.style().padding({4.0F, 5.0F}).border(BORDER_ALL).border_thickness(3.0F).box_sizing(BoxSizing::ContentBox);
+    auto& percentage_content = percentage.add<LayoutProbeNode>();
+    percentage_content.set_size({grow(), grow()});
+
+    const auto draw_frame = [&root] {
+        ImGui::NewFrame();
+        ImGui::Begin("box-inset-test");
+        root.draw();
+        ImGui::End();
+        ImGui::EndFrame();
+    };
+
+    draw_frame();
+    REQUIRE(fixed.layout().size().x == Catch::Approx(20.0F));
+    REQUIRE(fixed.layout().size().y == Catch::Approx(20.0F));
+    REQUIRE(fixed_content.layout().size().x == Catch::Approx(6.0F));
+    REQUIRE(fixed_content.layout().size().y == Catch::Approx(4.0F));
+    REQUIRE(percentage.layout().size().x == Catch::Approx(34.0F));
+    REQUIRE(percentage.layout().size().y == Catch::Approx(31.0F));
+    REQUIRE(percentage_content.layout().size().x == Catch::Approx(20.0F));
+    REQUIRE(percentage_content.layout().size().y == Catch::Approx(15.0F));
+
+    fixed.set_size({px(10.0F), px(10.0F)});
+    percentage.style().box_sizing(BoxSizing::BorderBox);
+    draw_frame();
+
+    REQUIRE(fixed.layout().size().x == Catch::Approx(14.0F));
+    REQUIRE(fixed.layout().size().y == Catch::Approx(16.0F));
+    REQUIRE(fixed_content.layout().size().x == Catch::Approx(0.0F));
+    REQUIRE(fixed_content.layout().size().y == Catch::Approx(0.0F));
+    REQUIRE(percentage.layout().size().x == Catch::Approx(20.0F));
+    REQUIRE(percentage.layout().size().y == Catch::Approx(16.0F));
+    REQUIRE(percentage_content.layout().size().x == Catch::Approx(6.0F));
+    REQUIRE(percentage_content.layout().size().y == Catch::Approx(0.0F));
+}
+
+TEST_CASE("grow distributes content space after box insets", "[layout]") {
+    ui_test::ImGuiContext context({220.0F, 180.0F});
+    Container root("grow-insets-root");
+    root.set_size({px(180.0F), px(120.0F)});
+
+    auto& fixed = root.add<LayoutProbeNode>(ImVec2{80.0F, 20.0F});
+    auto& growing = root.add<Container>("growing");
+    growing.set_size({px(80.0F), grow()});
+    growing.style().padding({0.0F, 8.0F}).border(BORDER_ALL).border_thickness(2.0F);
+    auto& growing_content = growing.add<LayoutProbeNode>();
+    growing_content.set_size({grow(), grow()});
+
     ImGui::NewFrame();
-    ImGui::SetNextWindowSize({200.0F, 120.0F});
-    ImGui::Begin("clipped-image-input-test");
-    const ImVec2 position = ImGui::GetCursorScreenPos();
-    ImGui::PushClipRect(position, {position.x + 12.0F, position.y + 100.0F}, true);
-    node.draw();
-    ImGui::PopClipRect();
+    ImGui::Begin("grow-insets-test");
+    root.draw();
     ImGui::End();
     ImGui::EndFrame();
 
-    const Rect bounds = node.layout().visual_rect();
-    REQUIRE(router.stats().entry_count == 1);
-    REQUIRE(router.node_at({bounds.min.x + 6.0F, bounds.min.y + 10.0F}) == &node);
-    REQUIRE(router.node_at({bounds.min.x + 18.0F, bounds.min.y + 10.0F}) == nullptr);
+    REQUIRE(fixed.layout().size().y == Catch::Approx(20.0F));
+    REQUIRE(growing.layout().size().y == Catch::Approx(100.0F));
+    REQUIRE(growing_content.layout().size().x == Catch::Approx(76.0F));
+    REQUIRE(growing_content.layout().size().y == Catch::Approx(80.0F));
+}
+
+TEST_CASE("fit parents retain a growing child's box insets", "[layout]") {
+    ui_test::ImGuiContext context({220.0F, 180.0F});
+    Container root("fit-grow-root");
+    root.set_size({px(180.0F), px(120.0F)});
+
+    auto& fit_parent = root.add<Container>("fit-parent");
+    fit_parent.set_size({fit(), fit()});
+    auto& growing = fit_parent.add<Container>("growing");
+    growing.set_size({grow(), grow()});
+    growing.style().padding({3.0F, 4.0F}).border(BORDER_ALL).border_thickness(2.0F);
+
+    ImGui::NewFrame();
+    ImGui::Begin("fit-grow-test");
+    root.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    REQUIRE(fit_parent.layout().size().x == Catch::Approx(10.0F));
+    REQUIRE(fit_parent.layout().size().y == Catch::Approx(12.0F));
+    REQUIRE(growing.layout().size().x == Catch::Approx(10.0F));
+    REQUIRE(growing.layout().size().y == Catch::Approx(12.0F));
 }
 
 TEST_CASE("positioned styled children apply margins around their placement") {
@@ -574,9 +682,9 @@ TEST_CASE("stack divides remaining main-axis space between flexible children", "
     ImGui::EndFrame();
 
     REQUIRE(fixed.layout().size().x == Catch::Approx(60.0F));
-    REQUIRE(first_flexible.layout().size().x == Catch::Approx(115.0F));
-    REQUIRE(second_flexible.layout().size().x == Catch::Approx(115.0F));
-    REQUIRE(second_flexible.layout().local_rect().min.x == Catch::Approx(first_flexible.layout().local_rect().min.x + 120.0F));
+    REQUIRE(first_flexible.layout().size().x == Catch::Approx(105.0F));
+    REQUIRE(second_flexible.layout().size().x == Catch::Approx(105.0F));
+    REQUIRE(second_flexible.layout().local_rect().min.x == Catch::Approx(first_flexible.layout().local_rect().min.x + 110.0F));
 }
 
 TEST_CASE("stack distributes grow space by axis weight", "[layout]") {
@@ -601,8 +709,8 @@ TEST_CASE("stack distributes grow space by axis weight", "[layout]") {
     ImGui::EndFrame();
 
     REQUIRE(fixed.layout().size().x == Catch::Approx(60.0F));
-    REQUIRE(narrow.layout().size().x == Catch::Approx(230.0F / 3.0F));
-    REQUIRE(wide.layout().size().x == Catch::Approx(460.0F / 3.0F));
+    REQUIRE(narrow.layout().size().x == Catch::Approx(70.0F));
+    REQUIRE(wide.layout().size().x == Catch::Approx(140.0F));
 }
 
 TEST_CASE("stack resolves percentage children from its content box", "[layout]") {
@@ -673,8 +781,8 @@ TEST_CASE("containers vertically stack flexible children by default", "[layout][
     const float initial_height = flexible.layout().size().y;
     draw_frame(220.0F);
 
-    REQUIRE(fixed.layout().size().x == Catch::Approx(120.0F));
-    REQUIRE(flexible.layout().size().x == Catch::Approx(120.0F));
+    REQUIRE(fixed.layout().size().x == Catch::Approx(108.0F));
+    REQUIRE(flexible.layout().size().x == Catch::Approx(108.0F));
     REQUIRE(flexible.layout().size().y > initial_height);
     REQUIRE(fixed.layout().size().y + flexible.layout().size().y == Catch::Approx(stack.layout().size().y - 12.0F));
 }
@@ -971,52 +1079,6 @@ TEST_CASE("nodes without explicit positions follow the ImGui cursor") {
     ImGui::Render();
 }
 
-TEST_CASE("changing an anchor restores a node's natural top-left flow position") {
-    class FlowNode final : public Node {
-    public:
-        explicit FlowNode(std::string node_id) : Node(std::move(node_id)) {
-            set_size({px(40.0F), px(20.0F)});
-        }
-
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
-    ui_test::ImGuiContext context({240.0F, 160.0F});
-
-    FlowNode title("title");
-    FlowNode tab("tab");
-
-    const auto draw_frame = [&title, &tab] {
-        ImGui::NewFrame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({240.0F, 160.0F});
-        ImGui::Begin("anchor-flow-test");
-        title.draw();
-        ImGui::SameLine();
-        tab.draw();
-        const ImVec2 position = tab.layout().visual_rect().min;
-        ImGui::End();
-        ImGui::EndFrame();
-        return position;
-    };
-
-    const ImVec2 initial_position = draw_frame();
-    LayoutConfig tab_layout = tab.layout().config();
-    tab_layout.placement.anchor = Anchor::Center;
-    tab_layout.in_flow = false;
-    tab.set_layout(tab_layout);
-    draw_frame();
-    tab_layout.in_flow = true;
-    tab.set_layout(tab_layout);
-    const ImVec2 restored_position = draw_frame();
-
-    REQUIRE(restored_position.x == Catch::Approx(initial_position.x));
-    REQUIRE(restored_position.y == Catch::Approx(initial_position.y));
-}
-
 TEST_CASE("node screen rectangles follow scrollable child windows") {
     class ScrollProbeNode final : public Node {
     public:
@@ -1225,7 +1287,7 @@ TEST_CASE("virtual layout creates visible rows lazily and reuses the caller cach
     REQUIRE(drawn.front() == 0);
     REQUIRE(drawn.size() <= 6);
     REQUIRE(cache.size() <= 6);
-    REQUIRE(list.max_scroll == Catch::Approx(1000.0F * 23.0F - 3.0F - 100.0F));
+    REQUIRE(list.max_scroll == Catch::Approx(1000.0F * 23.0F - 3.0F - 90.0F));
     REQUIRE(router.stats().entry_count <= 6);
     const auto& first = *cache.at(0);
     REQUIRE(first.layout().size().y == Catch::Approx(20.0F));

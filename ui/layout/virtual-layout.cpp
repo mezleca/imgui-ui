@@ -139,8 +139,7 @@ void VirtualLayout::on_measure() {
 }
 
 ImVec2 VirtualLayout::child_window_content_size() const {
-    const float content_width =
-        std::max(0.0F, (layout().size().x - computed_style().padding().x * 2.0F) - ImGui::GetStyle().ScrollbarSize);
+    const float content_width = std::max(0.0F, content_size(layout().size()).x - ImGui::GetStyle().ScrollbarSize);
     return {content_width, content_height()};
 }
 

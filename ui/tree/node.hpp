@@ -34,7 +34,7 @@ namespace ui {
         Blocker,
     };
 
-    /// Node coordinates lifecycle, layout, rendering, input registration, and propagation of the owning surface services to
+    /// node coordinates lifecycle, layout, rendering, input registration, and propagation of the owning surface services to
     /// descendants.
     class Node {
     public:
@@ -155,7 +155,7 @@ namespace ui {
 
         virtual ImVec2 layout_margin() const;
 
-        /// replaces the width and height sizing modes. fixed axes define content size; padding expands the final layout box.
+        /// replaces the width and height sizing modes interpreted by this node's box sizing style.
         Node& set_size(LayoutSize size) {
             const LayoutSize& current = m_layout.size_spec();
             if (m_layout.m_has_explicit_size_request && current == size) {
@@ -181,6 +181,20 @@ namespace ui {
                 invalidate_measure();
             }
             return *this;
+        }
+
+        /// positions this node at the matching point in its parent and removes it from flow layout.
+        Node& set_anchor(Anchor anchor) {
+            return set_anchor(anchor, anchor);
+        }
+
+        /// positions this node using explicit parent and node anchor points and removes it from flow layout.
+        Node& set_anchor(Anchor anchor, Anchor origin) {
+            LayoutConfig config = m_layout.config();
+            config.placement.anchor = anchor;
+            config.placement.origin = origin;
+            config.in_flow = false;
+            return set_layout(config);
         }
 
         /// invalidates this node and its size-dependent ancestors.
@@ -262,7 +276,8 @@ namespace ui {
         /// paints an optional decoration above the completed node subtree.
         virtual void draw_after();
 
-        virtual ImVec2 box_padding() const;
+        virtual BoxInsets box_insets() const;
+        virtual BoxSizing box_sizing() const;
         virtual float minimum_content_height() const;
 
         void set_input_state(InputState state);

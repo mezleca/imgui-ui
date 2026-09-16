@@ -41,13 +41,13 @@ namespace ui {
         void update_shape();
 
         bool* m_value;
-        BoxWidget* m_box_node = nullptr;
-        BoxWidget* m_frame_node = nullptr;
+        Container* m_box_node = nullptr;
+        Container* m_frame_node = nullptr;
         BoxWidget* m_fill_node = nullptr;
         TextWidget* m_label_node = nullptr;
         CheckboxType m_type = CheckboxType::Standard;
         float m_box_size = 20.0F;
-        float m_frame_padding = 1.0F;
+        float m_frame_border_thickness = 1.0F;
         bool m_mark_visible = false;
     };
 } // namespace ui

@@ -195,7 +195,7 @@ bool DropdownBodyNode::paint() {
     m_item_height = ImGui::GetTextLineHeight() + item_padding.y * 2.0F;
     ImGui::SetNextWindowPos(popup_position, ImGuiCond_Always);
     ImGui::SetNextWindowSize(outer_size({popup_width, m_item_height * static_cast<float>(children().size())}));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.padding());
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, box_insets().window_padding());
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{});
     ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, style.border_radius());
     ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 0.0F);
@@ -364,9 +364,9 @@ void DropdownWidget::apply_theme_defaults(const Theme& theme) {
 
     set_spacing(theme.metrics.item_spacing.y);
     m_label_node->style().color(theme.text_color);
-    m_trigger->configure_all_styles(
-        [&theme](Style& style) { style.control(theme, {10.0F, 6.0F}).cursor(ImGuiMouseCursor_Hand); }
-    );
+    m_trigger->configure_all_styles([&theme](Style& style) {
+        style.control(theme, {10.0F, 6.0F}).cursor(ImGuiMouseCursor_Hand);
+    });
     m_trigger->configure_style(StyleType::HOVER, [&theme](Style& style) { style.background_color(theme.controls.hover_color); });
     m_trigger->configure_style(StyleType::ACTIVE, [&theme](Style& style) {
         style.background_color(theme.controls.active_color);

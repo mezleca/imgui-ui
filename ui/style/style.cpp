@@ -35,9 +35,11 @@ using namespace ui;
 
 bool Style::lerp(Style& style, const Style& target, float dt) {
     const ImFont* previous_font = style.m_font;
+    const BoxSizing previous_box_sizing = style.m_box_sizing;
     bool measure_changed = false;
 
     style.m_font = target.m_font;
+    style.m_box_sizing = target.m_box_sizing;
     style.m_alpha = target.m_alpha;
     style.m_cursor = target.m_cursor;
     style.m_scrollbar_size = target.m_scrollbar_size;
@@ -72,7 +74,7 @@ bool Style::lerp(Style& style, const Style& target, float dt) {
         return true;
     });
 
-    if (previous_font != style.m_font || measure_changed) {
+    if (previous_font != style.m_font || previous_box_sizing != style.m_box_sizing || measure_changed) {
         style.notify_change();
     }
 

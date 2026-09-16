@@ -17,9 +17,7 @@ static float menu_height(std::size_t item_count) {
 class ui::ContextMenuItemNode final : public DrawListWidget {
 public:
     ContextMenuItemNode(ContextMenuWidget& menu, std::string label, ContextMenuCallback callback)
-        : DrawListWidget("item", "ContextMenuItem"), m_menu(menu), m_label(std::move(label)), m_callback(std::move(callback)) {
-        set_size({grow(), px(28.0F)});
-    }
+        : DrawListWidget("item", "ContextMenuItem"), m_menu(menu), m_label(std::move(label)), m_callback(std::move(callback)) {}
 
     bool accepts_input() const override {
         return m_menu.is_open() && Widget::accepts_input();
@@ -121,22 +119,21 @@ void ContextMenuWidget::apply_theme_defaults(const Theme& theme) {
     if (m_submenu_icon == nullptr) {
         set_submenu_icon(surface().runtime().textures().find("context-menu-chevron"));
     }
-    set_size({px(184.0F), px(menu_height(m_items.size()))});
-
     configure_all_styles([&theme](Style& style) {
-        style.padding({4.0F, 0.0F})
+        style.padding({4.0F, 4.0F})
             .background_color(theme.background_secondary_color)
             .border(BORDER_ALL)
             .border_thickness(theme.controls.border_thickness)
             .border_radius(4.0F)
             .border_color(theme.border_color);
     });
+    set_size({px(184.0F), px(menu_height(m_items.size()) + box_insets().vertical())});
 }
 
 ContextMenuWidget& ContextMenuWidget::set_items(ContextMenuItems items) {
     m_items.clear();
     clear();
-    set_size({px(184.0F), px(menu_height(items.size()))});
+    set_size({px(184.0F), px(menu_height(items.size()) + box_insets().vertical())});
 
     for (ContextMenuItem& item : items) {
         const bool has_submenu = !item.children.empty();

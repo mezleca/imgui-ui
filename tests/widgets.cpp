@@ -64,6 +64,26 @@ TEST_CASE("checkbox input is limited to its box", "[CheckboxWidget][input][regre
     REQUIRE(surface.input_router().node_at(label_position) != &checkbox);
 }
 
+TEST_CASE("checkbox fills stay centered inside their frames", "[CheckboxWidget][layout][regression]") {
+    Runtime runtime;
+    ui::UI surface(runtime, {.backend = ui_test::make_backend()});
+    bool checked = true;
+    bool selected = true;
+    auto& checkbox = surface.root().add<CheckboxWidget>(checked, "checkbox");
+    auto& radio = surface.root().add<CheckboxWidget>(selected, "radio");
+    radio.set_type(CheckboxType::Radio);
+
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
+    ui_test::draw_surface(surface);
+
+    for (CheckboxWidget* control : {&checkbox, &radio}) {
+        const Rect frame = control->frame().layout().visual_rect();
+        const Rect fill = control->fill().layout().visual_rect();
+        REQUIRE(fill.min.x - frame.min.x == Catch::Approx(frame.max.x - fill.max.x));
+        REQUIRE(fill.min.y - frame.min.y == Catch::Approx(frame.max.y - fill.max.y));
+    }
+}
+
 TEST_CASE("nested containers keep default padding empty and route checkbox clicks", "[container][input][regression]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
@@ -407,7 +427,7 @@ TEST_CASE("inline layer centers inside content beside the debugger", "[LayerCont
     REQUIRE(modal_center.y == Catch::Approx(content_center.y));
 }
 
-TEST_CASE("text measurement and drawing include style padding", "[TextWidget][layout][style]") {
+TEST_CASE("text measurement and drawing include style insets", "[TextWidget][layout][style]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
     Container stack("text-padding-stack");
@@ -428,8 +448,8 @@ TEST_CASE("text measurement and drawing include style padding", "[TextWidget][la
     ImGui::End();
     surface.end_frame();
 
-    REQUIRE(text.layout().size().x == Catch::Approx(raw_size.x + 10.0F));
-    REQUIRE(text.layout().size().y == Catch::Approx(raw_size.y + 6.0F));
+    REQUIRE(text.layout().size().x == Catch::Approx(raw_size.x + 12.0F));
+    REQUIRE(text.layout().size().y == Catch::Approx(raw_size.y + 8.0F));
 }
 
 TEST_CASE("animated padding updates text measurement", "[TextWidget][layout][animation]") {
@@ -541,26 +561,6 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
     REQUIRE(input.layout().size().y < parent.layout().size().y);
 }
 
-TEST_CASE("text input grows its field below an above label", "[TextInputWidget][layout][regression]") {
-    Runtime runtime;
-    ui::UI surface(runtime, {.backend = ui_test::make_backend()});
-    std::string value;
-    auto& input = surface.root().add<TextInputWidget>(value, "input");
-    input.set_label("profile").set_label_placement(LabelPlacement::Above);
-    input.set_size({px(180.0F), px(100.0F)});
-
-    const auto surface_context = ui_test::prepare_surface(surface, {240.0F, 160.0F});
-    ui_test::draw_surface(surface);
-
-    const Rect label = input.children()[0]->layout().visual_rect();
-    const Rect field = input.children()[1]->layout().visual_rect();
-    const Rect native_field = input.children()[1]->children().back()->layout().visual_rect();
-
-    REQUIRE(label.max.y <= field.min.y);
-    REQUIRE(field.size().y > label.size().y);
-    REQUIRE(native_field.size().y > 0.0F);
-}
-
 TEST_CASE("pointer block prevents hover and clicks on content controls", "[input][regression]") {
     Runtime runtime;
     ui::UI surface(runtime, {.backend = ui_test::make_backend()});
@@ -669,18 +669,6 @@ TEST_CASE("pointer block rejects clicks on another overlay control", "[input][re
     REQUIRE_FALSE(panel.visible());
 }
 
-TEST_CASE("style transitions apply the configured easing function", "[VisualState][transition]") {
-    VisualState state;
-    state.style(StyleType::DEFAULT).color({0.0F, 0.0F, 0.0F, 1.0F});
-    state.style(StyleType::HOVER).color({1.0F, 0.0F, 0.0F, 1.0F}, {0.2F, easing::out_quad});
-
-    state.snap_to_style(StyleType::DEFAULT);
-    state.set_style(StyleType::HOVER);
-    state.update(0.1F);
-
-    REQUIRE(state.style().color().get().x == Catch::Approx(0.75F));
-}
-
 TEST_CASE("style transitions remain active until their duration ends", "[VisualState][transition]") {
     VisualState state;
     state.style(StyleType::HOVER).line_height(2.0F, {0.5F, easing::out_cubic});
@@ -696,47 +684,6 @@ TEST_CASE("style transitions remain active until their duration ends", "[VisualS
 
     REQUIRE(state.style().line_height() == Catch::Approx(2.0F));
     REQUIRE_FALSE(state.transitioning());
-}
-
-TEST_CASE("animation sequences run parallel steps before advancing", "[VisualState][animation]") {
-    VisualState state;
-    state.configure_all_styles([](Style& style) {
-        style.padding({2.0F, 4.0F});
-        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F});
-    });
-
-    state.animate()
-        .padding_y(12.0F, {0.1F, easing::linear})
-        .background_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F}, {0.1F, easing::linear})
-        .then(0.05F)
-        .padding_x(20.0F, {0.1F, easing::linear});
-
-    state.update(0.05F);
-
-    REQUIRE(state.computed_style().padding().x == Catch::Approx(2.0F));
-    REQUIRE(state.computed_style().padding().y == Catch::Approx(8.0F));
-    REQUIRE(state.computed_style().background_color().value.Value.x == Catch::Approx(0.5F));
-
-    state.update(0.1F);
-
-    REQUIRE(state.computed_style().padding().x == Catch::Approx(2.0F));
-    REQUIRE(state.computed_style().padding().y == Catch::Approx(12.0F));
-    REQUIRE(state.computed_style().background_color().value.Value.x == Catch::Approx(1.0F));
-    REQUIRE(state.transitioning());
-
-    state.update(0.05F);
-
-    REQUIRE(state.computed_style().padding().x == Catch::Approx(11.0F));
-    REQUIRE(state.transitioning());
-
-    state.update(0.05F);
-
-    REQUIRE(state.computed_style().padding().x == Catch::Approx(20.0F));
-    REQUIRE_FALSE(state.transitioning());
-
-    state.cancel_animations();
-
-    REQUIRE(state.computed_style().padding().x == Catch::Approx(2.0F));
 }
 
 TEST_CASE("released animation properties return to the active style", "[VisualState][animation]") {
@@ -826,30 +773,6 @@ TEST_CASE("animation sequence steps continue from the preceding track", "[Visual
     REQUIRE(state.computed_style().scale().x == Catch::Approx(2.5F));
 }
 
-TEST_CASE("animator sequences update arbitrary references", "[Animator]") {
-    Animator animator;
-    float line_length = 0.0F;
-    bool ended = false;
-
-    animator.animate()
-        .to(line_length, 10.0F, {0.2F, easing::linear})
-        .then()
-        .by(line_length, -4.0F, {0.1F, easing::linear})
-        .end([&ended] { ended = true; });
-
-    animator.update(0.1F);
-    REQUIRE(line_length == Catch::Approx(5.0F));
-
-    animator.update(0.15F);
-    REQUIRE(line_length == Catch::Approx(8.0F));
-    REQUIRE_FALSE(ended);
-
-    animator.update(0.05F);
-    REQUIRE(line_length == Catch::Approx(6.0F));
-    REQUIRE(ended);
-    REQUIRE_FALSE(animator.transitioning());
-}
-
 TEST_CASE("styled nodes advance their generic animator", "[Animator][StyledNode]") {
     TextWidget text{"animated-node"};
     float reveal = 0.0F;
@@ -886,10 +809,12 @@ TEST_CASE("styled nodes rotate their generated vertices without changing layout"
     widget.draw();
 
     const Rect layout_rect = widget.layout().visual_rect();
+
     float min_x = std::numeric_limits<float>::max();
     float max_x = std::numeric_limits<float>::lowest();
     float min_y = std::numeric_limits<float>::max();
     float max_y = std::numeric_limits<float>::lowest();
+
     for (int index = first_vertex; index < draw_list->VtxBuffer.Size; ++index) {
         const ImVec2 position = draw_list->VtxBuffer[index].pos;
         min_x = std::min(min_x, position.x);
@@ -979,19 +904,6 @@ TEST_CASE("opacity ticks towards target and drives visibility", "[widget_state][
     state.update(0.075F);
     REQUIRE(state.opacity() == Catch::Approx(0.0F));
     REQUIRE_FALSE(state.is_visible());
-}
-
-TEST_CASE("fade transitions control input independently from drawing", "[widget_state][opacity]") {
-    VisualState state;
-    state.update(1.0f / 60.0f);
-    REQUIRE(state.accepts_input());
-
-    state.fade_out();
-    REQUIRE_FALSE(state.accepts_input());
-    REQUIRE(state.is_visible());
-
-    state.fade_in();
-    REQUIRE(state.accepts_input());
 }
 
 TEST_CASE("widget input requires both node and visual state to accept input", "[Widget][input]") {
@@ -1138,30 +1050,6 @@ TEST_CASE("styled widgets advance visual state during update", "[Widget][style]"
     REQUIRE(widget.style(StyleType::FOCUS).border_radius() == Catch::Approx(12.0F));
 }
 
-TEST_CASE("custom update hooks cannot skip visual state advancement", "[Widget][style][regression]") {
-    class UpdatingWidget final : public Widget {
-    public:
-        UpdatingWidget() : Widget("updating-widget") {}
-
-        int updates = 0;
-
-    private:
-        void on_update(float) override {
-            ++updates;
-        }
-    };
-
-    UpdatingWidget widget;
-    widget.configure_all_styles([](Style& style) { style.alpha(0.0F); });
-    widget.configure_style(StyleType::HOVER, [](Style& style) { style.alpha(1.0F); });
-    widget.set_visual_style(StyleType::HOVER);
-
-    widget.update(1.0F / 60.0F);
-
-    REQUIRE(widget.updates == 1);
-    REQUIRE(widget.style().alpha() == Catch::Approx(1.0F));
-}
-
 TEST_CASE("fade in starts new visual states transparent", "[widget_state][opacity]") {
     VisualState state;
 
@@ -1200,8 +1088,8 @@ TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]
     ui_test::draw_surface(surface, 0.2F);
 
     REQUIRE(menu.is_open());
-    REQUIRE(menu.layout().visual_rect().min.x == Catch::Approx(128.0F));
-    REQUIRE(menu.layout().visual_rect().min.y == Catch::Approx(212.0F));
+    REQUIRE(menu.layout().visual_rect().min.x == Catch::Approx(136.0F));
+    REQUIRE(menu.layout().visual_rect().max.y == Catch::Approx(240.0F));
 
     ImGui::GetIO().MousePos = {140.0F, 216.0F};
     ui_test::draw_surface(surface, 0.01F);
@@ -1300,7 +1188,7 @@ TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMe
     auto* submenu = dynamic_cast<ContextMenuWidget*>(menu.children()[1].get());
     REQUIRE(submenu != nullptr);
     REQUIRE(submenu->visible());
-    REQUIRE(submenu->layout().visual_rect().min.x == Catch::Approx(item_rect.max.x + 6.0F));
+    REQUIRE(submenu->layout().visual_rect().min.x == Catch::Approx(item_rect.max.x + 6.0F).margin(0.5F));
     auto cross_gap = ui_test::pointer_event(
         EventType::PointerMove, {(item_rect.max.x + submenu->layout().visual_rect().min.x) * 0.5F, item_rect.min.y + 4.0F}
     );

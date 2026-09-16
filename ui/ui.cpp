@@ -14,33 +14,9 @@ using namespace ui;
 
 class SurfaceContent final : public ResizableContainer {
 public:
-    SurfaceContent(Node& surface_root, const Theme& theme) : ResizableContainer("content"), m_surface_root(surface_root) {
+    SurfaceContent() : ResizableContainer("content") {
         set_type_name("SurfaceContent");
         set_size({grow(), grow()});
-        apply_theme_defaults(theme);
-    }
-
-    void update(float dt) override {
-        if (m_forwarding) {
-            Node::update(dt);
-            return;
-        }
-
-        // prevent the root proxy from forwarding back into this surface while it updates its children.
-        m_forwarding = true;
-        m_surface_root.update(dt);
-        m_forwarding = false;
-    }
-
-    void draw() override {
-        if (m_forwarding) {
-            StyledNode::draw();
-            return;
-        }
-
-        m_forwarding = true;
-        m_surface_root.draw();
-        m_forwarding = false;
     }
 
     void apply_theme_defaults(const Theme& theme) override {
@@ -49,21 +25,13 @@ public:
             style.background_color(theme.background_color).border_color(theme.controls.border_color).border(BORDER_NONE);
         });
     }
-
-private:
-    Node& m_surface_root;
-    bool m_forwarding = false;
 };
 
 UI::UI(Runtime& runtime, UIConfig config)
     : m_runtime(runtime), m_theme(runtime.theme()), m_backend(std::move(config.backend)),
       m_file_dialog(config.file_dialog_backend != nullptr ? std::move(config.file_dialog_backend) : make_file_dialog_backend()),
       m_profiler(runtime.performance_directory()) {
-    initialize();
-
-    if (config.enable_debugger) {
-        m_debugger = &m_surface_layout->add<Debugger>(*this);
-    }
+    initialize(config.enable_debugger);
 }
 
 UI::~UI() {
@@ -71,7 +39,6 @@ UI::~UI() {
     ImGui::SetCurrentContext(m_context);
 
     m_root.reset();
-    m_surface_layout = nullptr;
     m_content_root = nullptr;
     m_debugger = nullptr;
 
@@ -124,7 +91,7 @@ ImFont* UI::get_secondary_font(int size) const {
     return resolve_font(m_secondary_font, size);
 }
 
-void UI::initialize() {
+void UI::initialize(bool enable_debugger) {
     if (m_backend == nullptr) {
         throw std::runtime_error("m_backend is nullptr");
     }
@@ -158,11 +125,14 @@ void UI::initialize() {
 
     auto& surface_layout = m_root->add<Container>("ui-root", StackDirection::Horizontal);
     surface_layout.set_size({grow(), grow()});
-    m_surface_layout = &surface_layout;
 
-    auto& content = surface_layout.add<SurfaceContent>(*m_root, m_theme);
+    auto& content = surface_layout.add<SurfaceContent>();
     m_content_root = &content;
     m_profiler.set_root_node(content.identity());
+
+    if (enable_debugger) {
+        m_debugger = &surface_layout.add<Debugger>(*this);
+    }
 }
 
 void UI::configure_style(float main_scale) {
@@ -279,11 +249,11 @@ void UI::begin_frame() {
 }
 
 void UI::update(float dt) {
-    m_content_root->update(dt);
+    m_root->update(dt);
 }
 
 void UI::draw() {
-    m_content_root->draw();
+    m_root->draw();
 }
 
 void UI::end_frame() {

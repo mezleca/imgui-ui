@@ -77,7 +77,7 @@ namespace ui {
         void finish_popup_restore();
         void set_target(Node* target);
         void remove_target();
-        bool should_restore_flow_position() const;
+        bool should_restore_flow_position(const LayoutConfig& config) const;
         bool overlay_contains(ImVec2 position) const;
 
         bool paint() override;

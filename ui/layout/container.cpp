@@ -38,7 +38,7 @@ static ImVec2 resolve_stack_child_size(const Node& child, ImVec2 content_size, f
     ImVec2 size = child.layout().resolve_size(available);
 
     if (main_axis.mode == LayoutSizeMode::Grow) {
-        set_axis_extent(size, horizontal, flexible_main * main_axis.value);
+        set_axis_extent(size, horizontal, child.layout().box_insets().axis(horizontal) + flexible_main * main_axis.value);
     }
 
     return size;
@@ -49,7 +49,7 @@ Container::Container(std::string id, std::string_view type_name)
 
 Container::Container(std::string id, StackDirection direction, std::string_view type_name)
     : Widget(std::move(id), type_name, InputMode::None), m_direction(direction) {
-    configure_all_styles([](Style& style) { style.padding({}); });
+    configure_all_styles([](Style& style) { style.padding({}).box_sizing(BoxSizing::BorderBox); });
 }
 
 Container& Container::set_scrollable(bool vertical, bool horizontal) {
@@ -184,16 +184,13 @@ void Container::arrange_children() {
         const LayoutSize& child_layout_size = child->layout().size_spec();
         const LayoutAxis& main_axis = horizontal ? child_layout_size.width : child_layout_size.height;
         const ImVec2 margin = child->layout_margin();
-        const float main_available = std::max(0.0F, available_main - axis_extent(margin, horizontal) * 2.0F);
-        const float cross_available =
-            std::max(0.0F, axis_extent(content_size, !horizontal) - axis_extent(margin, !horizontal) * 2.0F);
-        const ImVec2 available = horizontal ? ImVec2{main_available, cross_available} : ImVec2{cross_available, main_available};
-        const ImVec2 child_size = child->layout().resolve_size(available);
+        const ImVec2 child_size = resolve_stack_child_size(*child, content_size, 0.0F, horizontal);
 
         fixed_main += axis_extent(margin, horizontal) * 2.0F;
         if (main_axis.mode != LayoutSizeMode::Grow) {
             fixed_main += axis_extent(child_size, horizontal);
         } else {
+            fixed_main += child->layout().box_insets().axis(horizontal);
             flexible_weight += main_axis.value;
         }
 
@@ -256,7 +253,7 @@ ImVec2 Container::child_window_content_size() const {
 }
 
 ImVec2 Container::child_window_padding() const {
-    return computed_style().padding();
+    return box_insets().window_padding();
 }
 
 void Container::draw_children() {

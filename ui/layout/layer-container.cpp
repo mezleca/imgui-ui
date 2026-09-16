@@ -65,7 +65,7 @@ bool LayerContainer::paint() {
 
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, computed_style().padding());
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, box_insets().window_padding());
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{});

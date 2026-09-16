@@ -16,7 +16,7 @@ namespace ui {
 
     /// owns assets and visual defaults copied by every UI surface created from it.
     ///
-    /// Runtime outlives its surfaces so fonts and textures can safely cache data for each surface's ImGui context.
+    /// runtime outlives its surfaces so fonts and textures can safely cache data for each surface's imgui context.
     class Runtime {
     public:
         explicit Runtime(RuntimeConfig config = {});

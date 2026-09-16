@@ -43,7 +43,7 @@ namespace ui {
 
     /// stores target visual values for one interaction state and optional transitions toward them.
     ///
-    /// StyledNode resolves these values into a ComputedStyle each frame before measuring and painting.
+    /// styled nodes resolve these values into a computed style each frame before measuring and painting.
     class Style : public ComputedStyle {
         template <typename Field>
         Style& set_property(Field ComputedStyle::* member, Field value) {
@@ -86,6 +86,7 @@ namespace ui {
         using ComputedStyle::border_style;
         using ComputedStyle::border_thickness;
         using ComputedStyle::box_shadow;
+        using ComputedStyle::box_sizing;
         using ComputedStyle::color;
         using ComputedStyle::cursor;
         using ComputedStyle::font;
@@ -119,6 +120,10 @@ namespace ui {
 
         Style& padding(ImVec2 value, TransitionSpec transition = {}) {
             return set_animated_transition(&ComputedStyle::m_padding, normalize_style_insets(value), transition);
+        }
+
+        Style& box_sizing(BoxSizing value) {
+            return set_property(&ComputedStyle::m_box_sizing, value);
         }
 
         Style& margin(ImVec2 value, TransitionSpec transition = {}) {

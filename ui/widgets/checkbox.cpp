@@ -14,8 +14,10 @@ CheckboxWidget::CheckboxWidget(bool& value, std::string label, std::string id)
     set_input_mode(InputMode::Target);
     set_content_alignment(Anchor::CenterLeft);
 
-    m_box_node = &add<BoxWidget>("box", LayoutSize{px(m_box_size), px(m_box_size)});
-    m_frame_node = &m_box_node->add<BoxWidget>("frame", LayoutSize{grow(), grow()});
+    m_box_node = &add<Container>("box", "Box");
+    m_box_node->set_size({px(m_box_size), px(m_box_size)});
+    m_frame_node = &m_box_node->add<Container>("frame", "Box");
+    m_frame_node->set_size({grow(), grow()});
     m_fill_node = &m_frame_node->add<BoxWidget>("fill", LayoutSize{grow(), grow()});
     m_label_node = &add<TextWidget>(std::move(label));
     m_mark_visible = *m_value;
@@ -30,7 +32,7 @@ void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
 
     configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({4.0F, 4.0F}); });
 
-    m_frame_padding = theme.controls.border_thickness;
+    m_frame_border_thickness = theme.controls.border_thickness;
     m_frame_node->configure_all_styles([&theme](Style& style) { style.control(theme); });
 
     m_fill_node->configure_all_styles([&theme](Style& style) {
@@ -69,13 +71,14 @@ void CheckboxWidget::on_click(UiEvent& event) {
         return;
     }
 
-    *m_value = m_type == CheckboxType::Radio || !*m_value;
-    update_mark_visibility();
+    if (!set_checked(m_type == CheckboxType::Radio || !*m_value)) {
+        return;
+    }
+
     m_frame_node->animate()
         .background_color(m_frame_node->style(StyleType::ACTIVE).background_color().value)
         .then(0.04F)
         .release_all({0.12F, easing::out_quad});
-    notify_change();
 }
 
 CheckboxWidget& CheckboxWidget::set_type(CheckboxType type) {
@@ -151,6 +154,7 @@ void CheckboxWidget::update_shape() {
     m_frame_node->configure_all_styles([radius](Style& style) { style.border_radius(radius); });
     m_fill_node->configure_all_styles([radius](Style& style) { style.border_radius(radius); });
 
-    const float inset = std::max(m_frame_padding, m_box_size * 0.20F);
+    const float fill_size = m_box_size * 0.60F;
+    const float inset = std::max(0.0F, (m_box_size - fill_size) * 0.5F - m_frame_border_thickness);
     m_frame_node->configure_all_styles([inset](Style& style) { style.padding({inset, inset}); });
 }

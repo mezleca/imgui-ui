@@ -15,6 +15,10 @@ ResizableContainer::ResizableContainer(std::string id) : Container(std::move(id)
 }
 
 ResizableContainer& ResizableContainer::set_resize(ResizeAxes resize) {
+    if (m_resize == resize) {
+        return *this;
+    }
+
     m_resize = resize;
     if (resize == ResizeAxes::None) {
         set_input_mode(InputMode::None);

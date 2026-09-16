@@ -183,9 +183,24 @@ namespace ui {
         void input_state_changed() override;
         void draw_before() override;
         void draw_after() override;
-        ImVec2 box_padding() const override {
-            return computed_style().padding();
+
+        BoxInsets box_insets() const override {
+            const ComputedStyle& style = computed_style();
+            const ImVec2 padding = style.padding();
+            const float thickness = style.border_thickness();
+            const uint8_t border = style.border();
+            return {
+                padding.x + ((border & BORDER_LEFT) != 0 ? thickness : 0.0F),
+                padding.y + ((border & BORDER_TOP) != 0 ? thickness : 0.0F),
+                padding.x + ((border & BORDER_RIGHT) != 0 ? thickness : 0.0F),
+                padding.y + ((border & BORDER_BOTTOM) != 0 ? thickness : 0.0F),
+            };
         }
+
+        BoxSizing box_sizing() const override {
+            return computed_style().box_sizing();
+        }
+
         float minimum_content_height() const override {
             ImGui::PushFont(font());
             const float line_height = ImGui::GetTextLineHeight();
