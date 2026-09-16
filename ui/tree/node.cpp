@@ -412,6 +412,13 @@ void Node::draw() {
     }
 }
 
+void Node::draw_at_cursor() {
+    const bool arranged = m_layout.m_has_arranged_position;
+    m_layout.m_has_arranged_position = false;
+    draw();
+    m_layout.m_has_arranged_position = arranged;
+}
+
 void Node::submit_positioned_item() {
     if (!m_layout.has_position()) {
         return;

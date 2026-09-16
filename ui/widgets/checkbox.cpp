@@ -30,8 +30,8 @@ void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
 
     configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({4.0F, 4.0F}); });
 
-    const float inset = theme.controls.border_thickness;
-    m_frame_node->configure_all_styles([&theme, inset](Style& style) { style.control(theme, {inset, inset}); });
+    m_frame_padding = theme.controls.border_thickness;
+    m_frame_node->configure_all_styles([&theme](Style& style) { style.control(theme); });
 
     m_fill_node->configure_all_styles([&theme](Style& style) {
         style.background_color(theme.controls.mark_color).border(BORDER_NONE);
@@ -150,4 +150,7 @@ void CheckboxWidget::update_shape() {
     const float radius = m_type == CheckboxType::Radio ? m_box_size * 0.5F : 2.0F;
     m_frame_node->configure_all_styles([radius](Style& style) { style.border_radius(radius); });
     m_fill_node->configure_all_styles([radius](Style& style) { style.border_radius(radius); });
+
+    const float inset = std::max(m_frame_padding, m_box_size * 0.20F);
+    m_frame_node->configure_all_styles([inset](Style& style) { style.padding({inset, inset}); });
 }

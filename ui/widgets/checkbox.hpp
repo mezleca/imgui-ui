@@ -47,6 +47,7 @@ namespace ui {
         TextWidget* m_label_node = nullptr;
         CheckboxType m_type = CheckboxType::Standard;
         float m_box_size = 20.0F;
+        float m_frame_padding = 1.0F;
         bool m_mark_visible = false;
     };
 } // namespace ui

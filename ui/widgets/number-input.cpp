@@ -10,11 +10,12 @@ using namespace ui;
 
 void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
     const TransitionSpec transition{0.25F, easing::out_quad};
+    set_font(surface().get_primary_font(18));
     m_thumb_color = theme.controls.mark_color;
     m_thumb_size = theme.controls.thumb_size;
     m_label_spacing = theme.metrics.item_spacing.y;
 
-    configure_all_styles([&theme, transition](Style& style) { style.control(theme, {}, transition); });
+    configure_all_styles([&theme, transition](Style& style) { style.control(theme, {10.0F, 8.0F}, transition); });
 
     configure_style(StyleType::HOVER, [&theme, transition](Style& style) {
         style.background_color(theme.controls.hover_color, transition);
@@ -24,7 +25,7 @@ void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
         style.background_color(theme.controls.active_color, transition).border_color(theme.accent_color, transition);
     };
     configure_style(StyleType::ACTIVE, configure_active_style);
-    configure_style(StyleType::FOCUS, configure_active_style);
+    configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
 }
 
 void NumberInputWidget::on_event(UiEvent& event) {
@@ -197,6 +198,8 @@ bool NumberInputWidget::paint() {
     if (std::visit([this](auto* value) { return draw_value(*value); }, m_number)) {
         notify_change();
     }
+
+    set_interaction_style(ImGui::IsItemHovered(), ImGui::IsItemActive(), input_state().focused);
 
     ImColor border = current_style.border_color().value;
     border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);

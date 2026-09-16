@@ -250,6 +250,9 @@ TEST_CASE("color picker opens outside its parent and blocks content input", "[co
     REQUIRE(popup_rect.valid());
     REQUIRE(popup_rect.min.y >= picker.layout().visual_rect().max.y);
 
+    const Rect hex_input_rect = picker.popup().children().front()->layout().visual_rect();
+    REQUIRE(hex_input_rect.min.y > popup_rect.min.y + 150.0F);
+
     const ImVec2 popup_center = ui_test::center(popup_rect);
     down.position = popup_center;
     up.position = popup_center;
@@ -536,6 +539,26 @@ TEST_CASE("text input follows a resized parent width", "[TextInputWidget][layout
     REQUIRE(expanded_width > initial_width);
     REQUIRE(input.layout().size().x < initial_width);
     REQUIRE(input.layout().size().y < parent.layout().size().y);
+}
+
+TEST_CASE("text input grows its field below an above label", "[TextInputWidget][layout][regression]") {
+    Runtime runtime;
+    ui::UI surface(runtime, {.backend = ui_test::make_backend()});
+    std::string value;
+    auto& input = surface.root().add<TextInputWidget>(value, "input");
+    input.set_label("profile").set_label_placement(LabelPlacement::Above);
+    input.set_size({px(180.0F), px(100.0F)});
+
+    const auto surface_context = ui_test::prepare_surface(surface, {240.0F, 160.0F});
+    ui_test::draw_surface(surface);
+
+    const Rect label = input.children()[0]->layout().visual_rect();
+    const Rect field = input.children()[1]->layout().visual_rect();
+    const Rect native_field = input.children()[1]->children().back()->layout().visual_rect();
+
+    REQUIRE(label.max.y <= field.min.y);
+    REQUIRE(field.size().y > label.size().y);
+    REQUIRE(native_field.size().y > 0.0F);
 }
 
 TEST_CASE("pointer block prevents hover and clicks on content controls", "[input][regression]") {

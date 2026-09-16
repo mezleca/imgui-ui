@@ -11,7 +11,7 @@ FileDialogWidget::FileDialogWidget(std::string label, std::string id)
     set_input_mode(InputMode::Target);
     set_type_name("FileDialog");
     set_content_alignment({0.5F, 0.5F});
-    set_size({grow(), fit()});
+    set_size({fit(), fit()});
 }
 
 void FileDialogWidget::apply_theme_defaults(const Theme& theme) {

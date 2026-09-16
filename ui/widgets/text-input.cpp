@@ -8,6 +8,8 @@
 #include <cfloat>
 #include <imgui_stdlib.h>
 
+#include <algorithm>
+
 using namespace ui;
 
 class TextInputWidget::FieldNode final : public StyledNode {
@@ -24,6 +26,14 @@ public:
     }
 
 private:
+    void on_measure() override {
+        ImGui::PushFont(font());
+        const float line_height = ImGui::GetTextLineHeight();
+        ImGui::PopFont();
+        set_measured_size({0.0F, line_height}, false, true);
+        m_line_height = line_height;
+    }
+
     bool paint() override {
         if (*m_focus_requested) {
             ImGui::SetKeyboardFocusHere();
@@ -32,14 +42,18 @@ private:
 
         // imgui provides utf-8 editing, selection, clipboard, and ime handling.
         ImGui::PushID(this);
+        const float padding_y = std::max(0.0F, (layout().size().y - m_line_height) * 0.5F);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {ImGui::GetStyle().FramePadding.x, padding_y});
         ImGui::SetNextItemWidth(-FLT_MIN);
         m_changed = ImGui::InputText("##value", m_value);
+        ImGui::PopStyleVar();
         ImGui::PopID();
         return true;
     }
 
     std::string* m_value;
     bool* m_focus_requested;
+    float m_line_height = 0.0F;
     bool m_changed = false;
 };
 
@@ -90,29 +104,57 @@ void TextInputWidget::apply_theme_defaults(const Theme& theme) {
     update_label_layout();
     m_input_node->set_spacing(theme.metrics.item_inner_spacing.x);
     m_icon_node->set_size({px(18.0F), px(18.0F)});
-    m_field_node->set_size({grow(), px(18.0F)});
+    m_field_node->set_size({grow(), grow()});
 
-    configure_all_styles([&theme, transition](Style& style) {
-        style.border_color(theme.controls.border_color, transition)
-            .padding({12.0F, 14.0F})
-            .background_color(theme.controls.background_color, transition)
-            .border(BORDER_ALL)
-            .border_radius(4.0F)
-            .border_thickness(theme.controls.border_thickness);
+    configure_all_styles([](Style& style) { style.padding({}).border(BORDER_NONE); });
+
+    m_input_node->configure_all_styles([&theme, transition](Style& style) {
+        style.control(theme, {10.0F, 8.0F}, transition).border_radius(4.0F);
     });
 
     const auto configure_active_style = [&theme, transition](Style& style) {
         style.background_color(theme.controls.active_color, transition).border_color(theme.accent_color, transition);
     };
-    configure_style(StyleType::ACTIVE, configure_active_style);
-    configure_style(StyleType::FOCUS, configure_active_style);
-    configure_style(StyleType::HOVER, [&theme, transition](Style& style) {
+    m_input_node->configure_style(StyleType::ACTIVE, configure_active_style);
+    m_input_node->configure_style(StyleType::FOCUS, configure_active_style);
+    m_input_node->configure_style(StyleType::HOVER, [&theme, transition](Style& style) {
         style.background_color(theme.controls.hover_color, transition);
     });
 
     m_field_node->configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BORDER_NONE);
     });
+}
+
+void TextInputWidget::input_state_changed() {
+    Container::input_state_changed();
+    const InputState& state = input_state();
+    m_input_node->set_interaction_style(state.hovered, state.active, state.focused);
+}
+
+void TextInputWidget::arrange_children() {
+    if (m_label_placement != LabelPlacement::Above) {
+        Container::arrange_children();
+        return;
+    }
+
+    const ImVec2 content = content_size(layout().size());
+    if (!m_label_node->visible()) {
+        arrange_child(*m_input_node, content);
+        return;
+    }
+
+    const ImVec2 label_margin = m_label_node->layout_margin();
+    const ImVec2 label_size = m_label_node->layout().resolve_size(content);
+    arrange_child(*m_label_node, label_size, {.offset = label_margin});
+
+    const float field_y = label_size.y + label_margin.y * 2.0F + m_label_spacing.y;
+    const ImVec2 field_margin = m_input_node->layout_margin();
+    const ImVec2 field_size = {
+        std::max(0.0F, content.x - field_margin.x * 2.0F),
+        std::max(0.0F, content.y - field_y - field_margin.y * 2.0F),
+    };
+    arrange_child(*m_input_node, field_size, {.offset = {field_margin.x, field_y + field_margin.y}});
 }
 
 TextInputWidget& TextInputWidget::set_label(std::string label) {

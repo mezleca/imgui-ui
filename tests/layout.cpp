@@ -5,6 +5,7 @@
 #include <ui/layout/geometry.hpp>
 #include <ui/layout/layer-container.hpp>
 #include <ui/layout/resizable-container.hpp>
+#include <ui/layout/tree-container.hpp>
 #include <ui/layout/virtual-layout.hpp>
 #include <ui/input/router.hpp>
 #include <ui/widgets/text.hpp>
@@ -253,6 +254,55 @@ TEST_CASE("stack layout places auto-sized children after their measured height")
     REQUIRE(first.size().y > 0.0F);
     REQUIRE(second.min.y >= first.max.y + 4.0F);
     REQUIRE(stack.children()[1]->layout().config().placement.offset.y == Catch::Approx(0.0F));
+}
+
+TEST_CASE("tree layout hides closed descendants without reserving their flow space", "[TreeContainer][layout]") {
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+
+    Container page("tree-page");
+    page.set_size({px(200.0F), px(120.0F)});
+    page.style().padding({});
+
+    auto& tree = page.add<TreeContainer>("tree");
+    auto& child = tree.add<LayoutProbeNode>("child", ImVec2{40.0F, 20.0F});
+    auto& sibling = page.add<LayoutProbeNode>("sibling", ImVec2{40.0F, 20.0F});
+
+    ImGui::NewFrame();
+    ImGui::Begin("closed-tree-test");
+    page.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    REQUIRE_FALSE(child.layout().visual_rect().valid());
+    REQUIRE(sibling.layout().visual_rect().min.y >= tree.layout().visual_rect().max.y);
+}
+
+TEST_CASE("tree layout nests expanded descendants in imgui flow", "[TreeContainer][layout][regression]") {
+    ui_test::ImGuiContext context({240.0F, 220.0F});
+
+    Container page("nested-tree-page");
+    page.set_size({px(200.0F), px(180.0F)});
+    page.style().padding({});
+
+    auto& outer = page.add<TreeContainer>("outer");
+    auto& inner = outer.add<TreeContainer>("inner");
+    auto& sibling = page.add<LayoutProbeNode>("sibling", ImVec2{40.0F, 20.0F});
+
+    const auto draw_frame = [&] {
+        ImGui::NewFrame();
+        ImGui::Begin("nested-tree-test");
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+        page.draw();
+        ImGui::End();
+        ImGui::EndFrame();
+    };
+
+    draw_frame();
+    draw_frame();
+
+    REQUIRE(inner.layout().visual_rect().min.y > outer.layout().visual_rect().min.y);
+    REQUIRE(sibling.layout().visual_rect().min.y >= outer.layout().visual_rect().max.y);
 }
 
 TEST_CASE("stack layout centers flow content on requested axes") {

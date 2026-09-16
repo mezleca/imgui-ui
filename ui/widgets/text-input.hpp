@@ -25,6 +25,8 @@ namespace ui {
     protected:
         void apply_theme_defaults(const Theme& theme) override;
         void on_event(UiEvent& event) override;
+        void input_state_changed() override;
+        void arrange_children() override;
 
     private:
         class FieldNode;

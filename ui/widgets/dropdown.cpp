@@ -365,7 +365,7 @@ void DropdownWidget::apply_theme_defaults(const Theme& theme) {
     set_spacing(theme.metrics.item_spacing.y);
     m_label_node->style().color(theme.text_color);
     m_trigger->configure_all_styles(
-        [&theme](Style& style) { style.control(theme, {10.0F, 0.0F}).cursor(ImGuiMouseCursor_Hand); }
+        [&theme](Style& style) { style.control(theme, {10.0F, 6.0F}).cursor(ImGuiMouseCursor_Hand); }
     );
     m_trigger->configure_style(StyleType::HOVER, [&theme](Style& style) { style.background_color(theme.controls.hover_color); });
     m_trigger->configure_style(StyleType::ACTIVE, [&theme](Style& style) {

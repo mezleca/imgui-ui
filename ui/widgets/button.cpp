@@ -17,7 +17,7 @@ void ButtonWidget::apply_theme_defaults(const Theme& theme) {
         style.color(theme.text_color)
             .background_color(theme.background_secondary_color)
             .border_color(theme.controls.border_color, 0.2F)
-            .padding({12.0F, 6.0F})
+            .padding({10.0F, 2.0F})
             .border(BORDER_ALL)
             .border_radius(theme.controls.rounding)
             .border_thickness(theme.controls.border_thickness)

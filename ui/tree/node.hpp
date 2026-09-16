@@ -64,6 +64,10 @@ namespace ui {
         /// resolves, paints, and registers this visible subtree.
         virtual void draw();
 
+        /// draws this node at the current imgui cursor instead of its arranged flow position.
+        /// use it when a custom parent interleaves tree nodes or other native imgui items with framework children.
+        void draw_at_cursor();
+
         /// detaches a direct child.
         std::unique_ptr<Node> remove(Node& child);
 

@@ -209,7 +209,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
 
     int value = 5;
     auto& input = modal.add<ui::NumberInputWidget>(value, "modal-blur");
-    input.set_label("backdrop blur").set_range(0, 32).set_size({ui::px(180.0F), ui::px(48.0F)});
+    input.set_range(0, 32).set_size({ui::px(180.0F), ui::px(48.0F)});
     input.set_on_change([&modal_layer, &value] {
         modal_layer.configure_all_styles([&value](ui::Style& style) { style.blur(value); });
     });
@@ -253,7 +253,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
     }
 
     // blur reaching zero removes the visual effect while the active slider keeps the same imgui parent.
-    for (float ratio : {0.60F, 0.57F}) {
+    for (float ratio : {0.20F, 0.05F}) {
         const ImVec2 position = {rect.min.x + rect.size().x * ratio, press.y};
         send_pointer(SDL_EVENT_MOUSE_MOTION, position);
         ui_test::draw_surface(surface);

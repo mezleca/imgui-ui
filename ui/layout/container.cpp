@@ -224,7 +224,16 @@ void Container::arrange_children() {
 
         const ImVec2 child_size = resolve_stack_child_size(*child, content_size, flexible_main, horizontal);
         const ImVec2 margin = child->layout_margin();
-        const ImVec2 child_offset = {cursor.x + margin.x, cursor.y + margin.y};
+        ImVec2 child_offset = {cursor.x + margin.x, cursor.y + margin.y};
+        if (aligns_content) {
+            const float child_cross = axis_extent(child_size, !horizontal) + axis_extent(margin, !horizontal) * 2.0F;
+            const float cross_offset = std::max(0.0F, flow_cross - child_cross) * (horizontal ? alignment.y : alignment.x);
+            if (horizontal) {
+                child_offset.y += cross_offset;
+            } else {
+                child_offset.x += cross_offset;
+            }
+        }
 
         arrange_child(*child, child_size, {.offset = child_offset});
         m_content_size.x = std::max(m_content_size.x, child_offset.x + child_size.x + margin.x);
