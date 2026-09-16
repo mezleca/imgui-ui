@@ -133,12 +133,7 @@ void TextInputWidget::input_state_changed() {
 }
 
 void TextInputWidget::arrange_children() {
-    if (m_label_placement != LabelPlacement::Above) {
-        Container::arrange_children();
-        return;
-    }
-
-    const ImVec2 content = content_size(layout().size());
+    const ImVec2 content = layout().size();
     if (!m_label_node->visible()) {
         arrange_child(*m_input_node, content);
         return;
@@ -146,15 +141,33 @@ void TextInputWidget::arrange_children() {
 
     const ImVec2 label_margin = m_label_node->layout_margin();
     const ImVec2 label_size = m_label_node->layout().resolve_size(content);
+    const ImVec2 field_margin = m_input_node->layout_margin();
+
+    if (m_label_placement == LabelPlacement::Inline) {
+        const float label_y = std::max(0.0F, (content.y - label_size.y - label_margin.y * 2.0F) * 0.5F);
+        arrange_child(*m_label_node, label_size, {.offset = {label_margin.x, label_y + label_margin.y}});
+
+        const float field_x = label_size.x + label_margin.x * 2.0F + m_label_spacing.x;
+        const ImVec2 field_size = {
+            std::max(0.0F, content.x - field_x - field_margin.x * 2.0F),
+            std::max(0.0F, content.y - field_margin.y * 2.0F),
+        };
+        arrange_child(*m_input_node, field_size, {.offset = {field_x + field_margin.x, field_margin.y}});
+        return;
+    }
+
     arrange_child(*m_label_node, label_size, {.offset = label_margin});
 
     const float field_y = label_size.y + label_margin.y * 2.0F + m_label_spacing.y;
-    const ImVec2 field_margin = m_input_node->layout_margin();
     const ImVec2 field_size = {
         std::max(0.0F, content.x - field_margin.x * 2.0F),
         std::max(0.0F, content.y - field_y - field_margin.y * 2.0F),
     };
     arrange_child(*m_input_node, field_size, {.offset = {field_margin.x, field_y + field_margin.y}});
+}
+
+ImVec2 TextInputWidget::child_window_padding() const {
+    return {};
 }
 
 TextInputWidget& TextInputWidget::set_label(std::string label) {

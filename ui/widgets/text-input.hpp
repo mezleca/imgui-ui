@@ -27,6 +27,7 @@ namespace ui {
         void on_event(UiEvent& event) override;
         void input_state_changed() override;
         void arrange_children() override;
+        ImVec2 child_window_padding() const override;
 
     private:
         class FieldNode;

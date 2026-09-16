@@ -28,6 +28,7 @@ namespace ui {
         virtual void arrange_children();
         void draw_children() override;
 
+        virtual ImVec2 child_window_padding() const;
         bool paint() override;
         void on_draw_end() override;
 

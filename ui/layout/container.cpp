@@ -255,6 +255,10 @@ ImVec2 Container::child_window_content_size() const {
     return arranged_content_size();
 }
 
+ImVec2 Container::child_window_padding() const {
+    return computed_style().padding();
+}
+
 void Container::draw_children() {
     for (const auto& child : children()) {
         if (child->layout().in_flow()) {
@@ -293,7 +297,7 @@ bool Container::paint() {
     if (size_spec.width.mode == LayoutSizeMode::Fit) child_flags |= ImGuiChildFlags_AutoResizeX;
     if (size_spec.height.mode == LayoutSizeMode::Fit) child_flags |= ImGuiChildFlags_AutoResizeY;
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, current_style.padding());
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, child_window_padding());
     ImGui::SetNextWindowContentSize(child_window_content_size());
 
     // imgui truncates child window positions to integer pixels. round the origin before opening the
