@@ -26,6 +26,7 @@ struct BlurTextures {
     GLint original = -1;
     GLint texel = -1;
     GLint direction = -1;
+    GLint bounds = -1;
     GLint region = -1;
     GLint rounding = -1;
     GLint radius = -1;
@@ -60,6 +61,7 @@ uniform sampler2D image;
 uniform sampler2D original;
 uniform vec2 texel;
 uniform vec2 direction;
+uniform vec4 bounds;
 uniform vec4 region;
 uniform float rounding;
 uniform int radius;
@@ -75,15 +77,17 @@ return length(max(distance, 0.0)) + min(max(distance.x, distance.y), 0.0) - radi
 }
 
 vec4 box_blur(vec2 uv, vec2 step) {
-vec4 sum = texture(image, uv);
+vec2 minimum = (bounds.xy + vec2(0.5)) * texel;
+vec2 maximum = max(minimum, (bounds.zw - vec2(0.5)) * texel);
+vec4 sum = texture(image, clamp(uv, minimum, maximum));
 for (int pair = 0; pair < 32; ++pair) {
     if (pair >= radius / 2) break;
     float distance = float(pair * 2) + 1.5;
-    sum += (texture(image, uv - step * distance) + texture(image, uv + step * distance)) * 2.0;
+    sum += (texture(image, clamp(uv - step * distance, minimum, maximum)) + texture(image, clamp(uv + step * distance, minimum, maximum))) * 2.0;
 }
 
 if ((radius & 1) != 0) {
-    sum += texture(image, uv - step * radius) + texture(image, uv + step * radius);
+    sum += texture(image, clamp(uv - step * radius, minimum, maximum)) + texture(image, clamp(uv + step * radius, minimum, maximum));
 }
 
 return sum / float(radius * 2 + 1);
@@ -143,6 +147,7 @@ static bool create_program() {
         textures->original = glGetUniformLocation(textures->program, "original");
         textures->texel = glGetUniformLocation(textures->program, "texel");
         textures->direction = glGetUniformLocation(textures->program, "direction");
+        textures->bounds = glGetUniformLocation(textures->program, "bounds");
         textures->region = glGetUniformLocation(textures->program, "region");
         textures->rounding = glGetUniformLocation(textures->program, "rounding");
         textures->radius = glGetUniformLocation(textures->program, "radius");
@@ -190,7 +195,7 @@ static bool ensure_textures(int width, int height) {
     return true;
 }
 
-static void blur_pass(GLuint input, GLuint output, int width, int height, int radius, float direction_x, float direction_y) {
+static void blur_pass(GLuint input, GLuint output, int width, int height, int radius, float direction_x, float direction_y, ImVec4 bounds) {
     glBindFramebuffer(GL_FRAMEBUFFER, textures->framebuffer);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, output, 0);
     glViewport(0, 0, width, height);
@@ -200,6 +205,7 @@ static void blur_pass(GLuint input, GLuint output, int width, int height, int ra
     glUniform1i(textures->image, 0);
     glUniform2f(textures->texel, 1.0F / width, 1.0F / height);
     glUniform2f(textures->direction, direction_x, direction_y);
+    glUniform4f(textures->bounds, bounds.x, bounds.y, bounds.z, bounds.w);
     glUniform1i(textures->radius, radius);
     glUniform1i(textures->filtered, GL_TRUE);
     glUniform1i(textures->clipped, GL_FALSE);
@@ -227,18 +233,18 @@ static std::array<int, 3> box_widths(int sigma) {
     };
 }
 
-static void blur(int width, int height, int sigma) {
+static void blur(int width, int height, int sigma, ImVec4 bounds) {
     const std::array<int, 3> widths = box_widths(sigma);
     GLuint input = textures->source;
     GLuint output = textures->ping;
 
     for (const int window : widths) {
-        blur_pass(input, output, width, height, window / 2, 1.0F, 0.0F);
+        blur_pass(input, output, width, height, window / 2, 1.0F, 0.0F, bounds);
         std::swap(input, output);
     }
 
     for (const int window : widths) {
-        blur_pass(input, output, width, height, window / 2, 0.0F, 1.0F);
+        blur_pass(input, output, width, height, window / 2, 0.0F, 1.0F, bounds);
         std::swap(input, output);
     }
 
@@ -265,12 +271,6 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
         return;
     }
 
-    // each backdrop samples the framebuffer immediately before its own node is drawn.
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(framebuffer));
-    glBindTexture(GL_TEXTURE_2D, textures->source);
-    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
-    blur(width, height, region->strength);
-
     const ImDrawData* draw_data = ImGui::GetDrawData();
     const ImVec2 display_position = draw_data == nullptr ? ImVec2{} : draw_data->DisplayPos;
     const ImVec2 scale = draw_data == nullptr ? ImVec2{1.0F, 1.0F} : draw_data->FramebufferScale;
@@ -282,6 +282,12 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
         (region->rect.max.x - display_position.x) * scale.x,
         (region->rect.max.y - display_position.y) * scale.y,
     };
+
+    // each backdrop samples the framebuffer immediately before its own node is drawn.
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(framebuffer));
+    glBindTexture(GL_TEXTURE_2D, textures->source);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
+    blur(width, height, region->strength, {minimum.x, height - maximum.y, maximum.x, height - minimum.y});
 
     const float region_left = minimum.x;
     const float region_bottom = height - maximum.y;

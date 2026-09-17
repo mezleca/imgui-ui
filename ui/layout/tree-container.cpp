@@ -18,6 +18,10 @@ void TreeContainer::on_measure() {
         size.y = 0.0F;
     }
 
+    if (size.x > 0.0F) {
+        size.x += ImGui::GetStyle().IndentSpacing;
+    }
+
     size.x = std::max(size.x, ImGui::CalcTextSize(m_label.c_str()).x);
     size.y += ImGui::GetFrameHeightWithSpacing();
     set_measured_size(size, layout().size_spec().width.mode == LayoutSizeMode::Fit, true);
@@ -30,21 +34,38 @@ bool TreeContainer::paint() {
         invalidate_measure();
     }
 
-    if (open) {
-        arrange_children();
+    if (!open) {
+        return false;
     }
 
-    return open;
-}
-
-void TreeContainer::draw_children() {
-    for (const auto& child : children()) {
-        // treenodeex advances imgui's cursor below its header. children must follow that cursor
-        // instead of the container's pre-header arranged origin.
-        child->draw_at_cursor();
-    }
+    const ImVec2 body_position = ImGui::GetCursorScreenPos();
+    m_outer_rect = layout().visual_rect();
+    m_body_size = {
+        std::max(0.0F, m_outer_rect.max.x - body_position.x),
+        std::max(0.0F, m_outer_rect.max.y - body_position.y),
+    };
+    arrange_children();
+    return Container::paint();
 }
 
 void TreeContainer::on_draw_end() {
+    Container::on_draw_end();
+    const Rect body_rect = layout().visual_rect();
+    m_outer_rect.max.x = std::max(m_outer_rect.max.x, body_rect.max.x);
+    m_outer_rect.max.y = std::max(m_outer_rect.max.y, body_rect.max.y);
+    set_layout_rect(m_outer_rect);
+    set_visual_rect(m_outer_rect);
     ImGui::TreePop();
+}
+
+ImVec2 TreeContainer::child_window_size() const {
+    return m_body_size;
+}
+
+Rect TreeContainer::shadow_rect(Rect) const {
+    return m_outer_rect;
+}
+
+ImVec2 TreeContainer::child_layout_size() const {
+    return content_size(m_body_size);
 }

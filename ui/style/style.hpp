@@ -92,6 +92,7 @@ namespace ui {
         using ComputedStyle::font;
         using ComputedStyle::line_height;
         using ComputedStyle::margin;
+        using ComputedStyle::overflow;
         using ComputedStyle::padding;
         using ComputedStyle::rotation;
         using ComputedStyle::scale;
@@ -124,6 +125,10 @@ namespace ui {
 
         Style& box_sizing(BoxSizing value) {
             return set_property(&ComputedStyle::m_box_sizing, value);
+        }
+
+        Style& overflow(Overflow value) {
+            return set_property(&ComputedStyle::m_overflow, value);
         }
 
         Style& margin(ImVec2 value, TransitionSpec transition = {}) {

@@ -3,12 +3,15 @@
 
 #include "imgui-context.hpp"
 #include <ui/imgui/draw.hpp>
+#include <ui/imgui/effects/blur/blur.hpp>
 #include <ui/imgui/effects/shadow/shadow.hpp>
 #include <ui/layout/container.hpp>
 #include <ui/layout/geometry.hpp>
 #include <ui/layout/layer-container.hpp>
+#include <ui/layout/tree-container.hpp>
 #include <ui/tree/node.hpp>
 #include <ui/ui.hpp>
+#include <ui/widgets/dropdown.hpp>
 
 #include <imgui_internal.h>
 
@@ -23,6 +26,7 @@
 using namespace ui;
 
 static void collect_shadow_callback(const ImDrawList*, const ImDrawCmd*) {}
+static void collect_blur_callback(const ImDrawList*, const ImDrawCmd*) {}
 
 TEST_CASE("ui does not write to imgui's fallback window") {
     Runtime runtime;
@@ -253,6 +257,142 @@ TEST_CASE("container shadows stay in their owner draw list") {
     REQUIRE(callback_draw_list != foreground_draw_list);
 
     shutdown_box_shadow();
+}
+
+TEST_CASE("tree shadows use the tree outer rect") {
+    ui_test::ImGuiContext context({320.0F, 240.0F});
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos({0.0F, 0.0F});
+    ImGui::SetNextWindowSize({320.0F, 240.0F});
+    ImGui::Begin("tree-shadow-test");
+
+    begin_box_shadow_frame();
+    set_box_shadow_callback(collect_shadow_callback);
+
+    Container page("page");
+    page.set_size({px(240.0F), px(160.0F)});
+    auto& tree = page.add<TreeContainer>("tree");
+    tree.set_size({px(160.0F), px(100.0F)});
+    tree.configure_all_styles([](Style& style) {
+        style.box_shadow({.spread = 40.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}});
+    });
+    page.update(1.0F);
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+    page.draw();
+    ImGui::End();
+    ImGui::EndFrame();
+    ImGui::Render();
+
+    const ImDrawData* draw_data = ImGui::GetDrawData();
+    REQUIRE(draw_data != nullptr);
+    const BoxShadowRegion* queued_region = nullptr;
+    for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
+        for (const ImDrawCmd& command : draw_data->CmdLists[list_index]->CmdBuffer) {
+            if (command.UserCallback == collect_shadow_callback) {
+                queued_region = static_cast<const BoxShadowRegion*>(command.UserCallbackData);
+            }
+        }
+    }
+
+    REQUIRE(queued_region != nullptr);
+    REQUIRE(queued_region->cutout.min.y == Catch::Approx(tree.layout().visual_rect().min.y));
+
+    shutdown_box_shadow();
+}
+
+TEST_CASE("dropdown trigger shadows use the trigger rect below its label") {
+    Runtime runtime;
+    UI surface = ui_test::make_surface(runtime);
+    std::string value = "first";
+    auto& dropdown = surface.root().add<DropdownWidget>(
+        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "dropdown"
+    );
+    dropdown.set_label("label").set_size({px(180.0F), fit()});
+    dropdown.trigger().style().box_shadow({.spread = 8.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}});
+
+    const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 180.0F});
+    surface.begin_frame();
+    begin_box_shadow_frame();
+    set_box_shadow_callback(collect_shadow_callback);
+    surface.update(ImGui::GetIO().DeltaTime);
+    surface.draw();
+    surface.end_frame();
+
+    const ImDrawData* draw_data = ImGui::GetDrawData();
+    REQUIRE(draw_data != nullptr);
+    const BoxShadowRegion* region = nullptr;
+    for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
+        for (const ImDrawCmd& command : draw_data->CmdLists[list_index]->CmdBuffer) {
+            if (command.UserCallback == collect_shadow_callback) {
+                region = static_cast<const BoxShadowRegion*>(command.UserCallbackData);
+            }
+        }
+    }
+
+    REQUIRE(region != nullptr);
+    const Rect trigger_rect = dropdown.trigger().layout().visual_rect();
+    REQUIRE(region->cutout.min.x == Catch::Approx(trigger_rect.min.x));
+    REQUIRE(region->cutout.min.y == Catch::Approx(trigger_rect.min.y));
+    REQUIRE(region->cutout.max.x == Catch::Approx(trigger_rect.max.x));
+    REQUIRE(region->cutout.max.y == Catch::Approx(trigger_rect.max.y));
+
+    shutdown_box_shadow();
+}
+
+TEST_CASE("container blur excludes its scrollbar") {
+    class TallNode final : public Node {
+    public:
+        TallNode() : Node("tall") {
+            set_size({grow(), px(200.0F)});
+        }
+
+    private:
+        bool on_draw() override {
+            ImGui::Dummy(layout().size());
+            return true;
+        }
+    };
+
+    ui_test::ImGuiContext context({320.0F, 240.0F});
+    Container node("container");
+    node.set_size({px(100.0F), px(60.0F)});
+    node.set_scrollable(true);
+    node.configure_all_styles([](Style& style) { style.blur(8); });
+    node.add<TallNode>();
+
+    const auto draw_frame = [&] {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos({0.0F, 0.0F});
+        ImGui::SetNextWindowSize({320.0F, 240.0F});
+        ImGui::Begin("container-blur-test");
+        begin_blur_frame();
+        set_blur_callback(collect_blur_callback);
+        node.update(1.0F);
+        node.draw();
+        ImGui::End();
+        ImGui::EndFrame();
+        ImGui::Render();
+    };
+
+    draw_frame();
+    draw_frame();
+
+    const ImDrawData* draw_data = ImGui::GetDrawData();
+    REQUIRE(draw_data != nullptr);
+    const BlurRegion* queued_region = nullptr;
+    for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
+        for (const ImDrawCmd& command : draw_data->CmdLists[list_index]->CmdBuffer) {
+            if (command.UserCallback == collect_blur_callback) {
+                queued_region = static_cast<const BlurRegion*>(command.UserCallbackData);
+            }
+        }
+    }
+
+    REQUIRE(queued_region != nullptr);
+    REQUIRE(node.layout().visual_rect().max.x - queued_region->rect.max.x == Catch::Approx(ImGui::GetStyle().ScrollbarSize));
+
+    shutdown_blur();
 }
 
 TEST_CASE("styled paint slots render before the node and above completed subtrees") {

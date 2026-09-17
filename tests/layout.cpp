@@ -373,6 +373,94 @@ TEST_CASE("tree layout nests expanded descendants in imgui flow", "[TreeContaine
     REQUIRE(sibling.layout().visual_rect().min.y >= outer.layout().visual_rect().max.y);
 }
 
+TEST_CASE("tree layout allocates grow children inside its indented body", "[TreeContainer][layout][regression]") {
+    class TreeBodyProbe final : public Node {
+    public:
+        ImVec2 cursor{};
+
+    private:
+        bool on_draw() override {
+            cursor = ImGui::GetCursorScreenPos();
+            ImGui::Dummy(layout().size());
+            return true;
+        }
+    };
+
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+    Container page("tree-body-page");
+    page.set_size({px(200.0F), px(120.0F)});
+    page.style().padding({});
+
+    auto& tree = page.add<TreeContainer>("tree");
+    tree.set_size({px(120.0F), px(60.0F)});
+    auto& child = tree.add<TreeBodyProbe>();
+    child.set_size({grow(), grow()});
+
+    ui_test::draw_window("tree-body-test", [&] {
+        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+        page.draw();
+    });
+
+    const Rect tree_rect = tree.layout().visual_rect();
+    REQUIRE(child.cursor.x == Catch::Approx(tree_rect.min.x + ImGui::GetStyle().IndentSpacing));
+    REQUIRE(child.layout().size().x == Catch::Approx(tree_rect.max.x - child.cursor.x));
+    REQUIRE(child.layout().size().y == Catch::Approx(tree_rect.max.y - child.cursor.y));
+}
+
+TEST_CASE("tree layout fit width contains its indented child", "[TreeContainer][layout][regression]") {
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+
+    Container page("tree-fit-page");
+    page.set_size({px(200.0F), px(120.0F)});
+    page.style().padding({});
+
+    auto& tree = page.add<TreeContainer>("tree");
+    tree.set_size({fit(), fit()});
+    auto& child = tree.add<LayoutProbeNode>("child", ImVec2{80.0F, 20.0F});
+
+    const auto draw_frame = [&] {
+        ui_test::draw_window("tree-fit-test", [&] {
+            ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+            page.draw();
+        });
+    };
+
+    draw_frame();
+    draw_frame();
+
+    REQUIRE(child.layout().visual_rect().max.x <= tree.layout().visual_rect().max.x);
+}
+
+TEST_CASE("tree layout fit height contains later descendants", "[TreeContainer][layout][regression]") {
+    ui_test::ImGuiContext context({240.0F, 200.0F});
+
+    Container page("tree-fit-height-page");
+    page.set_size({px(200.0F), px(160.0F)});
+    page.style().padding({});
+
+    auto& tree = page.add<TreeContainer>("tree");
+    tree.set_size({fit(), fit()});
+    auto& content = tree.add<Container>("content");
+    content.set_size({fit(), fit()});
+    content.add<LayoutProbeNode>("content-item", ImVec2{80.0F, 40.0F});
+    auto& later_tree = tree.add<TreeContainer>("later-tree");
+
+    const auto draw_frame = [&] { ui_test::draw_window("tree-fit-height-test", [&] { page.draw(); }); };
+
+    draw_frame();
+    const ImVec2 tree_click = {tree.layout().visual_rect().min.x + 4.0F, tree.layout().visual_rect().min.y + 4.0F};
+    ImGui::GetIO().AddMousePosEvent(tree_click.x, tree_click.y);
+    ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    draw_frame();
+    ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    draw_frame();
+    draw_frame();
+
+    const Rect tree_rect = tree.layout().visual_rect();
+    REQUIRE(content.layout().visual_rect().max.y <= tree_rect.max.y);
+    REQUIRE(later_tree.layout().visual_rect().max.y <= tree_rect.max.y);
+}
+
 TEST_CASE("stack layout centers flow content on requested axes") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
     Container stack("centered-stack", StackDirection::Horizontal);

@@ -26,12 +26,16 @@ namespace ui {
         virtual void resolve_layout();
         void on_measure() override;
         virtual void arrange_children();
+        void arrange_children(ImVec2 content_size);
         void draw_children() override;
 
         virtual ImVec2 child_window_padding() const;
+        virtual ImVec2 child_window_size() const;
+        virtual Rect shadow_rect(Rect child_rect) const;
         bool paint() override;
         void on_draw_end() override;
 
+        virtual ImVec2 child_layout_size() const;
         virtual ImVec2 child_window_content_size() const;
 
     private:
@@ -41,5 +45,6 @@ namespace ui {
         float m_spacing = 0.0F;
         ImVec2 m_content_alignment{};
         ImVec2 m_content_size{};
+        bool m_content_clip_pushed = false;
     };
 } // namespace ui

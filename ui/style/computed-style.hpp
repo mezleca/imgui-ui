@@ -30,6 +30,15 @@ namespace ui {
         Dotted,
     };
 
+    enum class Overflow : uint8_t {
+        /// allows effects and descendant surfaces outside an unbordered content box.
+        Visible,
+        /// clips descendants and effects to the content box while retaining enabled scrolling.
+        Hidden,
+        /// clips descendants and effects to the content box and disables scrolling.
+        Clip,
+    };
+
     /// records the imgui state entries pushed by one style pass.
     struct PushState {
         /// records whether push changed the active font.
@@ -57,6 +66,10 @@ namespace ui {
 
         BoxSizing box_sizing() const {
             return m_box_sizing;
+        }
+
+        Overflow overflow() const {
+            return m_overflow;
         }
 
         const ImVec2& margin() const {
@@ -168,6 +181,7 @@ namespace ui {
 
         ImFont* m_font = nullptr;
         BoxSizing m_box_sizing = BoxSizing::ContentBox;
+        Overflow m_overflow = Overflow::Visible;
         Vec2Value m_margin;
         Vec2Value m_padding;
         FloatValue m_line_height{1.0F};

@@ -6,9 +6,36 @@
 #include "../imgui/effects/shadow/shadow.hpp"
 #include <algorithm>
 #include <cmath>
+#include <imgui_internal.h>
 #include <utility>
+#include <vector>
 
 using namespace ui;
+
+static std::vector<ImVec4> effect_clip_stack;
+
+static ImVec4 current_clip(const ImDrawList& draw_list) {
+    const ImVec2 min = draw_list.GetClipRectMin();
+    const ImVec2 max = draw_list.GetClipRectMax();
+    return {min.x, min.y, max.x, max.y};
+}
+
+static ImVec4 content_clip(const ComputedStyle& style, Rect rect) {
+    const float thickness = style.border_thickness();
+    if ((style.border() & BORDER_LEFT) != 0) rect.min.x += thickness;
+    if ((style.border() & BORDER_TOP) != 0) rect.min.y += thickness;
+    if ((style.border() & BORDER_RIGHT) != 0) rect.max.x -= thickness + 1.0F;
+    if ((style.border() & BORDER_BOTTOM) != 0) rect.max.y -= thickness + 1.0F;
+    return {rect.min.x, rect.min.y, rect.max.x, rect.max.y};
+}
+
+static ImVec4 intersect_clip(ImVec4 clip, Rect rect) {
+    clip.x = std::max(clip.x, rect.min.x);
+    clip.y = std::max(clip.y, rect.min.y);
+    clip.z = std::min(clip.z, rect.max.x);
+    clip.w = std::min(clip.w, rect.max.y);
+    return clip;
+}
 
 static bool is_flow_child(const Node& child) {
     return child.visible() && child.layout().in_flow();
@@ -163,9 +190,11 @@ void Container::on_measure() {
 }
 
 void Container::arrange_children() {
+    arrange_children(child_layout_size());
+}
+
+void Container::arrange_children(ImVec2 content_size) {
     const bool horizontal = m_direction == StackDirection::Horizontal;
-    const ImVec2 container_size = layout().size();
-    const ImVec2 content_size = this->content_size(container_size);
     const float available_main = axis_extent(content_size, horizontal);
 
     float fixed_main = 0.0F;
@@ -251,8 +280,20 @@ ImVec2 Container::child_window_padding() const {
     return box_insets().window_padding();
 }
 
+ImVec2 Container::child_window_size() const {
+    return layout().size();
+}
+
+Rect Container::shadow_rect(Rect child_rect) const {
+    return child_rect;
+}
+
+ImVec2 Container::child_layout_size() const {
+    return content_size(child_window_size());
+}
+
 void Container::draw_children() {
-    const ImVec2 available = content_size(layout().size());
+    const ImVec2 available = child_layout_size();
     for (const auto& child : children()) {
         if (child->layout().in_flow()) {
             child->draw();
@@ -271,17 +312,17 @@ void Container::draw_children() {
 }
 
 bool Container::paint() {
-    // begin a child window so imgui supplies clipping, scrolling, and cursor management.
     const ComputedStyle& current_style = computed_style();
 
     ImGuiChildFlags child_flags = ImGuiChildFlags_AlwaysUseWindowPadding;
     ImGuiWindowFlags window_flags = constants::WIDGET_WINDOW_FLAGS | ImGuiWindowFlags_NoBackground;
 
-    if (m_scroll_vertical || m_scroll_horizontal) {
+    const bool scrollable = (m_scroll_vertical || m_scroll_horizontal) && current_style.overflow() != Overflow::Clip;
+    if (scrollable) {
         window_flags &= ~(ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     }
 
-    if (m_scroll_horizontal) {
+    if (scrollable && m_scroll_horizontal) {
         window_flags |= ImGuiWindowFlags_HorizontalScrollbar;
     }
 
@@ -292,31 +333,53 @@ bool Container::paint() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, child_window_padding());
     ImGui::SetNextWindowContentSize(child_window_content_size());
 
-    // imgui truncates child window positions to integer pixels. round the origin before opening the
-    // child window so an animated position keeps the child and following content on the same pixel
-    // instead of jumping when the animation reaches its final value.
+    // preserve the allocated max edge when rounding the child origin.
     const ImVec2 position = ImGui::GetCursorScreenPos();
     const ImVec2 child_position = {std::round(position.x), std::round(position.y)};
+    const ImVec2 requested_size = child_window_size();
+    const ImVec2 child_size = {
+        std::max(0.0F, requested_size.x + position.x - child_position.x),
+        std::max(0.0F, requested_size.y + position.y - child_position.y),
+    };
     ImGui::SetCursorScreenPos(child_position);
 
     const ImGuiID child_id = id().empty() ? ImGui::GetID(this) : ImGui::GetID(id().c_str());
-    ImDrawList* parent_draw_list = ImGui::GetWindowDrawList();
-    const ImVec2 parent_clip_min = parent_draw_list->GetClipRectMin();
-    const ImVec2 parent_clip_max = parent_draw_list->GetClipRectMax();
-    ImGui::BeginChild(child_id, layout().size(), child_flags, window_flags);
+    const ImVec4 parent_clip = current_clip(*ImGui::GetWindowDrawList());
+    const ImVec4 parent_effect_clip = effect_clip_stack.empty() ? parent_clip : effect_clip_stack.back();
+    ImGui::BeginChild(child_id, child_size, child_flags, window_flags);
 
     const Rect resolved_child_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
     set_layout_rect(resolved_child_rect);
     set_visual_rect(resolved_child_rect);
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
-    ImGui::PushClipRect(parent_clip_min, parent_clip_max, false);
+    const ImRect blur_rect = ImGui::GetCurrentWindow()->InnerRect;
+    ImGui::PushClipRect({parent_effect_clip.x, parent_effect_clip.y}, {parent_effect_clip.z, parent_effect_clip.w}, false);
     const float paint_opacity = std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
-    draw_blur(*child_draw_list, resolved_child_rect, current_style.blur(), current_style.border_radius(), paint_opacity);
+    draw_blur(*child_draw_list, {blur_rect.Min, blur_rect.Max}, current_style.blur(), current_style.border_radius(), paint_opacity);
     draw_box_shadow(
-        *child_draw_list, resolved_child_rect, current_style.box_shadow(), current_style.border_radius(), paint_opacity
+        *child_draw_list, shadow_rect(resolved_child_rect), current_style.box_shadow(), current_style.border_radius(), paint_opacity
     );
     ImGui::PopClipRect();
+
+    effect_clip_stack.push_back(
+        current_style.overflow() == Overflow::Visible ? parent_effect_clip : intersect_clip(parent_effect_clip, resolved_child_rect)
+    );
+
+    ImGui::PushClipRect({parent_clip.x, parent_clip.y}, {parent_clip.z, parent_clip.w}, true);
     draw_frame_surface(*child_draw_list, resolved_child_rect, current_style);
+    ImGui::PopClipRect();
+
+    m_content_clip_pushed = !scrollable;
+    if (m_content_clip_pushed) {
+        if (current_style.overflow() == Overflow::Visible && current_style.border() == BORDER_NONE) {
+            ImGui::PushClipRect(
+                {parent_effect_clip.x, parent_effect_clip.y}, {parent_effect_clip.z, parent_effect_clip.w}, false
+            );
+        } else {
+            const ImVec4 clip = content_clip(current_style, resolved_child_rect);
+            ImGui::PushClipRect({clip.x, clip.y}, {clip.z, clip.w}, true);
+        }
+    }
 
     ImGui::PopStyleVar();
     return true;
@@ -334,7 +397,11 @@ void Container::on_draw_end() {
     const ComputedStyle& current_style = computed_style();
     ImColor border = current_style.border_color().value;
     border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
-    ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
-    draw_border(*child_draw_list, child_rect, current_style, border);
+    if (m_content_clip_pushed) {
+        ImGui::PopClipRect();
+        m_content_clip_pushed = false;
+    }
+    draw_border(*ImGui::GetWindowDrawList(), child_rect, current_style, border);
     ImGui::EndChild();
+    effect_clip_stack.pop_back();
 }

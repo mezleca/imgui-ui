@@ -40,6 +40,7 @@ bool Style::lerp(Style& style, const Style& target, float dt) {
 
     style.m_font = target.m_font;
     style.m_box_sizing = target.m_box_sizing;
+    style.m_overflow = target.m_overflow;
     style.m_alpha = target.m_alpha;
     style.m_cursor = target.m_cursor;
     style.m_scrollbar_size = target.m_scrollbar_size;
