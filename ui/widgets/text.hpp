@@ -4,7 +4,6 @@
 #include "text-value.hpp"
 
 #include <cstdint>
-#include <format>
 #include <string>
 #include <utility>
 
@@ -18,16 +17,8 @@ namespace ui {
     public:
         explicit TextWidget(std::string text) : StyledNode({}, "Text"), m_text(std::move(text)) {}
 
-        template <typename... Args>
-            requires(sizeof...(Args) > 0)
-        TextWidget(std::string format, Args&&... args)
-            : StyledNode({}, "Text"), m_text(std::vformat(format, std::make_format_args(args...))) {}
-
         TextWidget& set_wrap(float width);
         TextWidget& set_overflow(TextOverflow overflow);
-        TextOverflow overflow() const {
-            return m_overflow;
-        }
         bool empty() const;
         TextWidget& set_size(LayoutSize size) {
             StyledNode::set_size(size);

@@ -3,10 +3,8 @@
 #include "backends/backend.hpp"
 #include "file-dialog/file-dialog.hpp"
 #include "style/theme.hpp"
-#include "diagnostics/profiler.hpp"
 #include "imgui/effects/effects.hpp"
 #include "input/router.hpp"
-#include "runtime.hpp"
 
 #include <imgui.h>
 #include <memory>
@@ -17,6 +15,9 @@ namespace ui {
     class Debugger;
     class Node;
     class Container;
+    class Profiler;
+    class Runtime;
+    class Font;
 
     struct UIConfig {
         /// backend that drives the application's platform window and renders imgui draw data.
@@ -77,14 +78,6 @@ namespace ui {
         /// resolves a size from the primary font, falling back to imgui's current font.
         ImFont* get_primary_font(int size) const;
 
-        /// sets the font inherited by widgets that use the secondary font.
-        void set_secondary_font(Font* font) {
-            m_secondary_font = font;
-        }
-
-        /// resolves a size from the secondary font, falling back to imgui's current font.
-        ImFont* get_secondary_font(int size) const;
-
         /// returns the router used by the surface tree.
         InputRouter& input_router() {
             return m_input_router;
@@ -97,11 +90,11 @@ namespace ui {
 
         /// returns frame timing and node instrumentation for this surface.
         Profiler& profiler() {
-            return m_profiler;
+            return *m_profiler;
         }
 
         const Profiler& profiler() const {
-            return m_profiler;
+            return *m_profiler;
         }
 
         /// returns the debugger when diagnostic support was configured, or nullptr otherwise.
@@ -173,10 +166,9 @@ namespace ui {
         Node* m_content_root = nullptr;
         InputRouter m_input_router;
         EffectRegistry m_effects;
-        Profiler m_profiler;
+        std::unique_ptr<Profiler> m_profiler;
         Debugger* m_debugger = nullptr;
         Font* m_primary_font = nullptr;
-        Font* m_secondary_font = nullptr;
         float m_content_scale = 1.0F;
         bool m_done = false;
     };

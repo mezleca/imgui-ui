@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../string-hash.hpp"
+
 #include <imgui.h>
 #include <memory>
 #include <string>
@@ -7,18 +9,6 @@
 #include <unordered_map>
 
 namespace ui {
-    struct AssetHash {
-        using is_transparent = void;
-
-        size_t operator()(std::string_view value) const noexcept {
-            return std::hash<std::string_view>{}(value);
-        }
-
-        size_t operator()(const std::string& value) const noexcept {
-            return operator()(std::string_view{value});
-        }
-    };
-
     template <typename T>
     class AssetRegistry {
     public:
@@ -61,6 +51,6 @@ namespace ui {
         }
 
     private:
-        std::unordered_map<std::string, std::unique_ptr<T>, AssetHash, std::equal_to<>> m_assets;
+        std::unordered_map<std::string, std::unique_ptr<T>, StringHash, std::equal_to<>> m_assets;
     };
 } // namespace ui

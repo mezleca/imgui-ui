@@ -1,6 +1,7 @@
 #include <ui/backends/sdl/backend.hpp>
 #include <ui/tree/node.hpp>
 #include <ui/ui.hpp>
+#include <ui/runtime.hpp>
 #include "../demo.hpp"
 
 #include <SDL3/SDL.h>

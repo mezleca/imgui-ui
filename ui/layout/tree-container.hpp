@@ -10,10 +10,6 @@ namespace ui {
     public:
         explicit TreeContainer(std::string label, std::string id = {});
 
-        [[nodiscard]] bool open() const {
-            return m_open;
-        }
-
     private:
         void on_measure() override;
         bool paint() override;

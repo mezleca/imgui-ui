@@ -56,12 +56,11 @@ TEST_CASE("layout containers resolve themselves before arranging children", "[la
     ui_test::ImGuiContext context({200.0F, 120.0F});
     TestContainer container;
 
-    ImGui::NewFrame();
-    ImGui::Begin("container-layout-test");
-    const ImVec2 available = ImGui::GetContentRegionAvail();
-    container.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ImVec2 available;
+    ui_test::draw_window("container-layout-test", [&] {
+        available = ImGui::GetContentRegionAvail();
+        container.draw();
+    });
 
     REQUIRE(container.arrange_count == 1);
     REQUIRE(container.layout().size().x == Catch::Approx(available.x));
@@ -85,13 +84,7 @@ TEST_CASE("box sizing resolves fixed and percentage layout boxes", "[layout]") {
     auto& percentage_content = percentage.add<LayoutProbeNode>();
     percentage_content.set_size({grow(), grow()});
 
-    const auto draw_frame = [&root] {
-        ImGui::NewFrame();
-        ImGui::Begin("box-sizing-test");
-        root.draw();
-        ImGui::End();
-        ImGui::EndFrame();
-    };
+    const auto draw_frame = [&root] { ui_test::draw_window("box-sizing-test", [&] { root.draw(); }); };
 
     draw_frame();
     REQUIRE(fixed.layout().size().x == Catch::Approx(120.0F));
@@ -134,13 +127,7 @@ TEST_CASE("box sizing includes borders and preserves insets", "[layout]") {
     auto& percentage_content = percentage.add<LayoutProbeNode>();
     percentage_content.set_size({grow(), grow()});
 
-    const auto draw_frame = [&root] {
-        ImGui::NewFrame();
-        ImGui::Begin("box-inset-test");
-        root.draw();
-        ImGui::End();
-        ImGui::EndFrame();
-    };
+    const auto draw_frame = [&root] { ui_test::draw_window("box-inset-test", [&] { root.draw(); }); };
 
     draw_frame();
     REQUIRE(fixed.layout().size().x == Catch::Approx(20.0F));
@@ -178,11 +165,7 @@ TEST_CASE("grow distributes content space after box insets", "[layout]") {
     auto& growing_content = growing.add<LayoutProbeNode>();
     growing_content.set_size({grow(), grow()});
 
-    ImGui::NewFrame();
-    ImGui::Begin("grow-insets-test");
-    root.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("grow-insets-test", [&] { root.draw(); });
 
     REQUIRE(fixed.layout().size().y == Catch::Approx(20.0F));
     REQUIRE(growing.layout().size().y == Catch::Approx(100.0F));
@@ -201,11 +184,7 @@ TEST_CASE("fit parents retain a growing child's box insets", "[layout]") {
     growing.set_size({grow(), grow()});
     growing.style().padding({3.0F, 4.0F}).border(BORDER_ALL).border_thickness(2.0F);
 
-    ImGui::NewFrame();
-    ImGui::Begin("fit-grow-test");
-    root.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("fit-grow-test", [&] { root.draw(); });
 
     REQUIRE(fit_parent.layout().size().x == Catch::Approx(10.0F));
     REQUIRE(fit_parent.layout().size().y == Catch::Approx(12.0F));
@@ -227,11 +206,7 @@ TEST_CASE("positioned styled children apply margins around their placement") {
         .in_flow = false,
     });
 
-    ImGui::NewFrame();
-    ImGui::Begin("positioned-margin-test");
-    container.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("positioned-margin-test", [&] { container.draw(); });
 
     REQUIRE(child.layout().local_rect().min.x == Catch::Approx(25.0F));
     REQUIRE(child.layout().local_rect().min.y == Catch::Approx(37.0F));
@@ -246,11 +221,7 @@ TEST_CASE("positioned children resolve percentage sizes from their container") {
     auto& child = container.add<LayoutProbeNode>();
     child.set_layout({.size = {percent(50.0F), percent(25.0F)}, .in_flow = false});
 
-    ImGui::NewFrame();
-    ImGui::Begin("positioned-percent-test");
-    container.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("positioned-percent-test", [&] { container.draw(); });
 
     REQUIRE(child.layout().size().x == Catch::Approx(100.0F));
     REQUIRE(child.layout().size().y == Catch::Approx(25.0F));
@@ -294,11 +265,7 @@ TEST_CASE("placement changes preserve implicit measured sizing") {
     node.set_layout(config);
 
     ui_test::ImGuiContext context({120.0F, 80.0F});
-    ImGui::NewFrame();
-    ImGui::Begin("implicit-sizing-test");
-    node.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("implicit-sizing-test", [&] { node.draw(); });
 
     REQUIRE(node.layout().size().x == Catch::Approx(32.0F));
     REQUIRE(node.layout().size().y == Catch::Approx(18.0F));
@@ -375,11 +342,7 @@ TEST_CASE("tree layout hides closed descendants without reserving their flow spa
     auto& child = tree.add<LayoutProbeNode>("child", ImVec2{40.0F, 20.0F});
     auto& sibling = page.add<LayoutProbeNode>("sibling", ImVec2{40.0F, 20.0F});
 
-    ImGui::NewFrame();
-    ImGui::Begin("closed-tree-test");
-    page.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("closed-tree-test", [&] { page.draw(); });
 
     REQUIRE_FALSE(child.layout().visual_rect().valid());
     REQUIRE(sibling.layout().visual_rect().min.y >= tree.layout().visual_rect().max.y);
@@ -397,13 +360,10 @@ TEST_CASE("tree layout nests expanded descendants in imgui flow", "[TreeContaine
     auto& sibling = page.add<LayoutProbeNode>("sibling", ImVec2{40.0F, 20.0F});
 
     const auto draw_frame = [&] {
-        ImGui::NewFrame();
-        ImGui::Begin("nested-tree-test");
-
-        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
-        page.draw();
-        ImGui::End();
-        ImGui::EndFrame();
+        ui_test::draw_window("nested-tree-test", [&] {
+            ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+            page.draw();
+        });
     };
 
     draw_frame();
@@ -422,11 +382,7 @@ TEST_CASE("stack layout centers flow content on requested axes") {
     auto& field = stack.add<TextWidget>("field");
     field.set_size({px(40.0F), px(20.0F)});
 
-    ImGui::NewFrame();
-    ImGui::Begin("centered-stack-test");
-    stack.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("centered-stack-test", [&] { stack.draw(); });
 
     const Rect stack_rect = stack.layout().visual_rect();
     const Rect field_rect = field.layout().visual_rect();
@@ -451,11 +407,7 @@ TEST_CASE("stack layout excludes explicitly positioned children from its flow") 
     });
     auto& second = stack.add<LayoutProbeNode>(ImVec2{30.0F, 10.0F});
 
-    ImGui::NewFrame();
-    ImGui::Begin("positioned-child-stack-test");
-    stack.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("positioned-child-stack-test", [&] { stack.draw(); });
 
     REQUIRE(second.layout().local_rect().min.y == Catch::Approx(first.layout().local_rect().min.y + 14.0F));
     REQUIRE(positioned.layout().local_rect().min.x == Catch::Approx(100.0F));
@@ -472,11 +424,7 @@ TEST_CASE("fit content stack includes children spacing and padding") {
     stack.add<LayoutProbeNode>("first", ImVec2{30.0F, 10.0F});
     stack.add<LayoutProbeNode>("second", ImVec2{50.0F, 20.0F});
 
-    ImGui::NewFrame();
-    ImGui::Begin("fit-content-stack-test");
-    stack.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("fit-content-stack-test", [&] { stack.draw(); });
 
     REQUIRE(stack.layout().size().x == Catch::Approx(64.0F));
     REQUIRE(stack.layout().size().y == Catch::Approx(44.0F));
@@ -494,11 +442,7 @@ TEST_CASE("fit content container applies styled margins around flow children", "
     auto& second = stack.add<TextWidget>("second");
     second.set_size({px(10.0F), px(10.0F)});
 
-    ImGui::NewFrame();
-    ImGui::Begin("fit-content-margin-stack-test");
-    stack.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("fit-content-margin-stack-test", [&] { stack.draw(); });
 
     REQUIRE(stack.layout().size().x == Catch::Approx(36.0F));
     REQUIRE(stack.layout().size().y == Catch::Approx(34.0F));
@@ -520,11 +464,7 @@ TEST_CASE("fit-height container fills its available width without stretching chi
     auto& child = field.add<LayoutProbeNode>();
     child.set_size({grow(), px(20.0F)});
 
-    ImGui::NewFrame();
-    ImGui::Begin("fit-height-stack-test");
-    root.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("fit-height-stack-test", [&] { root.draw(); });
 
     REQUIRE(field.layout().size().x == Catch::Approx(200.0F));
     REQUIRE(field.layout().size().y == Catch::Approx(20.0F));
@@ -541,13 +481,7 @@ TEST_CASE("fit content stack remeasures after direction and spacing changes") {
     stack.add<LayoutProbeNode>(ImVec2{30.0F, 10.0F});
     stack.add<LayoutProbeNode>(ImVec2{50.0F, 20.0F});
 
-    const auto draw_frame = [&stack] {
-        ImGui::NewFrame();
-        ImGui::Begin("fit-content-remeasure-test");
-        stack.draw();
-        ImGui::End();
-        ImGui::EndFrame();
-    };
+    const auto draw_frame = [&stack] { ui_test::draw_window("fit-content-remeasure-test", [&] { stack.draw(); }); };
 
     draw_frame();
     REQUIRE(stack.layout().size().x == Catch::Approx(50.0F));
@@ -675,11 +609,7 @@ TEST_CASE("stack divides remaining main-axis space between flexible children", "
     auto& second_flexible = stack.add<LayoutProbeNode>();
     second_flexible.set_size({grow(), px(20.0F)});
 
-    ImGui::NewFrame();
-    ImGui::Begin("flexible-stack-test");
-    stack.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("flexible-stack-test", [&] { stack.draw(); });
 
     REQUIRE(fixed.layout().size().x == Catch::Approx(60.0F));
     REQUIRE(first_flexible.layout().size().x == Catch::Approx(105.0F));
@@ -702,11 +632,7 @@ TEST_CASE("stack distributes grow space by axis weight", "[layout]") {
     auto& wide = stack.add<TextWidget>("wide");
     wide.set_size({grow(2.0F), px(20.0F)});
 
-    ImGui::NewFrame();
-    ImGui::Begin("weighted-stack-test");
-    stack.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("weighted-stack-test", [&] { stack.draw(); });
 
     REQUIRE(fixed.layout().size().x == Catch::Approx(60.0F));
     REQUIRE(narrow.layout().size().x == Catch::Approx(70.0F));
@@ -723,11 +649,7 @@ TEST_CASE("stack resolves percentage children from its content box", "[layout]")
     child.set_size({percent(50.0F), percent(50.0F)});
     child.configure_all_styles([](Style& style) { style.padding({10.0F, 5.0F}); });
 
-    ImGui::NewFrame();
-    ImGui::Begin("percentage-stack-test");
-    stack.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("percentage-stack-test", [&] { stack.draw(); });
 
     REQUIRE(child.layout().size().x == Catch::Approx(170.0F));
     REQUIRE(child.layout().size().y == Catch::Approx(50.0F));
@@ -745,11 +667,7 @@ TEST_CASE("explicit fit keeps a text widget intrinsic size", "[layout]") {
     auto& fill = stack.add<Node>("fill");
     fill.set_size({grow(), px(20.0F)});
 
-    ImGui::NewFrame();
-    ImGui::Begin("fit-text-stack-test");
-    stack.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("fit-text-stack-test", [&] { stack.draw(); });
 
     REQUIRE(text.layout().config().size.width.mode == LayoutSizeMode::Fit);
     REQUIRE(text.layout().size().x > 0.0F);
@@ -798,13 +716,7 @@ TEST_CASE("changing stack direction rearranges existing children", "[layout][reg
     Node& second = stack.add<LayoutProbeNode>("second");
     second.set_size({px(30.0F), px(20.0F)});
 
-    const auto draw_frame = [&stack] {
-        ImGui::NewFrame();
-        ImGui::Begin("stack-direction-test");
-        stack.draw();
-        ImGui::End();
-        ImGui::EndFrame();
-    };
+    const auto draw_frame = [&stack] { ui_test::draw_window("stack-direction-test", [&] { stack.draw(); }); };
 
     draw_frame();
     REQUIRE(second.layout().local_rect().min.x == Catch::Approx(first.layout().local_rect().min.x));
@@ -948,13 +860,7 @@ TEST_CASE("resizing a container remeasures descendants", "[layout][regression]")
     container.set_size({px(120.0F), px(80.0F)});
     auto& probe = container.add<MeasureProbeNode>();
 
-    const auto draw_frame = [&container] {
-        ImGui::NewFrame();
-        ImGui::Begin("container-resize-test");
-        container.draw();
-        ImGui::End();
-        ImGui::EndFrame();
-    };
+    const auto draw_frame = [&container] { ui_test::draw_window("container-resize-test", [&] { container.draw(); }); };
 
     draw_frame();
     REQUIRE(probe.measure_count == 1);

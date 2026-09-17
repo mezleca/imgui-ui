@@ -136,18 +136,7 @@ namespace ui {
         Key key = Key::Unknown;
 
         static UiEvent make(EventType type) {
-            return {
-                .position = {},
-                .scroll = {},
-                .text = {},
-                .handled = false,
-                .propagation_stopped = false,
-                .default_prevented = false,
-                .native_input_blocked = false,
-                .type = type,
-                .button = PointerButton::None,
-                .key = Key::Unknown,
-            };
+            return {.type = type};
         }
 
         /// consumes the event without stopping its parent traversal.

@@ -54,7 +54,7 @@ static int draw_list_index(const ImDrawData& draw_data, std::string_view owner) 
 
 TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
     ui::Runtime runtime;
-    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ui::UI surface = ui_test::make_surface(runtime, true);
     REQUIRE(surface.debugger() != nullptr);
     REQUIRE_FALSE(surface.debugger()->is_open());
 
@@ -103,7 +103,7 @@ TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
 
 TEST_CASE("debugger hotkey toggles on the target surface") {
     ui::Runtime runtime;
-    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ui::UI surface = ui_test::make_surface(runtime, true);
     REQUIRE(surface.debugger() != nullptr);
     REQUIRE_FALSE(surface.debugger()->is_open());
 
@@ -119,7 +119,7 @@ TEST_CASE("debugger hotkey toggles on the target surface") {
 
 TEST_CASE("debugger clicks preserve an open popup") {
     ui::Runtime runtime;
-    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ui::UI surface = ui_test::make_surface(runtime, true);
     ImColor color = {0.26F, 0.59F, 0.98F, 1.0F};
     auto& picker = surface.root().add<ui::ColorPickerWidget>(color);
 
@@ -157,7 +157,7 @@ TEST_CASE("debugger clicks preserve an open popup") {
 
 TEST_CASE("focused debugger blocks application hover") {
     ui::Runtime runtime;
-    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ui::UI surface = ui_test::make_surface(runtime, true);
     bool value = false;
     auto& checkbox = surface.root().add<ui::CheckboxWidget>(value, "application");
     checkbox.set_layout({
@@ -194,7 +194,7 @@ TEST_CASE("focused debugger blocks application hover") {
 
 TEST_CASE("debugger renders as a panel in the surface layout") {
     ui::Runtime runtime;
-    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ui::UI surface = ui_test::make_surface(runtime, true);
     surface.debugger()->set_open(true);
 
     const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
@@ -211,7 +211,7 @@ TEST_CASE("debugger renders as a panel in the surface layout") {
 
 TEST_CASE("debugger exposes the content resize handle", "[Debugger][ResizableContainer][regression]") {
     ui::Runtime runtime;
-    ui::UI surface(runtime, {.backend = ui_test::make_backend(), .enable_debugger = true});
+    ui::UI surface = ui_test::make_surface(runtime, true);
     surface.debugger()->set_open(true);
 
     const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});

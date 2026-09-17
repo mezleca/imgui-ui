@@ -88,17 +88,10 @@ static void release_style_animation_slot(void* context) {
 }
 
 VisualState::VisualState() {
-    m_animation_slots = {{
-        {.property = StyleAnimationProperty::PaddingX, .affects_layout = true, .layout_dirty = &m_layout_dirty},
-        {.property = StyleAnimationProperty::PaddingY, .affects_layout = true, .layout_dirty = &m_layout_dirty},
-        {.property = StyleAnimationProperty::MarginX, .affects_layout = true, .layout_dirty = &m_layout_dirty},
-        {.property = StyleAnimationProperty::MarginY, .affects_layout = true, .layout_dirty = &m_layout_dirty},
-        {.property = StyleAnimationProperty::Rotation, .layout_dirty = &m_layout_dirty},
-        {.property = StyleAnimationProperty::Scale, .layout_dirty = &m_layout_dirty},
-        {.property = StyleAnimationProperty::Color, .layout_dirty = &m_layout_dirty},
-        {.property = StyleAnimationProperty::BorderColor, .layout_dirty = &m_layout_dirty},
-        {.property = StyleAnimationProperty::BackgroundColor, .layout_dirty = &m_layout_dirty},
-    }};
+    for (std::size_t index = 0; index < m_animation_slots.size(); ++index) {
+        m_animation_slots[index].affects_layout = index < static_cast<std::size_t>(StyleAnimationProperty::Rotation);
+        m_animation_slots[index].layout_dirty = &m_layout_dirty;
+    }
     current_opacity.value = m_opacity;
     snap_to_style(StyleType::DEFAULT);
 }
@@ -136,10 +129,12 @@ void VisualState::update_animations(float dt) {
 
     // rebuild the displayed style before advancing tracks so each new track reads the value shown in the previous frame.
     m_presentation_style = style();
-    for (StyleAnimationSlot& slot : animation_slots()) {
-        slot.base = read_style_property(style(), slot.property);
-        if (slot.override.has_value()) apply_style_property(m_presentation_style, slot.property, *slot.override);
-        slot.current = read_style_property(m_presentation_style, slot.property);
+    for (std::size_t index = 0; index < m_animation_slots.size(); ++index) {
+        StyleAnimationSlot& slot = m_animation_slots[index];
+        const auto property = static_cast<StyleAnimationProperty>(index);
+        slot.base = read_style_property(style(), property);
+        if (slot.override.has_value()) apply_style_property(m_presentation_style, property, *slot.override);
+        slot.current = read_style_property(m_presentation_style, property);
     }
 
     m_layout_dirty = false;
@@ -147,8 +142,11 @@ void VisualState::update_animations(float dt) {
 
     // apply values written by tracks so this frame draws the updated presentation style.
     m_presentation_style = style();
-    for (StyleAnimationSlot& slot : animation_slots()) {
-        if (slot.override.has_value()) apply_style_property(m_presentation_style, slot.property, *slot.override);
+    for (std::size_t index = 0; index < m_animation_slots.size(); ++index) {
+        StyleAnimationSlot& slot = m_animation_slots[index];
+        if (slot.override.has_value()) {
+            apply_style_property(m_presentation_style, static_cast<StyleAnimationProperty>(index), *slot.override);
+        }
     }
 
     m_has_presentation_style = has_animation_overrides();

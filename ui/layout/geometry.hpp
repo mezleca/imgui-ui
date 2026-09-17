@@ -425,9 +425,11 @@ namespace ui {
             invalidate_resolved_size();
         }
 
-        void set_arranged_placement(Placement placement) {
+        bool set_arranged_placement(Placement placement) {
+            const bool changed = m_arranged_placement != placement;
             m_arranged_placement = placement;
             m_has_arranged_position = true;
+            return changed;
         }
 
         bool has_position() const {
@@ -444,10 +446,12 @@ namespace ui {
             m_layout_rect = rect;
         }
 
-        void assign_size(ImVec2 size, bool assigned_by_parent = false) {
+        bool assign_size(ImVec2 size, bool assigned_by_parent = false) {
+            const bool changed = m_size.x != size.x || m_size.y != size.y;
             m_size = size;
             m_has_size = true;
             m_size_assigned_by_parent = assigned_by_parent;
+            return changed;
         }
 
         void clear_size_assignment() {
@@ -468,9 +472,13 @@ namespace ui {
             m_visual_rect = rect;
         }
 
-        void set_parent_content_rect(Rect rect, ImVec2 available_size = {}) {
+        bool set_parent_content_rect(Rect rect, ImVec2 available_size = {}) {
+            const ImVec2 previous_size = m_parent_content_rect.size();
+            const bool changed = previous_size.x != rect.size().x || previous_size.y != rect.size().y ||
+                                 m_available_size.x != available_size.x || m_available_size.y != available_size.y;
             m_parent_content_rect = rect;
             m_available_size = available_size;
+            return changed;
         }
 
         static float border_box_extent(float value, float insets) {
@@ -488,14 +496,8 @@ namespace ui {
 
         static float resolved_axis(LayoutAxis axis, float measured, float available, float insets, BoxSizing box_sizing) {
             const float resolved = axis.resolve(measured, available);
-            if (box_sizing == BoxSizing::ContentBox &&
-                (axis.mode == LayoutSizeMode::Fixed || axis.mode == LayoutSizeMode::Percent)) {
-                return resolved + insets;
-            }
-
-            if (box_sizing == BoxSizing::BorderBox &&
-                (axis.mode == LayoutSizeMode::Fixed || axis.mode == LayoutSizeMode::Percent)) {
-                return border_box_extent(resolved, insets);
+            if (axis.mode == LayoutSizeMode::Fixed || axis.mode == LayoutSizeMode::Percent) {
+                return box_sizing == BoxSizing::ContentBox ? resolved + insets : border_box_extent(resolved, insets);
             }
 
             if (axis.mode == LayoutSizeMode::Grow) return border_box_extent(resolved, insets);

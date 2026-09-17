@@ -1,9 +1,11 @@
 #include "ui.hpp"
 
+#include "diagnostics/profiler.hpp"
 #include "imgui/context-scope.hpp"
 #include "diagnostics/debugger.hpp"
 #include "layout/layer-container.hpp"
 #include "layout/resizable-container.hpp"
+#include "runtime.hpp"
 #include "style/theme.hpp"
 
 #include <algorithm>
@@ -30,7 +32,7 @@ public:
 UI::UI(Runtime& runtime, UIConfig config)
     : m_runtime(runtime), m_theme(runtime.theme()), m_backend(std::move(config.backend)),
       m_file_dialog(config.file_dialog_backend != nullptr ? std::move(config.file_dialog_backend) : make_file_dialog_backend()),
-      m_profiler(runtime.performance_directory()) {
+      m_profiler(std::make_unique<Profiler>(runtime.performance_directory())) {
     initialize(config.enable_debugger);
 }
 
@@ -86,11 +88,6 @@ ImFont* UI::get_primary_font(int size) const {
     return resolve_font(m_primary_font, size);
 }
 
-ImFont* UI::get_secondary_font(int size) const {
-    const ImGuiContextScope scope(m_context);
-    return resolve_font(m_secondary_font, size);
-}
-
 void UI::initialize(bool enable_debugger) {
     if (m_backend == nullptr) {
         throw std::runtime_error("m_backend is nullptr");
@@ -121,14 +118,14 @@ void UI::initialize(bool enable_debugger) {
     m_root = std::make_unique<LayerContainer>("ui-surface", LayerMode::Window);
     m_root->set_surface(this);
     m_root->set_input_router(&m_input_router);
-    m_root->set_profiler(&m_profiler);
+    m_root->set_profiler(m_profiler.get());
 
     auto& surface_layout = m_root->add<Container>("ui-root", StackDirection::Horizontal);
     surface_layout.set_size({grow(), grow()});
 
     auto& content = surface_layout.add<SurfaceContent>();
     m_content_root = &content;
-    m_profiler.set_root_node(content.identity());
+    m_profiler->set_root_node(content.identity());
 
     if (enable_debugger) {
         m_debugger = &surface_layout.add<Debugger>(*this);
@@ -236,7 +233,7 @@ void UI::begin_frame() {
     ImGui::SetCurrentContext(m_context);
 
     m_input_router.begin_frame();
-    m_profiler.begin_frame();
+    m_profiler->begin_frame();
 
     m_effects.begin_frame();
     m_backend->begin_frame(m_theme.background_color);
@@ -265,15 +262,15 @@ void UI::end_frame() {
     }
     ImDrawData* draw_data = ImGui::GetDrawData();
 
-    if (m_profiler.enabled()) {
+    if (m_profiler->enabled()) {
         const InputRouterStats input_stats = m_input_router.stats();
-        m_profiler.record_frame_metrics(input_stats.entry_count, input_stats.entry_checks);
+        m_profiler->record_frame_metrics(input_stats.entry_count, input_stats.entry_checks);
     }
 
-    UI_PROFILE_SCOPE(&m_profiler, "UI::render");
+    UI_PROFILE_SCOPE(m_profiler.get(), "UI::render");
     m_backend->render(draw_data);
 
-    m_profiler.end_frame();
+    m_profiler->end_frame();
     ImGui::SetCurrentContext(m_previous_context);
     m_previous_context = nullptr;
 }

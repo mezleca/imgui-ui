@@ -59,6 +59,10 @@ double Profiler::MetricSummary::average() const {
 }
 
 void Profiler::set_enabled(bool enabled) {
+    if (m_enabled == enabled) {
+        return;
+    }
+
     m_enabled = enabled;
     if (!enabled) {
         m_frame_open = false;
@@ -273,9 +277,10 @@ void Profiler::record_root_phase_times(FrameBuffer& frame) {
     }
 }
 
-ScopedProfileZone::ScopedProfileZone(Profiler* profiler, std::string_view name, uint64_t node_identity) : m_profiler(profiler) {
-    if (m_profiler != nullptr) {
-        m_token = m_profiler->begin_zone(name, node_identity);
+ScopedProfileZone::ScopedProfileZone(Profiler* profiler, std::string_view name, uint64_t node_identity) {
+    if (profiler != nullptr && profiler->enabled()) {
+        m_profiler = profiler;
+        m_token = profiler->begin_zone(name, node_identity);
     }
 }
 

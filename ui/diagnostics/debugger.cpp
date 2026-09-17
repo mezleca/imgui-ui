@@ -1,4 +1,5 @@
 #include "debugger.hpp"
+#include "profiler.hpp"
 #include "../imgui/context-scope.hpp"
 #include "../layout/layer-container.hpp"
 #include "../layout/resizable-container.hpp"
@@ -8,6 +9,7 @@
 #include "../style/theme.hpp"
 #include "../tree/node.hpp"
 #include "../ui.hpp"
+#include "../runtime.hpp"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -16,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <format>
+#include <limits>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -99,6 +102,7 @@ static constexpr ImVec2 SECTION_PADDING = {10.0F, 8.0F};
 static constexpr float PROPERTY_ITEM_SPACING = 6.0F;
 static constexpr float DEBUGGER_SPLITTER_HEIGHT = 6.0F;
 static constexpr float DEBUGGER_MIN_PANE_HEIGHT = 72.0F;
+static constexpr uint64_t PROFILE_UPDATE_INTERVAL = 3;
 
 // imgui closes unrelated root popups when a debugger press changes focus, so save their stack before that press is consumed.
 class ui::DebuggerPopupState {
@@ -129,6 +133,18 @@ public:
 
 private:
     std::vector<ImGuiPopupData> m_popups;
+};
+
+class ui::DebuggerProfileState {
+public:
+    uint64_t frame_count = 0;
+    uint64_t node_identity = 0;
+    double frame_ms = 0.0;
+    double node_ms = 0.0;
+    uint32_t dropped_events = 0;
+    ProfileFrameMetrics metrics;
+    std::vector<ProfileEvent> events;
+    bool valid = false;
 };
 
 static bool belongs_to_debugger(const ImGuiWindow& window, const ImGuiWindow& debugger_window) {
@@ -414,7 +430,8 @@ draw_number_input(std::string_view label, int* values, int components = 1, float
 }
 
 Debugger::Debugger(UI& target)
-    : Container("ui debugger", "Debugger"), m_target(target), m_popup_state(std::make_unique<DebuggerPopupState>()) {
+    : Container("ui debugger", "Debugger"), m_target(target), m_popup_state(std::make_unique<DebuggerPopupState>()),
+      m_profile_state(std::make_unique<DebuggerProfileState>()) {
     set_size({grow(), grow()});
     set_visible(false);
 
@@ -464,6 +481,7 @@ void Debugger::set_target(Node* target) {
     m_target_identity = target == nullptr ? 0 : target->identity();
     m_target_was_flow_position = target != nullptr && target->layout().in_flow();
     m_select_properties = target != nullptr;
+    m_profile_state->valid = false;
 
     m_inspected_style = 0;
 
@@ -535,6 +553,9 @@ void Debugger::set_open(bool open) {
 
     m_target.profiler().set_enabled(false);
     m_target.profiler().save_report();
+    m_profile_state->valid = false;
+    m_profile_state->frame_count = 0;
+    m_profile_state->events.clear();
 
     m_overlay_rect = {};
     m_overlay_window_id = 0;
@@ -881,16 +902,52 @@ void Debugger::render_node_properties() {
     draw_property_value("type", "{}", type);
 }
 
+void Debugger::update_profile_snapshot() {
+    DebuggerProfileState& profile = *m_profile_state;
+    if (profile.frame_count == std::numeric_limits<uint64_t>::max()) {
+        profile.frame_count = 0;
+    } else {
+        ++profile.frame_count;
+    }
+
+    if (profile.valid && profile.frame_count % PROFILE_UPDATE_INTERVAL != 0) {
+        return;
+    }
+
+    const Profiler& profiler = m_target.profiler();
+    profile.frame_ms = profiler.latest_frame_ms();
+    profile.metrics = profiler.latest_metrics();
+    profile.dropped_events = profiler.dropped_events();
+    profile.node_identity = m_node_target == nullptr ? 0 : m_node_target->identity();
+    profile.node_ms = 0.0;
+    profile.events.clear();
+
+    if (profile.node_identity != 0) {
+        profile.node_ms = profiler.node_duration_ms(profile.node_identity);
+        for (const ProfileEvent& event : profiler.latest_events()) {
+            if (event.node_identity == profile.node_identity) {
+                profile.events.push_back(event);
+            }
+        }
+    }
+
+    profile.valid = true;
+}
+
 void Debugger::render_profiling() {
     const Profiler& profiler = m_target.profiler();
     if (!profiler.enabled()) {
+        m_profile_state->valid = false;
+        m_profile_state->frame_count = 0;
         ImGui::TextDisabled("enable frame time to collect profiling data");
         return;
     }
 
-    const ProfileFrameMetrics& metrics = profiler.latest_metrics();
+    update_profile_snapshot();
+    const DebuggerProfileState& profile = *m_profile_state;
+    const ProfileFrameMetrics& metrics = profile.metrics;
     draw_property_section("frame");
-    draw_property_value("frame", "{:.3f} ms", profiler.latest_frame_ms());
+    draw_property_value("frame", "{:.3f} ms", profile.frame_ms);
     draw_property_value("update", "{:.3f} ms", metrics.update_ms);
     draw_property_value("measure", "{:.3f} ms", metrics.measure_ms);
     draw_property_value("layout", "{:.3f} ms", metrics.layout_ms);
@@ -902,7 +959,7 @@ void Debugger::render_profiling() {
     draw_property_section("work");
     draw_property_value("nodes", "{}", metrics.nodes_drawn);
     draw_property_value("input work", "{} entries / {} checks", metrics.input_entries, metrics.input_entry_checks);
-    draw_property_value("dropped events", "{}", profiler.dropped_events());
+    draw_property_value("dropped events", "{}", profile.dropped_events);
     end_property_section();
 
     if (m_node_target == nullptr) {
@@ -910,13 +967,9 @@ void Debugger::render_profiling() {
     }
 
     draw_property_section("selected node");
-    draw_property_value("node total", "{:.3f} ms", profiler.node_duration_ms(m_node_target->identity()));
+    draw_property_value("node total", "{:.3f} ms", profile.node_ms);
 
-    for (const ProfileEvent& event : profiler.latest_events()) {
-        if (event.node_identity != m_node_target->identity()) {
-            continue;
-        }
-
+    for (const ProfileEvent& event : profile.events) {
         draw_property_value(event.name, "{:.3f} ms", static_cast<double>(event.end - event.start) / 1'000'000.0);
     }
     end_property_section();
@@ -960,41 +1013,24 @@ void Debugger::render_layout_properties() {
         update_size_axis(false, static_cast<LayoutSizeMode>(height_mode));
     }
 
-    if (size_spec.width.mode == LayoutSizeMode::Fixed) {
-        float width = size_spec.width.value;
-        if (draw_number_input("width", &width)) {
-            LayoutSize updated = size_spec;
-            updated.width = px(width);
-            m_node_target->set_size(updated);
+    const auto draw_size_value = [this, &size_spec](bool width, LayoutSizeMode mode) {
+        const LayoutAxis& axis = width ? size_spec.width : size_spec.height;
+        float value = axis.value;
+        const bool limited = mode == LayoutSizeMode::Percent;
+        if (!draw_number_input(width ? "width" : "height", &value, 1, 0.1F, 0.0F, limited ? 100.0F : 0.0F)) {
+            return;
         }
-    }
 
-    if (size_spec.height.mode == LayoutSizeMode::Fixed) {
-        float height = size_spec.height.value;
-        if (draw_number_input("height", &height)) {
-            LayoutSize updated = size_spec;
-            updated.height = px(height);
-            m_node_target->set_size(updated);
-        }
-    }
+        LayoutSize updated = size_spec;
+        LayoutAxis& updated_axis = width ? updated.width : updated.height;
+        updated_axis = mode == LayoutSizeMode::Fixed ? px(value) : percent(value);
+        m_node_target->set_size(updated);
+    };
 
-    if (size_spec.width.mode == LayoutSizeMode::Percent) {
-        float width = size_spec.width.value;
-        if (draw_number_input("width", &width, 1, 0.1F, 0.0F, 100.0F)) {
-            LayoutSize updated = size_spec;
-            updated.width = percent(width);
-            m_node_target->set_size(updated);
-        }
-    }
-
-    if (size_spec.height.mode == LayoutSizeMode::Percent) {
-        float height = size_spec.height.value;
-        if (draw_number_input("height", &height, 1, 0.1F, 0.0F, 100.0F)) {
-            LayoutSize updated = size_spec;
-            updated.height = percent(height);
-            m_node_target->set_size(updated);
-        }
-    }
+    if (size_spec.width.mode == LayoutSizeMode::Fixed) draw_size_value(true, LayoutSizeMode::Fixed);
+    if (size_spec.height.mode == LayoutSizeMode::Fixed) draw_size_value(false, LayoutSizeMode::Fixed);
+    if (size_spec.width.mode == LayoutSizeMode::Percent) draw_size_value(true, LayoutSizeMode::Percent);
+    if (size_spec.height.mode == LayoutSizeMode::Percent) draw_size_value(false, LayoutSizeMode::Percent);
 
     draw_property_value("measured", "{:.1f} x {:.1f}", measured.x, measured.y);
     draw_property_value("intrinsic", "{:.1f} x {:.1f}", intrinsic.x, intrinsic.y);

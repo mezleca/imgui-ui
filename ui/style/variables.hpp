@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../string-hash.hpp"
 #include "values.hpp"
 
 #include <functional>
@@ -10,18 +11,6 @@
 #include <utility>
 
 namespace ui {
-    struct StyleVariableHash {
-        using is_transparent = void;
-
-        size_t operator()(std::string_view value) const {
-            return std::hash<std::string_view>{}(value);
-        }
-
-        size_t operator()(const std::string& value) const {
-            return operator()(std::string_view{value});
-        }
-    };
-
     /// stores key-value while preserving their concrete type for debugger controls.
     class StyleVariableStore {
     public:
@@ -106,7 +95,7 @@ namespace ui {
         }
 
     private:
-        std::unordered_map<std::string, StyleValue, StyleVariableHash, std::equal_to<>> m_vars;
+        std::unordered_map<std::string, StyleValue, StringHash, std::equal_to<>> m_vars;
     };
 
 } // namespace ui

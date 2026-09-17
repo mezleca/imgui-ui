@@ -13,17 +13,10 @@
 using namespace ui;
 
 static UiEvent event_of(EventType type, ImVec2 position = {}) {
-    return {
-        .position = position,
-        .scroll = {},
-        .text = {},
-        .handled = false,
-        .propagation_stopped = false,
-        .default_prevented = false,
-        .type = type,
-        .button = PointerButton::Left,
-        .key = Key::Unknown,
-    };
+    UiEvent event = UiEvent::make(type);
+    event.position = position;
+    event.button = PointerButton::Left;
+    return event;
 }
 
 static UiEvent click_event(ImVec2 position = {}) {
@@ -464,7 +457,7 @@ TEST_CASE("later targets win over earlier paint") {
 
 TEST_CASE("hidden layers release focus") {
     Runtime runtime;
-    UI surface(runtime, {.backend = ui_test::make_backend()});
+    UI surface = ui_test::make_surface(runtime);
     LayerContainer layer("layer", LayerMode::Inline);
     layer.set_input_router(&surface.input_router());
 

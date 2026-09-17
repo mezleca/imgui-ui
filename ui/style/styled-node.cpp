@@ -11,12 +11,14 @@
 
 using namespace ui;
 
-static void styled_node_style_changed(void* owner) {
-    static_cast<StyledNode*>(owner)->invalidate_measure();
+void StyledNode::style_changed(void* owner) {
+    auto* node = static_cast<StyledNode*>(owner);
+    node->invalidate_font_cache_subtree();
+    node->invalidate_measure();
 }
 
 StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::move(id)), m_type_name(type_name) {
-    m_state.set_change_callback(this, &styled_node_style_changed);
+    m_state.set_change_callback(this, &StyledNode::style_changed);
 }
 
 StyledNode::~StyledNode() = default;
@@ -31,7 +33,7 @@ void StyledNode::draw_surface(ImDrawList& draw_list, Rect rect, ImColor backgrou
 
 PaintSlot& StyledNode::before() {
     if (m_before == nullptr) {
-        m_before = std::make_unique<PaintSlot>(this, &styled_node_style_changed);
+        m_before = std::make_unique<PaintSlot>(this, &StyledNode::style_changed);
     }
 
     return *m_before;
@@ -39,7 +41,7 @@ PaintSlot& StyledNode::before() {
 
 PaintSlot& StyledNode::after() {
     if (m_after == nullptr) {
-        m_after = std::make_unique<PaintSlot>(this, &styled_node_style_changed);
+        m_after = std::make_unique<PaintSlot>(this, &StyledNode::style_changed);
     }
 
     return *m_after;

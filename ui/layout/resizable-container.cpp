@@ -20,11 +20,7 @@ ResizableContainer& ResizableContainer::set_resize(ResizeAxes resize) {
     }
 
     m_resize = resize;
-    if (resize == ResizeAxes::None) {
-        set_input_mode(InputMode::None);
-    } else {
-        set_input_mode(InputMode::Target);
-    }
+    set_input_mode(resize == ResizeAxes::None ? InputMode::None : InputMode::Target);
     return *this;
 }
 

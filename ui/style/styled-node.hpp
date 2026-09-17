@@ -151,6 +151,10 @@ namespace ui {
                 return current_style.font();
             }
 
+            if (m_font_cache_valid) {
+                return m_cached_font;
+            }
+
             for (const Node* ancestor = parent(); ancestor != nullptr; ancestor = ancestor->parent()) {
                 const auto* styled_ancestor = dynamic_cast<const StyledNode*>(ancestor);
                 if (styled_ancestor == nullptr) {
@@ -159,7 +163,9 @@ namespace ui {
 
                 const ComputedStyle& ancestor_style = styled_ancestor->computed_style();
                 if (ancestor_style.font() != nullptr) {
-                    return ancestor_style.font();
+                    m_cached_font = ancestor_style.font();
+                    m_font_cache_valid = true;
+                    return m_cached_font;
                 }
             }
 
@@ -170,8 +176,6 @@ namespace ui {
 
     protected:
         bool on_draw() final;
-        /// applies theme defaults to this node's style slots.
-        void apply_theme_defaults(const Theme&) override {}
         /// paints this node and returns whether its children should be drawn.
         virtual bool paint();
 
@@ -212,11 +216,24 @@ namespace ui {
         void draw_surface(ImDrawList& draw_list, Rect rect, ImColor background) const;
 
     private:
+        static void style_changed(void* owner);
+
+        void invalidate_font_cache_subtree() {
+            m_font_cache_valid = false;
+            for (const auto& child : children()) {
+                if (auto* styled_child = dynamic_cast<StyledNode*>(child.get()); styled_child != nullptr) {
+                    styled_child->invalidate_font_cache_subtree();
+                }
+            }
+        }
+
         void update_cursor();
 
         VisualState m_state;
         std::string_view m_type_name;
         std::unique_ptr<PaintSlot> m_before;
         std::unique_ptr<PaintSlot> m_after;
+        mutable ImFont* m_cached_font = nullptr;
+        mutable bool m_font_cache_valid = false;
     };
 } // namespace ui

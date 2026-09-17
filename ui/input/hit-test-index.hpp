@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <functional>
 #include <limits>
 #include <vector>
@@ -51,7 +50,7 @@ namespace ui {
         const Entry* blocking_entry_at(ImVec2 position, EventType type, const Node* target) const;
 
         std::vector<Entry> m_entries;
-        std::deque<InputCallback> m_callbacks;
+        std::vector<InputCallback> m_callbacks;
         bool m_has_blockers = false;
         mutable std::size_t m_checks = 0;
     };

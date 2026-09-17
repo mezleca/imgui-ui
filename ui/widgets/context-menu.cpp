@@ -4,6 +4,7 @@
 #include "../ui.hpp"
 #include "../imgui/draw.hpp"
 #include "../resources/texture-registry.hpp"
+#include "../runtime.hpp"
 
 #include <algorithm>
 #include <utility>

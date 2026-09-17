@@ -16,10 +16,10 @@ namespace ui {
         virtual ~Texture() = default;
         virtual ImVec2 size() const = 0;
 
-        // creates gpu data on the first draw for each imgui context and reuses it on later draws.
+        // creates gpu data on the first draw for each imgui context and reuses it later.
         virtual ImTextureID get(ImVec2 size) = 0;
 
-        // removes one context's gpu data while keeping the decoded cpu source for another context.
+        // removes one context's gpu data while retaining the decoded source for later contexts.
         virtual void release_context(ImGuiContext* context) = 0;
     };
 
@@ -33,10 +33,7 @@ namespace ui {
         virtual std::unique_ptr<Texture> load(std::string_view content, std::string id) = 0;
     };
 
-    // add() stores one decoded texture per id. drawing calls get() so each context creates its gpu object only when the
-    // texture becomes visible. runtime releases that object before destroying a context and keeps the decoded source for
-    // later contexts.
-    /// provides Runtime-owned Texture resources keyed by application-defined identifiers.
+    /// indexes decoded textures by id and creates context-specific gpu data on demand.
     class TextureRegistry final : public AssetRegistry<Texture> {
     public:
         explicit TextureRegistry(std::unique_ptr<TextureLoader> loader = nullptr);

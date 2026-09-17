@@ -26,7 +26,7 @@ static void collect_shadow_callback(const ImDrawList*, const ImDrawCmd*) {}
 
 TEST_CASE("ui does not write to imgui's fallback window") {
     Runtime runtime;
-    UI surface(runtime, {.backend = ui_test::make_backend()});
+    UI surface = ui_test::make_surface(runtime);
     surface.root().add<Node>("content");
 
     const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
@@ -590,11 +590,7 @@ TEST_CASE("positioned nodes preserve their cursor placement when drawing is skip
     auto& empty = container.add<EmptyNode>();
     empty.set_layout({.placement = {.offset = {140.0F, 20.0F}}, .in_flow = false});
 
-    ImGui::NewFrame();
-    ImGui::Begin("skipped-placement-test");
-    container.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("skipped-placement-test", [&] { container.draw(); });
 
     REQUIRE(skipped.layout().local_rect().min.x == container.style().padding().x + 120.0F);
 }
@@ -617,11 +613,7 @@ TEST_CASE("overlay children stay in the surface window") {
 
     REQUIRE_FALSE(overlay.layout().in_flow());
 
-    ImGui::NewFrame();
-    ImGui::Begin("surface");
-    overlay.draw();
-    ImGui::End();
-    ImGui::EndFrame();
+    ui_test::draw_window("surface", [&] { overlay.draw(); });
 
     REQUIRE(child.window_name == "surface");
     REQUIRE(overlay.layout().layout_rect().min.x == Catch::Approx(0.0F));

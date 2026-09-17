@@ -87,14 +87,6 @@ function(imgui_ui_configure_sdl)
     add_subdirectory(vendor/SDL EXCLUDE_FROM_ALL)
 endfunction()
 
-if(NOT TARGET glad)
-    add_subdirectory(vendor/glad EXCLUDE_FROM_ALL)
-endif()
-
-if(NOT TARGET imgui-ui::glad)
-    add_library(imgui-ui::glad ALIAS glad)
-endif()
-
 imgui_ui_configure_freetype()
 
 if(NOT TARGET nfd)
@@ -110,7 +102,6 @@ endif()
 if(NOT TARGET imgui-ui-imgui)
     add_library(imgui-ui-imgui STATIC
         vendor/imgui/imgui.cpp
-        vendor/imgui/imgui_demo.cpp
         vendor/imgui/imgui_draw.cpp
         vendor/imgui/imgui_tables.cpp
         vendor/imgui/imgui_widgets.cpp
@@ -124,8 +115,11 @@ if(NOT TARGET imgui-ui-imgui)
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/misc/cpp"
     )
 
-    target_compile_definitions(imgui-ui-imgui PUBLIC IMGUI_ENABLE_FREETYPE)
+    target_compile_definitions(imgui-ui-imgui PUBLIC IMGUI_ENABLE_FREETYPE PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
     target_link_libraries(imgui-ui-imgui PUBLIC Freetype::Freetype)
+    target_precompile_headers(imgui-ui-imgui PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/imgui_internal.h"
+    )
 
     set(IMGUI_UI_IMGUI_BACKENDS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends")
 endif()
@@ -139,6 +133,14 @@ if((IMGUI_UI_BUILD_SDL OR IMGUI_UI_BUILD_RAYLIB) AND NOT IMGUI_UI_IMGUI_BACKENDS
 endif()
 
 if(IMGUI_UI_BUILD_SDL OR IMGUI_UI_BUILD_RAYLIB)
+    if(NOT TARGET glad)
+        add_subdirectory(vendor/glad EXCLUDE_FROM_ALL)
+    endif()
+
+    if(NOT TARGET imgui-ui::glad)
+        add_library(imgui-ui::glad ALIAS glad)
+    endif()
+
     find_package(OpenGL REQUIRED)
 
     if(NOT TARGET nsgif)

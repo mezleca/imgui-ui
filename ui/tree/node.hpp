@@ -51,6 +51,7 @@ namespace ui {
             T& result = *child;
             prepare_child(result);
             m_children.emplace_back(std::move(child));
+            invalidate_input_state_cache();
             invalidate_measure();
             return result;
         }
@@ -291,8 +292,9 @@ namespace ui {
         void set_surface(UI* surface);
         void measure_tree();
         void detach_input_router(InputRouter& router);
+        void invalidate_input_state_cache();
         void clear_input_state();
-        void capture_parent_content();
+        bool capture_parent_content();
         void prepare_layout();
         void submit_positioned_item();
 
@@ -304,6 +306,7 @@ namespace ui {
         bool m_visible = true;
         bool m_enabled = true;
         bool m_measure_dirty = true;
+        bool m_layout_dirty = true;
         NodeLayout m_layout;
         UI* m_surface = nullptr;
         InputRouter* m_input_router = nullptr;
@@ -311,6 +314,8 @@ namespace ui {
         Rect m_input_area{};
         InputMode m_input_mode = InputMode::None;
         InputState m_input_state;
+        mutable InputState m_subtree_input_state;
+        mutable bool m_subtree_input_state_dirty = true;
     };
 
 } // namespace ui

@@ -26,8 +26,6 @@ namespace ui {
     };
 
     struct StyleAnimationSlot {
-        /// selects the style property read and written by this slot.
-        StyleAnimationProperty property = StyleAnimationProperty::PaddingX;
         /// holds a value while an animation overrides the configured style.
         std::optional<AnimationValue> override;
         /// stores the value visible before the current animation frame.
@@ -116,6 +114,10 @@ namespace ui {
         }
 
         void update(float dt) {
+            if (!first_frame && !transitioning()) {
+                return;
+            }
+
             const FloatValue target_opacity{m_opacity, m_opacity_transition};
             current_opacity.tick(target_opacity, dt);
 

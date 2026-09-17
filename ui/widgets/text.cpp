@@ -20,6 +20,10 @@ TextWidget& TextWidget::set_wrap(float width) {
 }
 
 TextWidget& TextWidget::set_overflow(TextOverflow overflow) {
+    if (m_overflow == overflow) {
+        return *this;
+    }
+
     m_overflow = overflow;
     return *this;
 }

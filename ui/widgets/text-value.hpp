@@ -1,12 +1,10 @@
 #pragma once
 
-#include "../imgui/draw.hpp"
-
-#include <concepts>
 #include <algorithm>
+#include <charconv>
 #include <cmath>
+#include <concepts>
 #include <cstdint>
-#include <format>
 #include <imgui.h>
 #include <string>
 #include <string_view>
@@ -18,8 +16,7 @@ namespace ui {
     template <typename T>
     concept GenericNumber = std::integral<T> || std::floating_point<T>;
 
-    /// stores text or a numeric value and lazily caches its imgui font metrics.
-    /// stores a display value as text, number, or callable text provider and caches its measured ImGui size.
+    /// stores a scalar display value and lazily caches its ImGui text size.
     class GenericValue {
     public:
         /// stores every supported scalar type in one stable representation.
@@ -44,8 +41,12 @@ namespace ui {
                         using ValueType = std::remove_cvref_t<decltype(value)>;
                         if constexpr (std::same_as<ValueType, std::string>) {
                             return value;
+                        } else if constexpr (std::same_as<ValueType, bool>) {
+                            return value ? "true" : "false";
                         } else {
-                            return std::format("{}", value);
+                            char buffer[64];
+                            const auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), value);
+                            return error == std::errc{} ? std::string(buffer, end) : std::string{};
                         }
                     },
                     m_value

@@ -32,7 +32,6 @@ namespace ui {
         bool paint() override;
         void on_draw_end() override;
 
-        const ImVec2& arranged_content_size() const;
         virtual ImVec2 child_window_content_size() const;
 
     private:

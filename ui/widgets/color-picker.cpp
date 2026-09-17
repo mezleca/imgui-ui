@@ -117,8 +117,6 @@ private:
         if (m_owner.is_open()) set_visual_style(StyleType::ACTIVE);
     }
 
-    void paint_draw_list(ImDrawList&, Rect, const ComputedStyle&) override {}
-
     ColorPickerWidget& m_owner;
     ImColor* m_color = nullptr;
 };

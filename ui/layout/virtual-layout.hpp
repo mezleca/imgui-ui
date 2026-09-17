@@ -21,6 +21,10 @@ namespace ui {
 
         /// asks the provider for this many additional indices before and after the visible range.
         VirtualLayout& set_overscan(size_t count) {
+            if (m_overscan == count) {
+                return *this;
+            }
+
             m_overscan = count;
             return *this;
         }
@@ -32,14 +36,6 @@ namespace ui {
 
         size_t item_count() const {
             return m_item_count;
-        }
-
-        float item_height() const {
-            return m_item_height;
-        }
-
-        float spacing() const {
-            return m_spacing;
         }
 
     protected:

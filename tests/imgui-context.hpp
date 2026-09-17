@@ -3,6 +3,7 @@
 #include <ui/backends/backend.hpp>
 #include <ui/imgui/context-scope.hpp>
 #include <ui/layout/geometry.hpp>
+#include <ui/runtime.hpp>
 #include <ui/tree/node.hpp>
 #include <ui/ui.hpp>
 
@@ -11,6 +12,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <utility>
 
 namespace ui_test {
     class TestBackend final : public ui::Backend {
@@ -45,6 +47,10 @@ namespace ui_test {
 
     inline std::unique_ptr<ui::Backend> make_backend() {
         return std::make_unique<TestBackend>();
+    }
+
+    inline ui::UI make_surface(ui::Runtime& runtime, bool enable_debugger = false) {
+        return ui::UI(runtime, {.backend = make_backend(), .enable_debugger = enable_debugger});
     }
 
     class ImGuiContext {
@@ -105,6 +111,15 @@ namespace ui_test {
         surface.update(delta_time.value_or(ImGui::GetIO().DeltaTime));
         surface.draw();
         surface.end_frame();
+    }
+
+    template <typename Draw>
+    inline void draw_window(const char* name, Draw&& draw) {
+        ImGui::NewFrame();
+        ImGui::Begin(name);
+        std::forward<Draw>(draw)();
+        ImGui::End();
+        ImGui::EndFrame();
     }
 
     inline ImVec2 center(const ui::Rect& rect) {

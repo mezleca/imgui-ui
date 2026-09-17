@@ -53,6 +53,10 @@ Container::Container(std::string id, StackDirection direction, std::string_view 
 }
 
 Container& Container::set_scrollable(bool vertical, bool horizontal) {
+    if (m_scroll_vertical == vertical && m_scroll_horizontal == horizontal) {
+        return *this;
+    }
+
     m_scroll_vertical = vertical;
     m_scroll_horizontal = horizontal;
     return *this;
@@ -64,10 +68,7 @@ Container& Container::set_direction(StackDirection direction) {
     }
 
     m_direction = direction;
-    const LayoutSize& size = layout().size_spec();
-    if (size.width.mode == LayoutSizeMode::Fit || size.height.mode == LayoutSizeMode::Fit) {
-        invalidate_measure();
-    }
+    invalidate_measure();
     return *this;
 }
 
@@ -86,6 +87,7 @@ Container& Container::set_content_alignment(ImVec2 alignment) {
     }
 
     m_content_alignment = resolved;
+    invalidate_measure();
     return *this;
 }
 
@@ -96,10 +98,7 @@ Container& Container::set_spacing(float spacing) {
     }
 
     m_spacing = resolved;
-    const LayoutSize& size = layout().size_spec();
-    if (size.width.mode == LayoutSizeMode::Fit || size.height.mode == LayoutSizeMode::Fit) {
-        invalidate_measure();
-    }
+    invalidate_measure();
     return *this;
 }
 
@@ -244,12 +243,8 @@ void Container::arrange_children() {
     }
 }
 
-const ImVec2& Container::arranged_content_size() const {
-    return m_content_size;
-}
-
 ImVec2 Container::child_window_content_size() const {
-    return arranged_content_size();
+    return m_content_size;
 }
 
 ImVec2 Container::child_window_padding() const {
@@ -257,6 +252,7 @@ ImVec2 Container::child_window_padding() const {
 }
 
 void Container::draw_children() {
+    const ImVec2 available = content_size(layout().size());
     for (const auto& child : children()) {
         if (child->layout().in_flow()) {
             child->draw();
@@ -268,7 +264,6 @@ void Container::draw_children() {
         const ImVec2 origin = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
         placement.offset.x += margin.x * (1.0F - 2.0F * origin.x);
         placement.offset.y += margin.y * (1.0F - 2.0F * origin.y);
-        const ImVec2 available = content_size(layout().size());
         const ImVec2 size = child->layout().resolve_size(available);
         arrange_child(*child, size, placement);
         child->draw();

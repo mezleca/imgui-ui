@@ -85,6 +85,6 @@ namespace ui {
             return true;
         }
 
-        virtual void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) = 0;
+        virtual void paint_draw_list(ImDrawList&, Rect, const ComputedStyle&) {}
     };
 } // namespace ui

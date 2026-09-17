@@ -493,6 +493,7 @@ private:
     ResizableContainer* m_dynamic_nodes = nullptr;
     TextWidget* m_dynamic_status = nullptr;
     TextWidget* m_fps = nullptr;
+    float m_fps_update_elapsed = 0.0F;
     Container* m_test_images = nullptr;
     std::vector<Node*> m_pending_image_removals;
     Node* m_pending_remove = nullptr;
@@ -809,8 +810,12 @@ int& DemoScreen::blur() {
     return m_blur;
 }
 
-void DemoScreen::on_update(float) {
-    m_fps->set_text(std::format("fps: {:.1f}", ImGui::GetIO().Framerate));
+void DemoScreen::on_update(float dt) {
+    m_fps_update_elapsed += std::max(0.0F, dt);
+    if (m_fps_update_elapsed >= 0.25F) {
+        m_fps_update_elapsed = 0.0F;
+        m_fps->set_text(std::format("fps: {:.1f}", ImGui::GetIO().Framerate));
+    }
 
     for (Node* image : m_pending_image_removals) {
         if (image->parent() != nullptr) {
@@ -848,10 +853,8 @@ void setup_demo(UI& surface, std::string backend) {
     // register paths before widgets request fonts. sizes load lazily per imgui context.
     const std::filesystem::path assets = std::filesystem::path{IMGUI_UI_ASSETS_DIR};
     runtime.fonts().add("Inter Regular", assets / "fonts/Inter.ttf");
-    runtime.fonts().add("Inter SemiBold", assets / "fonts/Inter.ttf");
     runtime.fonts().add("Inter Bold", assets / "fonts/Inter.ttf");
     surface.set_primary_font(runtime.fonts().find("Inter Regular"));
-    surface.set_secondary_font(runtime.fonts().find("Inter SemiBold"));
 
     runtime.textures().add("demo-file-icon", assets / "icons/demo.svg");
     runtime.textures().add("demo-test-image", assets / "images/tiny.jpg");

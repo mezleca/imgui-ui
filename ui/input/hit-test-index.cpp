@@ -18,6 +18,9 @@ void HitTestIndex::begin_frame(std::size_t expected_entries) {
     if (m_entries.capacity() < expected_entries) {
         m_entries.reserve(expected_entries);
     }
+    if (m_callbacks.capacity() < expected_entries) {
+        m_callbacks.reserve(expected_entries);
+    }
 }
 
 void HitTestIndex::add(Node* node, EntryKind kind, Rect rect, EventMask events, InputCallback callback) {

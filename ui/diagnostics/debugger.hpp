@@ -19,6 +19,7 @@ namespace ui {
     class StyledNode;
     class Texture;
     class DebuggerPopupState;
+    class DebuggerProfileState;
 
     class Debugger final : public Container {
     public:
@@ -75,6 +76,7 @@ namespace ui {
         void synchronize_targets();
         void set_inspect_mode(bool enabled);
         void finish_popup_restore();
+        void update_profile_snapshot();
         void set_target(Node* target);
         void remove_target();
         bool should_restore_flow_position(const LayoutConfig& config) const;
@@ -113,5 +115,6 @@ namespace ui {
         bool m_inspect_pointer_capture = false;
         bool m_property_section_open = false;
         std::unique_ptr<DebuggerPopupState> m_popup_state;
+        std::unique_ptr<DebuggerProfileState> m_profile_state;
     };
 } // namespace ui

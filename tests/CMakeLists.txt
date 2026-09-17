@@ -10,6 +10,7 @@ add_executable(imgui-ui-tests
 
 target_link_libraries(imgui-ui-tests PRIVATE imgui-ui::core Catch2::Catch2WithMain)
 target_compile_definitions(imgui-ui-tests PRIVATE IMGUI_UI_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+target_precompile_headers(imgui-ui-tests PRIVATE <catch2/catch_test_macros.hpp> <imgui.h>)
 imgui_ui_enable_sanitizers(imgui-ui-tests)
 
 include(Catch)
@@ -21,6 +22,7 @@ if(IMGUI_UI_BUILD_SDL)
     )
 
     target_link_libraries(imgui-ui-sdl-tests PRIVATE imgui-ui::sdl Catch2::Catch2WithMain)
+    target_precompile_headers(imgui-ui-sdl-tests PRIVATE <catch2/catch_test_macros.hpp> <imgui.h>)
     imgui_ui_enable_sanitizers(imgui-ui-sdl-tests)
 
     catch_discover_tests(

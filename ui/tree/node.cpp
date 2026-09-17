@@ -39,13 +39,25 @@ void Node::set_input_state(InputState state) {
         return;
     }
 
+    for (Node* node = this; node != nullptr; node = node->m_parent) {
+        node->subtree_input_state();
+    }
+
     m_input_state = state;
     for (Node* node = this; node != nullptr; node = node->m_parent) {
-        node->input_state_changed();
+        const InputState previous = node->m_subtree_input_state;
+        node->m_subtree_input_state_dirty = true;
+        if (previous != node->subtree_input_state()) {
+            node->input_state_changed();
+        }
     }
 }
 
 InputState Node::subtree_input_state() const {
+    if (!m_subtree_input_state_dirty) {
+        return m_subtree_input_state;
+    }
+
     InputState state = m_input_state;
     for (const auto& child : m_children) {
         const InputState child_state = child->subtree_input_state();
@@ -53,7 +65,9 @@ InputState Node::subtree_input_state() const {
         state.active |= child_state.active;
     }
 
-    return state;
+    m_subtree_input_state = state;
+    m_subtree_input_state_dirty = false;
+    return m_subtree_input_state;
 }
 
 UI& Node::surface() const {
@@ -66,6 +80,7 @@ UI& Node::surface() const {
 
 void Node::set_surface(UI* surface) {
     m_surface = surface;
+    m_layout_dirty = true;
     for (const auto& child : m_children) {
         child->set_surface(surface);
     }
@@ -128,12 +143,11 @@ void Node::resolve_position() {
     );
 }
 
-void Node::capture_parent_content() {
+bool Node::capture_parent_content() {
     ImGuiContext* context = ImGui::GetCurrentContext();
     if (context == nullptr || context->CurrentWindow == nullptr ||
         (m_parent == nullptr && context->CurrentWindow->IsFallbackWindow)) {
-        m_layout.set_parent_content_rect({});
-        return;
+        return m_layout.set_parent_content_rect({});
     }
 
     // cursor start is unscrolled. the logical cursor already includes the window scroll offset.
@@ -143,7 +157,7 @@ void Node::capture_parent_content() {
     const ImVec2 available = ImGui::GetContentRegionAvail();
 
     // express both content edges in the same local space before a container arranges its children.
-    m_layout.set_parent_content_rect(
+    return m_layout.set_parent_content_rect(
         {{start.x + scroll.x, start.y + scroll.y}, {cursor.x + available.x, cursor.y + available.y}}, available
     );
 }
@@ -172,6 +186,7 @@ void Node::detach_input_router(InputRouter& router) {
     if (m_input_router != &router) return;
     m_input_router = nullptr;
     m_input_state = {};
+    invalidate_input_state_cache();
 }
 
 void Node::set_visible(bool visible) {
@@ -184,6 +199,7 @@ void Node::set_visible(bool visible) {
         if (m_input_router != nullptr) m_input_router->clear_subtree_entries(*this);
     }
 
+    invalidate_input_state_cache();
     invalidate_measure();
 }
 
@@ -206,6 +222,12 @@ void Node::prepare_child(Node& child) {
 
     if (m_surface != nullptr) {
         child.apply_theme(m_surface->theme());
+    }
+}
+
+void Node::invalidate_input_state_cache() {
+    for (Node* node = this; node != nullptr; node = node->m_parent) {
+        node->m_subtree_input_state_dirty = true;
     }
 }
 
@@ -261,8 +283,9 @@ void Node::set_layout_rect(Rect rect) {
 }
 
 void Node::arrange_child(Node& child, ImVec2 size, Placement placement) {
-    child.m_layout.assign_size(size, true);
-    child.m_layout.set_arranged_placement(placement);
+    const bool size_changed = child.m_layout.assign_size(size, true);
+    const bool placement_changed = child.m_layout.set_arranged_placement(placement);
+    child.m_layout_dirty = child.m_layout_dirty || size_changed || placement_changed;
 }
 
 bool Node::capture_pointer() {
@@ -288,6 +311,7 @@ std::unique_ptr<Node> Node::remove(Node& child) {
     result->set_surface(nullptr);
     result->set_input_router(nullptr);
     result->set_profiler(nullptr);
+    invalidate_input_state_cache();
     invalidate_measure();
     return result;
 }
@@ -298,6 +322,7 @@ void Node::clear() {
     }
 
     m_children.clear();
+    invalidate_input_state_cache();
     invalidate_measure();
 }
 
@@ -346,6 +371,7 @@ void Node::invalidate_measure() {
     m_layout.set_box_insets(box_insets());
     m_layout.set_box_sizing(box_sizing());
     m_measure_dirty = true;
+    m_layout_dirty = true;
     if (m_parent != nullptr && !m_parent->m_measure_dirty) m_parent->invalidate_measure();
 }
 
@@ -353,6 +379,7 @@ void Node::invalidate_measure_subtree() {
     m_layout.set_box_insets(box_insets());
     m_layout.set_box_sizing(box_sizing());
     m_measure_dirty = true;
+    m_layout_dirty = true;
     for (const auto& child : m_children) {
         child->invalidate_measure_subtree();
     }
@@ -447,8 +474,10 @@ void Node::prepare_layout() {
         m_layout.clear_size_assignment();
     }
 
-    capture_parent_content();
-    on_layout();
+    const bool parent_content_changed = capture_parent_content();
+    const bool layout_dirty = m_layout_dirty || parent_content_changed || m_parent == nullptr;
+    m_layout_dirty = false;
+    if (layout_dirty) on_layout();
     m_layout.clear_parent_size_assignment();
     resolve_position();
     m_layout.clear_size_assignment();
