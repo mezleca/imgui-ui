@@ -22,6 +22,10 @@ LayerContainer::LayerContainer(std::string id, LayerMode mode, std::string_view 
 }
 
 void LayerContainer::resolve_layout() {
+    if (has_size()) {
+        return;
+    }
+
     if (m_mode == LayerMode::Inline && parent() != nullptr) {
         const Rect parent_content = layout().parent_content_rect();
         if (parent_content.valid()) {
@@ -43,7 +47,6 @@ bool LayerContainer::paint() {
         if (scroll.x != 0.0F || scroll.y != 0.0F) {
             const ImVec2 cursor = ImGui::GetCursorPos();
             ImGui::SetCursorPos({cursor.x + scroll.x, cursor.y + scroll.y});
-            m_inline_child_scope = true;
         }
 
         // padding changes descendant layout, so it needs the same child scope as visible frame effects.

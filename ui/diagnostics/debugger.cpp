@@ -104,6 +104,9 @@ static constexpr float PROPERTY_ITEM_SPACING = 6.0F;
 static constexpr float DEBUGGER_SPLITTER_HEIGHT = 6.0F;
 static constexpr float DEBUGGER_MIN_PANE_HEIGHT = 72.0F;
 static constexpr uint64_t PROFILE_UPDATE_INTERVAL = 3;
+static constexpr double DEBUGGER_FOCUS_DELAY = 0.1;
+static constexpr int HIGHLIGHT_MIN_LINE_THICKNESS = 1;
+static constexpr int HIGHLIGHT_MAX_LINE_THICKNESS = 10;
 
 // imgui closes unrelated root popups when a debugger press changes focus, so save their stack before that press is consumed.
 class ui::DebuggerPopupState {
@@ -251,8 +254,7 @@ void Debugger::draw_property_section(std::string_view label) {
     ImGui::Indent(SECTION_PADDING.x);
 }
 
-template <typename DrawInput>
-static bool draw_labeled_input(std::string_view label, DrawInput draw_input, ImVec4 frame_background = {}) {
+static void push_input_style(ImVec4 frame_background = {}) {
     if (frame_background.w == 0.0F) {
         frame_background = ImGui::GetStyle().Colors[ImGuiCol_FrameBg];
         frame_background.x *= 0.72F;
@@ -260,7 +262,6 @@ static bool draw_labeled_input(std::string_view label, DrawInput draw_input, ImV
         frame_background.z *= 0.72F;
     }
 
-    ImGui::PushID(label.data(), label.data() + label.size());
     ImVec4 border_color = ImGui::GetStyle().Colors[ImGuiCol_Border];
     border_color.w *= 0.7F;
     ImGui::PushStyleColor(ImGuiCol_FrameBg, frame_background);
@@ -269,14 +270,24 @@ static bool draw_labeled_input(std::string_view label, DrawInput draw_input, ImV
     ImGui::PushStyleColor(ImGuiCol_Border, border_color);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, INPUT_PADDING);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, INPUT_BORDER_THICKNESS);
+}
+
+static void pop_input_style() {
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(4);
+}
+
+template <typename DrawInput>
+static bool draw_labeled_input(std::string_view label, DrawInput draw_input, ImVec4 frame_background = {}) {
+    ImGui::PushID(label.data(), label.data() + label.size());
+    push_input_style(frame_background);
     ImGui::AlignTextToFramePadding();
     ImGui::Text("%.*s:", static_cast<int>(label.size()), label.data());
     ImGui::SameLine(0.0F, ITEM_SPACING);
     const float input_width = std::min(INPUT_MAX_WIDTH, std::max(0.0F, ImGui::GetContentRegionAvail().x));
     ImGui::SetNextItemWidth(input_width);
     const bool changed = draw_input();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor(4);
+    pop_input_style();
     ImGui::PopID();
     return changed;
 }
@@ -289,6 +300,22 @@ static bool draw_color_input(std::string_view label, ImVec4& value) {
     return draw_labeled_input(label, [&value] {
         return ImGui::ColorEdit4("##value", &value.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
     });
+}
+
+static bool draw_highlight_option(std::string_view label, bool& enabled, ImVec4& color) {
+    ImGui::PushID(label.data(), label.data() + label.size());
+    push_input_style();
+    bool changed = ImGui::Checkbox("##enabled", &enabled);
+    ImGui::SameLine(0.0F, ITEM_SPACING);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label.data(), label.data() + label.size());
+    if (enabled) {
+        ImGui::SameLine(0.0F, ITEM_SPACING);
+        changed = ImGui::ColorEdit4("##color", &color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar) || changed;
+    }
+    pop_input_style();
+    ImGui::PopID();
+    return changed;
 }
 
 static bool draw_inline_combo(std::string_view label, int* selected, const char* const items[], int item_count) {
@@ -448,6 +475,7 @@ void Debugger::apply_theme_defaults(const Theme& theme) {
             .border_color(theme.controls.border_color)
             .border(BORDER_ALL)
             .border_thickness(theme.controls.border_thickness)
+            .border_radius(0.0F)
             .padding({WINDOW_PADDING, WINDOW_PADDING});
     });
 }
@@ -460,7 +488,9 @@ bool Debugger::paint() {
 }
 
 void Debugger::draw_children() {
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, m_target.theme().controls.rounding);
     render();
+    ImGui::PopStyleVar();
 }
 
 Debugger::~Debugger() {
@@ -538,7 +568,6 @@ void Debugger::set_open(bool open) {
 
     m_open = open;
     set_visible(open);
-    m_target.set_debug_pointer_blocked(open);
 
     if (auto* content = dynamic_cast<ResizableContainer*>(&m_target.root()); content != nullptr) {
         content->set_resize(open ? ResizeAxes::X : ResizeAxes::None);
@@ -548,7 +577,8 @@ void Debugger::set_open(bool open) {
     }
 
     if (open) {
-        m_overlay_focused = true;
+        m_overlay_hover_started = -1.0;
+        set_overlay_focus(false);
         return;
     }
 
@@ -560,7 +590,8 @@ void Debugger::set_open(bool open) {
 
     m_overlay_rect = {};
     m_overlay_window_id = 0;
-    m_overlay_focused = false;
+    set_overlay_focus(false);
+    m_overlay_hover_started = -1.0;
     m_overlay_pointer_capture = false;
     m_inspect_pointer_capture = false;
     m_popup_state->clear();
@@ -586,6 +617,42 @@ void Debugger::set_font(std::string_view id, int size) {
 
 bool Debugger::overlay_contains(ImVec2 position) const {
     return m_open && m_overlay_rect.valid() && m_overlay_rect.contains(position);
+}
+
+void Debugger::set_overlay_focus(bool focused) {
+    if (m_overlay_focused == focused) {
+        return;
+    }
+
+    m_overlay_focused = focused;
+    m_target.set_debug_pointer_blocked(focused);
+    if (focused) {
+        m_target.input_router().clear_focus();
+    }
+}
+
+void Debugger::update_overlay_focus(ImVec2 position) {
+    if (m_inspect_mode || m_overlay_pointer_capture) {
+        m_overlay_hover_started = -1.0;
+        return;
+    }
+
+    if (!overlay_contains(position)) {
+        m_overlay_hover_started = -1.0;
+        set_overlay_focus(false);
+        return;
+    }
+
+    if (m_overlay_focused) {
+        return;
+    }
+
+    const double now = ImGui::GetTime();
+    if (m_overlay_hover_started < 0.0) {
+        m_overlay_hover_started = now;
+    } else if (now - m_overlay_hover_started >= DEBUGGER_FOCUS_DELAY) {
+        set_overlay_focus(true);
+    }
 }
 
 bool Debugger::handles_content_resize(const UiEvent& event) const {
@@ -638,12 +705,6 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
 
     if (overlay_contains(event.position)) {
         if (event.type == EventType::PointerDown) {
-            if (!m_overlay_focused) {
-                m_overlay_focused = true;
-                m_target.set_debug_pointer_blocked(true);
-                m_target.input_router().clear_focus();
-            }
-
             m_overlay_pointer_capture = true;
             // an outside press closes a debugger popup, while a press on the debugger must preserve an unrelated popup.
             if (debugger_popup_open(m_overlay_window_id)) {
@@ -657,18 +718,7 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
     }
 
     if (m_overlay_focused) {
-        if (event.type == EventType::PointerDown) {
-            m_overlay_focused = false;
-            m_target.set_debug_pointer_blocked(false);
-            m_overlay_pointer_capture = true;
-            if (event.button == PointerButton::Left) {
-                m_highlight_selected = false;
-                m_highlight_valid = false;
-            }
-        }
-
-        event.mark_handled();
-        return true;
+        set_overlay_focus(false);
     }
 
     if (!m_inspect_mode) {
@@ -714,6 +764,10 @@ bool Debugger::handle_input(UiEvent& event) {
         return false;
     }
 
+    if (ui::contains(EventMask::Pointer, event_mask(event.type))) {
+        update_overlay_focus(event.position);
+    }
+
     if (handle_inspect_event(event)) {
         return true;
     }
@@ -734,9 +788,9 @@ bool Debugger::handle_input(UiEvent& event) {
 void Debugger::set_inspect_mode(bool enabled) {
     m_inspect_mode = enabled;
     if (enabled) {
-        m_overlay_focused = false;
+        set_overlay_focus(false);
+        m_overlay_hover_started = -1.0;
         m_overlay_pointer_capture = false;
-        m_target.set_debug_pointer_blocked(false);
     }
     m_target.set_debug_inspect_mode(enabled);
 
@@ -808,9 +862,56 @@ void Debugger::draw_highlight() {
         return;
     }
 
-    ImGui::GetForegroundDrawList()->AddRect(
-        m_highlight.min, m_highlight.max, ImColor(m_target.theme().accent_color), 0.0F, 0, 2.0F
-    );
+    ImDrawList* draw_list = ImGui::GetForegroundDrawList();
+    draw_list->AddRect(m_highlight.min, m_highlight.max, ImColor(m_target.theme().accent_color), 0.0F, 0, 2.0F);
+
+    const Node* target = m_inspect_mode ? m_hover_target : m_node_target;
+    if (target == nullptr) {
+        return;
+    }
+
+    const NodeLayout& target_layout = target->layout();
+    const Rect local_rect = target_layout.local_rect();
+    const Rect layout_rect = target_layout.layout_rect();
+    const Placement& placement = target_layout.placement();
+    const ImVec2 origin_factor = target_layout.in_flow()              ? ImVec2{}
+                                 : placement.origin == Anchor::Custom ? placement.origin_position
+                                                                      : alignment_factor(placement.origin);
+    const ImVec2 anchor_factor = target_layout.in_flow()              ? ImVec2{}
+                                 : placement.anchor == Anchor::Custom ? placement.anchor_position
+                                                                      : alignment_factor(placement.anchor);
+    const Rect parent_rect = target_layout.parent_content_rect();
+    const ImVec2 anchor_local = parent_rect.valid()
+                                  ? ImVec2{parent_rect.min.x + parent_rect.size().x * anchor_factor.x,
+                                           parent_rect.min.y + parent_rect.size().y * anchor_factor.y}
+                                  : local_rect.min;
+    const ImVec2 origin_local = {
+        local_rect.min.x + local_rect.size().x * origin_factor.x, local_rect.min.y + local_rect.size().y * origin_factor.y
+    };
+    const ImVec2 screen_offset = {layout_rect.min.x - local_rect.min.x, layout_rect.min.y - local_rect.min.y};
+    const auto to_screen = [screen_offset](ImVec2 position) {
+        return ImVec2{position.x + screen_offset.x, position.y + screen_offset.y};
+    };
+    const ImVec2 anchor = to_screen(anchor_local);
+    const ImVec2 origin = to_screen(origin_local);
+    const ImVec2 node_top = {(m_highlight.min.x + m_highlight.max.x) * 0.5F, m_highlight.min.y};
+    const float line_thickness = static_cast<float>(m_highlight_line_thickness);
+    const auto draw_marker = [draw_list, node_top, line_thickness](ImVec2 position, ImVec4 color) {
+        constexpr float MARKER_SIZE = 3.0F;
+        const ImU32 marker_color = ImColor(color);
+        draw_list->AddLine(position, node_top, marker_color, line_thickness);
+        draw_list->AddRectFilled(
+            {position.x - MARKER_SIZE, position.y - MARKER_SIZE}, {position.x + MARKER_SIZE, position.y + MARKER_SIZE},
+            marker_color
+        );
+    };
+
+    if (m_show_anchor) {
+        draw_marker(anchor, m_anchor_color);
+    }
+    if (m_show_origin) {
+        draw_marker(origin, m_origin_color);
+    }
 }
 
 void Debugger::render_node_tree(Node& node, int depth) {
@@ -953,6 +1054,27 @@ void Debugger::render_profiling() {
     update_profile_snapshot();
     const DebuggerProfileState& profile = *m_profile_state;
     const ProfileFrameMetrics& metrics = profile.metrics;
+
+    const auto draw_event = [](const ProfileEvent& event) {
+        draw_property_value(event.name, "{:.3f} ms", static_cast<double>(event.end - event.start) / 1'000'000.0);
+    };
+
+    if (m_node_target != nullptr) {
+        draw_property_section("selected node");
+        for (const ProfileEvent& event : profile.events) {
+            if (event.name == "Node::update") {
+                draw_event(event);
+            }
+        }
+        draw_property_value("node total", "{:.3f} ms", profile.node_ms);
+        for (const ProfileEvent& event : profile.events) {
+            if (event.name != "Node::update") {
+                draw_event(event);
+            }
+        }
+        end_property_section();
+    }
+
     draw_property_section("frame");
     draw_property_value("frame", "{:.3f} ms", profile.frame_ms);
     draw_property_value("update", "{:.3f} ms", metrics.update_ms);
@@ -968,16 +1090,16 @@ void Debugger::render_profiling() {
     draw_property_value("input work", "{} entries / {} checks", metrics.input_entries, metrics.input_entry_checks);
     draw_property_value("dropped events", "{}", profile.dropped_events);
     end_property_section();
+}
 
-    if (m_node_target == nullptr) {
-        return;
-    }
-
-    draw_property_section("selected node");
-    draw_property_value("node total", "{:.3f} ms", profile.node_ms);
-
-    for (const ProfileEvent& event : profile.events) {
-        draw_property_value(event.name, "{:.3f} ms", static_cast<double>(event.end - event.start) / 1'000'000.0);
+void Debugger::render_highlight_properties() {
+    draw_property_section("highlight");
+    draw_highlight_option("show anchor", m_show_anchor, m_anchor_color);
+    draw_highlight_option("show origin", m_show_origin, m_origin_color);
+    if (m_show_anchor || m_show_origin) {
+        draw_number_input(
+            "line thickness", &m_highlight_line_thickness, 1, 1.0F, HIGHLIGHT_MIN_LINE_THICKNESS, HIGHLIGHT_MAX_LINE_THICKNESS
+        );
     }
     end_property_section();
 }
@@ -1206,6 +1328,16 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
         apply([&color](Style& target) { target.color(ImColor{color}); });
     }
 
+    float alpha = style.alpha();
+    if (draw_number_input("alpha", &alpha, 1, 0.01F, 0.0F, 1.0F)) {
+        apply([alpha](Style& target) { target.alpha(alpha); });
+    }
+
+    float thickness = style.border_thickness();
+    if (draw_number_input("border thickness", &thickness, 1, 0.1F, 0.0F, 16.0F)) {
+        apply([thickness](Style& target) { target.border_thickness(thickness); });
+    }
+
     if (!is_line) {
         ImVec4 background_color = style.background_color().get();
         if (draw_color_input("background", background_color)) {
@@ -1225,6 +1357,35 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
         int border_style = static_cast<int>(style.border_style());
         if (draw_inline_combo("border style", &border_style, BORDER_STYLE_NAMES, IM_ARRAYSIZE(BORDER_STYLE_NAMES))) {
             apply([border_style](Style& target) { target.border_style(static_cast<BorderStyle>(border_style)); });
+        }
+
+        float radius = style.border_radius();
+        if (draw_number_input("border radius", &radius, 1, 0.1F, 0.0F, 64.0F)) {
+            apply([radius](Style& target) { target.border_radius(radius); });
+        }
+
+        int blur = style.blur();
+        if (draw_number_input("blur", &blur, 1, 1.0F, 0, MAX_BLUR_STRENGTH)) {
+            apply([blur](Style& target) { target.blur(blur); });
+        }
+
+        BoxShadow shadow = style.box_shadow();
+        if (draw_number_input("shadow offset", &shadow.offset.x, 2, 0.1F)) {
+            apply([shadow](Style& target) { target.box_shadow(shadow); });
+        }
+
+        if (draw_slider("shadow blur", &shadow.blur, 0.0F, 256.0F)) {
+            apply([shadow](Style& target) { target.box_shadow(shadow); });
+        }
+
+        if (draw_slider("shadow spread", &shadow.spread, -128.0F, 256.0F)) {
+            apply([shadow](Style& target) { target.box_shadow(shadow); });
+        }
+
+        ImVec4 shadow_color = shadow.color.Value;
+        if (draw_color_input("shadow color", shadow_color)) {
+            shadow.color.Value = shadow_color;
+            apply([shadow](Style& target) { target.box_shadow(shadow); });
         }
 
         ImVec2 padding = style.padding();
@@ -1288,45 +1449,6 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
         if (draw_color_input("scrollbar grab active", scrollbar_grab_active)) {
             apply([scrollbar_grab_active](Style& target) { target.scrollbar_grab_active_color(ImColor{scrollbar_grab_active}); });
         }
-
-        int blur = style.blur();
-        if (draw_number_input("blur", &blur, 1, 1.0F, 0, MAX_BLUR_STRENGTH)) {
-            apply([blur](Style& target) { target.blur(blur); });
-        }
-
-        BoxShadow shadow = style.box_shadow();
-        if (draw_number_input("shadow offset", &shadow.offset.x, 2, 0.1F)) {
-            apply([shadow](Style& target) { target.box_shadow(shadow); });
-        }
-
-        if (draw_slider("shadow blur", &shadow.blur, 0.0F, 256.0F)) {
-            apply([shadow](Style& target) { target.box_shadow(shadow); });
-        }
-
-        if (draw_slider("shadow spread", &shadow.spread, -128.0F, 256.0F)) {
-            apply([shadow](Style& target) { target.box_shadow(shadow); });
-        }
-
-        ImVec4 shadow_color = shadow.color.Value;
-        if (draw_color_input("shadow color", shadow_color)) {
-            shadow.color.Value = shadow_color;
-            apply([shadow](Style& target) { target.box_shadow(shadow); });
-        }
-
-        float radius = style.border_radius();
-        if (draw_number_input("border radius", &radius, 1, 0.1F, 0.0F, 64.0F)) {
-            apply([radius](Style& target) { target.border_radius(radius); });
-        }
-    }
-
-    float alpha = style.alpha();
-    if (draw_number_input("alpha", &alpha, 1, 0.01F, 0.0F, 1.0F)) {
-        apply([alpha](Style& target) { target.alpha(alpha); });
-    }
-
-    float thickness = style.border_thickness();
-    if (draw_number_input("border thickness", &thickness, 1, 0.1F, 0.0F, 16.0F)) {
-        apply([thickness](Style& target) { target.border_thickness(thickness); });
     }
 }
 
@@ -1536,6 +1658,13 @@ void Debugger::render_sections() {
             ImGui::EndTabItem();
         }
 
+        if (ImGui::BeginTabItem("highlight")) {
+            ImGui::BeginChild("##debugger-highlight-content", {0.0F, 0.0F}, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
+            render_highlight_properties();
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+
         ImGui::EndTabBar();
     }
 
@@ -1551,6 +1680,7 @@ void Debugger::render() {
     ImGuiWindow* debugger_window = ImGui::GetCurrentWindow();
     m_overlay_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
     m_overlay_window_id = debugger_window == nullptr ? 0 : debugger_window->ID;
+    update_overlay_focus(ImGui::GetMousePos());
     draw_highlight();
 
     const bool has_font = m_font != nullptr;

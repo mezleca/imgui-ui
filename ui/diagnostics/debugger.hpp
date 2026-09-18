@@ -62,6 +62,7 @@ namespace ui {
         void render_properties();
         void render_node_properties();
         void render_profiling();
+        void render_highlight_properties();
         void render_layout_properties();
         void render_style_properties();
         static void render_style_controls(Style& style, bool is_line = false, std::span<Style*> all_styles = {});
@@ -79,6 +80,8 @@ namespace ui {
         void update_profile_snapshot();
         void set_target(Node* target);
         void remove_target();
+        void set_overlay_focus(bool focused);
+        void update_overlay_focus(ImVec2 position);
         bool should_restore_flow_position(const LayoutConfig& config) const;
         bool overlay_contains(ImVec2 position) const;
 
@@ -92,6 +95,9 @@ namespace ui {
         Texture* m_close_icon = nullptr;
         Rect m_highlight{};
         bool m_highlight_valid = false;
+        ImVec4 m_anchor_color = {0.26F, 0.59F, 0.98F, 1.0F};
+        ImVec4 m_origin_color = {1.0F, 0.25F, 0.25F, 1.0F};
+        int m_highlight_line_thickness = 1;
         Rect m_overlay_rect{};
         ImGuiID m_overlay_window_id = 0;
         Node* m_node_target = nullptr;
@@ -103,11 +109,14 @@ namespace ui {
         uint64_t m_hover_identity = 0;
         int m_inspected_style = 0;
         float m_node_list_ratio = 0.6F;
+        double m_overlay_hover_started = -1.0;
         ImGuiKeyChord m_hotkey = ImGuiMod_Shift | ImGuiKey_D;
         bool m_open = false;
         bool m_inspect_mode = false;
         bool m_target_was_flow_position = false;
         bool m_highlight_selected = false;
+        bool m_show_anchor = false;
+        bool m_show_origin = false;
         bool m_select_properties = false;
         bool m_scroll_to_target = false;
         bool m_overlay_focused = false;

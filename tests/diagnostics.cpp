@@ -98,7 +98,8 @@ TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
 
     surface.begin_frame();
 
-    ui::UiEvent down = ui_test::pointer_event(ui::EventType::PointerDown, {10.0F, 10.0F});
+    const ImVec2 debugger_position = ui_test::center(surface.debugger()->layout().visual_rect());
+    ui::UiEvent down = ui_test::pointer_event(ui::EventType::PointerDown, debugger_position);
     REQUIRE(surface.dispatch(down));
 
     ui::UiEvent up = ui_test::pointer_event(ui::EventType::PointerUp, down.position);
@@ -160,7 +161,7 @@ TEST_CASE("debugger clicks preserve an open popup") {
     REQUIRE(picker.is_open());
 }
 
-TEST_CASE("focused debugger blocks application hover") {
+TEST_CASE("debugger focus follows hover and releases before application input") {
     ui::Runtime runtime;
     ui::UI surface = ui_test::make_surface(runtime, true);
     bool value = false;
@@ -175,17 +176,25 @@ TEST_CASE("focused debugger blocks application hover") {
 
     ui_test::draw_surface(surface);
     const ImVec2 checkbox_position = ui_test::center(checkbox.frame().layout().visual_rect());
-    const auto draw_frame = [&surface, checkbox_position] {
-        ImGui::GetIO().MousePos = checkbox_position;
+    const auto draw_frame = [&surface](ImVec2 position) {
+        ImGui::GetIO().MousePos = position;
         ui_test::draw_surface(surface);
     };
 
-    draw_frame();
+    draw_frame(checkbox_position);
     REQUIRE(checkbox.input_state().hovered);
 
     surface.debugger()->set_open(true);
-    draw_frame();
-    REQUIRE_FALSE(checkbox.input_state().hovered);
+    draw_frame(checkbox_position);
+    REQUIRE(checkbox.input_state().hovered);
+
+    const ImVec2 debugger_position = ui_test::center(surface.debugger()->layout().visual_rect());
+    for (int frame = 0; frame < 8; ++frame) {
+        draw_frame(debugger_position);
+    }
+
+    ui::UiEvent key = ui::UiEvent::make(ui::EventType::KeyDown);
+    REQUIRE(surface.dispatch(key));
 
     ui::UiEvent down = ui_test::pointer_event(ui::EventType::PointerDown, checkbox_position);
     REQUIRE(surface.dispatch(down));
@@ -193,8 +202,9 @@ TEST_CASE("focused debugger blocks application hover") {
     ui::UiEvent up = ui_test::pointer_event(ui::EventType::PointerUp, down.position);
     REQUIRE(surface.dispatch(up));
 
-    draw_frame();
+    draw_frame(checkbox_position);
     REQUIRE(checkbox.input_state().hovered);
+    REQUIRE(value);
 }
 
 TEST_CASE("debugger renders as a panel in the surface layout") {
