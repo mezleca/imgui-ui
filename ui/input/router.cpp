@@ -113,7 +113,12 @@ void InputRouter::refresh_pointer_state(ImVec2 position) {
 
     const HitTestIndex::Entry* blocker = nullptr;
     const HitTestIndex::Entry* target = m_hit_test.resolve(position, EventType::PointerMove, blocker);
-    Node* hovered = blocker == nullptr ? (target == nullptr ? nullptr : target->node) : blocker->node;
+    Node* hovered = nullptr;
+    if (blocker != nullptr) {
+        hovered = blocker->node;
+    } else if (target != nullptr) {
+        hovered = target->node;
+    }
     set_input_flag(m_hovered_node, hovered, InputFlag::Hovered);
 }
 

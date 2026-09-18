@@ -177,8 +177,8 @@ static bool ensure_gl_state() {
     return true;
 }
 
-static void render_box_shadow(const ImDrawList*, const ImDrawCmd* command) {
-    const auto* region = static_cast<const ui::BoxShadowRegion*>(command->UserCallbackData);
+static void render_box_shadow(void*, const ImDrawList*, const ImDrawCmd* command, const void* payload) {
+    const auto* region = static_cast<const ui::BoxShadowRegion*>(payload);
     if (region == nullptr || !select_gl_state() || !ensure_gl_state()) {
         return;
     }
@@ -251,34 +251,27 @@ static void render_box_shadow(const ImDrawList*, const ImDrawCmd* command) {
 }
 
 static bool initialize_box_shadow_effect(void*) {
-    if (!GLAD_GL_VERSION_3_3 || !select_gl_state() || !ensure_gl_state()) {
-        return false;
-    }
-
-    ui::set_box_shadow_callback(render_box_shadow);
-    return true;
+    return GLAD_GL_VERSION_3_3 && select_gl_state() && ensure_gl_state();
 }
 
 static void begin_box_shadow_effect(void*) {
-    ui::begin_box_shadow_frame();
+    select_gl_state();
 }
 
 static void shutdown_box_shadow_effect(void*) {
     if (!select_gl_state()) {
-        ui::shutdown_box_shadow();
         return;
     }
 
-    ui::set_box_shadow_callback(nullptr);
     if (gl_state->program != 0) glDeleteProgram(gl_state->program);
     if (gl_state->vertex_array != 0) glDeleteVertexArrays(1, &gl_state->vertex_array);
     gl_states.erase(ImGui::GetCurrentContext());
     gl_state = nullptr;
-    ui::shutdown_box_shadow();
 }
 
 void ui::register_opengl_box_shadow(EffectRegistry& effects) {
-    effects.register_effect(
+    effects.register_effect<BoxShadowRegion>(
+        EffectSlot::BoxShadow,
         {render_box_shadow, initialize_box_shadow_effect, begin_box_shadow_effect, shutdown_box_shadow_effect, nullptr}
     );
 }

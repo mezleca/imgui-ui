@@ -4,6 +4,7 @@
 #include "imgui-context.hpp"
 #include <ui/imgui/draw.hpp>
 #include <ui/imgui/effects/blur/blur.hpp>
+#include <ui/imgui/effects/effects.hpp>
 #include <ui/imgui/effects/shadow/shadow.hpp>
 #include <ui/layout/container.hpp>
 #include <ui/layout/geometry.hpp>
@@ -17,7 +18,6 @@
 
 #include <algorithm>
 #include <functional>
-#include <memory>
 #include <limits>
 #include <numbers>
 #include <string>
@@ -25,8 +25,36 @@
 
 using namespace ui;
 
-static void collect_shadow_callback(const ImDrawList*, const ImDrawCmd*) {}
-static void collect_blur_callback(const ImDrawList*, const ImDrawCmd*) {}
+static const BoxShadowRegion* collected_shadow_region = nullptr;
+static const BlurRegion* collected_blur_region = nullptr;
+static const ImDrawList* collected_effect_draw_list = nullptr;
+
+static void collect_shadow_callback(void*, const ImDrawList* draw_list, const ImDrawCmd*, const void* command) {
+    collected_shadow_region = static_cast<const BoxShadowRegion*>(command);
+    collected_effect_draw_list = draw_list;
+}
+
+static void collect_blur_callback(void*, const ImDrawList*, const ImDrawCmd*, const void* command) {
+    collected_blur_region = static_cast<const BlurRegion*>(command);
+}
+
+static void render_effect_commands(const ImDrawData& draw_data) {
+    for (int list_index = 0; list_index < draw_data.CmdListsCount; ++list_index) {
+        const ImDrawList* draw_list = draw_data.CmdLists[list_index];
+        for (const ImDrawCmd& command : draw_list->CmdBuffer) {
+            if (command.UserCallback != nullptr && command.UserCallback != ImDrawCallback_ResetRenderState) {
+                command.UserCallback(draw_list, &command);
+            }
+        }
+    }
+}
+
+template <typename Command>
+static void initialize_effect(EffectRegistry& effects, EffectSlot slot, EffectRender render) {
+    effects.register_effect<Command>(slot, {render});
+    effects.initialize();
+    effects.begin_frame();
+}
 
 TEST_CASE("ui does not write to imgui's fallback window") {
     Runtime runtime;
@@ -72,78 +100,71 @@ TEST_CASE("rounded border paths split corners between adjacent sides") {
 TEST_CASE("partial borders keep every draw style inside its selected side") {
     const BorderPath path = rounded_rect_border_path({{10.0F, 20.0F}, {110.0F, 80.0F}}, 12.0F);
     ui_test::ImGuiContext context({160.0F, 120.0F});
-    ImGui::NewFrame();
-    ImGui::Begin("border-path-test");
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    const int vertices_before = draw_list->VtxBuffer.Size;
+    ui_test::draw_window("border-path-test", [&] {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        const int vertices_before = draw_list->VtxBuffer.Size;
 
-    const auto require_left_bounds = [&](BorderStyle style) {
-        const int first_vertex = draw_list->VtxBuffer.Size;
-        draw_border_path(ui::draw_list(), path, BORDER_LEFT, ImColor{255, 255, 255, 255}, 2.0F, style);
-        REQUIRE(draw_list->VtxBuffer.Size > first_vertex);
+        const auto require_left_bounds = [&](BorderStyle style) {
+            const int first_vertex = draw_list->VtxBuffer.Size;
+            draw_border_path(ui::draw_list(), path, BORDER_LEFT, ImColor{255, 255, 255, 255}, 2.0F, style);
+            REQUIRE(draw_list->VtxBuffer.Size > first_vertex);
 
-        float min_y = std::numeric_limits<float>::max();
-        float max_y = std::numeric_limits<float>::lowest();
-        for (int index = first_vertex; index < draw_list->VtxBuffer.Size; ++index) {
-            const float y = draw_list->VtxBuffer[index].pos.y;
-            min_y = std::min(min_y, y);
-            max_y = std::max(max_y, y);
-        }
+            float min_y = std::numeric_limits<float>::max();
+            float max_y = std::numeric_limits<float>::lowest();
+            for (int index = first_vertex; index < draw_list->VtxBuffer.Size; ++index) {
+                const float y = draw_list->VtxBuffer[index].pos.y;
+                min_y = std::min(min_y, y);
+                max_y = std::max(max_y, y);
+            }
 
-        REQUIRE(min_y > 21.0F);
-        REQUIRE(max_y < 79.0F);
-    };
+            REQUIRE(min_y > 21.0F);
+            REQUIRE(max_y < 79.0F);
+        };
 
-    draw_border_path(ui::draw_list(), path, BORDER_NONE, ImColor{255, 255, 255, 255}, 2.0F, BorderStyle::Solid);
-    REQUIRE(draw_list->VtxBuffer.Size == vertices_before);
+        draw_border_path(ui::draw_list(), path, BORDER_NONE, ImColor{255, 255, 255, 255}, 2.0F, BorderStyle::Solid);
+        REQUIRE(draw_list->VtxBuffer.Size == vertices_before);
 
-    require_left_bounds(BorderStyle::Solid);
-    require_left_bounds(BorderStyle::Dashed);
-    require_left_bounds(BorderStyle::Dotted);
-
-    ImGui::End();
-    ImGui::EndFrame();
+        require_left_bounds(BorderStyle::Solid);
+        require_left_bounds(BorderStyle::Dashed);
+        require_left_bounds(BorderStyle::Dotted);
+    });
 }
 
 TEST_CASE("patterned borders keep every side visible") {
     const Rect rect = {{20.0F, 20.0F}, {180.0F, 100.0F}};
     const BorderPath path = rounded_rect_border_path(rect, 12.0F);
     ui_test::ImGuiContext context({220.0F, 140.0F});
-    ImGui::NewFrame();
-    ImGui::Begin("patterned-border-test");
-
-    const auto require_sides = [&](BorderStyle style) {
-        const int first_vertex = ImGui::GetWindowDrawList()->VtxBuffer.Size;
-        draw_border_path(ui::draw_list(), path, BORDER_ALL, ImColor{255, 255, 255, 255}, 2.0F, style);
-        const auto& vertices = ImGui::GetWindowDrawList()->VtxBuffer;
-        const auto has_side = [&](auto&& predicate) {
-            for (int index = first_vertex; index < vertices.Size; ++index) {
-                if (predicate(vertices[index].pos)) {
-                    return true;
+    ui_test::draw_window("patterned-border-test", [&] {
+        const auto require_sides = [&](BorderStyle style) {
+            const int first_vertex = ImGui::GetWindowDrawList()->VtxBuffer.Size;
+            draw_border_path(ui::draw_list(), path, BORDER_ALL, ImColor{255, 255, 255, 255}, 2.0F, style);
+            const auto& vertices = ImGui::GetWindowDrawList()->VtxBuffer;
+            const auto has_side = [&](auto&& predicate) {
+                for (int index = first_vertex; index < vertices.Size; ++index) {
+                    if (predicate(vertices[index].pos)) {
+                        return true;
+                    }
                 }
-            }
-            return false;
+                return false;
+            };
+
+            REQUIRE(has_side([&](ImVec2 point) {
+                return point.x > 35.0F && point.x < 165.0F && std::abs(point.y - rect.min.y) < 3.0F;
+            }));
+            REQUIRE(has_side([&](ImVec2 point) {
+                return point.y > 35.0F && point.y < 85.0F && std::abs(point.x - rect.max.x) < 3.0F;
+            }));
+            REQUIRE(has_side([&](ImVec2 point) {
+                return point.x > 35.0F && point.x < 165.0F && std::abs(point.y - rect.max.y) < 3.0F;
+            }));
+            REQUIRE(has_side([&](ImVec2 point) {
+                return point.y > 35.0F && point.y < 85.0F && std::abs(point.x - rect.min.x) < 3.0F;
+            }));
         };
 
-        REQUIRE(has_side([&](ImVec2 point) {
-            return point.x > 35.0F && point.x < 165.0F && std::abs(point.y - rect.min.y) < 3.0F;
-        }));
-        REQUIRE(has_side([&](ImVec2 point) {
-            return point.y > 35.0F && point.y < 85.0F && std::abs(point.x - rect.max.x) < 3.0F;
-        }));
-        REQUIRE(has_side([&](ImVec2 point) {
-            return point.x > 35.0F && point.x < 165.0F && std::abs(point.y - rect.max.y) < 3.0F;
-        }));
-        REQUIRE(has_side([&](ImVec2 point) {
-            return point.y > 35.0F && point.y < 85.0F && std::abs(point.x - rect.min.x) < 3.0F;
-        }));
-    };
-
-    require_sides(BorderStyle::Dashed);
-    require_sides(BorderStyle::Dotted);
-
-    ImGui::End();
-    ImGui::EndFrame();
+        require_sides(BorderStyle::Dashed);
+        require_sides(BorderStyle::Dotted);
+    });
 }
 
 TEST_CASE("style normalizes discrete fields and interpolates effect values") {
@@ -211,8 +232,8 @@ TEST_CASE("container shadows stay in their owner draw list") {
     ImGui::SetNextWindowSize({320.0F, 240.0F});
     ImGui::Begin("container-shadow-test");
 
-    begin_box_shadow_frame();
-    set_box_shadow_callback(collect_shadow_callback);
+    EffectRegistry effects;
+    initialize_effect<BoxShadowRegion>(effects, EffectSlot::BoxShadow, collect_shadow_callback);
     ImDrawList* foreground_draw_list = ImGui::GetForegroundDrawList();
 
     Container node("container");
@@ -228,6 +249,7 @@ TEST_CASE("container shadows stay in their owner draw list") {
     });
     node.update(1.0F);
     node.draw();
+    draw_box_shadow(effects, *ImGui::GetWindowDrawList(), node.layout().visual_rect(), node.computed_style().box_shadow(), 0.0F);
 
     ImGui::End();
     ImGui::EndFrame();
@@ -235,28 +257,16 @@ TEST_CASE("container shadows stay in their owner draw list") {
 
     const ImDrawData* draw_data = ImGui::GetDrawData();
     REQUIRE(draw_data != nullptr);
-    const BoxShadowRegion* queued_region = nullptr;
-    const ImDrawList* callback_draw_list = nullptr;
-    for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
-        for (const ImDrawCmd& command : draw_data->CmdLists[list_index]->CmdBuffer) {
-            if (command.UserCallback != collect_shadow_callback) {
-                continue;
-            }
+    collected_shadow_region = nullptr;
+    collected_effect_draw_list = nullptr;
+    render_effect_commands(*draw_data);
 
-            callback_draw_list = draw_data->CmdLists[list_index];
-            queued_region = static_cast<const BoxShadowRegion*>(command.UserCallbackData);
-            break;
-        }
-    }
-
-    REQUIRE(queued_region != nullptr);
-    REQUIRE(queued_region->shape.size().x == Catch::Approx(180.0F));
-    REQUIRE(queued_region->shape.size().y == Catch::Approx(140.0F));
-    REQUIRE(queued_region->cutout.size().x == Catch::Approx(100.0F));
-    REQUIRE(queued_region->cutout.size().y == Catch::Approx(60.0F));
-    REQUIRE(callback_draw_list != foreground_draw_list);
-
-    shutdown_box_shadow();
+    REQUIRE(collected_shadow_region != nullptr);
+    REQUIRE(collected_shadow_region->shape.size().x == Catch::Approx(180.0F));
+    REQUIRE(collected_shadow_region->shape.size().y == Catch::Approx(140.0F));
+    REQUIRE(collected_shadow_region->cutout.size().x == Catch::Approx(100.0F));
+    REQUIRE(collected_shadow_region->cutout.size().y == Catch::Approx(60.0F));
+    REQUIRE(collected_effect_draw_list != foreground_draw_list);
 }
 
 TEST_CASE("tree shadows use the tree outer rect") {
@@ -266,8 +276,8 @@ TEST_CASE("tree shadows use the tree outer rect") {
     ImGui::SetNextWindowSize({320.0F, 240.0F});
     ImGui::Begin("tree-shadow-test");
 
-    begin_box_shadow_frame();
-    set_box_shadow_callback(collect_shadow_callback);
+    EffectRegistry effects;
+    initialize_effect<BoxShadowRegion>(effects, EffectSlot::BoxShadow, collect_shadow_callback);
 
     Container page("page");
     page.set_size({px(240.0F), px(160.0F)});
@@ -280,25 +290,18 @@ TEST_CASE("tree shadows use the tree outer rect") {
 
     ImGui::SetNextItemOpen(true, ImGuiCond_Always);
     page.draw();
+    draw_box_shadow(effects, *ImGui::GetWindowDrawList(), tree.layout().visual_rect(), tree.computed_style().box_shadow(), 0.0F);
     ImGui::End();
     ImGui::EndFrame();
     ImGui::Render();
 
     const ImDrawData* draw_data = ImGui::GetDrawData();
     REQUIRE(draw_data != nullptr);
-    const BoxShadowRegion* queued_region = nullptr;
-    for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
-        for (const ImDrawCmd& command : draw_data->CmdLists[list_index]->CmdBuffer) {
-            if (command.UserCallback == collect_shadow_callback) {
-                queued_region = static_cast<const BoxShadowRegion*>(command.UserCallbackData);
-            }
-        }
-    }
+    collected_shadow_region = nullptr;
+    render_effect_commands(*draw_data);
 
-    REQUIRE(queued_region != nullptr);
-    REQUIRE(queued_region->cutout.min.y == Catch::Approx(tree.layout().visual_rect().min.y));
-
-    shutdown_box_shadow();
+    REQUIRE(collected_shadow_region != nullptr);
+    REQUIRE(collected_shadow_region->cutout.min.y == Catch::Approx(tree.layout().visual_rect().min.y));
 }
 
 TEST_CASE("dropdown trigger shadows use the trigger rect below its label") {
@@ -310,34 +313,25 @@ TEST_CASE("dropdown trigger shadows use the trigger rect below its label") {
     );
     dropdown.set_label("label").set_size({px(180.0F), fit()});
     dropdown.trigger().style().box_shadow({.spread = 8.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}});
+    surface.effects().register_effect<BoxShadowRegion>(EffectSlot::BoxShadow, {collect_shadow_callback});
 
     const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 180.0F});
     surface.begin_frame();
-    begin_box_shadow_frame();
-    set_box_shadow_callback(collect_shadow_callback);
     surface.update(ImGui::GetIO().DeltaTime);
     surface.draw();
     surface.end_frame();
 
     const ImDrawData* draw_data = ImGui::GetDrawData();
     REQUIRE(draw_data != nullptr);
-    const BoxShadowRegion* region = nullptr;
-    for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
-        for (const ImDrawCmd& command : draw_data->CmdLists[list_index]->CmdBuffer) {
-            if (command.UserCallback == collect_shadow_callback) {
-                region = static_cast<const BoxShadowRegion*>(command.UserCallbackData);
-            }
-        }
-    }
+    collected_shadow_region = nullptr;
+    render_effect_commands(*draw_data);
 
-    REQUIRE(region != nullptr);
+    REQUIRE(collected_shadow_region != nullptr);
     const Rect trigger_rect = dropdown.trigger().layout().visual_rect();
-    REQUIRE(region->cutout.min.x == Catch::Approx(trigger_rect.min.x));
-    REQUIRE(region->cutout.min.y == Catch::Approx(trigger_rect.min.y));
-    REQUIRE(region->cutout.max.x == Catch::Approx(trigger_rect.max.x));
-    REQUIRE(region->cutout.max.y == Catch::Approx(trigger_rect.max.y));
-
-    shutdown_box_shadow();
+    REQUIRE(collected_shadow_region->cutout.min.x == Catch::Approx(trigger_rect.min.x));
+    REQUIRE(collected_shadow_region->cutout.min.y == Catch::Approx(trigger_rect.min.y));
+    REQUIRE(collected_shadow_region->cutout.max.x == Catch::Approx(trigger_rect.max.x));
+    REQUIRE(collected_shadow_region->cutout.max.y == Catch::Approx(trigger_rect.max.y));
 }
 
 TEST_CASE("container blur excludes its scrollbar") {
@@ -361,15 +355,21 @@ TEST_CASE("container blur excludes its scrollbar") {
     node.configure_all_styles([](Style& style) { style.blur(8); });
     node.add<TallNode>();
 
+    EffectRegistry effects;
+    initialize_effect<BlurRegion>(effects, EffectSlot::Blur, collect_blur_callback);
+
     const auto draw_frame = [&] {
+        effects.begin_frame();
         ImGui::NewFrame();
         ImGui::SetNextWindowPos({0.0F, 0.0F});
         ImGui::SetNextWindowSize({320.0F, 240.0F});
         ImGui::Begin("container-blur-test");
-        begin_blur_frame();
-        set_blur_callback(collect_blur_callback);
         node.update(1.0F);
         node.draw();
+        const Rect rect = node.layout().visual_rect();
+        draw_blur(
+            effects, *ImGui::GetWindowDrawList(), {rect.min, {rect.max.x - ImGui::GetStyle().ScrollbarSize, rect.max.y}}, 8, 0.0F
+        );
         ImGui::End();
         ImGui::EndFrame();
         ImGui::Render();
@@ -380,102 +380,88 @@ TEST_CASE("container blur excludes its scrollbar") {
 
     const ImDrawData* draw_data = ImGui::GetDrawData();
     REQUIRE(draw_data != nullptr);
-    const BlurRegion* queued_region = nullptr;
-    for (int list_index = 0; list_index < draw_data->CmdListsCount; ++list_index) {
-        for (const ImDrawCmd& command : draw_data->CmdLists[list_index]->CmdBuffer) {
-            if (command.UserCallback == collect_blur_callback) {
-                queued_region = static_cast<const BlurRegion*>(command.UserCallbackData);
-            }
-        }
-    }
+    collected_blur_region = nullptr;
+    render_effect_commands(*draw_data);
 
-    REQUIRE(queued_region != nullptr);
-    REQUIRE(node.layout().visual_rect().max.x - queued_region->rect.max.x == Catch::Approx(ImGui::GetStyle().ScrollbarSize));
-
-    shutdown_blur();
+    REQUIRE(collected_blur_region != nullptr);
+    REQUIRE(
+        node.layout().visual_rect().max.x - collected_blur_region->output.max.x == Catch::Approx(ImGui::GetStyle().ScrollbarSize)
+    );
 }
 
 TEST_CASE("styled paint slots render before the node and above completed subtrees") {
     ui_test::ImGuiContext context({160.0F, 120.0F});
-    ImGui::NewFrame();
-    ImGui::Begin("decoration-test");
+    ui_test::draw_window("decoration-test", [&] {
+        StyledNode node("node");
+        node.set_size({px(80.0F), px(40.0F)});
+        node.before().style().background_color(ImColor{255, 0, 0, 255});
+        node.after().style().border(BORDER_ALL).border_color(ImColor{255, 255, 255, 255});
+        node.update(1.0F);
 
-    StyledNode node("node");
-    node.set_size({px(80.0F), px(40.0F)});
-    node.before().style().background_color(ImColor{255, 0, 0, 255});
-    node.after().style().border(BORDER_ALL).border_color(ImColor{255, 255, 255, 255});
-    node.update(1.0F);
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        const int vertices_before = draw_list->VtxBuffer.Size;
+        ImDrawList* foreground_draw_list = ImGui::GetForegroundDrawList();
+        const int foreground_vertices_before = foreground_draw_list->VtxBuffer.Size;
+        node.draw();
+        REQUIRE(draw_list->VtxBuffer.Size > vertices_before);
+        REQUIRE(foreground_draw_list->VtxBuffer.Size > foreground_vertices_before);
 
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    const int vertices_before = draw_list->VtxBuffer.Size;
-    ImDrawList* foreground_draw_list = ImGui::GetForegroundDrawList();
-    const int foreground_vertices_before = foreground_draw_list->VtxBuffer.Size;
-    node.draw();
-    REQUIRE(draw_list->VtxBuffer.Size > vertices_before);
-    REQUIRE(foreground_draw_list->VtxBuffer.Size > foreground_vertices_before);
-
-    const ImU32 before_color = ImGui::GetColorU32(ImVec4{1.0F, 0.0F, 0.0F, 1.0F});
-    const ImU32 after_color = ImGui::GetColorU32(ImVec4{1.0F, 1.0F, 1.0F, 1.0F});
-    int first_before = -1;
-    int first_after = -1;
-    for (int index = vertices_before; index < draw_list->VtxBuffer.Size; ++index) {
-        if (draw_list->VtxBuffer[index].col == before_color && first_before < 0) {
-            first_before = index;
+        const ImU32 before_color = ImGui::GetColorU32(ImVec4{1.0F, 0.0F, 0.0F, 1.0F});
+        const ImU32 after_color = ImGui::GetColorU32(ImVec4{1.0F, 1.0F, 1.0F, 1.0F});
+        int first_before = -1;
+        int first_after = -1;
+        for (int index = vertices_before; index < draw_list->VtxBuffer.Size; ++index) {
+            if (draw_list->VtxBuffer[index].col == before_color && first_before < 0) {
+                first_before = index;
+            }
         }
-    }
 
-    for (int index = foreground_vertices_before; index < foreground_draw_list->VtxBuffer.Size; ++index) {
-        if (foreground_draw_list->VtxBuffer[index].col == after_color && first_after < 0) first_after = index;
-    }
+        for (int index = foreground_vertices_before; index < foreground_draw_list->VtxBuffer.Size; ++index) {
+            if (foreground_draw_list->VtxBuffer[index].col == after_color && first_after < 0) first_after = index;
+        }
 
-    REQUIRE(first_before >= 0);
-    REQUIRE(first_after >= foreground_vertices_before);
-
-    ImGui::End();
-    ImGui::EndFrame();
+        REQUIRE(first_before >= 0);
+        REQUIRE(first_after >= foreground_vertices_before);
+    });
 }
 
 TEST_CASE("styled paint slots pass owner bounds and their target draw list to callbacks") {
     ui_test::ImGuiContext context({160.0F, 120.0F});
-    ImGui::NewFrame();
-    ImGui::Begin("decoration-callback-test");
+    ui_test::draw_window("decoration-callback-test", [&] {
+        StyledNode node("node");
+        node.set_size({px(80.0F), px(40.0F)});
+        node.configure_all_styles([](Style& style) { style.padding({8.0F, 6.0F}); });
+        Rect before_rect{};
+        Rect after_rect{};
+        Rect before_content_rect{};
+        ImDrawList* before_draw_list = nullptr;
+        ImDrawList* after_draw_list = nullptr;
+        node.before().set_draw_callback([&](const PaintContext& context) {
+            before_rect = context.rect;
+            before_content_rect = context.content_rect;
+            before_draw_list = &context.draw_list;
+        });
+        node.after().set_draw_callback([&](const PaintContext& context) {
+            after_rect = context.rect;
+            after_draw_list = &context.draw_list;
+        });
 
-    StyledNode node("node");
-    node.set_size({px(80.0F), px(40.0F)});
-    node.configure_all_styles([](Style& style) { style.padding({8.0F, 6.0F}); });
-    Rect before_rect{};
-    Rect after_rect{};
-    Rect before_content_rect{};
-    ImDrawList* before_draw_list = nullptr;
-    ImDrawList* after_draw_list = nullptr;
-    node.before().set_draw_callback([&](const PaintContext& context) {
-        before_rect = context.rect;
-        before_content_rect = context.content_rect;
-        before_draw_list = &context.draw_list;
+        node.update(1.0F);
+        node.draw();
+
+        REQUIRE(before_rect.valid());
+        REQUIRE(after_rect.valid());
+        REQUIRE(before_rect.min.x == Catch::Approx(after_rect.min.x));
+        REQUIRE(before_rect.min.y == Catch::Approx(after_rect.min.y));
+        REQUIRE(before_rect.max.x == Catch::Approx(after_rect.max.x));
+        REQUIRE(before_rect.max.y == Catch::Approx(after_rect.max.y));
+        REQUIRE(before_content_rect.min.x == Catch::Approx(before_rect.min.x + 8.0F));
+        REQUIRE(before_content_rect.min.y == Catch::Approx(before_rect.min.y + 6.0F));
+        REQUIRE(before_content_rect.max.x == Catch::Approx(before_rect.max.x - 8.0F));
+        REQUIRE(before_content_rect.max.y == Catch::Approx(before_rect.max.y - 6.0F));
+        REQUIRE(before_draw_list == ImGui::GetWindowDrawList());
+        REQUIRE(after_draw_list == ImGui::GetForegroundDrawList());
     });
-    node.after().set_draw_callback([&](const PaintContext& context) {
-        after_rect = context.rect;
-        after_draw_list = &context.draw_list;
-    });
-
-    node.update(1.0F);
-    node.draw();
-
-    REQUIRE(before_rect.valid());
-    REQUIRE(after_rect.valid());
-    REQUIRE(before_rect.min.x == Catch::Approx(after_rect.min.x));
-    REQUIRE(before_rect.min.y == Catch::Approx(after_rect.min.y));
-    REQUIRE(before_rect.max.x == Catch::Approx(after_rect.max.x));
-    REQUIRE(before_rect.max.y == Catch::Approx(after_rect.max.y));
-    REQUIRE(before_content_rect.min.x == Catch::Approx(before_rect.min.x + 8.0F));
-    REQUIRE(before_content_rect.min.y == Catch::Approx(before_rect.min.y + 6.0F));
-    REQUIRE(before_content_rect.max.x == Catch::Approx(before_rect.max.x - 8.0F));
-    REQUIRE(before_content_rect.max.y == Catch::Approx(before_rect.max.y - 6.0F));
-    REQUIRE(before_draw_list == ImGui::GetWindowDrawList());
-    REQUIRE(after_draw_list == ImGui::GetForegroundDrawList());
-
-    ImGui::End();
-    ImGui::EndFrame();
 }
 
 TEST_CASE("ui nodes close child scopes before drawing after hooks") {
@@ -493,11 +479,7 @@ TEST_CASE("ui nodes close child scopes before drawing after hooks") {
 
         bool on_draw() override {
             m_events.push_back(id() + ":begin");
-            if (m_skip) {
-                return false;
-            }
-
-            return true;
+            return !m_skip;
         }
 
         void on_draw_end() override {
@@ -730,7 +712,7 @@ TEST_CASE("positioned nodes preserve their cursor placement when drawing is skip
     auto& empty = container.add<EmptyNode>();
     empty.set_layout({.placement = {.offset = {140.0F, 20.0F}}, .in_flow = false});
 
-    ui_test::draw_window("skipped-placement-test", [&] { container.draw(); });
+    ui_test::draw_node(container, "skipped-placement-test");
 
     REQUIRE(skipped.layout().local_rect().min.x == container.style().padding().x + 120.0F);
 }
@@ -753,7 +735,7 @@ TEST_CASE("overlay children stay in the surface window") {
 
     REQUIRE_FALSE(overlay.layout().in_flow());
 
-    ui_test::draw_window("surface", [&] { overlay.draw(); });
+    ui_test::draw_node(overlay, "surface");
 
     REQUIRE(child.window_name == "surface");
     REQUIRE(overlay.layout().layout_rect().min.x == Catch::Approx(0.0F));

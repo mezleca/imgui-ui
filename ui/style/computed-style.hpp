@@ -175,7 +175,7 @@ namespace ui {
         PushState push(float opacity, ImFont* effective_font) const;
 
         /// restores the imgui values recorded by push.
-        void pop(PushState state) const;
+        static void pop(PushState state);
 
         friend class StyledNode;
 

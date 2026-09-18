@@ -76,7 +76,7 @@ void CheckboxWidget::on_click(UiEvent& event) {
     }
 
     m_frame_node->animate()
-        .background_color(m_frame_node->style(StyleType::ACTIVE).background_color().value)
+        .to(StyleAnimationProperty::BackgroundColor, m_frame_node->style(StyleType::ACTIVE).background_color().value)
         .then(0.04F)
         .release_all({0.12F, easing::out_quad});
 }
@@ -155,6 +155,6 @@ void CheckboxWidget::update_shape() {
     m_fill_node->configure_all_styles([radius](Style& style) { style.border_radius(radius); });
 
     const float fill_size = m_box_size * 0.60F;
-    const float inset = std::max(0.0F, (m_box_size - fill_size) * 0.5F - m_frame_border_thickness);
+    const float inset = std::max(0.0F, ((m_box_size - fill_size) * 0.5F) - m_frame_border_thickness);
     m_frame_node->configure_all_styles([inset](Style& style) { style.padding({inset, inset}); });
 }

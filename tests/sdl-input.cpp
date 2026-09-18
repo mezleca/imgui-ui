@@ -7,6 +7,7 @@
 #include <ui/imgui/context-scope.hpp>
 #include <ui/layout/container.hpp>
 #include <ui/layout/layer-container.hpp>
+#include <ui/layout/resizable-container.hpp>
 #include <ui/layout/tree-container.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
@@ -25,6 +26,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -73,6 +75,30 @@ private:
 
 static bool process_sdl_event(ui::UI& surface, const SDL_Event& event) {
     return static_cast<ui::SdlBackend&>(surface.backend()).process_event(surface, event);
+}
+
+static void draw_frame(ui::UI& surface, std::optional<float> delta_time = std::nullopt) {
+    surface.begin_frame();
+    surface.update(delta_time.value_or(ImGui::GetIO().DeltaTime));
+    surface.draw();
+    ImGui::Render();
+    ImDrawData* draw_data = ImGui::GetDrawData();
+    REQUIRE(draw_data != nullptr);
+    ImGui_ImplOpenGL3_RenderDrawData(draw_data);
+    glFinish();
+    surface.end_frame();
+}
+
+static void click_tree(ui::UI& surface, const ui::TreeContainer& tree) {
+    const ui::ImGuiContextScope context(surface.imgui_context());
+    const ui::Rect rect = tree.layout().visual_rect();
+    ImGui::GetIO().AddMousePosEvent(rect.min.x + 4.0F, rect.min.y + 4.0F);
+    ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+}
+
+static void release_click(ui::UI& surface) {
+    const ui::ImGuiContextScope context(surface.imgui_context());
+    ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, false);
 }
 
 TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regression]") {
@@ -133,38 +159,20 @@ TEST_CASE("opengl blur excludes content outside its rect", "[render][regression]
         .placement = {.offset = {20.0F, 20.0F}},
         .in_flow = false,
     });
-    parent.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F});
-    });
+    parent.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F}); });
     auto& outside = parent.add<ui::Container>("outside");
     outside.set_layout({
         .size = {ui::px(20.0F), ui::px(60.0F)},
         .placement = {.offset = {80.0F, 0.0F}},
         .in_flow = false,
     });
-    outside.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F});
-    });
+    outside.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F}); });
     auto& blurred = parent.add<ui::Container>("blurred");
     blurred.set_size({ui::px(80.0F), ui::px(60.0F)});
-    blurred.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F}).blur(12);
-    });
+    blurred.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F}).blur(12); });
 
-    const auto draw_frame = [&] {
-        surface.begin_frame();
-        surface.update(ImGui::GetIO().DeltaTime);
-        surface.draw();
-        ImGui::Render();
-        ImDrawData* draw_data = ImGui::GetDrawData();
-        REQUIRE(draw_data != nullptr);
-        ImGui_ImplOpenGL3_RenderDrawData(draw_data);
-        glFinish();
-        surface.end_frame();
-    };
-
-    draw_frame();
-    draw_frame();
+    draw_frame(surface);
+    draw_frame(surface);
 
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);
@@ -208,18 +216,8 @@ TEST_CASE("container border stays above a child widget surface", "[render][regre
         style.background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F}).border(ui::BORDER_NONE).padding({});
     });
 
-    const auto draw_frame = [&] {
-        surface.begin_frame();
-        surface.update(ImGui::GetIO().DeltaTime);
-        surface.draw();
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        glFinish();
-        surface.end_frame();
-    };
-
-    draw_frame();
-    draw_frame();
+    draw_frame(surface);
+    draw_frame(surface);
 
     const ui::Rect parent_rect = parent.layout().visual_rect();
     const ui::Rect dialog_rect = dialog.layout().visual_rect();
@@ -231,11 +229,95 @@ TEST_CASE("container border stays above a child widget surface", "[render][regre
     glGetIntegerv(GL_VIEWPORT, viewport);
     unsigned char pixel[4]{};
     glReadPixels(
-        static_cast<int>(dialog_rect.min.x + 20.0F), viewport[3] - static_cast<int>(parent_rect.max.y - 1.0F), 1, 1,
-        GL_RGBA, GL_UNSIGNED_BYTE, pixel
+        static_cast<int>(dialog_rect.min.x + 20.0F), viewport[3] - static_cast<int>(parent_rect.max.y - 1.0F), 1, 1, GL_RGBA,
+        GL_UNSIGNED_BYTE, pixel
     );
     CHECK(pixel[0] > 32);
     CHECK(pixel[2] < 224);
+}
+
+TEST_CASE("scrolling keeps inline overlay panels above earlier content", "[LayerContainer][render][scroll][regression]") {
+    class ScrollContainer final : public ui::Container {
+    public:
+        ScrollContainer() : Container("scroll-overlay-parent") {
+            set_size({ui::px(140.0F), ui::px(100.0F)});
+            set_scrollable(true);
+        }
+
+        bool scroll_to_end = false;
+
+    protected:
+        bool paint() override {
+            ImGui::SetNextWindowContentSize({140.0F, 400.0F});
+            return Container::paint();
+        }
+
+        void on_draw_end() override {
+            if (scroll_to_end) {
+                ImGui::SetScrollY(20.0F);
+            }
+            Container::on_draw_end();
+        }
+    };
+
+    SdlVideoSession sdl({240.0F, 180.0F});
+    ui::Runtime runtime;
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
+    ui::UI surface(runtime, {.backend = std::move(backend)});
+    auto& scroll = surface.root().add<ScrollContainer>();
+
+    auto& input = scroll.add<ui::Container>("input");
+    input.set_layout({
+        .size = {ui::px(100.0F), ui::px(50.0F)},
+        .placement = {.offset = {20.0F, 60.0F}},
+        .in_flow = false,
+    });
+    input.configure_all_styles([](ui::Style& style) {
+        style.background_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+            .border(ui::BORDER_ALL)
+            .border_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+            .padding({});
+    });
+
+    scroll.add<ui::Container>("filler").set_size({ui::px(140.0F), ui::px(400.0F)});
+
+    auto& overlay = scroll.add<ui::LayerContainer>("overlay");
+    auto& panel = overlay.add<ui::Container>("panel");
+    panel.set_layout({
+        .size = {ui::px(100.0F), ui::px(50.0F)},
+        .placement = {.offset = {20.0F, 60.0F}},
+        .in_flow = false,
+    });
+    panel.configure_all_styles([](ui::Style& style) {
+        style.background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F})
+            .border(ui::BORDER_ALL)
+            .border_color(ImColor{0.5F, 0.5F, 0.5F, 1.0F})
+            .padding({});
+    });
+    auto& resize = panel.add<ui::ResizableContainer>("resize");
+    resize.set_size({ui::grow(), ui::grow()});
+    resize.set_resize(ui::ResizeAxes::Both).set_scrollable(true);
+    resize.add<ui::Container>("row").set_size({ui::grow(), ui::px(200.0F)});
+
+    draw_frame(surface);
+    const ImVec2 initial_size = resize.layout().size();
+    scroll.scroll_to_end = true;
+    draw_frame(surface);
+    draw_frame(surface);
+
+    REQUIRE(panel.layout().visual_rect().valid());
+    REQUIRE(resize.layout().visual_rect().valid());
+    REQUIRE(resize.layout().size().x == Catch::Approx(initial_size.x));
+    REQUIRE(resize.layout().size().y == Catch::Approx(initial_size.y));
+
+    const ui::Rect panel_rect = panel.layout().visual_rect();
+    const ImVec2 sample = ui_test::center(panel_rect);
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    unsigned char pixel[4]{};
+    glReadPixels(static_cast<int>(sample.x), viewport[3] - static_cast<int>(sample.y), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+    CHECK(pixel[1] > 160);
+    CHECK(pixel[0] < 96);
 }
 
 TEST_CASE("container borders stay below popup surfaces", "[render][regression]") {
@@ -258,16 +340,7 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
         .placement = {.offset = {40.0F, 10.0F}},
         .in_flow = false,
     });
-    const auto draw_frame = [&] {
-        surface.begin_frame();
-        surface.update(0.1F);
-        surface.draw();
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        glFinish();
-        surface.end_frame();
-    };
-    draw_frame();
+    draw_frame(surface, 0.1F);
     file.configure_all_styles([](ui::Style& style) {
         style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F})
             .border(ui::BORDER_ALL)
@@ -276,12 +349,12 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
             .padding({});
     });
     dropdown.body().style().background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F}).border(ui::BORDER_NONE).padding({});
-    draw_frame();
+    draw_frame(surface, 0.1F);
     CHECK(file.computed_style().border_color().value.Value.x > 0.9F);
     CHECK(dropdown.body().computed_style().background_color().value.Value.y > 0.9F);
     dropdown.open();
     for (int frame = 0; frame < 5; ++frame) {
-        draw_frame();
+        draw_frame(surface, 0.1F);
     }
     CHECK(dropdown.body().opacity() > 0.99F);
     const ui::Rect file_rect = file.layout().visual_rect();
@@ -329,17 +402,8 @@ TEST_CASE("container borders stay below window-layer panels", "[render][regressi
         style.background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F}).border(ui::BORDER_NONE).padding({});
     });
 
-    const auto draw_frame = [&] {
-        surface.begin_frame();
-        surface.update(ImGui::GetIO().DeltaTime);
-        surface.draw();
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        glFinish();
-        surface.end_frame();
-    };
-    draw_frame();
-    draw_frame();
+    draw_frame(surface);
+    draw_frame(surface);
 
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);
@@ -374,18 +438,8 @@ TEST_CASE("dropdown trigger shadows render below its label", "[render][regressio
             .box_shadow({.spread = 8.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}});
     });
 
-    const auto draw_frame = [&] {
-        surface.begin_frame();
-        surface.update(ImGui::GetIO().DeltaTime);
-        surface.draw();
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        glFinish();
-        surface.end_frame();
-    };
-
-    draw_frame();
-    draw_frame();
+    draw_frame(surface);
+    draw_frame(surface);
 
     const ui::Rect trigger_rect = dropdown.trigger().layout().visual_rect();
     GLint viewport[4]{};
@@ -418,20 +472,11 @@ TEST_CASE("container overflow controls child surfaces", "[render][regression]") 
             .placement = {.offset = {70.0F, 10.0F}},
             .in_flow = false,
         });
-        const auto draw_frame = [&] {
-            surface.begin_frame();
-            surface.update(ImGui::GetIO().DeltaTime);
-            surface.draw();
-            ImGui::Render();
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-            glFinish();
-            surface.end_frame();
-        };
-        draw_frame();
+        draw_frame(surface);
         parent.style().overflow(overflow).border(ui::BORDER_NONE).padding({});
         child.style().background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F}).padding({});
         for (int frame = 0; frame < 2; ++frame) {
-            draw_frame();
+            draw_frame(surface);
         }
 
         GLint viewport[4]{};
@@ -448,6 +493,162 @@ TEST_CASE("container overflow controls child surfaces", "[render][regression]") 
         const auto clipped = sample_overflow(overflow);
         CHECK(clipped[2] < 80);
     }
+}
+
+TEST_CASE("scrolled tree bodies clip oversized checkbox surfaces", "[TreeContainer][render][regression]") {
+    class ScrollContainer final : public ui::Container {
+    public:
+        ScrollContainer() : Container("tree-scroll-parent") {
+            set_size({ui::px(160.0F), ui::px(100.0F)});
+            set_scrollable(true);
+        }
+
+        bool scroll_to_end = false;
+
+    protected:
+        bool paint() override {
+            ImGui::SetNextWindowContentSize({160.0F, 360.0F});
+            return Container::paint();
+        }
+
+        void on_draw_end() override {
+            if (scroll_to_end) {
+                ImGui::SetScrollY(20.0F);
+            }
+            Container::on_draw_end();
+        }
+    };
+
+    SdlVideoSession sdl({240.0F, 180.0F});
+    ui::Runtime runtime;
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
+    ui::UI surface(runtime, {.backend = std::move(backend)});
+    auto& backdrop = surface.root().add<ui::Container>("backdrop");
+    backdrop.set_layout({.size = {ui::px(240.0F), ui::px(180.0F)}, .in_flow = false});
+    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F}); });
+    auto& parent = surface.root().add<ScrollContainer>();
+    parent.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F}).padding({}); });
+
+    auto& tree = parent.add<ui::TreeContainer>("widgets");
+    auto& panel = tree.add<ui::Container>("panel");
+    panel.set_size({ui::px(80.0F), ui::px(64.0F)});
+    panel.configure_all_styles([](ui::Style& style) {
+        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F})
+            .border(ui::BORDER_ALL)
+            .border_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+            .padding({});
+    });
+    bool checked = false;
+    auto& checkbox = panel.add<ui::CheckboxWidget>(checked, "oversized");
+    checkbox.set_size({ui::px(160.0F), ui::px(40.0F)});
+    checkbox.set_box_size(120.0F);
+    checkbox.frame().configure_all_styles([](ui::Style& style) {
+        style.background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F}).border(ui::BORDER_NONE).padding({});
+    });
+    parent.add<ui::Container>("filler").set_size({ui::px(160.0F), ui::px(280.0F)});
+
+    draw_frame(surface);
+    click_tree(surface, tree);
+    draw_frame(surface);
+    release_click(surface);
+    draw_frame(surface);
+    parent.scroll_to_end = true;
+    draw_frame(surface);
+    draw_frame(surface);
+
+    const ui::Rect panel_rect = panel.layout().visual_rect();
+    const ui::Rect frame_rect = checkbox.frame().layout().visual_rect();
+    REQUIRE(panel_rect.valid());
+    REQUIRE(frame_rect.valid());
+    REQUIRE(frame_rect.max.x > panel_rect.max.x);
+
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    unsigned char pixel[4]{};
+    glReadPixels(
+        static_cast<int>(panel_rect.max.x + 5.0F), viewport[3] - static_cast<int>((frame_rect.min.y + frame_rect.max.y) * 0.5F),
+        1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
+    );
+    CHECK(pixel[1] > 160);
+    CHECK(pixel[2] < 80);
+}
+
+TEST_CASE("tree widget viewports clip oversized file dialog surfaces", "[TreeContainer][render][regression]") {
+    SdlVideoSession sdl({240.0F, 180.0F});
+    ui::Runtime runtime;
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
+    ui::UI surface(runtime, {.backend = std::move(backend)});
+    auto& backdrop = surface.root().add<ui::Container>("backdrop");
+    backdrop.set_layout({.size = {ui::px(240.0F), ui::px(180.0F)}, .in_flow = false});
+    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F}); });
+
+    auto& visual = surface.root().add<ui::Container>("visual-tests");
+    visual.set_layout({
+        .size = {ui::px(180.0F), ui::px(140.0F)},
+        .placement = {.offset = {20.0F, 20.0F}},
+        .in_flow = false,
+    });
+    visual.set_scrollable(true);
+    visual.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F}); });
+    auto& outer = visual.add<ui::TreeContainer>("ui visual tests");
+    auto& tree = outer.add<ui::TreeContainer>("widgets");
+    auto& widgets = tree.add<ui::Container>("widget-view");
+    widgets.set_size({ui::px(100.0F), ui::px(80.0F)});
+    widgets.set_scrollable(true);
+    widgets.configure_all_styles([](ui::Style& style) {
+        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F})
+            .border(ui::BORDER_ALL)
+            .border_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+            .padding({12.0F, 12.0F});
+    });
+    auto& dialog = widgets.add<ui::FileDialogWidget>("file dialog");
+    dialog.set_size({ui::px(240.0F), ui::px(100.0F)});
+    dialog.configure_all_styles([](ui::Style& style) {
+        style.background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F}).border(ui::BORDER_NONE).padding({});
+    });
+    widgets.add<ui::Container>("filler").set_size({ui::px(100.0F), ui::px(200.0F)});
+
+    draw_frame(surface);
+    click_tree(surface, outer);
+    draw_frame(surface);
+    release_click(surface);
+    draw_frame(surface);
+    click_tree(surface, tree);
+    draw_frame(surface);
+    release_click(surface);
+    draw_frame(surface);
+
+    const ui::Rect viewport_rect = widgets.layout().visual_rect();
+    const ui::Rect dialog_rect = dialog.layout().visual_rect();
+    REQUIRE(viewport_rect.valid());
+    REQUIRE(dialog_rect.valid());
+    REQUIRE(dialog_rect.max.x > viewport_rect.max.x);
+
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    unsigned char pixel[4]{};
+    glReadPixels(
+        static_cast<int>(viewport_rect.max.x + 5.0F),
+        viewport[3] - static_cast<int>((dialog_rect.min.y + dialog_rect.max.y) * 0.5F), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
+    );
+    CHECK(pixel[1] > 160);
+    CHECK(pixel[2] < 80);
+    glReadPixels(
+        static_cast<int>(viewport_rect.max.x - 1.0F),
+        viewport[3] - static_cast<int>((dialog_rect.min.y + dialog_rect.max.y) * 0.5F), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
+    );
+    CAPTURE(viewport_rect.min.x, viewport_rect.max.x, viewport_rect.min.y, viewport_rect.max.y);
+    CAPTURE(dialog_rect.min.x, dialog_rect.max.x, dialog_rect.min.y, dialog_rect.max.y);
+    CAPTURE(pixel[0], pixel[1], pixel[2], pixel[3]);
+    CHECK(pixel[0] > 160);
+    CHECK(pixel[2] < 80);
+    glReadPixels(
+        static_cast<int>((viewport_rect.min.x + viewport_rect.max.x) * 0.5F),
+        viewport[3] - static_cast<int>(viewport_rect.max.y - 1.0F), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
+    );
+    CAPTURE(pixel[0], pixel[1], pixel[2], pixel[3]);
+    CHECK(pixel[0] > 64);
+    CHECK(pixel[2] < 80);
 }
 
 TEST_CASE("nested tree shadows escape their parent body clip", "[render][regression]") {
@@ -484,37 +685,16 @@ TEST_CASE("nested tree shadows escape their parent body clip", "[render][regress
     auto& filler = visual_tests.add<ui::Container>("filler");
     filler.set_size({ui::grow(), ui::px(200.0F)});
 
-    const auto draw_frame = [&] {
-        surface.begin_frame();
-        surface.update(ImGui::GetIO().DeltaTime);
-        surface.draw();
-        ImGui::Render();
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        glFinish();
-        surface.end_frame();
-    };
-
-    const auto click_tree = [&](const ui::TreeContainer& tree) {
-        const ui::ImGuiContextScope context(surface.imgui_context());
-        const ui::Rect rect = tree.layout().visual_rect();
-        ImGui::GetIO().AddMousePosEvent(rect.min.x + 4.0F, rect.min.y + 4.0F);
-        ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, true);
-    };
-    const auto release_click = [&] {
-        const ui::ImGuiContextScope context(surface.imgui_context());
-        ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, false);
-    };
-
-    draw_frame();
-    click_tree(outer);
-    draw_frame();
-    release_click();
-    draw_frame();
-    click_tree(inner);
-    draw_frame();
-    release_click();
-    draw_frame();
-    draw_frame();
+    draw_frame(surface);
+    click_tree(surface, outer);
+    draw_frame(surface);
+    release_click(surface);
+    draw_frame(surface);
+    click_tree(surface, inner);
+    draw_frame(surface);
+    release_click(surface);
+    draw_frame(surface);
+    draw_frame(surface);
 
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);

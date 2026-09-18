@@ -122,6 +122,21 @@ namespace ui_test {
         ImGui::EndFrame();
     }
 
+    template <typename Draw>
+    inline void draw_window(const char* name, ImVec2 size, Draw&& draw) {
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos({0.0F, 0.0F});
+        ImGui::SetNextWindowSize(size);
+        ImGui::Begin(name);
+        std::forward<Draw>(draw)();
+        ImGui::End();
+        ImGui::EndFrame();
+    }
+
+    inline void draw_node(ui::Node& node, const char* name) {
+        draw_window(name, [&node] { node.draw(); });
+    }
+
     inline ImVec2 center(const ui::Rect& rect) {
         return {(rect.min.x + rect.max.x) * 0.5F, (rect.min.y + rect.max.y) * 0.5F};
     }

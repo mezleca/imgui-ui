@@ -8,6 +8,7 @@ using namespace ui;
 
 static constexpr ImGuiWindowFlags LAYER_WINDOW_FLAGS = constants::WINDOW_FLAGS;
 
+// a child window gives styled padding, backgrounds, borders, and effects a local clip and draw list.
 static bool needs_child_scope(const ComputedStyle& style) {
     return style.background_color().value.Value.w > 0.0F || style.blur() > 0 || style.box_shadow().color.Value.w > 0.0F ||
            style.border() != BORDER_NONE || style.padding().x > 0.0F || style.padding().y > 0.0F;
@@ -37,6 +38,14 @@ bool LayerContainer::paint() {
 
     const Rect viewport_rect = Rect::from_position_size(viewport->WorkPos, viewport->WorkSize);
     if (m_mode == LayerMode::Inline) {
+        const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
+        // a scrolled inline layer must enter the parent content coordinate space before arranging descendants.
+        if (scroll.x != 0.0F || scroll.y != 0.0F) {
+            const ImVec2 cursor = ImGui::GetCursorPos();
+            ImGui::SetCursorPos({cursor.x + scroll.x, cursor.y + scroll.y});
+            m_inline_child_scope = true;
+        }
+
         // padding changes descendant layout, so it needs the same child scope as visible frame effects.
         m_inline_child_scope = m_inline_child_scope || needs_child_scope(computed_style());
         if (m_inline_child_scope) {
@@ -55,7 +64,7 @@ bool LayerContainer::paint() {
     // window layers use a borderless viewport-sized imgui window.
     const bool accepts_input = this->accepts_input();
     ImGuiWindowFlags window_flags = LAYER_WINDOW_FLAGS;
-    // allow the first draw to establish the layer above its parent window.
+    // allow the first window creation to reorder the layer above its parent window.
     if (!m_window_initialized) {
         window_flags &= ~ImGuiWindowFlags_NoBringToFrontOnFocus;
     }
@@ -81,8 +90,8 @@ bool LayerContainer::paint() {
 }
 
 void LayerContainer::on_draw_end() {
+    // close the child opened by container painting while retaining the flag for the next frame.
     if (m_mode == LayerMode::Inline) {
-        // close the child opened by container painting while retaining the flag for the next frame.
         if (m_inline_child_scope) {
             Container::on_draw_end();
         }

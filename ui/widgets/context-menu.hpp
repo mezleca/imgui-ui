@@ -67,7 +67,7 @@ namespace ui {
         void update_pointer_hover(ImVec2 position);
         void update_submenu_hover(ImVec2 position);
         void activate();
-        void position_submenu(ContextMenuWidget& submenu, const ContextMenuItemNode& item);
+        static void position_submenu(ContextMenuWidget& submenu, const ContextMenuItemNode& item);
         bool contains_open_menu(ImVec2 position) const;
         ContextMenuWidget& root_menu();
         void close_children();

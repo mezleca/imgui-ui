@@ -144,13 +144,13 @@ void TextInputWidget::arrange_children() {
     const ImVec2 field_margin = m_input_node->layout_margin();
 
     if (m_label_placement == LabelPlacement::Inline) {
-        const float label_y = std::max(0.0F, (content.y - label_size.y - label_margin.y * 2.0F) * 0.5F);
+        const float label_y = std::max(0.0F, (content.y - label_size.y - (label_margin.y * 2.0F)) * 0.5F);
         arrange_child(*m_label_node, label_size, {.offset = {label_margin.x, label_y + label_margin.y}});
 
-        const float field_x = label_size.x + label_margin.x * 2.0F + m_label_spacing.x;
+        const float field_x = label_size.x + (label_margin.x * 2.0F) + m_label_spacing.x;
         const ImVec2 field_size = {
-            std::max(0.0F, content.x - field_x - field_margin.x * 2.0F),
-            std::max(0.0F, content.y - field_margin.y * 2.0F),
+            std::max(0.0F, content.x - field_x - (field_margin.x * 2.0F)),
+            std::max(0.0F, content.y - (field_margin.y * 2.0F)),
         };
         arrange_child(*m_input_node, field_size, {.offset = {field_x + field_margin.x, field_margin.y}});
         return;
@@ -158,10 +158,10 @@ void TextInputWidget::arrange_children() {
 
     arrange_child(*m_label_node, label_size, {.offset = label_margin});
 
-    const float field_y = label_size.y + label_margin.y * 2.0F + m_label_spacing.y;
+    const float field_y = label_size.y + (label_margin.y * 2.0F) + m_label_spacing.y;
     const ImVec2 field_size = {
-        std::max(0.0F, content.x - field_margin.x * 2.0F),
-        std::max(0.0F, content.y - field_y - field_margin.y * 2.0F),
+        std::max(0.0F, content.x - (field_margin.x * 2.0F)),
+        std::max(0.0F, content.y - field_y - (field_margin.y * 2.0F)),
     };
     arrange_child(*m_input_node, field_size, {.offset = {field_margin.x, field_y + field_margin.y}});
 }

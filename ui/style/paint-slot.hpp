@@ -6,6 +6,8 @@
 #include <functional>
 
 namespace ui {
+    class EffectRegistry;
+
     /// values available to a paint slot draw callback for the current node paint pass.
     struct PaintContext {
         Rect rect;
@@ -36,7 +38,7 @@ namespace ui {
     private:
         friend class StyledNode;
 
-        void paint(ImDrawList& draw_list, Rect rect, Rect content_rect);
+        void paint(EffectRegistry* effects, ImDrawList& draw_list, Rect rect, Rect content_rect);
 
         Style m_style;
         DrawCallback m_draw_callback;

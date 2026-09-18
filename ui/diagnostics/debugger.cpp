@@ -89,6 +89,7 @@ static constexpr const char* ALIGNMENT_NAMES[] = {
 static constexpr const char* STYLE_NAMES[] = {"all", "default", "hover", "active", "focus"};
 static constexpr const char* BORDER_STYLE_NAMES[] = {"solid", "dashed", "dotted"};
 static constexpr const char* BOX_SIZING_NAMES[] = {"content-box", "border-box"};
+static constexpr const char* OVERFLOW_NAMES[] = {"visible", "hidden", "clip"};
 static constexpr const char* SIZE_MODE_NAMES[] = {"fixed", "percent", "fit", "grow"};
 
 static constexpr float WINDOW_PADDING = 8.0F;
@@ -299,7 +300,7 @@ static bool draw_inline_combo(std::string_view label, int* selected, const char*
         if (ImGui::BeginCombo("##value", preview, ImGuiComboFlags_NoArrowButton)) {
             for (int index = 0; index < item_count; ++index) {
                 const bool is_selected = selected != nullptr && *selected == index;
-                if (ImGui::Selectable(items[index], is_selected)) {
+                if (ImGui::Selectable(items[index], is_selected) && selected != nullptr) {
                     *selected = index;
                     changed = true;
                 }
@@ -368,7 +369,7 @@ static bool draw_number_input(
                 ImGui::TextDisabled(index == 0 ? "x" : "y");
                 ImGui::SameLine(0.0F, 2.0F);
                 ImGui::SetNextItemWidth(component_width);
-                void* component = raw_values + value_size * static_cast<size_t>(index);
+                void* component = raw_values + (value_size * static_cast<size_t>(index));
                 changed = ImGui::DragScalar(
                               "##component", type, component, speed, minimum != nullptr && maximum != nullptr ? minimum : nullptr,
                               minimum != nullptr && maximum != nullptr ? maximum : nullptr, format
@@ -405,7 +406,7 @@ static bool draw_slider(std::string_view label, float* value, float minimum, flo
 
 static void draw_fallback_inspect_icon(ImDrawList& draw_list, ImVec2 min, ImVec2 max, ImU32 color) {
     const float scale = std::min(max.x - min.x, max.y - min.y) / 24.0F;
-    const auto point = [min, scale](float x, float y) { return ImVec2{min.x + x * scale, min.y + y * scale}; };
+    const auto point = [min, scale](float x, float y) { return ImVec2{min.x + (x * scale), min.y + (y * scale)}; };
 
     draw_list.AddRect(point(2.0F, 2.0F), point(19.0F, 19.0F), color, 2.0F * scale, 0, 1.8F * scale);
     draw_list.AddLine(point(12.0F, 12.0F), point(16.2F, 22.0F), color, 1.8F * scale);
@@ -766,7 +767,13 @@ void Debugger::finish_popup_restore() {
 }
 
 void Debugger::refresh_highlight() {
-    const uint64_t target_identity = m_inspect_mode ? m_hover_identity : (m_highlight_selected ? m_target_identity : 0);
+    uint64_t target_identity = 0;
+    if (m_inspect_mode) {
+        target_identity = m_hover_identity;
+    } else if (m_highlight_selected) {
+        target_identity = m_target_identity;
+    }
+
     Node* target = target_identity == 0 ? nullptr : find_node_by_identity(m_target.root(), target_identity);
     if (target == nullptr || !is_effectively_visible(*target)) {
         m_highlight_valid = false;
@@ -996,10 +1003,20 @@ void Debugger::render_layout_properties() {
         LayoutAxis& axis = width ? size.width : size.height;
         const float resolved = width ? layout.size().x : layout.size().y;
 
-        axis = mode == LayoutSizeMode::Fixed     ? px(resolved)
-               : mode == LayoutSizeMode::Percent ? percent(100.0F)
-               : mode == LayoutSizeMode::Fit     ? fit()
-                                                 : grow();
+        switch (mode) {
+            case LayoutSizeMode::Fixed:
+                axis = px(resolved);
+                break;
+            case LayoutSizeMode::Percent:
+                axis = percent(100.0F);
+                break;
+            case LayoutSizeMode::Fit:
+                axis = fit();
+                break;
+            case LayoutSizeMode::Grow:
+                axis = grow();
+                break;
+        }
         m_node_target->set_size(size);
     };
 
@@ -1220,6 +1237,11 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
             apply([box_sizing](Style& target) { target.box_sizing(static_cast<BoxSizing>(box_sizing)); });
         }
 
+        int overflow = static_cast<int>(style.overflow());
+        if (draw_inline_combo("overflow", &overflow, OVERFLOW_NAMES, IM_ARRAYSIZE(OVERFLOW_NAMES))) {
+            apply([overflow](Style& target) { target.overflow(static_cast<Overflow>(overflow)); });
+        }
+
         ImVec2 margin = style.margin();
         if (draw_number_input("margin", &margin.x, 2, 0.1F, 0.0F, 128.0F)) {
             apply([margin](Style& target) { target.margin(margin); });
@@ -1424,7 +1446,7 @@ static bool draw_icon_button(
     }
 
     const ImVec2 center = {(button_min.x + button_max.x) * 0.5F, (button_min.y + button_max.y) * 0.5F};
-    const ImVec2 icon_min = {center.x - icon_size.x * 0.5F, center.y - icon_size.y * 0.5F};
+    const ImVec2 icon_min = {center.x - (icon_size.x * 0.5F), center.y - (icon_size.y * 0.5F)};
     const ImVec2 icon_max = {icon_min.x + icon_size.x, icon_min.y + icon_size.y};
     if (texture != nullptr) {
         draw_list->AddImage(texture->get(icon_size), icon_min, icon_max, {0.0F, 0.0F}, {1.0F, 1.0F}, icon_color);
@@ -1559,14 +1581,13 @@ void Debugger::render() {
 
     const ImVec2 splitter_min = ImGui::GetItemRectMin();
     const ImVec2 splitter_max = ImGui::GetItemRectMax();
-    const ImU32 splitter_color = ImGui::GetColorU32(
-        splitter_active    ? ImGuiCol_SeparatorActive
-        : splitter_hovered ? ImGuiCol_SeparatorHovered
-                           : ImGuiCol_Separator
-    );
+    ImGuiCol splitter_color_id = ImGuiCol_Separator;
+    if (splitter_hovered) splitter_color_id = ImGuiCol_SeparatorHovered;
+    if (splitter_active) splitter_color_id = ImGuiCol_SeparatorActive;
+    const ImU32 splitter_color = ImGui::GetColorU32(splitter_color_id);
     ImGui::GetWindowDrawList()->AddRectFilled(
-        {splitter_min.x, splitter_min.y + splitter_height * 0.5F - 0.5F},
-        {splitter_max.x, splitter_min.y + splitter_height * 0.5F + 0.5F}, splitter_color
+        {splitter_min.x, splitter_min.y + (splitter_height * 0.5F) - 0.5F},
+        {splitter_max.x, splitter_min.y + (splitter_height * 0.5F) + 0.5F}, splitter_color
     );
 
     if (splitter_active) {

@@ -18,7 +18,7 @@ namespace ui {
     /// stores one font source and creates size-specific ImGui fonts only after a UI context needs them.
     class Font final {
     public:
-        Font(std::filesystem::path location, ImFontConfig cfg);
+        Font(std::filesystem::path location, ImFontConfig config);
 
         ImFont* get(int size);
         void release_context(ImGuiContext* context);

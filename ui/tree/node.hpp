@@ -14,6 +14,7 @@ namespace ui {
     class InputRouter;
     class HitTestIndex;
     class Profiler;
+    class EffectRegistry;
     class UI;
     struct Theme;
 
@@ -204,6 +205,7 @@ namespace ui {
     protected:
         /// returns the UI that owns this attached node.
         UI& surface() const;
+        EffectRegistry* effect_registry() const;
 
         /// dispatches an event to this node.
         virtual void dispatch_event(UiEvent& event);
@@ -242,7 +244,7 @@ namespace ui {
         void set_layout_rect(Rect rect);
 
         /// assigns size and placement to a child.
-        void arrange_child(Node& child, ImVec2 size, Placement placement = {});
+        static void arrange_child(Node& child, ImVec2 size, Placement placement = {});
 
         bool capture_pointer();
         void release_pointer();

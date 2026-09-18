@@ -21,7 +21,7 @@ PaintSlot& PaintSlot::set_opacity(float opacity) {
     return *this;
 }
 
-void PaintSlot::paint(ImDrawList& draw_list, Rect rect, Rect content_rect) {
+void PaintSlot::paint(EffectRegistry* effects, ImDrawList& draw_list, Rect rect, Rect content_rect) {
     if (m_opacity <= 0.0F || !rect.valid()) {
         return;
     }
@@ -32,5 +32,9 @@ void PaintSlot::paint(ImDrawList& draw_list, Rect rect, Rect content_rect) {
         return;
     }
 
+    if (effects != nullptr) {
+        draw_frame(*effects, context.draw_list, context.rect, context.style, context.opacity * context.style.alpha());
+        return;
+    }
     draw_frame(context.draw_list, context.rect, context.style, context.opacity * context.style.alpha());
 }

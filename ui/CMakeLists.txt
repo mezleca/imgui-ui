@@ -27,6 +27,7 @@ file(GLOB_RECURSE IMGUI_UI_CORE_SOURCES CONFIGURE_DEPENDS "*.cpp")
 list(FILTER IMGUI_UI_CORE_SOURCES EXCLUDE REGEX "/backends/")
 
 set(IMGUI_UI_OPENGL_EFFECT_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/opengl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/blur/opengl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/shadow/opengl.cpp"
 )

@@ -1,6 +1,8 @@
 #include "demo.hpp"
 
 #include <ui/backends/opengl/texture-loader.hpp>
+#include <ui/imgui/effects/effects.hpp>
+#include <ui/imgui/effects/opengl.hpp>
 #include <ui/layout/layer-container.hpp>
 #include <ui/layout/resizable-container.hpp>
 #include <ui/layout/virtual-layout.hpp>
@@ -49,6 +51,106 @@ enum class DemoPanelTone {
     Tertiary,
 };
 
+struct DemoChromaticCommand {
+    Rect rect;
+};
+
+struct DemoChromaticState {
+    OpenGlFullscreenEffect effect;
+};
+
+// adapted from https://ziyadbarakat.wordpress.com/tutorials/graphics/chromatic-aberration-shader/.
+static constexpr const char* DEMO_CHROMATIC_FRAGMENT_SHADER = R"(#version 330 core
+uniform sampler2D defaultTexture;
+uniform vec4 bounds;
+uniform float redOffset;
+uniform float greenOffset;
+uniform float blueOffset;
+out vec4 outColor;
+
+void main() {
+vec2 uv = (gl_FragCoord.xy - bounds.xy) / (bounds.zw - bounds.xy);
+vec2 offset = vec2(1.0 / max(bounds.z - bounds.x, 1.0), 0.0);
+float redValue = texture(defaultTexture, clamp(uv + offset * redOffset, 0.0, 1.0)).r;
+float greenValue = texture(defaultTexture, clamp(uv + offset * greenOffset, 0.0, 1.0)).g;
+float blueValue = texture(defaultTexture, clamp(uv + offset * blueOffset, 0.0, 1.0)).b;
+outColor = vec4(redValue, greenValue, blueValue, texture(defaultTexture, uv).a);
+})";
+
+static bool initialize_demo_chromatic(void* data) {
+    return static_cast<DemoChromaticState*>(data)->effect.initialize(DEMO_CHROMATIC_FRAGMENT_SHADER);
+}
+
+static void shutdown_demo_chromatic(void* data) {
+    static_cast<DemoChromaticState*>(data)->effect.shutdown();
+}
+
+static void render_demo_chromatic(void* data, const ImDrawList*, const ImDrawCmd* draw_command, const void* payload) {
+    auto* state = static_cast<DemoChromaticState*>(data);
+    const auto* chromatic = static_cast<const DemoChromaticCommand*>(payload);
+    if (chromatic == nullptr || !state->effect.begin(*draw_command, chromatic->rect) || !state->effect.capture()) {
+        return;
+    }
+
+    const Rect bounds = state->effect.framebuffer_bounds();
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, state->effect.captured_texture());
+    glUniform1i(state->effect.uniform("defaultTexture"), 0);
+    glUniform4f(state->effect.uniform("bounds"), bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y);
+    glUniform1f(state->effect.uniform("redOffset"), 2.0F);
+    glUniform1f(state->effect.uniform("greenOffset"), 0.5F);
+    glUniform1f(state->effect.uniform("blueOffset"), -2.0F);
+    state->effect.draw();
+}
+
+static DemoChromaticState demo_chromatic_state;
+
+struct DemoGlowCommand {
+    Rect rect;
+    ImVec4 center;
+    ImVec4 edge;
+};
+
+struct DemoGlowState {
+    OpenGlFullscreenEffect effect;
+};
+
+static constexpr const char* DEMO_GLOW_FRAGMENT_SHADER = R"(#version 330 core
+uniform vec4 bounds;
+uniform vec4 center_color;
+uniform vec4 edge_color;
+out vec4 color;
+
+void main() {
+vec2 center = (bounds.xy + bounds.zw) * 0.5;
+vec2 radius = max((bounds.zw - bounds.xy) * 0.5, vec2(1.0));
+float amount = 1.0 - smoothstep(0.0, 1.0, length((gl_FragCoord.xy - center) / radius));
+color = mix(edge_color, center_color, amount);
+})";
+
+static bool initialize_demo_glow(void* data) {
+    return static_cast<DemoGlowState*>(data)->effect.initialize(DEMO_GLOW_FRAGMENT_SHADER);
+}
+
+static void shutdown_demo_glow(void* data) {
+    static_cast<DemoGlowState*>(data)->effect.shutdown();
+}
+
+static void render_demo_glow(void* data, const ImDrawList*, const ImDrawCmd* draw_command, const void* payload) {
+    auto* state = static_cast<DemoGlowState*>(data);
+    const auto* glow = static_cast<const DemoGlowCommand*>(payload);
+    if (glow == nullptr || !state->effect.begin(*draw_command, glow->rect)) {
+        return;
+    }
+
+    const Rect bounds = state->effect.framebuffer_bounds();
+    glUniform4f(state->effect.uniform("bounds"), bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y);
+    glUniform4f(state->effect.uniform("center_color"), glow->center.x, glow->center.y, glow->center.z, glow->center.w);
+    glUniform4f(state->effect.uniform("edge_color"), glow->edge.x, glow->edge.y, glow->edge.z, glow->edge.w);
+    state->effect.draw();
+}
+
+static DemoGlowState demo_glow_state;
 static DemoThemeVariant s_demo_theme_variant = DemoThemeVariant::Default;
 
 static DemoThemeVariant demo_theme_variant(std::string_view variant) {
@@ -274,6 +376,62 @@ private:
     bool m_shadow;
 };
 
+class DemoChromaticPanel final : public DemoPanel {
+public:
+    explicit DemoChromaticPanel(EffectPass effect) : DemoPanel("demo-custom-effect", DemoPanelTone::Secondary), m_effect(effect) {
+        set_size({grow(), px(128.0F)});
+        set_spacing(6.0F);
+    }
+
+protected:
+    void apply_theme_defaults(const Theme& theme) override {
+        DemoPanel::apply_theme_defaults(theme);
+        configure_all_styles([](Style& style) {
+            style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F})
+                .border(BORDER_ALL)
+                .border_color(ImColor{0.5F, 0.5F, 0.5F, 1.0F});
+        });
+    }
+
+    void on_draw_end() override {
+        const Rect rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
+        m_effect.submit(*ImGui::GetWindowDrawList(), DemoChromaticCommand{rect});
+        DemoPanel::on_draw_end();
+    }
+
+private:
+    EffectPass m_effect;
+};
+
+class DemoGlowPanel final : public DemoPanel {
+public:
+    explicit DemoGlowPanel(EffectPass effect) : DemoPanel("demo-glow-effect", DemoPanelTone::Secondary), m_effect(effect) {
+        set_size({grow(), px(128.0F)});
+        set_spacing(6.0F);
+    }
+
+protected:
+    void apply_theme_defaults(const Theme& theme) override {
+        DemoPanel::apply_theme_defaults(theme);
+        m_center = theme.accent_hover_color;
+        m_edge = theme.background_tertiary_color;
+    }
+
+    bool paint() override {
+        if (!DemoPanel::paint()) {
+            return false;
+        }
+
+        m_effect.submit(*ImGui::GetWindowDrawList(), DemoGlowCommand{layout().visual_rect(), m_center, m_edge});
+        return true;
+    }
+
+private:
+    EffectPass m_effect;
+    ImVec4 m_center{};
+    ImVec4 m_edge{};
+};
+
 class InputBlocker final : public DemoPanel {
 public:
     InputBlocker() : DemoPanel("InputBlocker") {
@@ -342,12 +500,12 @@ private:
         m_hovered = hovered;
         if (hovered) {
             animate()
-                .padding_y(10.0F, {0.2F, easing::out_quad})
+                .to(StyleAnimationProperty::PaddingY, 10.0F, {0.2F, easing::out_quad})
                 .then(0.1F)
-                .padding_x(20.0F, {0.24F, easing::out_cubic})
-                .background_color(surface().theme().accent_color, {0.24F, easing::out_cubic})
+                .to(StyleAnimationProperty::PaddingX, 20.0F, {0.24F, easing::out_cubic})
+                .to(StyleAnimationProperty::BackgroundColor, surface().theme().accent_color, {0.24F, easing::out_cubic})
                 .then(0.1F)
-                .rotation(180.0F, {0.25F, easing::out_cubic});
+                .to(StyleAnimationProperty::Rotation, 180.0F, {0.25F, easing::out_cubic});
         } else {
             animate().release_all({0.15F, easing::linear});
         }
@@ -624,6 +782,16 @@ void DemoScreen::setup(std::string backend) {
         apply_border_style(surface().root(), style);
     });
 
+    auto& chromatic = add<DemoChromaticPanel>(ui.effects().register_effect<DemoChromaticCommand>(
+        {render_demo_chromatic, initialize_demo_chromatic, nullptr, shutdown_demo_chromatic, &demo_chromatic_state}
+    ));
+    chromatic.add<TextWidget>("custom chromatic-aberration pass");
+
+    auto& glow = add<DemoGlowPanel>(ui.effects().register_effect<DemoGlowCommand>(
+        {render_demo_glow, initialize_demo_glow, nullptr, shutdown_demo_glow, &demo_glow_state}
+    ));
+    glow.add<TextWidget>("custom radial glow effect");
+
     auto& actions = add<DemoPanel>("actions");
     actions.set_size({grow(), fit()});
     actions.set_spacing(8.0F);
@@ -681,7 +849,7 @@ void DemoScreen::setup(std::string backend) {
     button.set_on_click([this, &button, &status] {
         ++m_clicks;
         status.set_text(std::format("button clicks: {}", m_clicks));
-        button.animate().rotation_by(180.0F, {0.5F, easing::out_back});
+        button.animate().by(StyleAnimationProperty::Rotation, 180.0F, {0.5F, easing::out_back});
     });
 }
 
@@ -767,14 +935,14 @@ ImageWidget& DemoScreen::add_test_image(Texture* texture) {
 
         image_ptr->set_enabled(false);
         image_ptr->animate()
-            .padding_y_by(12.0F, {0.30F, easing::in_out_sine})
-            .scale({1.12F, 0.78F}, {0.30F, easing::in_out_sine})
+            .by(StyleAnimationProperty::PaddingY, 12.0F, {0.30F, easing::in_out_sine})
+            .to(StyleAnimationProperty::Scale, ImVec2{1.12F, 0.78F}, {0.30F, easing::in_out_sine})
             .then()
-            .padding_y(0.0F, {0.28F, easing::in_out_sine})
-            .scale({0.94F, 1.08F}, {0.28F, easing::in_out_sine})
+            .to(StyleAnimationProperty::PaddingY, 0.0F, {0.28F, easing::in_out_sine})
+            .to(StyleAnimationProperty::Scale, ImVec2{0.94F, 1.08F}, {0.28F, easing::in_out_sine})
             .then()
-            .padding_y(3.0F, {0.22F, easing::in_out_sine})
-            .scale({1.03F, 0.97F}, {0.22F, easing::in_out_sine})
+            .to(StyleAnimationProperty::PaddingY, 3.0F, {0.22F, easing::in_out_sine})
+            .to(StyleAnimationProperty::Scale, ImVec2{1.03F, 0.97F}, {0.22F, easing::in_out_sine})
             .then()
             .release_all({0.38F, easing::in_out_sine})
             .end([this, image_ptr] { m_pending_image_removals.push_back(image_ptr); });

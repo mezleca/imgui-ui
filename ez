@@ -97,6 +97,45 @@ def format_code() -> None:
     run("clang-format -i $(rg --files -g '*.{h,hpp,cpp,cc,cxx}' ui tests examples)")
 
 
+def check(build_type: str, backend: str, fix: bool) -> None:
+    require_tool("clang-tidy")
+
+    build_dir = build(build_type, backend, tests=True)
+    source_files = sorted(
+        str(path.relative_to(ROOT))
+        for root in (ROOT / "ui", ROOT / "tests")
+        for path in root.rglob("*.cpp")
+    )
+    if not source_files:
+        print("[ez] no c++ source files found")
+        sys.exit(1)
+
+    if SYSTEM == "Linux" and shutil.which("run-clang-tidy") is not None:
+        command = [
+            "run-clang-tidy",
+            "-p", str(build_dir),
+            "-config-file", str(ROOT / ".clang-tidy"),
+            "-quiet",
+            "-hide-progress",
+            "-j", str(os.cpu_count() or 1),
+        ]
+        if fix:
+            command.append("-fix")
+        command.extend(source_files)
+    else:
+        command = [
+            "clang-tidy",
+            f"-p={build_dir}",
+            f"--config-file={ROOT / '.clang-tidy'}",
+            "--quiet",
+        ]
+        if fix:
+            command.append("--fix")
+        command.extend(source_files)
+
+    run(command)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ez")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -112,6 +151,11 @@ def main() -> None:
     subparsers.add_parser("init")
     subparsers.add_parser("format")
 
+    check_parser = subparsers.add_parser("check")
+    check_parser.add_argument("--backend", choices=("core", "sdl", "raylib", "all"), default="core")
+    check_parser.add_argument("--type", choices=("debug", "release"), default="debug")
+    check_parser.add_argument("--fix", action="store_true")
+
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("backend", choices=("sdl", "raylib"))
     run_parser.add_argument("--type", choices=("debug", "release"), default="debug")
@@ -124,6 +168,10 @@ def main() -> None:
 
     if args.command == "format":
         format_code()
+        return
+
+    if args.command == "check":
+        check(args.type.capitalize(), args.backend, args.fix)
         return
 
     build_type = args.type.capitalize()

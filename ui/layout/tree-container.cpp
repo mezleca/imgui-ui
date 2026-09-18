@@ -34,6 +34,7 @@ bool TreeContainer::paint() {
         invalidate_measure();
     }
 
+    // the TreeNodeEx call already consumed the header; only the remaining outer rect belongs to the body child.
     if (!open) {
         return false;
     }

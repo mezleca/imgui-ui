@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <format>
 #include <imgui.h>
 #include <string>
@@ -48,8 +49,8 @@ static bool parse_hex(const std::string& text, ImColor& color) {
 
     std::array<unsigned char, 4> channels{0, 0, 0, 255};
     for (std::size_t index = 0; index < length / 2; ++index) {
-        const int high = hex_digit(text[offset + index * 2]);
-        const int low = hex_digit(text[offset + index * 2 + 1]);
+        const int high = hex_digit(text[offset + (index * 2)]);
+        const int low = hex_digit(text[offset + (index * 2) + 1]);
         if (high < 0 || low < 0) {
             return false;
         }
@@ -62,11 +63,13 @@ static bool parse_hex(const std::string& text, ImColor& color) {
 
 static void draw_checkerboard(ImDrawList& draw_list, Rect rect, float cell_size, ImColor light, ImColor dark) {
     cell_size = std::max(1.0F, cell_size);
+    const int rows = std::max(0, static_cast<int>(std::ceil((rect.max.y - rect.min.y) / cell_size)));
+    const int columns = std::max(0, static_cast<int>(std::ceil((rect.max.x - rect.min.x) / cell_size)));
 
-    for (float y = rect.min.y; y < rect.max.y; y += cell_size) {
-        const int row = static_cast<int>((y - rect.min.y) / cell_size);
-        for (float x = rect.min.x; x < rect.max.x; x += cell_size) {
-            const int column = static_cast<int>((x - rect.min.x) / cell_size);
+    for (int row = 0; row < rows; ++row) {
+        const float y = rect.min.y + (static_cast<float>(row) * cell_size);
+        for (int column = 0; column < columns; ++column) {
+            const float x = rect.min.x + (static_cast<float>(column) * cell_size);
             const Rect cell =
                 Rect::from_position_size({x, y}, {std::min(cell_size, rect.max.x - x), std::min(cell_size, rect.max.y - y)});
             draw_rect_filled(draw_list, cell, (row + column) % 2 == 0 ? light : dark);
@@ -273,8 +276,8 @@ private:
         draw_rect_outline(draw_list, selector, theme.controls.border_color);
 
         for (int index = 0; index < 6; ++index) {
-            const float top = hue_bar.min.y + hue_bar.size().y * static_cast<float>(index) / 6.0F;
-            const float bottom = hue_bar.min.y + hue_bar.size().y * static_cast<float>(index + 1) / 6.0F;
+            const float top = hue_bar.min.y + (hue_bar.size().y * static_cast<float>(index) / 6.0F);
+            const float bottom = hue_bar.min.y + (hue_bar.size().y * static_cast<float>(index + 1) / 6.0F);
             const ImColor first = hsv_color(static_cast<float>(index) / 6.0F, 1.0F, 1.0F);
             const ImColor second = hsv_color(static_cast<float>(index + 1) / 6.0F, 1.0F, 1.0F);
             draw_rect_filled_gradient(draw_list, {{hue_bar.min.x, top}, {hue_bar.max.x, bottom}}, first, first, second, second);
@@ -292,14 +295,14 @@ private:
         draw_rect_outline(draw_list, alpha_bar, theme.controls.border_color);
 
         const ImVec2 selector_cursor = {
-            selector.min.x + saturation * selector.size().x,
-            selector.min.y + (1.0F - value) * selector.size().y,
+            selector.min.x + (saturation * selector.size().x),
+            selector.min.y + ((1.0F - value) * selector.size().y),
         };
 
         draw_circle(draw_list, selector_cursor, 5.0F, theme.background_color);
         draw_circle_outline(draw_list, selector_cursor, 5.0F, theme.text_color, 1.5F);
 
-        const float hue_cursor_y = hue_bar.min.y + hue * hue_bar.size().y;
+        const float hue_cursor_y = hue_bar.min.y + (hue * hue_bar.size().y);
 
         draw_line(draw_list, {hue_bar.min.x - 2.0F, hue_cursor_y}, {hue_bar.max.x + 2.0F, hue_cursor_y}, theme.text_color, 2.0F);
         draw_line(
@@ -307,7 +310,7 @@ private:
             theme.background_color, 1.0F
         );
 
-        const float alpha_cursor_x = alpha_bar.min.x + color.Value.w * alpha_bar.size().x;
+        const float alpha_cursor_x = alpha_bar.min.x + (color.Value.w * alpha_bar.size().x);
 
         draw_line(
             draw_list, {alpha_cursor_x, alpha_bar.min.y - 2.0F}, {alpha_cursor_x, alpha_bar.max.y + 2.0F}, theme.text_color, 2.0F
@@ -356,8 +359,8 @@ void ColorPickerWidget::apply_theme_defaults(const Theme& theme) {
     set_spacing(theme.metrics.item_spacing.y);
 
     const ImVec2 preview_size = {
-        theme.controls.thumb_size * 2.0F + theme.metrics.frame_padding.x * 2.0F,
-        theme.controls.thumb_size + theme.metrics.frame_padding.y * 2.0F,
+        (theme.controls.thumb_size * 2.0F) + (theme.metrics.frame_padding.x * 2.0F),
+        theme.controls.thumb_size + (theme.metrics.frame_padding.y * 2.0F),
     };
 
     set_size({px(preview_size.x), fit()});

@@ -78,6 +78,10 @@ UI& Node::surface() const {
     return *m_surface;
 }
 
+EffectRegistry* Node::effect_registry() const {
+    return m_surface == nullptr ? nullptr : &m_surface->effects();
+}
+
 void Node::set_surface(UI* surface) {
     m_surface = surface;
     m_layout_dirty = true;

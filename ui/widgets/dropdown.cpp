@@ -119,13 +119,14 @@ private:
         const Rect content = content_rect(rect);
 
         draw_text(
-            draw_list, {content.min.x, content.min.y + (content.size().y - text_size.y) * 0.5F}, current_style.color().get_col(),
-            preview
+            draw_list, {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)},
+            current_style.color().get_col(), preview
         );
 
         draw_triangle(
-            draw_list, {content.max.x - m_state.arrow_size.x * 0.5F, content.min.y + content.size().y * 0.5F}, m_state.arrow_size,
-            current_style.color().get_col(), m_state.is_open() ? TriangleDirection::Up : TriangleDirection::Down
+            draw_list, {content.max.x - (m_state.arrow_size.x * 0.5F), content.min.y + (content.size().y * 0.5F)},
+            m_state.arrow_size, current_style.color().get_col(),
+            m_state.is_open() ? TriangleDirection::Up : TriangleDirection::Down
         );
     }
 
@@ -192,7 +193,7 @@ bool DropdownBodyNode::paint() {
     const ComputedStyle& style = computed_style();
     const ImVec2 item_padding =
         children().empty() ? ImVec2{} : static_cast<const DropdownOptionNode&>(*children().front()).computed_style().padding();
-    m_item_height = ImGui::GetTextLineHeight() + item_padding.y * 2.0F;
+    m_item_height = ImGui::GetTextLineHeight() + (item_padding.y * 2.0F);
     ImGui::SetNextWindowPos(popup_position, ImGuiCond_Always);
     ImGui::SetNextWindowSize(outer_size({popup_width, m_item_height * static_cast<float>(children().size())}));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, box_insets().window_padding());
@@ -209,7 +210,8 @@ bool DropdownBodyNode::paint() {
         // block the body while keeping its option rows targetable.
         surface().input_router().register_blocker(*this, body_rect);
         return true;
-    } else if (m_state.is_open()) {
+    }
+    if (m_state.is_open()) {
         m_state.close();
         m_popup_opened = false;
     }

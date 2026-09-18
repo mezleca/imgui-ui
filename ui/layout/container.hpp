@@ -14,9 +14,12 @@ namespace ui {
         /// enables the requested scrollbars. imgui may still show a vertical scrollbar when horizontal scrolling is enabled,
         /// even if vertical is false.
         Container& set_scrollable(bool vertical, bool horizontal = false);
+        /// orders visible in-flow children along one axis.
         Container& set_direction(StackDirection direction);
+        /// offsets the complete flow group within the available content box.
         Container& set_content_alignment(Anchor alignment);
         Container& set_content_alignment(ImVec2 alignment);
+        /// inserts a gap between adjacent visible in-flow children.
         Container& set_spacing(float spacing);
 
     protected:
@@ -45,6 +48,7 @@ namespace ui {
         float m_spacing = 0.0F;
         ImVec2 m_content_alignment{};
         ImVec2 m_content_size{};
+        ImVec4 m_parent_clip{};
         bool m_content_clip_pushed = false;
     };
 } // namespace ui

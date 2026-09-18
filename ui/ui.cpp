@@ -58,7 +58,7 @@ void UI::process_events() {
 }
 
 void UI::set_theme(Theme theme) {
-    m_theme = std::move(theme);
+    m_theme = theme;
 
     const ImGuiContextScope scope(m_context);
 
@@ -68,7 +68,7 @@ void UI::set_theme(Theme theme) {
     m_root->apply_theme(m_theme);
 }
 
-ImFont* UI::resolve_font(Font* font, int size) const {
+ImFont* UI::resolve_font(Font* font, int size) {
     if (font != nullptr) {
         if (ImFont* result = font->get(size); result != nullptr) {
             return result;

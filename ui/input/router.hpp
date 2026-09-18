@@ -78,7 +78,7 @@ namespace ui {
         bool dispatch(UiEvent& event);
 
         /// dispatches to target, then walks its parent chain until propagation stops.
-        bool dispatch(Node& target, UiEvent& event);
+        static bool dispatch(Node& target, UiEvent& event);
 
         /// returns the eligible target at position without applying blockers.
         Node* node_at(ImVec2 position) const;
@@ -122,7 +122,7 @@ namespace ui {
         /// removes node from the destructor's attachment list.
         void detach_node(Node& node);
         /// clears flag when current points into subtree.
-        void clear_input_flag(Node& subtree, Node*& current, InputFlag flag);
+        static void clear_input_flag(Node& subtree, Node*& current, InputFlag flag);
         /// resolves a node hit rect into one clipped screen-space entry.
         void register_node(Node& node, bool blocker, Rect input_rect, Rect visual_rect);
         /// clears focus, capture, hover, active, and press state for inactive nodes.
@@ -130,7 +130,7 @@ namespace ui {
         /// updates hover from a position without dispatching an event.
         void refresh_pointer_state(ImVec2 position);
         /// moves one input flag between nodes and resets the cursor when hover clears.
-        void set_input_flag(Node*& current, Node* next, InputFlag flag);
+        static void set_input_flag(Node*& current, Node* next, InputFlag flag);
         /// resolves a pointer entry, dispatches a matching blocker, and updates hover.
         const HitTestIndex::Entry* pointer_target(UiEvent& event, bool& blocked);
         /// returns the target or blocker owner visible to debugger inspection.

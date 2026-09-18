@@ -22,7 +22,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 #include <imgui.h>
-#include <imgui_internal.h>
 #include <algorithm>
 #include <cfloat>
 #include <limits>
@@ -149,7 +148,7 @@ TEST_CASE("image fit preserves the texture aspect ratio", "[ImageWidget][fit]") 
 
         void release_context(ImGuiContext*) override {}
 
-        ImVec2 requested_size{};
+        ImVec2 requested_size;
     };
 
     ui_test::ImGuiContext context({240.0F, 180.0F});
@@ -159,7 +158,7 @@ TEST_CASE("image fit preserves the texture aspect ratio", "[ImageWidget][fit]") 
         image.set_size({px(100.0F), px(100.0F)});
         image.set_fit(fit);
 
-        ui_test::draw_window("image-fit-test", [&] { image.draw(); });
+        ui_test::draw_node(image, "image-fit-test");
         return texture.requested_size;
     };
 
@@ -178,7 +177,7 @@ TEST_CASE("image fit preserves the texture aspect ratio", "[ImageWidget][fit]") 
     image.set_size({grow(), grow()});
     image.set_fit(ImageFit::Contain);
 
-    const auto draw_container = [&container] { ui_test::draw_window("responsive-image-test", [&] { container.draw(); }); };
+    const auto draw_container = [&container] { ui_test::draw_node(container, "responsive-image-test"); };
 
     draw_container();
     REQUIRE(texture.requested_size.x == Catch::Approx(100.0F));
@@ -338,7 +337,7 @@ TEST_CASE("dropdown options use framework input and select their value", "[Dropd
     const float item_height = body_rect.size().y * 0.5F;
     const ImVec2 option_position = {
         ui_test::center(body_rect).x,
-        body_rect.min.y + item_height * 1.5F,
+        body_rect.min.y + (item_height * 1.5F),
     };
     const ui::Node* option = surface.input_router().node_at(option_position);
     REQUIRE(option != nullptr);
@@ -452,7 +451,7 @@ TEST_CASE("animated padding updates text measurement", "[TextWidget][layout][ani
 
     surface.begin_frame();
     const ImVec2 raw_size = ImGui::GetFont()->CalcTextSizeA(ImGui::GetFont()->LegacySize, FLT_MAX, 0.0F, "animated text");
-    text.animate().padding_x(10.0F, {0.1F, easing::linear});
+    text.animate().to(StyleAnimationProperty::PaddingX, 10.0F, {0.1F, easing::linear});
     text.update(0.05F);
     ImGui::Begin("animated-text-padding-test");
     text.draw();
@@ -619,7 +618,7 @@ TEST_CASE("resizable lists keep child layout valid after adding a row", "[Resiza
 
     UiEvent click = UiEvent::make(EventType::Click);
     click.button = PointerButton::Left;
-    surface.input_router().dispatch(add_button, click);
+    InputRouter::dispatch(add_button, click);
     REQUIRE(dynamic_nodes.children().size() == 1);
 
     ui_test::draw_surface(surface);
@@ -683,7 +682,10 @@ TEST_CASE("released animation properties return to the active style", "[VisualSt
     const ImColor flash_color{1.0F, 0.0F, 0.0F, 1.0F};
     state.style(StyleType::DEFAULT).background_color(default_color);
     state.style(StyleType::HOVER).background_color(hover_color);
-    state.animate().background_color(flash_color).then(0.05F).release_background_color({0.1F, easing::linear});
+    state.animate()
+        .to(StyleAnimationProperty::BackgroundColor, flash_color)
+        .then(0.05F)
+        .release(StyleAnimationProperty::BackgroundColor, {0.1F, easing::linear});
 
     state.update(0.0F);
     REQUIRE(state.computed_style().background_color().value.Value.x == Catch::Approx(1.0F));
@@ -704,10 +706,10 @@ TEST_CASE("released animation properties return to the active style", "[VisualSt
 TEST_CASE("interrupted animations release from their displayed value", "[VisualState][animation]") {
     VisualState state;
     state.configure_all_styles([](Style& style) { style.padding({2.0F, 0.0F}); });
-    state.animate().padding_x(20.0F, {0.2F, easing::linear});
+    state.animate().to(StyleAnimationProperty::PaddingX, 20.0F, {0.2F, easing::linear});
     state.update(0.1F);
 
-    state.animate().release_padding_x({0.1F, easing::linear});
+    state.animate().release(StyleAnimationProperty::PaddingX, {0.1F, easing::linear});
     state.update(0.05F);
 
     REQUIRE(state.computed_style().padding().x == Catch::Approx(6.5F));
@@ -720,14 +722,16 @@ TEST_CASE("interrupted animations release from their displayed value", "[VisualS
 
 TEST_CASE("animation sequences transform style presentation values", "[VisualState][animation][transform]") {
     VisualState state;
-    state.animate().rotation(40.0F, {0.2F, easing::linear}).scale({1.4F, 0.8F}, {0.2F, easing::linear});
+    state.animate()
+        .to(StyleAnimationProperty::Rotation, 40.0F, {0.2F, easing::linear})
+        .to(StyleAnimationProperty::Scale, ImVec2{1.4F, 0.8F}, {0.2F, easing::linear});
     state.update(0.1F);
 
     REQUIRE(state.computed_style().rotation() == Catch::Approx(20.0F));
     REQUIRE(state.computed_style().scale().x == Catch::Approx(1.2F));
     REQUIRE(state.computed_style().scale().y == Catch::Approx(0.9F));
 
-    state.animate().rotation_by(30.0F, {0.1F, easing::linear});
+    state.animate().by(StyleAnimationProperty::Rotation, 30.0F, {0.1F, easing::linear});
     state.update(0.1F);
 
     REQUIRE(state.computed_style().rotation() == Catch::Approx(50.0F));
@@ -743,7 +747,9 @@ TEST_CASE("animation sequences transform style presentation values", "[VisualSta
 TEST_CASE("animation sequence callbacks run after their timeline", "[VisualState][animation]") {
     VisualState state;
     bool ended = false;
-    state.animate().rotation(90.0F, {0.1F, easing::linear}).then(0.1F).end([&ended] { ended = true; });
+    state.animate().to(StyleAnimationProperty::Rotation, 90.0F, {0.1F, easing::linear}).then(0.1F).end([&ended] {
+        ended = true;
+    });
 
     state.update(0.1F);
     REQUIRE_FALSE(ended);
@@ -754,7 +760,10 @@ TEST_CASE("animation sequence callbacks run after their timeline", "[VisualState
 
 TEST_CASE("animation sequence steps continue from the preceding track", "[VisualState][animation]") {
     VisualState state;
-    state.animate().scale(2.0F, {0.1F, easing::linear}).then().scale(3.0F, {0.1F, easing::linear});
+    state.animate()
+        .to(StyleAnimationProperty::Scale, ImVec2{2.0F, 2.0F}, {0.1F, easing::linear})
+        .then()
+        .to(StyleAnimationProperty::Scale, ImVec2{3.0F, 3.0F}, {0.1F, easing::linear});
 
     state.update(0.1F);
     REQUIRE(state.computed_style().scale().x == Catch::Approx(2.0F));
@@ -792,34 +801,31 @@ TEST_CASE("styled nodes rotate their generated vertices without changing layout"
     widget.set_size({px(40.0F), px(20.0F)});
     widget.configure_all_styles([](Style& style) { style.rotation(90.0F); });
 
-    ImGui::NewFrame();
-    ImGui::Begin("styled-transform-test");
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    const int first_vertex = draw_list->VtxBuffer.Size;
-    widget.draw();
+    ui_test::draw_window("styled-transform-test", [&] {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        const int first_vertex = draw_list->VtxBuffer.Size;
+        widget.draw();
 
-    const Rect layout_rect = widget.layout().visual_rect();
+        const Rect layout_rect = widget.layout().visual_rect();
 
-    float min_x = std::numeric_limits<float>::max();
-    float max_x = std::numeric_limits<float>::lowest();
-    float min_y = std::numeric_limits<float>::max();
-    float max_y = std::numeric_limits<float>::lowest();
+        float min_x = std::numeric_limits<float>::max();
+        float max_x = std::numeric_limits<float>::lowest();
+        float min_y = std::numeric_limits<float>::max();
+        float max_y = std::numeric_limits<float>::lowest();
 
-    for (int index = first_vertex; index < draw_list->VtxBuffer.Size; ++index) {
-        const ImVec2 position = draw_list->VtxBuffer[index].pos;
-        min_x = std::min(min_x, position.x);
-        max_x = std::max(max_x, position.x);
-        min_y = std::min(min_y, position.y);
-        max_y = std::max(max_y, position.y);
-    }
+        for (int index = first_vertex; index < draw_list->VtxBuffer.Size; ++index) {
+            const ImVec2 position = draw_list->VtxBuffer[index].pos;
+            min_x = std::min(min_x, position.x);
+            max_x = std::max(max_x, position.x);
+            min_y = std::min(min_y, position.y);
+            max_y = std::max(max_y, position.y);
+        }
 
-    ImGui::End();
-    ImGui::EndFrame();
-
-    REQUIRE(layout_rect.size().x == Catch::Approx(40.0F));
-    REQUIRE(layout_rect.size().y == Catch::Approx(20.0F));
-    REQUIRE(max_x - min_x == Catch::Approx(20.0F));
-    REQUIRE(max_y - min_y == Catch::Approx(40.0F));
+        REQUIRE(layout_rect.size().x == Catch::Approx(40.0F));
+        REQUIRE(layout_rect.size().y == Catch::Approx(20.0F));
+        REQUIRE(max_x - min_x == Catch::Approx(20.0F));
+        REQUIRE(max_y - min_y == Catch::Approx(40.0F));
+    });
 }
 
 TEST_CASE("interaction style precedence is active focus hover default", "[VisualState][style]") {
@@ -844,18 +850,18 @@ TEST_CASE("style cursor follows hovered nodes", "[Style][cursor]") {
     Widget widget("cursor-widget");
     widget.configure_style(StyleType::HOVER, [](Style& style) { style.cursor(ImGuiMouseCursor_Hand); });
 
-    ImGui::NewFrame();
-    router.begin_frame();
-    router.register_target(widget, {{0.0F, 0.0F}, {40.0F, 20.0F}});
+    ui_test::draw_window("style-cursor-test", [&] {
+        router.begin_frame();
+        router.register_target(widget, {{0.0F, 0.0F}, {40.0F, 20.0F}});
 
-    UiEvent move = ui_test::pointer_event(EventType::PointerMove, {10.0F, 10.0F});
-    router.dispatch(move);
-    REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
+        UiEvent move = ui_test::pointer_event(EventType::PointerMove, {10.0F, 10.0F});
+        router.dispatch(move);
+        REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
 
-    move.position = {100.0F, 100.0F};
-    router.dispatch(move);
-    REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Arrow);
-    ImGui::EndFrame();
+        move.position = {100.0F, 100.0F};
+        router.dispatch(move);
+        REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Arrow);
+    });
 }
 
 TEST_CASE("border alpha fades out when a hover state is cleared", "[VisualState][transition]") {
@@ -942,7 +948,7 @@ TEST_CASE("styled nodes apply their effective font during draw", "[Widget][style
     FontProbeWidget widget;
     widget.set_font(large_font);
 
-    ui_test::draw_window("styled-font-test", [&] { widget.draw(); });
+    ui_test::draw_node(widget, "styled-font-test");
 
     REQUIRE(widget.observed_font == large_font);
 }
@@ -952,12 +958,12 @@ TEST_CASE("styled nodes keep borders out of imgui style scope", "[Widget][style]
     public:
         StyleProbeWidget() : Widget("style-probe") {}
 
-        ImVec2 observed_padding{};
+        ImVec2 observed_padding;
         float observed_rounding = 0.0F;
         float observed_border_size = 0.0F;
         float observed_alpha = 0.0F;
-        ImVec4 observed_text{};
-        ImVec4 observed_background{};
+        ImVec4 observed_text;
+        ImVec4 observed_background;
 
     private:
         bool paint() override {
@@ -989,7 +995,7 @@ TEST_CASE("styled nodes keep borders out of imgui style scope", "[Widget][style]
     widget.update(0.0F);
 
     const ImGuiStyle before = ImGui::GetStyle();
-    ui_test::draw_window("styled-scope-test", [&] { widget.draw(); });
+    ui_test::draw_node(widget, "styled-scope-test");
 
     REQUIRE(widget.observed_padding.x == Catch::Approx(7.0F));
     REQUIRE(widget.observed_padding.y == Catch::Approx(9.0F));
@@ -1019,7 +1025,7 @@ TEST_CASE("styled widgets advance visual state during update", "[Widget][style]"
     widget.update(ImGui::GetIO().DeltaTime);
     const float color_after_update = widget.style().color().get().x;
 
-    ui_test::draw_window("style-tick-test", [&] { widget.draw(); });
+    ui_test::draw_node(widget, "style-tick-test");
 
     REQUIRE(widget.style().color().get().x == Catch::Approx(expected.style().color().get().x));
     REQUIRE(widget.style().color().get().x == Catch::Approx(color_after_update));
@@ -1220,11 +1226,11 @@ TEST_CASE("virtual rows expand and collapse independently", "[layout][virtual-la
     Node* second = list.children()[1].get();
 
     UiEvent click = UiEvent::make(EventType::Click);
-    surface.input_router().dispatch(*first, click);
+    InputRouter::dispatch(*first, click);
     REQUIRE(list.extra_offset(0) == 64.0F);
-    surface.input_router().dispatch(*second, click);
+    InputRouter::dispatch(*second, click);
     REQUIRE(list.extra_offset(1) == 64.0F);
-    surface.input_router().dispatch(*first, click);
+    InputRouter::dispatch(*first, click);
     REQUIRE(list.extra_offset(0) == 0.0F);
     REQUIRE(list.extra_offset(1) == 64.0F);
 }

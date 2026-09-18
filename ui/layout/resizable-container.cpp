@@ -80,8 +80,8 @@ void ResizableContainer::handle_resize(UiEvent& event) {
         return;
     }
 
+    // capture after the pointer enters the handle. later moves use the original size and pointer position.
     if (event.type == EventType::PointerDown && event.button == PointerButton::Left && resize_handle().contains(event.position)) {
-        // capture after the pointer enters the handle. later moves use the original size and pointer position.
         m_dragging = capture_pointer();
         if (!m_dragging) {
             return;
@@ -140,7 +140,7 @@ void ResizableContainer::draw_resize_indicator() {
     const ImVec2 max = resize_handle().max;
 
     for (int i = 0; i < 3; ++i) {
-        const float distance = 3.0F + static_cast<float>(i) * 4.0F;
+        const float distance = 3.0F + (static_cast<float>(i) * 4.0F);
         draw_line(
             window_draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, current_style.border_color().get_col(),
             border_thickness

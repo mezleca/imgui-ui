@@ -7,7 +7,7 @@
 
 using namespace ui;
 
-ButtonWidget::ButtonWidget(std::string text, LayoutSize size) : DrawListWidget({}, "Button"), m_text(text) {
+ButtonWidget::ButtonWidget(std::string text, LayoutSize size) : DrawListWidget({}, "Button"), m_text(std::move(text)) {
     set_size(size);
 }
 
@@ -42,7 +42,7 @@ ButtonWidget& ButtonWidget::set_text(std::string text) {
 
 void ButtonWidget::on_click(UiEvent&) {
     animate()
-        .background_color(style(StyleType::ACTIVE).background_color().value)
+        .to(StyleAnimationProperty::BackgroundColor, style(StyleType::ACTIVE).background_color().value)
         .then(0.04F)
         .release_all({0.12F, easing::out_quad});
 
@@ -64,8 +64,8 @@ void ButtonWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const Compu
     draw_text(
         draw_list,
         {
-            content.min.x + (content.size().x - text_size.x) * m_text_alignment.x,
-            content.min.y + (content.size().y - text_size.y) * m_text_alignment.y,
+            content.min.x + ((content.size().x - text_size.x) * m_text_alignment.x),
+            content.min.y + ((content.size().y - text_size.y) * m_text_alignment.y),
         },
         style.color().get_col(), m_text
     );

@@ -1,6 +1,7 @@
 #include "draw.hpp"
 
 #include "effects/blur/blur.hpp"
+#include "effects/effects.hpp"
 #include "effects/shadow/shadow.hpp"
 #include "../widgets/text-value.hpp"
 
@@ -48,13 +49,13 @@ static ImVec2 point_at(const BorderPathSegment& segment, float distance) {
     // distance is normalized by arc length, keeping dash and dot spacing uniform around corners.
     const float angle = std::lerp(segment.start_angle, segment.end_angle, progress);
     const float radius = segment.length / std::abs(segment.end_angle - segment.start_angle);
-    return {segment.center.x + std::cos(angle) * radius, segment.center.y + std::sin(angle) * radius};
+    return {segment.center.x + (std::cos(angle) * radius), segment.center.y + (std::sin(angle) * radius)};
 }
 
 static float arc_max_step(const BorderPathSegment& segment) {
     const float sweep = std::abs(segment.end_angle - segment.start_angle);
     const float radius = segment.length / sweep;
-    return radius <= ARC_MAX_ERROR ? sweep : 2.0F * std::acos(std::clamp(1.0F - ARC_MAX_ERROR / radius, -1.0F, 1.0F));
+    return radius <= ARC_MAX_ERROR ? sweep : 2.0F * std::acos(std::clamp(1.0F - (ARC_MAX_ERROR / radius), -1.0F, 1.0F));
 }
 
 static void
@@ -243,7 +244,9 @@ static void stroke_dotted_side(ImDrawList& draw_list, const BorderPath& path, ui
         return points;
     }();
 
-    const int segments = radius <= 1.5F ? 8 : radius <= 2.5F ? 12 : radius <= 5.0F ? 12 : 24;
+    int segments = 24;
+    if (radius <= 5.0F) segments = 12;
+    if (radius <= 1.5F) segments = 8;
     const int stride = static_cast<int>(unit_circle.size()) / segments;
     std::array<ImVec2, 24> points{};
     const auto draw_dot = [&](ImVec2 center) {
@@ -253,8 +256,8 @@ static void stroke_dotted_side(ImDrawList& draw_list, const BorderPath& path, ui
         }
 
         for (int index = 0; index < segments; ++index) {
-            const ImVec2 unit = unit_circle[static_cast<std::size_t>(index * stride)];
-            points[static_cast<std::size_t>(index)] = {center.x + unit.x * radius, center.y + unit.y * radius};
+            const ImVec2 unit = unit_circle[static_cast<std::size_t>(index) * static_cast<std::size_t>(stride)];
+            points[static_cast<std::size_t>(index)] = {center.x + (unit.x * radius), center.y + (unit.y * radius)};
         }
         draw_list.AddConvexPolyFilled(points.data(), segments, color);
     };
@@ -453,7 +456,7 @@ void ui::draw_triangle(ImDrawList& draw_list, ImVec2 center, ImVec2 size, ImColo
     const ImVec2 half_size = {size.x * 0.5F, size.y * 0.5F};
     const auto& offsets = DIRECTION_OFFSETS[static_cast<std::size_t>(direction)];
     const auto vertex = [&](std::size_t index) {
-        return ImVec2{center.x + offsets[index].x * half_size.x, center.y + offsets[index].y * half_size.y};
+        return ImVec2{center.x + (offsets[index].x * half_size.x), center.y + (offsets[index].y * half_size.y)};
     };
 
     draw_list.AddTriangleFilled(vertex(0), vertex(1), vertex(2), apply_draw_alpha(color));
@@ -497,28 +500,44 @@ draw_frame_surface_impl(ImDrawList& draw_list, Rect rect, const ComputedStyle& s
     draw_border(draw_list, rect, style, border);
 }
 
-static void draw_frame_impl(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background, float alpha) {
-    draw_box_shadow(draw_list, rect, style.box_shadow(), style.border_radius(), alpha);
-    draw_blur(draw_list, rect, style.blur(), style.border_radius(), alpha);
+static void draw_frame_impl(
+    EffectRegistry* effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background, float alpha
+) {
+    if (effects != nullptr) {
+        if (style.box_shadow().color.Value.w > 0.0F) {
+            draw_box_shadow(*effects, draw_list, rect, style.box_shadow(), style.border_radius(), alpha);
+        }
+        if (style.blur() > 0) {
+            draw_blur(*effects, draw_list, rect, style.blur(), style.border_radius(), alpha);
+        }
+    }
     draw_frame_surface_impl(draw_list, rect, style, background, alpha);
 }
 
 void ui::draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) {
-    draw_frame_impl(draw_list, rect, style, style.background_color().value, current_draw_alpha());
+    draw_frame_impl(nullptr, draw_list, rect, style, style.background_color().value, current_draw_alpha());
 }
 
 void ui::draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background) {
-    draw_frame_impl(draw_list, rect, style, background, current_draw_alpha());
+    draw_frame_impl(nullptr, draw_list, rect, style, background, current_draw_alpha());
 }
 
 void ui::draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity) {
     const float alpha = std::clamp(opacity, 0.0F, 1.0F) * current_draw_alpha();
-    draw_frame_impl(draw_list, rect, style, style.background_color().value, alpha);
+    draw_frame_impl(nullptr, draw_list, rect, style, style.background_color().value, alpha);
 }
 
-void ui::draw_frame_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity) {
+void ui::draw_frame(EffectRegistry& effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style) {
+    draw_frame_impl(&effects, draw_list, rect, style, style.background_color().value, current_draw_alpha());
+}
+
+void ui::draw_frame(EffectRegistry& effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background) {
+    draw_frame_impl(&effects, draw_list, rect, style, background, current_draw_alpha());
+}
+
+void ui::draw_frame(EffectRegistry& effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity) {
     const float alpha = std::clamp(opacity, 0.0F, 1.0F) * current_draw_alpha();
-    draw_frame_surface_impl(draw_list, rect, style, style.background_color().value, alpha);
+    draw_frame_impl(&effects, draw_list, rect, style, style.background_color().value, alpha);
 }
 
 static BorderPathSegment line(ImVec2 start, ImVec2 end, uint8_t sides) {
@@ -527,7 +546,7 @@ static BorderPathSegment line(ImVec2 start, ImVec2 end, uint8_t sides) {
 
 static BorderPathSegment arc(ImVec2 center, float radius, float start_angle, float end_angle, uint8_t sides) {
     const auto point = [center, radius](float angle) {
-        return ImVec2{center.x + std::cos(angle) * radius, center.y + std::sin(angle) * radius};
+        return ImVec2{center.x + (std::cos(angle) * radius), center.y + (std::sin(angle) * radius)};
     };
     return {
         BorderPathSegmentType::Arc,

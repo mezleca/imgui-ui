@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../layout/geometry.hpp"
-#include "../style/style.hpp"
+#include "../style/computed-style.hpp"
 
 #include <array>
 #include <cstdint>
@@ -10,6 +10,7 @@
 
 namespace ui {
     class GenericValue;
+    class EffectRegistry;
 
     enum class DrawListTarget : uint8_t {
         /// uses the current imgui window draw list.
@@ -74,7 +75,9 @@ namespace ui {
     void draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style);
     void draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background);
     void draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity);
-    void draw_frame_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity = 1.0F);
+    void draw_frame(EffectRegistry& effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style);
+    void draw_frame(EffectRegistry& effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background);
+    void draw_frame(EffectRegistry& effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity);
     BorderPath rounded_rect_border_path(Rect rect, float rounding);
     void draw_border_path(
         ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImColor color, float thickness, BorderStyle style

@@ -64,7 +64,7 @@ namespace ui {
         void render_profiling();
         void render_layout_properties();
         void render_style_properties();
-        void render_style_controls(Style& style, bool is_line = false, std::span<Style*> all_styles = {});
+        static void render_style_controls(Style& style, bool is_line = false, std::span<Style*> all_styles = {});
         void render_decoration_properties(StyledNode& node);
         void render_style_variables(Style& style, std::span<Style*> all_styles = {});
         void draw_property_section(std::string_view label);

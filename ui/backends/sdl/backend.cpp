@@ -298,8 +298,8 @@ bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
         native_input_blocked = dispatched.native_input_blocked;
     }
 
+    // keep the coordinate visible to imgui even when the framework consumes the button event.
     if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN || event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-        // keep the coordinate visible to imgui even when the framework consumes the button event.
         ImGui::GetIO().AddMousePosEvent(event.button.x, event.button.y);
     }
 

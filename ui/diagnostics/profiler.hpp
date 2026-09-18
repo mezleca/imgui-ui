@@ -89,7 +89,7 @@ namespace ui {
         ZoneToken begin_zone(std::string_view name, uint64_t node_identity);
         void end_zone(ZoneToken token);
         void record_node_draw();
-        void record_root_phase_times(FrameBuffer& frame);
+        void record_root_phase_times(FrameBuffer& frame) const;
 
         std::array<FrameBuffer, 2> m_frames;
         std::filesystem::path m_output_path;

@@ -1,31 +1,59 @@
 #pragma once
 
-#include <imgui.h>
-
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <deque>
+#include <memory_resource>
+#include <type_traits>
 #include <vector>
 
+struct ImDrawList;
+struct ImDrawCmd;
+
 namespace ui {
-    using EffectId = uint32_t;
     using EffectInitialize = bool (*)(void* user_data);
     using EffectFrame = void (*)(void* user_data);
     using EffectShutdown = void (*)(void* user_data);
+    using EffectRender = void (*)(void* user_data, const ImDrawList*, const ImDrawCmd*, const void* command);
+
+    class EffectRegistry;
+
+    enum class EffectSlot : uint8_t {
+        Blur,
+        BoxShadow,
+    };
+
+    class EffectPass {
+    public:
+        EffectPass() = default;
+
+        /// copies a trivially copyable command into the frame queue for deferred rendering.
+        template <typename Command>
+        bool submit(ImDrawList& draw_list, const Command& command) const;
+
+    private:
+        friend class EffectRegistry;
+
+        EffectPass(EffectRegistry* registry, uint32_t id) : m_registry(registry), m_id(id) {}
+
+        EffectRegistry* m_registry = nullptr;
+        uint32_t m_id = 0;
+    };
 
     struct EffectDefinition {
-        /// called by the renderer for each command submitted with this effect.
-        ImDrawCallback render = nullptr;
-        /// called after the backend context is ready. return false when setup fails.
+        /// renders one copied command at its original draw-list position.
+        EffectRender render = nullptr;
+        /// creates backend resources after the imgui context is ready.
         EffectInitialize initialize = nullptr;
-        /// called once at the start of each ui frame.
+        /// selects or resets per-frame backend state before node drawing.
         EffectFrame begin_frame = nullptr;
-        /// called while the backend context is still available.
+        /// releases backend resources before the imgui context is destroyed.
         EffectShutdown shutdown = nullptr;
         void* user_data = nullptr;
     };
 
-    /// coordinates effect resources and deferred draw callbacks for one UI frame.
-    ///
-    /// backends register supported effects once; nodes enqueue work while painting and UI flushes it before frame rendering ends.
+    /// owns backend effect callbacks and stores submitted commands until imgui renders them.
     class EffectRegistry {
     public:
         EffectRegistry() = default;
@@ -33,33 +61,63 @@ namespace ui {
         EffectRegistry(const EffectRegistry&) = delete;
         EffectRegistry& operator=(const EffectRegistry&) = delete;
 
-        EffectId register_effect(EffectDefinition definition);
-        bool unregister_effect(EffectId id);
+        template <typename Command>
+        EffectPass register_effect(EffectDefinition definition) {
+            static_assert(std::is_trivially_copyable_v<Command>);
+            return register_effect(definition, sizeof(Command), alignof(Command));
+        }
+
+        template <typename Command>
+        EffectPass register_effect(EffectSlot slot, EffectDefinition definition) {
+            EffectPass pass = register_effect<Command>(definition);
+            m_slots[static_cast<std::size_t>(slot)] = pass;
+            return pass;
+        }
+
+        const EffectPass& effect(EffectSlot slot) const {
+            return m_slots[static_cast<std::size_t>(slot)];
+        }
+
+        bool unregister_effect(EffectPass pass);
 
         bool initialize();
         void begin_frame();
         void shutdown();
 
-        /// queues a callback and a render-state reset. payload must live through rendering.
-        bool submit(ImDrawList& draw_list, EffectId id, void* payload) const;
-
-        bool initialized() const {
-            return m_initialized;
-        }
-
     private:
+        friend class EffectPass;
+
+        struct QueuedCommand {
+            EffectRender render = nullptr;
+            void* user_data = nullptr;
+            const void* command = nullptr;
+        };
+
         struct Entry {
-            EffectId id = 0;
+            uint32_t id = 0;
             EffectDefinition definition{};
+            std::size_t command_size = 0;
+            std::size_t command_alignment = 0;
             bool initialized = false;
         };
 
-        Entry* find(EffectId id);
-        const Entry* find(EffectId id) const;
+        EffectPass register_effect(EffectDefinition definition, std::size_t command_size, std::size_t command_alignment);
+        bool submit(ImDrawList& draw_list, uint32_t id, const void* command, std::size_t size) const;
+        static void render_command(const ImDrawList* draw_list, const ImDrawCmd* draw_command);
+        const Entry* find(uint32_t id) const;
 
         std::vector<Entry> m_entries;
-        EffectId m_next_id = 1;
+        mutable std::pmr::monotonic_buffer_resource m_command_memory;
+        mutable std::deque<QueuedCommand> m_commands;
+        std::array<EffectPass, 2> m_slots;
+        uint32_t m_next_id = 1;
         bool m_initialized = false;
     };
+
+    template <typename Command>
+    bool EffectPass::submit(ImDrawList& draw_list, const Command& command) const {
+        static_assert(std::is_trivially_copyable_v<Command>);
+        return m_registry != nullptr && m_registry->submit(draw_list, m_id, &command, sizeof(Command));
+    }
 
 } // namespace ui

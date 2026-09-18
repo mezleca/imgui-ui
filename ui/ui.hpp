@@ -146,7 +146,7 @@ namespace ui {
     private:
         friend class Debugger;
 
-        ImFont* resolve_font(Font* font, int size) const;
+        static ImFont* resolve_font(Font* font, int size);
         void initialize(bool enable_debugger);
         void configure_style(float main_scale);
         void apply_theme_metrics();

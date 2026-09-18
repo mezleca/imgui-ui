@@ -195,7 +195,8 @@ static bool ensure_textures(int width, int height) {
     return true;
 }
 
-static void blur_pass(GLuint input, GLuint output, int width, int height, int radius, float direction_x, float direction_y, ImVec4 bounds) {
+static void
+blur_pass(GLuint input, GLuint output, int width, int height, int radius, float direction_x, float direction_y, ImVec4 bounds) {
     glBindFramebuffer(GL_FRAMEBUFFER, textures->framebuffer);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, output, 0);
     glViewport(0, 0, width, height);
@@ -203,7 +204,7 @@ static void blur_pass(GLuint input, GLuint output, int width, int height, int ra
     glDisable(GL_SCISSOR_TEST);
     glUseProgram(textures->program);
     glUniform1i(textures->image, 0);
-    glUniform2f(textures->texel, 1.0F / width, 1.0F / height);
+    glUniform2f(textures->texel, 1.0F / static_cast<float>(width), 1.0F / static_cast<float>(height));
     glUniform2f(textures->direction, direction_x, direction_y);
     glUniform4f(textures->bounds, bounds.x, bounds.y, bounds.z, bounds.w);
     glUniform1i(textures->radius, radius);
@@ -222,9 +223,9 @@ static std::array<int, 3> box_widths(int sigma) {
     if ((lower & 1) == 0) --lower;
 
     const int upper = lower + 2;
-    const int lower_count = static_cast<int>(
-        std::round((12.0 * sigma * sigma - passes * lower * lower - 4.0 * passes * lower - 3.0 * passes) / (-4.0 * lower - 4.0))
-    );
+    const int lower_count = static_cast<int>(std::round(
+        ((12.0 * sigma * sigma) - (passes * lower * lower) - (4.0 * passes * lower) - (3.0 * passes)) / ((-4.0 * lower) - 4.0)
+    ));
 
     return {
         lower_count > 0 ? lower : upper,
@@ -251,8 +252,8 @@ static void blur(int width, int height, int sigma, ImVec4 bounds) {
     textures->result = input;
 }
 
-static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
-    const auto* region = static_cast<const BlurRegion*>(command->UserCallbackData);
+static void render_blur(void*, const ImDrawList*, const ImDrawCmd* command, const void* payload) {
+    const auto* region = static_cast<const BlurRegion*>(payload);
 
     if (region == nullptr || !select_textures()) {
         return;
@@ -275,24 +276,35 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
     const ImVec2 display_position = draw_data == nullptr ? ImVec2{} : draw_data->DisplayPos;
     const ImVec2 scale = draw_data == nullptr ? ImVec2{1.0F, 1.0F} : draw_data->FramebufferScale;
     const ImVec2 minimum = {
-        (region->rect.min.x - display_position.x) * scale.x,
-        (region->rect.min.y - display_position.y) * scale.y,
+        (region->sample.min.x - display_position.x) * scale.x,
+        (region->sample.min.y - display_position.y) * scale.y,
     };
     const ImVec2 maximum = {
-        (region->rect.max.x - display_position.x) * scale.x,
-        (region->rect.max.y - display_position.y) * scale.y,
+        (region->sample.max.x - display_position.x) * scale.x,
+        (region->sample.max.y - display_position.y) * scale.y,
     };
 
     // each backdrop samples the framebuffer immediately before its own node is drawn.
     glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(framebuffer));
     glBindTexture(GL_TEXTURE_2D, textures->source);
     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
-    blur(width, height, region->strength, {minimum.x, height - maximum.y, maximum.x, height - minimum.y});
+    blur(
+        width, height, region->strength,
+        {minimum.x, static_cast<float>(height) - maximum.y, maximum.x, static_cast<float>(height) - minimum.y}
+    );
 
-    const float region_left = minimum.x;
-    const float region_bottom = height - maximum.y;
-    const float region_width = maximum.x - minimum.x;
-    const float region_height = maximum.y - minimum.y;
+    const ImVec2 output_minimum = {
+        (region->output.min.x - display_position.x) * scale.x,
+        (region->output.min.y - display_position.y) * scale.y,
+    };
+    const ImVec2 output_maximum = {
+        (region->output.max.x - display_position.x) * scale.x,
+        (region->output.max.y - display_position.y) * scale.y,
+    };
+    const float region_left = output_minimum.x;
+    const float region_bottom = static_cast<float>(height) - output_maximum.y;
+    const float region_width = output_maximum.x - output_minimum.x;
+    const float region_height = output_maximum.y - output_minimum.y;
     const int left = std::clamp(static_cast<int>(std::floor(region_left)), 0, width);
     const int right = std::clamp(static_cast<int>(std::ceil(region_left + region_width)), 0, width);
     const int bottom = std::clamp(static_cast<int>(std::floor(region_bottom)), 0, height);
@@ -305,10 +317,14 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
         std::clamp(static_cast<int>(std::floor((command->ClipRect.x - display_position.x) * scale.x)), 0, width);
     const int clip_right =
         std::clamp(static_cast<int>(std::ceil((command->ClipRect.z - display_position.x) * scale.x)), 0, width);
-    const int clip_bottom =
-        std::clamp(static_cast<int>(std::floor(height - (command->ClipRect.w - display_position.y) * scale.y)), 0, height);
-    const int clip_top =
-        std::clamp(static_cast<int>(std::ceil(height - (command->ClipRect.y - display_position.y) * scale.y)), 0, height);
+    const int clip_bottom = std::clamp(
+        static_cast<int>(std::floor(static_cast<float>(height) - ((command->ClipRect.w - display_position.y) * scale.y))), 0,
+        height
+    );
+    const int clip_top = std::clamp(
+        static_cast<int>(std::ceil(static_cast<float>(height) - ((command->ClipRect.y - display_position.y) * scale.y))), 0,
+        height
+    );
     const int clipped_left = std::max(left, clip_left);
     const int clipped_right = std::min(right, clip_right);
     const int clipped_bottom = std::max(bottom, clip_bottom);
@@ -325,7 +341,7 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
     glUseProgram(textures->program);
     glUniform1i(textures->image, 0);
     glUniform1i(textures->original, 1);
-    glUniform2f(textures->texel, 1.0F / width, 1.0F / height);
+    glUniform2f(textures->texel, 1.0F / static_cast<float>(width), 1.0F / static_cast<float>(height));
     glUniform4f(textures->region, region_left, region_bottom, region_width, region_height);
     glUniform1f(
         textures->rounding, std::min(region->rounding * std::min(scale.x, scale.y), std::min(region_width, region_height) * 0.5F)
@@ -353,27 +369,17 @@ static void render_blur(const ImDrawList*, const ImDrawCmd* command) {
 }
 
 static bool initialize_blur_effect(void*) {
-    if (!GLAD_GL_VERSION_3_3 || !select_textures()) {
-        return false;
-    }
-
-    set_blur_callback(render_blur);
-    return true;
+    return GLAD_GL_VERSION_3_3 && select_textures();
 }
 
 static void begin_blur_effect(void*) {
-    if (!select_textures()) {
-        return;
-    }
+    select_textures();
 }
 
 static void shutdown_blur_effect(void*) {
     if (!select_textures()) {
-        shutdown_blur();
         return;
     }
-
-    set_blur_callback(nullptr);
 
     if (textures->program != 0) glDeleteProgram(textures->program);
     if (textures->vertex_array != 0) glDeleteVertexArrays(1, &textures->vertex_array);
@@ -384,9 +390,10 @@ static void shutdown_blur_effect(void*) {
 
     texture_sets.erase(ImGui::GetCurrentContext());
     textures = nullptr;
-    shutdown_blur();
 }
 
 void ui::register_opengl_blur(EffectRegistry& effects) {
-    effects.register_effect({render_blur, initialize_blur_effect, begin_blur_effect, shutdown_blur_effect, nullptr});
+    effects.register_effect<BlurRegion>(
+        EffectSlot::Blur, {render_blur, initialize_blur_effect, begin_blur_effect, shutdown_blur_effect, nullptr}
+    );
 }

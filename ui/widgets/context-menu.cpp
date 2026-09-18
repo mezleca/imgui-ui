@@ -62,7 +62,8 @@ private:
         const Rect content = content_rect(rect);
         const ImVec2 text_size = ImGui::CalcTextSize(m_label.c_str());
         draw_text(
-            draw_list, {content.min.x, content.min.y + (content.size().y - text_size.y) * 0.5F}, style.color().get_col(), m_label
+            draw_list, {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)}, style.color().get_col(),
+            m_label
         );
 
         if (m_submenu != nullptr) {
@@ -73,13 +74,13 @@ private:
     void draw_submenu_icon(ImDrawList& draw_list, Rect content, const ComputedStyle& style) const {
         const float icon_size = std::min(13.0F, std::min(content.size().x, content.size().y));
         const Rect icon = Rect::from_position_size(
-            {content.max.x - icon_size, content.min.y + (content.size().y - icon_size) * 0.5F}, {icon_size, icon_size}
+            {content.max.x - icon_size, content.min.y + ((content.size().y - icon_size) * 0.5F)}, {icon_size, icon_size}
         );
 
         if (m_submenu_icon == nullptr) {
             draw_triangle(
-                draw_list, {icon.min.x + icon_size * 0.5F, icon.min.y + icon_size * 0.5F}, {icon_size * 0.5F, icon_size * 0.3F},
-                style.color().get_col(), TriangleDirection::Right
+                draw_list, {icon.min.x + (icon_size * 0.5F), icon.min.y + (icon_size * 0.5F)},
+                {icon_size * 0.5F, icon_size * 0.3F}, style.color().get_col(), TriangleDirection::Right
             );
             return;
         }

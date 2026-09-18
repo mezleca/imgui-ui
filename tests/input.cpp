@@ -90,9 +90,8 @@ TEST_CASE("widget event handlers preserve internal behavior") {
     EventWidget widget(events);
     widget.set_on_event([&events](UiEvent&) { events.push_back("public"); });
 
-    InputRouter router;
     UiEvent event = click_event();
-    REQUIRE_FALSE(router.dispatch(widget, event));
+    REQUIRE_FALSE(InputRouter::dispatch(widget, event));
     REQUIRE(events == std::vector<std::string>{"internal", "public"});
 }
 
@@ -101,9 +100,8 @@ TEST_CASE("ui events bubble from the target to its ancestors") {
     auto parent = std::make_unique<EventNode>("parent", events);
     EventNode* child_ptr = &parent->add<EventNode>("child", events);
 
-    InputRouter router;
     UiEvent event = click_event();
-    const bool handled = router.dispatch(*child_ptr, event);
+    const bool handled = InputRouter::dispatch(*child_ptr, event);
     REQUIRE_FALSE(handled);
 
     REQUIRE(events == std::vector<std::string>{"child", "parent"});
@@ -115,9 +113,8 @@ TEST_CASE("ui events can stop propagation") {
     EventNode* child_ptr = &parent->add<EventNode>("child", events);
     child_ptr->stop_events = true;
 
-    InputRouter router;
     UiEvent event = click_event();
-    const bool handled = router.dispatch(*child_ptr, event);
+    const bool handled = InputRouter::dispatch(*child_ptr, event);
     REQUIRE(handled);
 
     REQUIRE(event.handled);

@@ -58,14 +58,14 @@ static ImVec2 resolve_stack_child_size(const Node& child, ImVec2 content_size, f
     const LayoutAxis& main_axis = horizontal ? layout_size.width : layout_size.height;
     const ImVec2 margin = child.layout_margin();
 
-    const float main_available = std::max(0.0F, axis_extent(content_size, horizontal) - axis_extent(margin, horizontal) * 2.0F);
+    const float main_available = std::max(0.0F, axis_extent(content_size, horizontal) - (axis_extent(margin, horizontal) * 2.0F));
     const float cross_available =
-        std::max(0.0F, axis_extent(content_size, !horizontal) - axis_extent(margin, !horizontal) * 2.0F);
+        std::max(0.0F, axis_extent(content_size, !horizontal) - (axis_extent(margin, !horizontal) * 2.0F));
     const ImVec2 available = horizontal ? ImVec2{main_available, cross_available} : ImVec2{cross_available, main_available};
     ImVec2 size = child.layout().resolve_size(available);
 
     if (main_axis.mode == LayoutSizeMode::Grow) {
-        set_axis_extent(size, horizontal, child.layout().box_insets().axis(horizontal) + flexible_main * main_axis.value);
+        set_axis_extent(size, horizontal, child.layout().box_insets().axis(horizontal) + (flexible_main * main_axis.value));
     }
 
     return size;
@@ -166,7 +166,7 @@ void Container::on_measure() {
 
         const ImVec2 child_size = child->layout().preferred_size();
         const ImVec2 margin = child->layout_margin();
-        const ImVec2 outer_size = {child_size.x + margin.x * 2.0F, child_size.y + margin.y * 2.0F};
+        const ImVec2 outer_size = {child_size.x + (margin.x * 2.0F), child_size.y + (margin.y * 2.0F)};
 
         if (horizontal) {
             content_size.x += outer_size.x;
@@ -223,7 +223,7 @@ void Container::arrange_children(ImVec2 content_size) {
         }
 
         if (aligns_content) {
-            flow_cross = std::max(flow_cross, axis_extent(child_size, !horizontal) + axis_extent(margin, !horizontal) * 2.0F);
+            flow_cross = std::max(flow_cross, axis_extent(child_size, !horizontal) + (axis_extent(margin, !horizontal) * 2.0F));
         }
 
         ++flow_count;
@@ -236,7 +236,7 @@ void Container::arrange_children(ImVec2 content_size) {
 
     ImVec2 cursor{};
     if (aligns_content) {
-        const float flow_main = fixed_main + flexible_main * flexible_weight + spacing;
+        const float flow_main = fixed_main + (flexible_main * flexible_weight) + spacing;
         const ImVec2 flow_size = horizontal ? ImVec2{flow_main, flow_cross} : ImVec2{flow_cross, flow_main};
         cursor = {(content_size.x - flow_size.x) * alignment.x, (content_size.y - flow_size.y) * alignment.y};
     }
@@ -251,7 +251,7 @@ void Container::arrange_children(ImVec2 content_size) {
         const ImVec2 margin = child->layout_margin();
         ImVec2 child_offset = {cursor.x + margin.x, cursor.y + margin.y};
         if (aligns_content) {
-            const float child_cross = axis_extent(child_size, !horizontal) + axis_extent(margin, !horizontal) * 2.0F;
+            const float child_cross = axis_extent(child_size, !horizontal) + (axis_extent(margin, !horizontal) * 2.0F);
             const float cross_offset = std::max(0.0F, flow_cross - child_cross) * (horizontal ? alignment.y : alignment.x);
             if (horizontal) {
                 child_offset.y += cross_offset;
@@ -265,9 +265,9 @@ void Container::arrange_children(ImVec2 content_size) {
         m_content_size.y = std::max(m_content_size.y, child_offset.y + child_size.y + margin.y);
 
         if (horizontal) {
-            cursor.x += child_size.x + margin.x * 2.0F + item_spacing;
+            cursor.x += child_size.x + (margin.x * 2.0F) + item_spacing;
         } else {
-            cursor.y += child_size.y + margin.y * 2.0F + item_spacing;
+            cursor.y += child_size.y + (margin.y * 2.0F) + item_spacing;
         }
     }
 }
@@ -303,8 +303,8 @@ void Container::draw_children() {
         const ImVec2 margin = child->layout_margin();
         Placement placement = child->layout().placement();
         const ImVec2 origin = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
-        placement.offset.x += margin.x * (1.0F - 2.0F * origin.x);
-        placement.offset.y += margin.y * (1.0F - 2.0F * origin.y);
+        placement.offset.x += margin.x * (1.0F - (2.0F * origin.x));
+        placement.offset.y += margin.y * (1.0F - (2.0F * origin.y));
         const ImVec2 size = child->layout().resolve_size(available);
         arrange_child(*child, size, placement);
         child->draw();
@@ -344,7 +344,9 @@ bool Container::paint() {
     ImGui::SetCursorScreenPos(child_position);
 
     const ImGuiID child_id = id().empty() ? ImGui::GetID(this) : ImGui::GetID(id().c_str());
+    // preserve the incoming clip because BeginChild replaces it before the border and visible overflow path run.
     const ImVec4 parent_clip = current_clip(*ImGui::GetWindowDrawList());
+    m_parent_clip = parent_clip;
     const ImVec4 parent_effect_clip = effect_clip_stack.empty() ? parent_clip : effect_clip_stack.back();
     ImGui::BeginChild(child_id, child_size, child_flags, window_flags);
 
@@ -352,29 +354,39 @@ bool Container::paint() {
     set_layout_rect(resolved_child_rect);
     set_visual_rect(resolved_child_rect);
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
-    const ImRect blur_rect = ImGui::GetCurrentWindow()->InnerRect;
-    ImGui::PushClipRect({parent_effect_clip.x, parent_effect_clip.y}, {parent_effect_clip.z, parent_effect_clip.w}, false);
-    const float paint_opacity = std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
-    draw_blur(*child_draw_list, {blur_rect.Min, blur_rect.Max}, current_style.blur(), current_style.border_radius(), paint_opacity);
-    draw_box_shadow(
-        *child_draw_list, shadow_rect(resolved_child_rect), current_style.box_shadow(), current_style.border_radius(), paint_opacity
-    );
-    ImGui::PopClipRect();
+    // effects are the only draws that need the ancestor effect clip.
+    if (EffectRegistry* effects = effect_registry();
+        effects != nullptr && (current_style.blur() > 0 || current_style.box_shadow().color.Value.w > 0.0F)) {
+        const ImRect blur_rect = ImGui::GetCurrentWindow()->InnerRect;
+        ImGui::PushClipRect({parent_effect_clip.x, parent_effect_clip.y}, {parent_effect_clip.z, parent_effect_clip.w}, false);
+        const float paint_opacity = std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
+        draw_blur(
+            *effects, *child_draw_list, {blur_rect.Min, blur_rect.Max}, current_style.blur(), current_style.border_radius(),
+            paint_opacity
+        );
+        draw_box_shadow(
+            *effects, *child_draw_list, shadow_rect(resolved_child_rect), current_style.box_shadow(),
+            current_style.border_radius(), paint_opacity
+        );
+        ImGui::PopClipRect();
+    }
 
+    // visible overflow escapes this container but never an ancestor's effect clip.
     effect_clip_stack.push_back(
-        current_style.overflow() == Overflow::Visible ? parent_effect_clip : intersect_clip(parent_effect_clip, resolved_child_rect)
+        current_style.overflow() == Overflow::Visible ? parent_effect_clip
+                                                      : intersect_clip(parent_effect_clip, resolved_child_rect)
     );
 
+    // draw the frame under the incoming clip; descendant clipping is applied separately below.
     ImGui::PushClipRect({parent_clip.x, parent_clip.y}, {parent_clip.z, parent_clip.w}, true);
-    draw_frame_surface(*child_draw_list, resolved_child_rect, current_style);
+    draw_frame(*child_draw_list, resolved_child_rect, current_style);
     ImGui::PopClipRect();
 
-    m_content_clip_pushed = !scrollable;
+    // bordered scrollable children still need a manual content clip because imgui's scroll clip does not protect the border.
+    m_content_clip_pushed = !scrollable || current_style.border() != BORDER_NONE;
     if (m_content_clip_pushed) {
         if (current_style.overflow() == Overflow::Visible && current_style.border() == BORDER_NONE) {
-            ImGui::PushClipRect(
-                {parent_effect_clip.x, parent_effect_clip.y}, {parent_effect_clip.z, parent_effect_clip.w}, false
-            );
+            ImGui::PushClipRect({parent_clip.x, parent_clip.y}, {parent_clip.z, parent_clip.w}, false);
         } else {
             const ImVec4 clip = content_clip(current_style, resolved_child_rect);
             ImGui::PushClipRect({clip.x, clip.y}, {clip.z, clip.w}, true);
@@ -397,11 +409,16 @@ void Container::on_draw_end() {
     const ComputedStyle& current_style = computed_style();
     ImColor border = current_style.border_color().value;
     border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
+    // descendants must stop before the border; the border itself uses the parent clip below.
     if (m_content_clip_pushed) {
         ImGui::PopClipRect();
         m_content_clip_pushed = false;
     }
-    draw_border(*ImGui::GetWindowDrawList(), child_rect, current_style, border);
+    if (current_style.border() != BORDER_NONE) {
+        ImGui::PushClipRect({m_parent_clip.x, m_parent_clip.y}, {m_parent_clip.z, m_parent_clip.w}, false);
+        draw_border(*ImGui::GetWindowDrawList(), child_rect, current_style, border);
+        ImGui::PopClipRect();
+    }
     ImGui::EndChild();
     effect_clip_stack.pop_back();
 }

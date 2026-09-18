@@ -24,10 +24,18 @@ StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::m
 StyledNode::~StyledNode() = default;
 
 void StyledNode::draw_surface(ImDrawList& draw_list, Rect rect) const {
+    if (EffectRegistry* effects = effect_registry(); effects != nullptr) {
+        ui::draw_frame(*effects, draw_list, rect, computed_style());
+        return;
+    }
     ui::draw_frame(draw_list, rect, computed_style());
 }
 
 void StyledNode::draw_surface(ImDrawList& draw_list, Rect rect, ImColor background) const {
+    if (EffectRegistry* effects = effect_registry(); effects != nullptr) {
+        ui::draw_frame(*effects, draw_list, rect, computed_style(), background);
+        return;
+    }
     ui::draw_frame(draw_list, rect, computed_style(), background);
 }
 
@@ -69,7 +77,7 @@ void StyledNode::draw() {
 
     if (rotation_deg == 0.0F && scale.x == 1.0F && scale.y == 1.0F) {
         Node::draw();
-        current_style.pop(push_state);
+        ComputedStyle::pop(push_state);
         return;
     }
 
@@ -106,8 +114,8 @@ void StyledNode::draw() {
             ImDrawVert& vertex = draw_list.VtxBuffer[index];
             const ImVec2 offset = {(vertex.pos.x - center.x) * scale.x, (vertex.pos.y - center.y) * scale.y};
             vertex.pos = {
-                center.x + offset.x * cosine - offset.y * sine,
-                center.y + offset.x * sine + offset.y * cosine,
+                center.x + (offset.x * cosine) - (offset.y * sine),
+                center.y + (offset.x * sine) + (offset.y * cosine),
             };
         }
     };
@@ -119,7 +127,7 @@ void StyledNode::draw() {
         transform_draw_list(*context.Windows[index]->DrawList, 0);
     }
 
-    current_style.pop(push_state);
+    ComputedStyle::pop(push_state);
 }
 
 bool StyledNode::on_draw() {
@@ -152,13 +160,13 @@ void StyledNode::update_cursor() {
 void StyledNode::draw_before() {
     if (m_before != nullptr) {
         const Rect rect = layout().visual_rect();
-        m_before->paint(*ImGui::GetWindowDrawList(), rect, rect.inset(computed_style().padding()));
+        m_before->paint(effect_registry(), *ImGui::GetWindowDrawList(), rect, rect.inset(computed_style().padding()));
     }
 }
 
 void StyledNode::draw_after() {
     if (m_after != nullptr) {
         const Rect rect = layout().visual_rect();
-        m_after->paint(*ImGui::GetForegroundDrawList(), rect, rect.inset(computed_style().padding()));
+        m_after->paint(effect_registry(), *ImGui::GetForegroundDrawList(), rect, rect.inset(computed_style().padding()));
     }
 }

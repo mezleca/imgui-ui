@@ -19,10 +19,13 @@
 
 #include "imgui-context.hpp"
 
+using namespace ui;
+
 struct EffectProbe {
     int initialized = 0;
     int frames = 0;
     int shutdown = 0;
+    int command = 0;
 };
 
 static bool initialize_test_effect(void* data) {
@@ -38,7 +41,9 @@ static void shutdown_test_effect(void* data) {
     ++static_cast<EffectProbe*>(data)->shutdown;
 }
 
-static void render_test_effect(const ImDrawList*, const ImDrawCmd*) {}
+static void render_test_effect(void* data, const ImDrawList*, const ImDrawCmd*, const void* command) {
+    static_cast<EffectProbe*>(data)->command = *static_cast<const int*>(command);
+}
 
 static int draw_list_index(const ImDrawData& draw_data, std::string_view owner) {
     for (int index = 0; index < draw_data.CmdListsCount; ++index) {
@@ -242,12 +247,11 @@ TEST_CASE("debugger exposes the content resize handle", "[Debugger][ResizableCon
 
 TEST_CASE("effect registry invokes lifecycle callbacks and queues draw callbacks") {
     EffectProbe probe;
-    ui::EffectRegistry effects;
-    const ui::EffectId id = effects.register_effect(
+    EffectRegistry effects;
+    const EffectPass pass = effects.register_effect<int>(
         {render_test_effect, initialize_test_effect, begin_test_effect_frame, shutdown_test_effect, &probe}
     );
 
-    REQUIRE(id != 0);
     REQUIRE(effects.initialize());
     REQUIRE(probe.initialized == 1);
 
@@ -255,22 +259,29 @@ TEST_CASE("effect registry invokes lifecycle callbacks and queues draw callbacks
     REQUIRE(probe.frames == 1);
 
     ui_test::ImGuiContext context({100.0F, 100.0F});
-    ImGui::NewFrame();
-    ImGui::Begin("effect-registry-test");
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    REQUIRE(effects.submit(*draw_list, id, &probe));
-    REQUIRE(draw_list->CmdBuffer.Size >= 2);
-    bool found_callback = false;
-    for (const ImDrawCmd& command : draw_list->CmdBuffer) {
-        found_callback = found_callback || command.UserCallback == render_test_effect;
-    }
-    REQUIRE(found_callback);
-    ImGui::End();
-    ImGui::EndFrame();
+    ImDrawList* draw_list = nullptr;
+    ui_test::draw_window("effect-registry-test", {100.0F, 100.0F}, [&] {
+        draw_list = ImGui::GetWindowDrawList();
+        int command_value = 42;
+        REQUIRE(pass.submit(*draw_list, command_value));
+        command_value = 0;
+        REQUIRE(draw_list->CmdBuffer.Size >= 2);
+        bool found_callback = false;
+        for (const ImDrawCmd& command : draw_list->CmdBuffer) {
+            if (command.UserCallback == nullptr || command.UserCallback == ImDrawCallback_ResetRenderState) {
+                continue;
+            }
 
-    REQUIRE(effects.unregister_effect(id));
+            command.UserCallback(draw_list, &command);
+            found_callback = true;
+        }
+        REQUIRE(found_callback);
+        REQUIRE(probe.command == 42);
+    });
+
+    REQUIRE(effects.unregister_effect(pass));
     REQUIRE(probe.shutdown == 1);
-    REQUIRE_FALSE(effects.submit(*draw_list, id, &probe));
+    REQUIRE_FALSE(pass.submit(*draw_list, 42));
 }
 
 TEST_CASE("ui profiler records completed zones and frame metrics") {

@@ -219,8 +219,8 @@ Profiler::ZoneToken Profiler::begin_zone(std::string_view name, uint64_t node_id
     }
 
     FrameBuffer& frame = m_frames[m_write_index];
+    // keep the frame usable when instrumentation reaches the fixed event limit.
     if (frame.count >= frame.events.size()) {
-        // keep the frame usable when instrumentation reaches the fixed event limit.
         ++frame.dropped;
         return {};
     }
@@ -252,7 +252,7 @@ void Profiler::record_node_draw() {
     ++m_frames[m_write_index].metrics.nodes_drawn;
 }
 
-void Profiler::record_root_phase_times(FrameBuffer& frame) {
+void Profiler::record_root_phase_times(FrameBuffer& frame) const {
     // root phase times are inclusive. layout and input sum all node zones.
     for (std::size_t index = 0; index < frame.count; ++index) {
         const ProfileEvent& event = frame.events[index];

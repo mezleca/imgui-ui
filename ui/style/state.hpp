@@ -229,7 +229,7 @@ namespace ui {
             return m_animation_slots[static_cast<size_t>(property)];
         }
 
-        AnimationTarget target(StyleAnimationSlot& slot);
+        static AnimationTarget target(StyleAnimationSlot& slot);
         bool has_animation_overrides() const;
 
         StyleType m_target_style = StyleType::DEFAULT;

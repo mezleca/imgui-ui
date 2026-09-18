@@ -28,7 +28,7 @@ void ImageWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const Comput
                                         : std::max(content_size.x / texture_size.x, content_size.y / texture_size.y);
                 const ImVec2 size = {texture_size.x * scale, texture_size.y * scale};
                 image = Rect::from_position_size(
-                    {content.min.x + (content_size.x - size.x) * 0.5F, content.min.y + (content_size.y - size.y) * 0.5F}, size
+                    {content.min.x + ((content_size.x - size.x) * 0.5F), content.min.y + ((content_size.y - size.y) * 0.5F)}, size
                 );
             }
         }

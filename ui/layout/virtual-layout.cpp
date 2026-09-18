@@ -217,10 +217,10 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
     while (clipper.Step()) {
         for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
             const size_t index = first + static_cast<size_t>(row);
-            const float screen_y = start.y + static_cast<float>(row) * stride;
+            const float screen_y = start.y + (static_cast<float>(row) * stride);
 
             // the clipper may return a boundary row, so avoid creating it unless it is visible or inside overscan.
-            if (!(index >= begin && index < end) &&
+            if ((index < begin || index >= end) &&
                 !ImGui::IsRectVisible({start.x, screen_y}, {start.x + width, screen_y + height})) {
                 continue;
             }
@@ -232,10 +232,10 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
             }
 
             const ImVec2 margin = child.layout_margin();
-            const float y = offset + static_cast<float>(row) * stride;
+            const float y = offset + (static_cast<float>(row) * stride);
 
             arrange_child(
-                child, {std::max(0.0F, width - margin.x * 2.0F), std::max(0.0F, height - margin.y * 2.0F)},
+                child, {std::max(0.0F, width - (margin.x * 2.0F)), std::max(0.0F, height - (margin.y * 2.0F))},
                 {.offset = {margin.x, y + margin.y}}
             );
 
