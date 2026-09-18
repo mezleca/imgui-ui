@@ -22,10 +22,11 @@ namespace ui {
         void resolve_layout() override;
         bool paint() override;
         void on_draw_end() override;
+        ImGuiWindowFlags child_window_flags() const override;
 
     private:
         LayerMode m_mode;
         bool m_window_initialized = false;
-        bool m_inline_child_scope = false;
+        bool m_inline_child_window = false;
     };
 } // namespace ui

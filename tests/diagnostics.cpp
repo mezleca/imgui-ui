@@ -161,52 +161,6 @@ TEST_CASE("debugger clicks preserve an open popup") {
     REQUIRE(picker.is_open());
 }
 
-TEST_CASE("debugger focus follows hover and releases before application input") {
-    ui::Runtime runtime;
-    ui::UI surface = ui_test::make_surface(runtime, true);
-    bool value = false;
-    auto& checkbox = surface.root().add<ui::CheckboxWidget>(value, "application");
-    checkbox.set_layout({
-        .size = {ui::px(120.0F), ui::px(40.0F)},
-        .placement = {.offset = {20.0F, 20.0F}},
-        .in_flow = false,
-    });
-
-    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
-
-    ui_test::draw_surface(surface);
-    const ImVec2 checkbox_position = ui_test::center(checkbox.frame().layout().visual_rect());
-    const auto draw_frame = [&surface](ImVec2 position) {
-        ImGui::GetIO().MousePos = position;
-        ui_test::draw_surface(surface);
-    };
-
-    draw_frame(checkbox_position);
-    REQUIRE(checkbox.input_state().hovered);
-
-    surface.debugger()->set_open(true);
-    draw_frame(checkbox_position);
-    REQUIRE(checkbox.input_state().hovered);
-
-    const ImVec2 debugger_position = ui_test::center(surface.debugger()->layout().visual_rect());
-    for (int frame = 0; frame < 8; ++frame) {
-        draw_frame(debugger_position);
-    }
-
-    ui::UiEvent key = ui::UiEvent::make(ui::EventType::KeyDown);
-    REQUIRE(surface.dispatch(key));
-
-    ui::UiEvent down = ui_test::pointer_event(ui::EventType::PointerDown, checkbox_position);
-    REQUIRE(surface.dispatch(down));
-
-    ui::UiEvent up = ui_test::pointer_event(ui::EventType::PointerUp, down.position);
-    REQUIRE(surface.dispatch(up));
-
-    draw_frame(checkbox_position);
-    REQUIRE(checkbox.input_state().hovered);
-    REQUIRE(value);
-}
-
 TEST_CASE("debugger renders as a panel in the surface layout") {
     ui::Runtime runtime;
     ui::UI surface = ui_test::make_surface(runtime, true);

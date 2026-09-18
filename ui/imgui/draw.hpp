@@ -55,6 +55,13 @@ namespace ui {
     ImDrawList& draw_list(DrawListTarget target = DrawListTarget::Window);
     Rect viewport_work_area();
 
+    /// returns the ancestor clip for effects, or fallback when no container scope is active.
+    ImVec4 current_effect_clip(ImVec4 fallback);
+    /// sets the clip used by descendant effects until pop_effect_clip().
+    void push_effect_clip(ImVec4 clip);
+    /// restores the previous descendant effect clip.
+    void pop_effect_clip();
+
     void draw_line(ImDrawList& draw_list, ImVec2 start, ImVec2 end, ImColor color, float thickness);
     void draw_circle(ImDrawList& draw_list, ImVec2 center, float radius, ImColor color);
     void draw_circle_outline(ImDrawList& draw_list, ImVec2 center, float radius, ImColor color, float thickness);

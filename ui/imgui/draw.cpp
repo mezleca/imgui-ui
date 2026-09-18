@@ -9,8 +9,23 @@
 #include <bit>
 #include <cmath>
 #include <numbers>
+#include <vector>
 
 using namespace ui;
+
+static std::vector<ImVec4> effect_clip_stack;
+
+ImVec4 ui::current_effect_clip(ImVec4 fallback) {
+    return effect_clip_stack.empty() ? fallback : effect_clip_stack.back();
+}
+
+void ui::push_effect_clip(ImVec4 clip) {
+    effect_clip_stack.push_back(clip);
+}
+
+void ui::pop_effect_clip() {
+    effect_clip_stack.pop_back();
+}
 
 static constexpr float PI = std::numbers::pi_v<float>;
 static constexpr float QUARTER_PI = PI * 0.25F;
@@ -503,12 +518,21 @@ draw_frame_surface_impl(ImDrawList& draw_list, Rect rect, const ComputedStyle& s
 static void draw_frame_impl(
     EffectRegistry* effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background, float alpha
 ) {
-    if (effects != nullptr) {
+    const bool has_effects = effects != nullptr && (style.box_shadow().color.Value.w > 0.0F || style.blur() > 0);
+    const bool clip_effects = has_effects && !effect_clip_stack.empty();
+    if (has_effects) {
+        if (clip_effects) {
+            const ImVec4 clip = effect_clip_stack.back();
+            draw_list.PushClipRect({clip.x, clip.y}, {clip.z, clip.w}, false);
+        }
         if (style.box_shadow().color.Value.w > 0.0F) {
             draw_box_shadow(*effects, draw_list, rect, style.box_shadow(), style.border_radius(), alpha);
         }
         if (style.blur() > 0) {
             draw_blur(*effects, draw_list, rect, style.blur(), style.border_radius(), alpha);
+        }
+        if (clip_effects) {
+            draw_list.PopClipRect();
         }
     }
     draw_frame_surface_impl(draw_list, rect, style, background, alpha);

@@ -8,11 +8,8 @@
 #include <cmath>
 #include <imgui_internal.h>
 #include <utility>
-#include <vector>
 
 using namespace ui;
-
-static std::vector<ImVec4> effect_clip_stack;
 
 static ImVec4 current_clip(const ImDrawList& draw_list) {
     const ImVec2 min = draw_list.GetClipRectMin();
@@ -186,7 +183,15 @@ void Container::on_measure() {
         content_size.y += spacing;
     }
 
-    set_measured_size(outer_size(content_size), fit_width, fit_height);
+    ImVec2 measured_size = outer_size(content_size);
+    if (computed_style().box_sizing() == BoxSizing::BorderBox) {
+        const BoxInsets insets = box_insets();
+        const ImVec2 padding = computed_style().padding();
+        if (fit_width) measured_size.x -= insets.horizontal() - (padding.x * 2.0F);
+        if (fit_height) measured_size.y -= insets.vertical() - (padding.y * 2.0F);
+    }
+
+    set_measured_size(measured_size, fit_width, fit_height);
 }
 
 void Container::arrange_children() {
@@ -284,6 +289,16 @@ ImVec2 Container::child_window_size() const {
     return layout().size();
 }
 
+ImGuiWindowFlags Container::child_window_flags() const {
+    ImGuiWindowFlags flags = constants::WIDGET_WINDOW_FLAGS;
+    // preserve a pass-through parent window until this container owns framework input or scrolling.
+    if (!has_input_mode() && !has_direct_input_child() && !m_scroll_vertical && !m_scroll_horizontal &&
+        (ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_NoMouseInputs) != 0) {
+        flags |= ImGuiWindowFlags_NoMouseInputs;
+    }
+    return flags;
+}
+
 Rect Container::shadow_rect(Rect child_rect) const {
     return child_rect;
 }
@@ -315,7 +330,7 @@ bool Container::paint() {
     const ComputedStyle& current_style = computed_style();
 
     ImGuiChildFlags child_flags = ImGuiChildFlags_AlwaysUseWindowPadding;
-    ImGuiWindowFlags window_flags = constants::WIDGET_WINDOW_FLAGS | ImGuiWindowFlags_NoBackground;
+    ImGuiWindowFlags window_flags = child_window_flags() | ImGuiWindowFlags_NoBackground;
 
     const bool scrollable = (m_scroll_vertical || m_scroll_horizontal) && current_style.overflow() != Overflow::Clip;
     if (scrollable) {
@@ -337,17 +352,20 @@ bool Container::paint() {
     const ImVec2 position = ImGui::GetCursorScreenPos();
     const ImVec2 child_position = {std::round(position.x), std::round(position.y)};
     const ImVec2 requested_size = child_window_size();
-    const ImVec2 child_size = {
+    ImVec2 child_size = {
         std::max(0.0F, requested_size.x + position.x - child_position.x),
         std::max(0.0F, requested_size.y + position.y - child_position.y),
     };
+    // keep a growing child inside the parent's inner width so the parent's scrollbar remains hittable.
+    if (size_spec.width.mode == LayoutSizeMode::Grow) {
+        child_size.x = std::min(child_size.x, ImGui::GetCurrentWindow()->InnerRect.GetWidth());
+    }
     ImGui::SetCursorScreenPos(child_position);
 
     const ImGuiID child_id = id().empty() ? ImGui::GetID(this) : ImGui::GetID(id().c_str());
     // preserve the incoming clip because BeginChild replaces it before the border and visible overflow path run.
     const ImVec4 parent_clip = current_clip(*ImGui::GetWindowDrawList());
-    m_parent_clip = parent_clip;
-    const ImVec4 parent_effect_clip = effect_clip_stack.empty() ? parent_clip : effect_clip_stack.back();
+    const ImVec4 parent_effect_clip = current_effect_clip(parent_clip);
     ImGui::BeginChild(child_id, child_size, child_flags, window_flags);
 
     const Rect resolved_child_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
@@ -371,18 +389,18 @@ bool Container::paint() {
         ImGui::PopClipRect();
     }
 
-    // visible overflow escapes this container but never an ancestor's effect clip.
-    effect_clip_stack.push_back(
-        current_style.overflow() == Overflow::Visible ? parent_effect_clip
-                                                      : intersect_clip(parent_effect_clip, resolved_child_rect)
-    );
-
-    // draw the frame under the incoming clip; descendant clipping is applied separately below.
+    // draw the frame and border before descendants. the content clip protects the border from normal surfaces.
     ImGui::PushClipRect({parent_clip.x, parent_clip.y}, {parent_clip.z, parent_clip.w}, true);
     draw_frame(*child_draw_list, resolved_child_rect, current_style);
     ImGui::PopClipRect();
 
-    // bordered scrollable children still need a manual content clip because imgui's scroll clip does not protect the border.
+    // visible overflow escapes this container but never an ancestor's effect clip.
+    push_effect_clip(
+        current_style.overflow() == Overflow::Visible ? parent_effect_clip
+                                                      : intersect_clip(parent_effect_clip, resolved_child_rect)
+    );
+
+    // bordered children need a manual content clip because the child window clip does not protect the border.
     m_content_clip_pushed = !scrollable || current_style.border() != BORDER_NONE;
     if (m_content_clip_pushed) {
         if (current_style.overflow() == Overflow::Visible && current_style.border() == BORDER_NONE) {
@@ -399,6 +417,7 @@ bool Container::paint() {
 
 void Container::on_draw_end() {
     // capture fit-size changes before closing the child so input and deferred decorations use its final bounds.
+    ImGuiWindow* child_window = ImGui::GetCurrentWindow();
     const ImVec2 window_position = ImGui::GetWindowPos();
     const ImVec2 window_size = ImGui::GetWindowSize();
 
@@ -406,19 +425,18 @@ void Container::on_draw_end() {
     set_layout_rect(child_rect);
     set_visual_rect(child_rect);
 
-    const ComputedStyle& current_style = computed_style();
-    ImColor border = current_style.border_color().value;
-    border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
-    // descendants must stop before the border; the border itself uses the parent clip below.
     if (m_content_clip_pushed) {
         ImGui::PopClipRect();
         m_content_clip_pushed = false;
     }
-    if (current_style.border() != BORDER_NONE) {
-        ImGui::PushClipRect({m_parent_clip.x, m_parent_clip.y}, {m_parent_clip.z, m_parent_clip.w}, false);
-        draw_border(*ImGui::GetWindowDrawList(), child_rect, current_style, border);
-        ImGui::PopClipRect();
+    // clear ImGui's parent wheel lock when the hovered window is a nested scrollable child.
+    if ((m_scroll_vertical || m_scroll_horizontal) && GImGui->WheelingWindow != nullptr &&
+        GImGui->WheelingWindow != child_window && GImGui->HoveredWindow != nullptr &&
+        ImGui::IsWindowChildOf(GImGui->HoveredWindow, child_window, false)) {
+        GImGui->WheelingWindow = nullptr;
+        ImGui::SetKeyOwner(ImGuiKey_MouseWheelX, ImGuiKeyOwner_NoOwner);
+        ImGui::SetKeyOwner(ImGuiKey_MouseWheelY, ImGuiKeyOwner_NoOwner);
     }
     ImGui::EndChild();
-    effect_clip_stack.pop_back();
+    pop_effect_clip();
 }

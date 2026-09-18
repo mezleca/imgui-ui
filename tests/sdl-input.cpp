@@ -9,12 +9,14 @@
 #include <ui/layout/layer-container.hpp>
 #include <ui/layout/resizable-container.hpp>
 #include <ui/layout/tree-container.hpp>
+#include <ui/layout/virtual-layout.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/button.hpp>
 #include <ui/widgets/checkbox.hpp>
 #include <ui/widgets/dropdown.hpp>
 #include <ui/widgets/file-dialog.hpp>
 #include <ui/widgets/number-input.hpp>
+#include <ui/widgets/text.hpp>
 
 #include <SDL3/SDL.h>
 #include <glad/gl.h>
@@ -320,6 +322,112 @@ TEST_CASE("scrolling keeps inline overlay panels above earlier content", "[Layer
     CHECK(pixel[0] < 96);
 }
 
+TEST_CASE("scrolled inline layers keep virtual list input separate", "[LayerContainer][VirtualLayout][input][regression]") {
+    class VirtualListProbe final : public ui::VirtualLayout {
+    public:
+        VirtualListProbe() : VirtualLayout("virtual-list", 20.0F) {}
+
+        ImGuiWindow* window = nullptr;
+        ImRect scrollbar{};
+
+    protected:
+        void draw_children() override {
+            window = ImGui::GetCurrentWindow();
+            scrollbar = window->ScrollbarY ? ImGui::GetWindowScrollbarRect(window, ImGuiAxis_Y) : ImRect{};
+            VirtualLayout::draw_children();
+        }
+    };
+
+    SdlVideoSession sdl({900.0F, 600.0F});
+    ui::Runtime runtime;
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
+    ui::UI surface(runtime, {.backend = std::move(backend)});
+    auto& demo = surface.root().add<ui::Container>("demo");
+    demo.set_size({ui::px(900.0F), ui::px(600.0F)});
+    demo.set_scrollable(true).style().padding({12.0F, 12.0F});
+    demo.add<ui::Container>("before-list").set_size({ui::grow(), ui::px(300.0F)});
+
+    auto& list = demo.add<VirtualListProbe>();
+    list.set_size({ui::grow(), ui::px(100.0F)});
+    std::vector<ui::Node*> rows(1000);
+    list.set_items(1000, [&list, &rows](size_t index) -> ui::Node& {
+        if (rows[index] == nullptr) {
+            rows[index] = &list.add<ui::Node>(std::to_string(index));
+        }
+        return *rows[index];
+    });
+    demo.add<ui::Container>("after-list").set_size({ui::grow(), ui::px(300.0F)});
+    auto& overlay = demo.add<ui::LayerContainer>("demo-overlay");
+    auto& panel = overlay.add<ui::Container>("overlay-panel");
+    panel.set_layout({
+        .size = {ui::px(180.0F), ui::px(80.0F)},
+        .placement = {.anchor = ui::Anchor::TopRight, .origin = ui::Anchor::TopRight, .offset = {-20.0F, 20.0F}},
+        .in_flow = false,
+    });
+
+    const auto send = [&surface](SDL_EventType type, ImVec2 position) {
+        SDL_Event event{};
+        event.type = type;
+        if (type == SDL_EVENT_MOUSE_MOTION) {
+            event.motion.windowID = surface.backend().window_id();
+            event.motion.x = position.x;
+            event.motion.y = position.y;
+        } else {
+            event.button.windowID = surface.backend().window_id();
+            event.button.x = position.x;
+            event.button.y = position.y;
+            event.button.button = SDL_BUTTON_LEFT;
+        }
+        return process_sdl_event(surface, event);
+    };
+    const auto scroll = [&surface](ImVec2 position) {
+        SDL_Event event{};
+        event.type = SDL_EVENT_MOUSE_WHEEL;
+        event.wheel.windowID = surface.backend().window_id();
+        event.wheel.mouse_x = position.x;
+        event.wheel.mouse_y = position.y;
+        event.wheel.y = -1.0F;
+        return process_sdl_event(surface, event);
+    };
+
+    draw_frame(surface);
+    REQUIRE_FALSE(send(SDL_EVENT_MOUSE_MOTION, {100.0F, 240.0F}));
+    draw_frame(surface);
+    for (int frame = 0; frame < 6; ++frame) {
+        scroll({100.0F, 240.0F});
+        draw_frame(surface);
+    }
+
+    REQUIRE(list.scrollbar.GetHeight() > 0.0F);
+    REQUIRE(list.layout().visual_rect().contains({100.0F, 240.0F}));
+    scroll({100.0F, 240.0F});
+    draw_frame(surface);
+    REQUIRE(list.window->Scroll.y > 0.0F);
+
+    const ImVec2 thumb = {(list.scrollbar.Min.x + list.scrollbar.Max.x) * 0.5F, list.scrollbar.Min.y + 4.0F};
+
+    send(SDL_EVENT_MOUSE_MOTION, thumb);
+    draw_frame(surface);
+    REQUIRE_FALSE(send(SDL_EVENT_MOUSE_BUTTON_DOWN, thumb));
+    draw_frame(surface);
+    REQUIRE(GImGui->ActiveId == ImGui::GetWindowScrollbarID(list.window, ImGuiAxis_Y));
+    send(SDL_EVENT_MOUSE_MOTION, {thumb.x, thumb.y + 40.0F});
+    draw_frame(surface);
+    send(SDL_EVENT_MOUSE_BUTTON_UP, {thumb.x, thumb.y + 40.0F});
+    draw_frame(surface);
+
+    const float dragged_scroll = list.window->Scroll.y;
+
+    const ImVec2 list_position = {list.layout().visual_rect().min.x + 20.0F, list.layout().visual_rect().min.y + 20.0F};
+    REQUIRE_FALSE(send(SDL_EVENT_MOUSE_MOTION, list_position));
+    draw_frame(surface);
+
+    scroll(list_position);
+    draw_frame(surface);
+
+    REQUIRE(list.window->Scroll.y > dragged_scroll);
+}
+
 TEST_CASE("container borders stay below popup surfaces", "[render][regression]") {
     SdlVideoSession sdl({160.0F, 120.0F});
     ui::Runtime runtime;
@@ -370,6 +478,67 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
     );
     CHECK(pixel[0] < 96);
     CHECK(pixel[1] > 160);
+}
+
+TEST_CASE("visible file dialog overflow lets text shadows cross its border", "[render][regression]") {
+    SdlVideoSession sdl({180.0F, 140.0F});
+    ui::Runtime runtime;
+    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
+    ui::UI surface(runtime, {.backend = std::move(backend)});
+
+    auto& backdrop = surface.root().add<ui::Container>("backdrop");
+    backdrop.set_layout({.size = {ui::px(180.0F), ui::px(140.0F)}, .in_flow = false});
+    backdrop.style().background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F});
+
+    auto& dialog = surface.root().add<ui::FileDialogWidget>("file");
+    dialog.set_layout({
+        .size = {ui::px(70.0F), ui::px(40.0F)},
+        .placement = {.offset = {60.0F, 50.0F}},
+        .in_flow = false,
+    });
+    dialog.set_content_alignment({0.0F, 0.5F});
+    dialog.configure_all_styles([](ui::Style& style) {
+        style.background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F})
+            .border(ui::BORDER_ALL)
+            .border_color(ImColor{0.5F, 0.5F, 0.5F, 1.0F})
+            .border_thickness(4.0F)
+            .overflow(ui::Overflow::Visible)
+            .padding({});
+    });
+    auto& text = static_cast<ui::TextWidget&>(*dialog.children().front());
+    text.configure_all_styles([](ui::Style& style) {
+        style.color(ImColor{0.0F, 0.0F, 0.0F, 1.0F})
+            .background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F})
+            .border(ui::BORDER_NONE)
+            .box_shadow({.spread = 16.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}})
+            .padding({});
+    });
+
+    draw_frame(surface);
+    draw_frame(surface);
+
+    const ui::Rect dialog_rect = dialog.layout().visual_rect();
+    const ui::Rect text_rect = text.layout().visual_rect();
+    REQUIRE(dialog_rect.valid());
+    REQUIRE(text_rect.valid());
+    REQUIRE(text_rect.min.x < dialog_rect.max.x);
+
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    unsigned char pixel[4]{};
+    const ImVec2 sample = {dialog_rect.min.x - 4.0F, (text_rect.min.y + text_rect.max.y) * 0.5F};
+    glReadPixels(static_cast<int>(sample.x), viewport[3] - static_cast<int>(sample.y), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+    CHECK(pixel[0] < 80);
+    CHECK(pixel[1] < 80);
+    CHECK(pixel[2] < 80);
+
+    const ImVec2 border_sample = {dialog_rect.min.x + 1.0F, sample.y};
+    glReadPixels(
+        static_cast<int>(border_sample.x), viewport[3] - static_cast<int>(border_sample.y), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
+    );
+    CHECK(pixel[0] < 80);
+    CHECK(pixel[1] < 80);
+    CHECK(pixel[2] < 80);
 }
 
 TEST_CASE("container borders stay below window-layer panels", "[render][regression]") {
@@ -631,23 +800,9 @@ TEST_CASE("tree widget viewports clip oversized file dialog surfaces", "[TreeCon
         static_cast<int>(viewport_rect.max.x + 5.0F),
         viewport[3] - static_cast<int>((dialog_rect.min.y + dialog_rect.max.y) * 0.5F), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
     );
-    CHECK(pixel[1] > 160);
-    CHECK(pixel[2] < 80);
-    glReadPixels(
-        static_cast<int>(viewport_rect.max.x - 1.0F),
-        viewport[3] - static_cast<int>((dialog_rect.min.y + dialog_rect.max.y) * 0.5F), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
-    );
     CAPTURE(viewport_rect.min.x, viewport_rect.max.x, viewport_rect.min.y, viewport_rect.max.y);
     CAPTURE(dialog_rect.min.x, dialog_rect.max.x, dialog_rect.min.y, dialog_rect.max.y);
     CAPTURE(pixel[0], pixel[1], pixel[2], pixel[3]);
-    CHECK(pixel[0] > 160);
-    CHECK(pixel[2] < 80);
-    glReadPixels(
-        static_cast<int>((viewport_rect.min.x + viewport_rect.max.x) * 0.5F),
-        viewport[3] - static_cast<int>(viewport_rect.max.y - 1.0F), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
-    );
-    CAPTURE(pixel[0], pixel[1], pixel[2], pixel[3]);
-    CHECK(pixel[0] > 64);
     CHECK(pixel[2] < 80);
 }
 

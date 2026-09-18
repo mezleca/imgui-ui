@@ -8,10 +8,11 @@ using namespace ui;
 
 static constexpr ImGuiWindowFlags LAYER_WINDOW_FLAGS = constants::WINDOW_FLAGS;
 
-// a child window gives styled padding, backgrounds, borders, and effects a local clip and draw list.
+// returns whether inline descendants need a child window for local drawing or clipping.
 static bool needs_child_scope(const ComputedStyle& style) {
     return style.background_color().value.Value.w > 0.0F || style.blur() > 0 || style.box_shadow().color.Value.w > 0.0F ||
-           style.border() != BORDER_NONE || style.padding().x > 0.0F || style.padding().y > 0.0F;
+           style.border() != BORDER_NONE || style.padding().x > 0.0F || style.padding().y > 0.0F ||
+           style.overflow() != Overflow::Visible;
 }
 
 LayerContainer::LayerContainer(std::string id, LayerMode mode) : LayerContainer(std::move(id), mode, "LayerContainer") {}
@@ -19,6 +20,10 @@ LayerContainer::LayerContainer(std::string id, LayerMode mode) : LayerContainer(
 LayerContainer::LayerContainer(std::string id, LayerMode mode, std::string_view type_name)
     : Container(std::move(id), type_name), m_mode(mode) {
     set_layout({.in_flow = false});
+}
+
+ImGuiWindowFlags LayerContainer::child_window_flags() const {
+    return Container::child_window_flags() | ImGuiWindowFlags_NoMouseInputs;
 }
 
 void LayerContainer::resolve_layout() {
@@ -43,15 +48,15 @@ bool LayerContainer::paint() {
     const Rect viewport_rect = Rect::from_position_size(viewport->WorkPos, viewport->WorkSize);
     if (m_mode == LayerMode::Inline) {
         const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
-        // a scrolled inline layer must enter the parent content coordinate space before arranging descendants.
-        if (scroll.x != 0.0F || scroll.y != 0.0F) {
-            const ImVec2 cursor = ImGui::GetCursorPos();
-            ImGui::SetCursorPos({cursor.x + scroll.x, cursor.y + scroll.y});
-        }
-
-        // padding changes descendant layout, so it needs the same child scope as visible frame effects.
-        m_inline_child_scope = m_inline_child_scope || needs_child_scope(computed_style());
-        if (m_inline_child_scope) {
+        // scrolling requires content coordinates. styles that draw or clip descendants require a local child window.
+        const bool scrolled = scroll.x != 0.0F || scroll.y != 0.0F;
+        // keep the first child-window choice so active ImGui controls keep the same parent while styles change.
+        m_inline_child_window = m_inline_child_window || scrolled || needs_child_scope(computed_style());
+        if (m_inline_child_window) {
+            if (scrolled) {
+                const ImVec2 cursor = ImGui::GetCursorPos();
+                ImGui::SetCursorPos({cursor.x + scroll.x, cursor.y + scroll.y});
+            }
             return Container::paint();
         }
 
@@ -93,9 +98,9 @@ bool LayerContainer::paint() {
 }
 
 void LayerContainer::on_draw_end() {
-    // close the child opened by container painting while retaining the flag for the next frame.
+    // inline paint either shares the parent window or delegates child-window cleanup to Container.
     if (m_mode == LayerMode::Inline) {
-        if (m_inline_child_scope) {
+        if (m_inline_child_window) {
             Container::on_draw_end();
         }
         return;

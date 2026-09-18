@@ -221,6 +221,21 @@ namespace ui {
             return visual_rect;
         }
 
+        /// returns whether this node registers a framework input target.
+        bool has_input_mode() const {
+            return m_input_mode != InputMode::None;
+        }
+
+        /// returns true for direct children that own input. deeper containers decide their own pass-through window.
+        bool has_direct_input_child() const {
+            for (const auto& child : m_children) {
+                if (child->has_input_mode()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         virtual void input_state_changed() {}
 
         bool has_size() const;

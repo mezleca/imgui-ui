@@ -31,11 +31,11 @@ namespace ui {
     };
 
     enum class Overflow : uint8_t {
-        /// allows effects and descendant surfaces outside an unbordered content box.
+        /// lets descendant effects escape. borderless containers also let normal surfaces escape.
         Visible,
-        /// clips descendants and effects to the content box while retaining enabled scrolling.
+        /// clips descendants and effects to the container while retaining enabled scrolling.
         Hidden,
-        /// clips descendants and effects to the content box and disables scrolling.
+        /// clips descendants and effects to the container and disables scrolling.
         Clip,
     };
 

@@ -116,6 +116,30 @@ TEST_CASE("box sizing resolves fixed and percentage layout boxes", "[layout]") {
     REQUIRE(percentage_content.layout().size().y == Catch::Approx(84.0F));
 }
 
+TEST_CASE("border-box tab headers keep bounds when border thickness changes", "[layout][regression]") {
+    ui_test::ImGuiContext context({320.0F, 180.0F});
+    Container root("tabs-root");
+    root.set_size({px(280.0F), px(140.0F)});
+
+    auto& header = root.add<Container>("tabs-header", StackDirection::Horizontal);
+    header.set_size({grow(), fit()});
+    header.set_spacing(15.0F);
+    header.style().padding({12.0F, 12.0F}).box_sizing(BoxSizing::BorderBox).border(BORDER_BOTTOM).border_thickness(1.5F);
+    header.add<LayoutProbeNode>("tab", ImVec2{80.0F, 20.0F});
+
+    const auto draw_frame = [&root] { ui_test::draw_node(root, "tabs-border-test"); };
+
+    draw_frame();
+    const ImVec2 initial_size = header.layout().visual_rect().size();
+
+    header.style().border_thickness(8.0F);
+    draw_frame();
+
+    const ImVec2 updated_size = header.layout().visual_rect().size();
+    REQUIRE(updated_size.x == Catch::Approx(initial_size.x));
+    REQUIRE(updated_size.y == Catch::Approx(initial_size.y));
+}
+
 TEST_CASE("box sizing includes borders and preserves insets", "[layout]") {
     ui_test::ImGuiContext context({240.0F, 180.0F});
     Container root("box-inset-root");
@@ -1274,69 +1298,6 @@ void set_virtual_items(ui::VirtualLayout& list, size_t count, std::vector<int>& 
         cache.emplace(index, &row);
         return row;
     });
-}
-
-TEST_CASE(
-    "scrolled inline overlays do not capture virtual list wheel input", "[LayerContainer][VirtualLayout][scroll][regression]"
-) {
-    class ScrollContainer final : public ui::Container {
-    public:
-        ScrollContainer() : Container("overlay-scroll-parent") {
-            set_size({ui::px(240.0F), ui::px(160.0F)});
-            set_scrollable(true);
-        }
-
-        bool scroll_to_content = false;
-
-    protected:
-        void on_draw_end() override {
-            if (scroll_to_content) {
-                ImGui::SetScrollY(80.0F);
-            }
-            Container::on_draw_end();
-        }
-    } parent;
-
-    parent.add<LayoutProbeNode>("before-list", {240.0F, 160.0F});
-    auto& list = parent.add<VirtualListProbe>();
-    list.set_size({ui::px(180.0F), ui::px(80.0F)});
-    std::vector<int> drawn;
-    std::map<size_t, VirtualRow*> cache;
-    set_virtual_items(list, 100, drawn, cache);
-    parent.add<LayoutProbeNode>("after-list", {240.0F, 400.0F});
-
-    auto& overlay = parent.add<ui::LayerContainer>("demo-overlay");
-    auto& panel = overlay.add<ui::Container>("dynamic-section");
-    panel.set_layout({
-        .size = {ui::px(220.0F), ui::px(70.0F)},
-        .placement = {.anchor = ui::Anchor::TopRight, .origin = ui::Anchor::TopRight},
-        .in_flow = false,
-    });
-    panel.configure_all_styles([](ui::Style& style) {
-        style.padding({14.0F, 14.0F})
-            .background_color(ImColor{0.1F, 0.1F, 0.1F, 1.0F})
-            .border(ui::BORDER_ALL)
-            .border_color(ImColor{0.5F, 0.5F, 0.5F, 1.0F});
-    });
-    panel.add<LayoutProbeNode>("dynamic-content", {180.0F, 36.0F});
-
-    ui_test::ImGuiContext context({240.0F, 160.0F});
-    const auto draw_frame = [&parent] { ui_test::draw_node(parent, "virtual-overlay-scroll-test"); };
-
-    draw_frame();
-    parent.scroll_to_content = true;
-    draw_frame();
-    parent.scroll_to_content = false;
-
-    const Rect list_rect = list.layout().visual_rect();
-    REQUIRE(list.max_scroll > 0.0F);
-    REQUIRE(list_rect.min.y >= 70.0F);
-
-    ImGui::GetIO().AddMousePosEvent(list_rect.max.x - 4.0F, (list_rect.min.y + list_rect.max.y) * 0.5F);
-    ImGui::GetIO().AddMouseWheelEvent(0.0F, -5.0F);
-    draw_frame();
-
-    REQUIRE(list.scroll > 0.0F);
 }
 
 TEST_CASE("virtual layout creates visible rows lazily and reuses the caller cache", "[layout][virtual-layout]") {

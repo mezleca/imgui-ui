@@ -34,6 +34,8 @@ namespace ui {
 
         virtual ImVec2 child_window_padding() const;
         virtual ImVec2 child_window_size() const;
+        /// returns flags for the child window opened by paint. subclasses use it to change native hit testing.
+        virtual ImGuiWindowFlags child_window_flags() const;
         virtual Rect shadow_rect(Rect child_rect) const;
         bool paint() override;
         void on_draw_end() override;
@@ -48,7 +50,6 @@ namespace ui {
         float m_spacing = 0.0F;
         ImVec2 m_content_alignment{};
         ImVec2 m_content_size{};
-        ImVec4 m_parent_clip{};
         bool m_content_clip_pushed = false;
     };
 } // namespace ui
