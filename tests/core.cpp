@@ -13,6 +13,7 @@
 #include <ui/tree/node.hpp>
 #include <ui/ui.hpp>
 #include <ui/widgets/dropdown.hpp>
+#include <ui/widgets/widget.hpp>
 
 #include <imgui_internal.h>
 
@@ -545,7 +546,7 @@ TEST_CASE("node measurement only reruns after invalidation") {
     REQUIRE(child_measurements == 2);
 }
 
-TEST_CASE("clearing children destroys the subtree and clears input targets") {
+TEST_CASE("clearing children defers subtree destruction and clears input targets") {
     int destructions = 0;
 
     class LifetimeNode final : public Node {
@@ -569,11 +570,154 @@ TEST_CASE("clearing children destroys the subtree and clears input targets") {
     REQUIRE(router.capture_pointer(child));
 
     parent.clear();
+    REQUIRE(child.removal_pending());
+    REQUIRE(destructions == 0);
+
+    parent.update(0.0F);
 
     REQUIRE(parent.children().empty());
     REQUIRE(destructions == 2);
     REQUIRE(router.focused_node() == nullptr);
-    router.release_pointer();
+}
+
+TEST_CASE("nodes can remove active widgets and containers during update") {
+    class UpdateCounter final : public Widget {
+    public:
+        explicit UpdateCounter(int& updates) : Widget("update-counter"), m_updates(updates) {}
+
+    private:
+        void on_update(float) override {
+            ++m_updates;
+        }
+
+        int& m_updates;
+    };
+
+    class SelfRemovingWidget final : public Widget {
+    public:
+        SelfRemovingWidget(Container& owner, int& updates, int& destructions)
+            : Widget("self-removing"), m_owner(owner), m_updates(updates), m_destructions(destructions) {}
+
+        ~SelfRemovingWidget() override {
+            ++m_destructions;
+        }
+
+    private:
+        void on_update(float) override {
+            ++m_updates;
+            m_owner.remove(*this);
+        }
+
+        Container& m_owner;
+        int& m_updates;
+        int& m_destructions;
+    };
+
+    class TrackedLayer final : public LayerContainer {
+    public:
+        explicit TrackedLayer(int& destructions) : LayerContainer("tracked-layer"), m_destructions(destructions) {}
+
+        ~TrackedLayer() override {
+            ++m_destructions;
+        }
+
+    private:
+        int& m_destructions;
+    };
+
+    class RemoveLayerOnUpdate final : public Widget {
+    public:
+        RemoveLayerOnUpdate(Node& owner, Node& layer, int& updates)
+            : Widget("remove-layer"), m_owner(owner), m_layer(layer), m_updates(updates) {}
+
+    private:
+        void on_update(float) override {
+            ++m_updates;
+            m_owner.remove(m_layer);
+        }
+
+        Node& m_owner;
+        Node& m_layer;
+        int& m_updates;
+    };
+
+    int self_updates = 0;
+    int self_destructions = 0;
+    int container_sibling_updates = 0;
+    Container container("self-removal-container");
+    auto& self_remover = container.add<SelfRemovingWidget>(container, self_updates, self_destructions);
+    container.add<UpdateCounter>(container_sibling_updates);
+
+    container.update(1.0F);
+
+    REQUIRE(self_updates == 1);
+    REQUIRE(self_remover.removal_pending());
+    REQUIRE(self_destructions == 0);
+    REQUIRE(container_sibling_updates == 1);
+
+    container.update(1.0F);
+    REQUIRE(self_destructions == 1);
+    REQUIRE(container.children().size() == 1);
+    REQUIRE(container_sibling_updates == 2);
+
+    int layer_destructions = 0;
+    int remover_updates = 0;
+    int root_sibling_updates = 0;
+    Node root("update-root");
+    auto& layer = root.add<TrackedLayer>(layer_destructions);
+    layer.add<RemoveLayerOnUpdate>(root, layer, remover_updates);
+    root.add<UpdateCounter>(root_sibling_updates);
+
+    root.update(1.0F);
+
+    REQUIRE(remover_updates == 1);
+    REQUIRE(layer.removal_pending());
+    REQUIRE(layer_destructions == 0);
+    REQUIRE(root_sibling_updates == 1);
+
+    root.update(1.0F);
+    REQUIRE(layer_destructions == 1);
+    REQUIRE(root.children().size() == 1);
+    REQUIRE(root_sibling_updates == 2);
+}
+
+TEST_CASE("containers can clear descendants during update") {
+    class ClearOwnerOnUpdate final : public Widget {
+    public:
+        explicit ClearOwnerOnUpdate(Container& owner) : Widget("clear-owner"), m_owner(owner) {}
+
+    private:
+        void on_update(float) override {
+            m_owner.clear();
+        }
+
+        Container& m_owner;
+    };
+
+    class TrackedWidget final : public Widget {
+    public:
+        explicit TrackedWidget(int& destructions) : Widget("tracked-child"), m_destructions(destructions) {}
+
+        ~TrackedWidget() override {
+            ++m_destructions;
+        }
+
+    private:
+        int& m_destructions;
+    };
+
+    int destructions = 0;
+    Container container("clear-during-update");
+    auto& clearer = container.add<ClearOwnerOnUpdate>(container);
+    container.add<TrackedWidget>(destructions);
+
+    container.update(1.0F);
+
+    REQUIRE(clearer.removal_pending());
+    REQUIRE(destructions == 1);
+
+    container.update(1.0F);
+    REQUIRE(container.children().empty());
 }
 
 TEST_CASE("visual bounds stay on layout unless paint overrides them") {

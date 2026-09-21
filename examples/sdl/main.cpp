@@ -62,10 +62,7 @@ int main() {
         while (!surface.is_done()) {
             surface.process_events();
 
-            surface.begin_frame();
-            surface.update(ImGui::GetIO().DeltaTime);
-            surface.draw();
-            surface.end_frame();
+            surface.frame();
         }
     }
 

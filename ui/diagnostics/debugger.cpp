@@ -554,7 +554,7 @@ void Debugger::remove_target() {
     m_hover_target = nullptr;
     m_scroll_to_target = false;
 
-    if (std::unique_ptr<Node> detached = parent->remove(*target); detached != nullptr) {
+    if (std::unique_ptr<Node> detached = parent->detach(*target); detached != nullptr) {
         detached->set_visible(false);
         detached->set_enabled(false);
         m_detached_nodes.push_back(std::move(detached));

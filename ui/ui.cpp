@@ -245,6 +245,13 @@ void UI::begin_frame() {
     }
 }
 
+void UI::frame() {
+    begin_frame();
+    update(ImGui::GetIO().DeltaTime);
+    draw();
+    end_frame();
+}
+
 void UI::update(float dt) {
     m_root->update(dt);
 }

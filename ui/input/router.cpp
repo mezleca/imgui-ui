@@ -26,7 +26,7 @@ static int pointer_button_index(PointerButton button) {
 }
 
 static bool is_input_target(const Node* node) {
-    return node != nullptr && node->visible() && node->accepts_input();
+    return node != nullptr && !node->removal_pending() && node->visible() && node->accepts_input();
 }
 
 void InputRouter::begin_frame() {
@@ -354,12 +354,16 @@ bool InputRouter::dispatch(UiEvent& event) {
 }
 
 bool InputRouter::dispatch(Node& target, UiEvent& event) {
-    Node* current = &target;
+    return dispatch_bubble(target, event);
+}
 
-    while (current != nullptr && !event.propagation_stopped) {
-        Node* next = current->parent();
+bool InputRouter::dispatch_bubble(Node& target, UiEvent& event) {
+    for (Node* current = &target; current != nullptr && !event.propagation_stopped; current = current->parent()) {
+        if (current->m_removal_pending) {
+            break;
+        }
+
         current->dispatch_event(event);
-        current = next;
     }
 
     return event.handled;
@@ -411,12 +415,19 @@ const HitTestIndex::Entry* InputRouter::pointer_target(UiEvent& event, bool& blo
         Node* owner = blocker->node;
 
         set_input_flag(m_hovered_node, owner, InputFlag::Hovered);
-        if (event.type == EventType::PointerDown && owner != nullptr) {
-            set_input_flag(m_active_node, owner, InputFlag::Active);
-        }
+        if (owner != nullptr) {
+            if (event.type == EventType::PointerDown) {
+                set_input_flag(m_active_node, owner, InputFlag::Active);
+            }
 
-        if (!m_hit_test.invoke_callback(*blocker, event) && owner != nullptr) {
-            dispatch(*owner, event);
+            if (!owner->removal_pending()) {
+                const bool callback_invoked = m_hit_test.invoke_callback(*blocker, event);
+                if (!callback_invoked && !owner->removal_pending()) {
+                    dispatch_bubble(*owner, event);
+                }
+            }
+        } else {
+            m_hit_test.invoke_callback(*blocker, event);
         }
 
         // prevent imgui from consuming the same event behind the blocker.
@@ -434,6 +445,11 @@ const HitTestIndex::Entry* InputRouter::pointer_target(UiEvent& event, bool& blo
 
 bool InputRouter::dispatch_target(const HitTestIndex::Entry& target, UiEvent& event) {
     Node* node = target.node;
-    m_hit_test.invoke_callback(target, event);
-    return dispatch(*node, event);
+    if (!node->removal_pending()) {
+        m_hit_test.invoke_callback(target, event);
+        if (!node->removal_pending()) {
+            dispatch_bubble(*node, event);
+        }
+    }
+    return event.handled;
 }

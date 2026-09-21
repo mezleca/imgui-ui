@@ -8,8 +8,7 @@ using namespace ui;
 
 static constexpr ImGuiWindowFlags LAYER_WINDOW_FLAGS = constants::WINDOW_FLAGS;
 
-// returns whether inline descendants need a child window for local drawing or clipping.
-static bool needs_child_scope(const ComputedStyle& style) {
+static bool needs_child_window(const ComputedStyle& style) {
     return style.background_color().value.Value.w > 0.0F || style.blur() > 0 || style.box_shadow().color.Value.w > 0.0F ||
            style.border() != BORDER_NONE || style.padding().x > 0.0F || style.padding().y > 0.0F ||
            style.overflow() != Overflow::Visible;
@@ -43,36 +42,38 @@ void LayerContainer::resolve_layout() {
 }
 
 bool LayerContainer::paint() {
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    return m_mode == LayerMode::Inline ? paint_inline() : paint_window();
+}
 
-    const Rect viewport_rect = Rect::from_position_size(viewport->WorkPos, viewport->WorkSize);
-    if (m_mode == LayerMode::Inline) {
-        const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
-        // scrolling requires content coordinates. styles that draw or clip descendants require a local child window.
-        const bool scrolled = scroll.x != 0.0F || scroll.y != 0.0F;
-        // keep the first child-window choice so active ImGui controls keep the same parent while styles change.
-        m_inline_child_window = m_inline_child_window || scrolled || needs_child_scope(computed_style());
-        if (m_inline_child_window) {
-            if (scrolled) {
-                const ImVec2 cursor = ImGui::GetCursorPos();
-                ImGui::SetCursorPos({cursor.x + scroll.x, cursor.y + scroll.y});
-            }
-            return Container::paint();
+bool LayerContainer::paint_inline() {
+    const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
+    const bool scrolled = scroll.x != 0.0F || scroll.y != 0.0F;
+    // keep controls under the same imgui parent across frames.
+    m_inline_child_window = m_inline_child_window || scrolled || needs_child_window(computed_style());
+    if (m_inline_child_window) {
+        if (scrolled) {
+            const ImVec2 cursor = ImGui::GetCursorPos();
+            ImGui::SetCursorPos({cursor.x + scroll.x, cursor.y + scroll.y});
         }
-
-        // plain inline layers only replace the layout box in the current window.
-        const Rect inline_rect =
-            parent() == nullptr ? viewport_rect : Rect::from_position_size(ImGui::GetCursorScreenPos(), layout().size());
-        set_layout_rect(inline_rect);
-        set_visual_rect(inline_rect);
-        draw_surface(*ImGui::GetWindowDrawList(), inline_rect);
-        return true;
+        return Container::paint();
     }
 
-    // window layers use a borderless viewport-sized imgui window.
+    Rect inline_rect = Rect::from_position_size(ImGui::GetCursorScreenPos(), layout().size());
+    if (parent() == nullptr) {
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        inline_rect = Rect::from_position_size(viewport->WorkPos, viewport->WorkSize);
+    }
+    set_layout_rect(inline_rect);
+    set_visual_rect(inline_rect);
+    draw_surface(*ImGui::GetWindowDrawList(), inline_rect);
+    return true;
+}
+
+bool LayerContainer::paint_window() {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const bool accepts_input = this->accepts_input();
     ImGuiWindowFlags window_flags = LAYER_WINDOW_FLAGS;
-    // allow the first window creation to reorder the layer above its parent window.
+    // the first window creation may need to move this layer above its parent.
     if (!m_window_initialized) {
         window_flags &= ~ImGuiWindowFlags_NoBringToFrontOnFocus;
     }
@@ -98,7 +99,6 @@ bool LayerContainer::paint() {
 }
 
 void LayerContainer::on_draw_end() {
-    // inline paint either shares the parent window or delegates child-window cleanup to Container.
     if (m_mode == LayerMode::Inline) {
         if (m_inline_child_window) {
             Container::on_draw_end();

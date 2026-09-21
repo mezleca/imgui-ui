@@ -226,8 +226,13 @@ void DropdownBodyNode::draw_children() {
     const float item_width = content_size(layout().visual_rect().size()).x;
     const ImVec2 item_size = {item_width, m_item_height};
 
-    for (std::size_t index = 0; index < children().size(); ++index) {
-        auto& option_node = static_cast<DropdownOptionNode&>(*children()[index]);
+    std::size_t index = 0;
+    for (const auto& child : children()) {
+        if (child->removal_pending()) {
+            continue;
+        }
+
+        auto& option_node = static_cast<DropdownOptionNode&>(*child);
         arrange_child(option_node, item_size, {.offset = {0.0F, m_item_height * static_cast<float>(index)}});
         const InputState& input = option_node.input_state();
 
@@ -237,6 +242,7 @@ void DropdownBodyNode::draw_children() {
         }
 
         option_node.draw();
+        ++index;
     }
 }
 

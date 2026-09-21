@@ -653,8 +653,6 @@ private:
     TextWidget* m_fps = nullptr;
     float m_fps_update_elapsed = 0.0F;
     Container* m_test_images = nullptr;
-    std::vector<Node*> m_pending_image_removals;
-    Node* m_pending_remove = nullptr;
     bool m_enabled = true;
     bool m_radio_selected = true;
     ImColor m_color = {0.26F, 0.59F, 0.98F, 1.0F};
@@ -887,7 +885,12 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
         const int item_id = ++m_next_dynamic_id;
         auto& item = m_dynamic_nodes->add<ButtonWidget>(std::format("list item {}", item_id), LayoutSize{grow(), px(36.0F)});
         ButtonWidget* item_ptr = &item;
-        item.set_on_click([this, item_ptr] { m_pending_remove = item_ptr; });
+        item.set_on_click([this, item_ptr] {
+            if (m_dynamic_nodes->remove(*item_ptr)) {
+                --m_dynamic_count;
+                m_dynamic_status->set_text(std::format("dynamic nodes: {}", m_dynamic_count));
+            }
+        });
 
         m_dynamic_status->set_text(std::format("dynamic nodes: {}", m_dynamic_count));
     });
@@ -905,7 +908,6 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
             return;
         }
 
-        m_pending_remove = nullptr;
         m_dynamic_nodes->remove(*m_dynamic_nodes->children().back());
 
         --m_dynamic_count;
@@ -914,7 +916,6 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
 
     auto& clear_nodes = node_controls.add<ButtonWidget>("clear nodes", LayoutSize{px(120.0F), px(36.0F)});
     clear_nodes.set_on_click([this] {
-        m_pending_remove = nullptr;
         m_dynamic_nodes->clear();
         m_dynamic_count = 0;
         m_dynamic_status->set_text("dynamic nodes: 0");
@@ -945,7 +946,11 @@ ImageWidget& DemoScreen::add_test_image(Texture* texture) {
             .to(StyleAnimationProperty::Scale, ImVec2{1.03F, 0.97F}, {0.22F, easing::in_out_sine})
             .then()
             .release_all({0.38F, easing::in_out_sine})
-            .end([this, image_ptr] { m_pending_image_removals.push_back(image_ptr); });
+            .end([image_ptr] {
+                if (Node* parent = image_ptr->parent(); parent != nullptr) {
+                    parent->remove(*image_ptr);
+                }
+            });
     });
 
     return image;
@@ -983,24 +988,6 @@ void DemoScreen::on_update(float dt) {
     if (m_fps_update_elapsed >= 0.25F) {
         m_fps_update_elapsed = 0.0F;
         m_fps->set_text(std::format("fps: {:.1f}", ImGui::GetIO().Framerate));
-    }
-
-    for (Node* image : m_pending_image_removals) {
-        if (image->parent() != nullptr) {
-            image->parent()->remove(*image);
-        }
-    }
-    m_pending_image_removals.clear();
-
-    // defer destruction until dispatch finishes because the click callback still references the item.
-    if (m_pending_remove != nullptr) {
-        Node* pending_remove = m_pending_remove;
-        m_pending_remove = nullptr;
-        if (m_dynamic_nodes->contains(pending_remove)) {
-            m_dynamic_nodes->remove(*pending_remove);
-            --m_dynamic_count;
-            m_dynamic_status->set_text(std::format("dynamic nodes: {}", m_dynamic_count));
-        }
     }
 }
 

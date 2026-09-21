@@ -263,7 +263,9 @@ void ContextMenuWidget::on_update(float dt) {
 
 void ContextMenuWidget::draw_children() {
     for (ContextMenuItemNode* item : m_items) {
-        item->draw();
+        if (!item->removal_pending()) {
+            item->draw();
+        }
     }
 }
 

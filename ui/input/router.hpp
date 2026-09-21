@@ -137,6 +137,7 @@ namespace ui {
         Node* inspect_node_at(ImVec2 position, EventType type) const;
         /// runs the entry callback before bubbling the event from its target node.
         bool dispatch_target(const HitTestIndex::Entry& target, UiEvent& event);
+        static bool dispatch_bubble(Node& target, UiEvent& event);
 
         HitTestIndex m_hit_test;
         Node* m_focused_node = nullptr;

@@ -49,8 +49,15 @@ namespace ui {
 
         void dispatch_event(UiEvent& event) override {
             Node::dispatch_event(event);
+            if (removal_pending()) {
+                return;
+            }
+
             if (m_on_event) {
                 m_on_event(event);
+                if (removal_pending()) {
+                    return;
+                }
             }
 
             if (event.type == EventType::Click) {

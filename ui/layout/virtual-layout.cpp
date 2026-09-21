@@ -227,7 +227,7 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
 
             Node& child = m_item_provider(index);
 
-            if (!child.visible()) {
+            if (child.removal_pending() || !child.visible()) {
                 continue;
             }
 

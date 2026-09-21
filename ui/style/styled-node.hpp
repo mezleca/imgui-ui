@@ -221,6 +221,10 @@ namespace ui {
         void invalidate_font_cache_subtree() {
             m_font_cache_valid = false;
             for (const auto& child : children()) {
+                if (child->removal_pending()) {
+                    continue;
+                }
+
                 if (auto* styled_child = dynamic_cast<StyledNode*>(child.get()); styled_child != nullptr) {
                     styled_child->invalidate_font_cache_subtree();
                 }

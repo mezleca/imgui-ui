@@ -1358,7 +1358,7 @@ TEST_CASE("virtual layout creates visible rows lazily and reuses the caller cach
     REQUIRE(cache.at(0) == &first);
     REQUIRE(list.children().size() == cached_count);
 
-    auto removed = list.remove(*cache.at(0));
+    auto removed = list.detach(*cache.at(0));
     cache.erase(0);
     frame();
     REQUIRE(cache.at(0) != removed.get());

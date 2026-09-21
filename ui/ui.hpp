@@ -52,6 +52,9 @@ namespace ui {
         /// renders the current imgui frame and restores the previous context.
         void end_frame();
 
+        /// begins, updates, and renders one backend-timed frame.
+        void frame();
+
         /// updates the application tree for the current frame.
         void update(float dt);
 

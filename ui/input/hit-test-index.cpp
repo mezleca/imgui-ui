@@ -98,7 +98,7 @@ const HitTestIndex::Entry* HitTestIndex::target_at(ImVec2 position, EventType ty
             continue;
         }
 
-        if (!it->node->visible() || !it->node->accepts_input()) {
+        if (it->node->removal_pending() || !it->node->visible() || !it->node->accepts_input()) {
             continue;
         }
 
@@ -119,7 +119,8 @@ const HitTestIndex::Entry* HitTestIndex::blocking_entry_at(ImVec2 position, Even
     for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
         ++m_checks;
         if (it->kind == EntryKind::Blocker && it->rect.contains(position) && contains(it->events, mask) &&
-            (it->node == nullptr || (it->node->visible() && it->node->enabled() && !it->node->contains(target)))) {
+            (it->node == nullptr ||
+             (!it->node->removal_pending() && it->node->visible() && it->node->enabled() && !it->node->contains(target)))) {
             return &*it;
         }
     }

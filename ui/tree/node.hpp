@@ -70,10 +70,13 @@ namespace ui {
         /// use it when a custom parent interleaves tree nodes or other native imgui items with framework children.
         void draw_at_cursor();
 
-        /// detaches a direct child.
-        std::unique_ptr<Node> remove(Node& child);
+        /// marks a direct child for removal; it is destroyed by the parent before its next update.
+        bool remove(Node& child);
 
-        /// destroys all children and invalidates measurement.
+        /// immediately transfers ownership of a direct child. Use remove() from tree callbacks.
+        std::unique_ptr<Node> detach(Node& child);
+
+        /// marks every child for removal.
         void clear();
 
         /// connects this subtree to a router.
@@ -124,6 +127,10 @@ namespace ui {
 
         bool visible() const {
             return m_visible;
+        }
+
+        bool removal_pending() const {
+            return m_removal_pending;
         }
 
         /// hides this subtree and removes it from hit testing.
@@ -229,7 +236,7 @@ namespace ui {
         /// returns true for direct children that own input. deeper containers decide their own pass-through window.
         bool has_direct_input_child() const {
             for (const auto& child : m_children) {
-                if (child->has_input_mode()) {
+                if (!child->m_removal_pending && child->has_input_mode()) {
                     return true;
                 }
             }
@@ -311,6 +318,7 @@ namespace ui {
         void detach_input_router(InputRouter& router);
         void invalidate_input_state_cache();
         void clear_input_state();
+        std::unique_ptr<Node> detach_child(size_t index);
         bool capture_parent_content();
         void prepare_layout();
         void submit_positioned_item();
@@ -333,6 +341,7 @@ namespace ui {
         InputState m_input_state;
         mutable InputState m_subtree_input_state;
         mutable bool m_subtree_input_state_dirty = true;
+        bool m_removal_pending = false;
     };
 
 } // namespace ui

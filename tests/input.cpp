@@ -122,6 +122,52 @@ TEST_CASE("ui events can stop propagation") {
     REQUIRE(events == std::vector<std::string>{"child"});
 }
 
+TEST_CASE("event handlers can remove their widget while bubbling") {
+    ui_test::ImGuiContext context({100.0F, 100.0F});
+
+    class SelfRemovingWidget final : public Widget {
+    public:
+        SelfRemovingWidget(Node& owner, int& events, int& destructions)
+            : Widget("self-removing"), m_owner(owner), m_events(events), m_destructions(destructions) {}
+
+        ~SelfRemovingWidget() override {
+            ++m_destructions;
+        }
+
+    private:
+        void on_event(UiEvent&) override {
+            ++m_events;
+            m_owner.remove(*this);
+        }
+
+        Node& m_owner;
+        int& m_events;
+        int& m_destructions;
+    };
+
+    Node owner("owner");
+    int events = 0;
+    int destructions = 0;
+    auto& widget = owner.add<SelfRemovingWidget>(owner, events, destructions);
+    InputRouter router;
+    owner.set_input_router(&router);
+    router.register_target(widget, {{0.0F, 0.0F}, {40.0F, 20.0F}});
+
+    UiEvent event = click_event();
+    REQUIRE_FALSE(router.dispatch(event));
+    REQUIRE(events == 1);
+    REQUIRE(widget.removal_pending());
+    REQUIRE(destructions == 0);
+
+    event = click_event();
+    REQUIRE_FALSE(router.dispatch(event));
+    REQUIRE(events == 1);
+
+    owner.update(0.0F);
+    REQUIRE(destructions == 1);
+    REQUIRE(owner.children().empty());
+}
+
 TEST_CASE("pointer capture keeps drag events on the original node") {
     InputRouter router;
     std::vector<EventType> events;
@@ -348,7 +394,7 @@ TEST_CASE("input router clears targets when a node is detached") {
     router.register_target(*child_ptr, {{0.0F, 0.0F}, {10.0F, 10.0F}});
     events.clear();
 
-    auto detached = parent.remove(*child_ptr);
+    auto detached = parent.detach(*child_ptr);
     REQUIRE(detached != nullptr);
     events.clear();
 

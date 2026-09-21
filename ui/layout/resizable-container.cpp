@@ -121,9 +121,11 @@ void ResizableContainer::handle_resize(UiEvent& event) {
     if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) {
         updated.width = px(size.x);
     }
+
     if ((m_resizing & ResizeAxes::Y) != ResizeAxes::None) {
         updated.height = px(size.y);
     }
+
     set_size(updated);
     event.block_native_input();
     event.stop_propagation();

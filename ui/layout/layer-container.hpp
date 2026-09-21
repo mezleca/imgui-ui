@@ -28,5 +28,8 @@ namespace ui {
         LayerMode m_mode;
         bool m_window_initialized = false;
         bool m_inline_child_window = false;
+
+        bool paint_inline();
+        bool paint_window();
     };
 } // namespace ui

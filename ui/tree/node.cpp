@@ -7,6 +7,7 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <stdexcept>
 #include <utility>
 
@@ -15,11 +16,19 @@ static uint64_t next_node_id = 1;
 
 template <typename NodeType>
 static NodeType* find_node(NodeType& root, std::string_view id) {
+    if (root.removal_pending()) {
+        return nullptr;
+    }
+
     if (root.id() == id) {
         return &root;
     }
 
     for (const auto& child : root.children()) {
+        if (child->removal_pending()) {
+            continue;
+        }
+
         if (NodeType* result = find_node(*child, id); result != nullptr) {
             return result;
         }
@@ -60,6 +69,10 @@ InputState Node::subtree_input_state() const {
 
     InputState state = m_input_state;
     for (const auto& child : m_children) {
+        if (child->m_removal_pending) {
+            continue;
+        }
+
         const InputState child_state = child->subtree_input_state();
         state.hovered |= child_state.hovered;
         state.active |= child_state.active;
@@ -300,17 +313,36 @@ void Node::release_pointer() {
     if (m_input_router != nullptr) m_input_router->release_pointer();
 }
 
-std::unique_ptr<Node> Node::remove(Node& child) {
-    const auto it = std::find_if(m_children.begin(), m_children.end(), [&child](const std::unique_ptr<Node>& candidate) {
-        return candidate.get() == &child;
-    });
+bool Node::remove(Node& child) {
+    if (child.m_parent != this) {
+        return false;
+    }
 
-    if (it == m_children.end()) {
+    if (!child.m_removal_pending) {
+        child.m_removal_pending = true;
+        invalidate_input_state_cache();
+        invalidate_measure();
+    }
+
+    return true;
+}
+
+std::unique_ptr<Node> Node::detach(Node& child) {
+    if (child.m_parent != this) {
         return nullptr;
     }
 
+    const auto it = std::find_if(m_children.begin(), m_children.end(), [&child](const std::unique_ptr<Node>& candidate) {
+        return candidate.get() == &child;
+    });
+    return it == m_children.end() ? nullptr : detach_child(static_cast<size_t>(it - m_children.begin()));
+}
+
+std::unique_ptr<Node> Node::detach_child(size_t index) {
+    const auto it = m_children.begin() + static_cast<std::ptrdiff_t>(index);
     std::unique_ptr<Node> result = std::move(*it);
     m_children.erase(it);
+    result->m_removal_pending = false;
     result->m_parent = nullptr;
     result->set_surface(nullptr);
     result->set_input_router(nullptr);
@@ -325,9 +357,16 @@ void Node::clear() {
         return;
     }
 
-    m_children.clear();
-    invalidate_input_state_cache();
-    invalidate_measure();
+    bool changed = false;
+    for (const auto& child : m_children) {
+        changed |= !child->m_removal_pending;
+        child->m_removal_pending = true;
+    }
+
+    if (changed) {
+        invalidate_input_state_cache();
+        invalidate_measure();
+    }
 }
 
 Node* Node::find(std::string_view searched_id) {
@@ -351,23 +390,40 @@ bool Node::contains(const Node* node) const {
 void Node::update(float dt) {
     UI_PROFILE_NODE(m_profiler, "Node::update", m_identity);
 
-    if (!m_visible) {
+    if (!m_visible || m_removal_pending) {
         return;
     }
 
     advance_frame_state(dt);
-    on_update(dt);
+    if (!m_removal_pending) on_update(dt);
+    if (m_removal_pending) {
+        return;
+    }
 
-    const size_t child_count = m_children.size();
-    for (size_t index = 0; index < child_count && index < m_children.size(); ++index) {
-        m_children[index]->update(dt);
+    size_t child_count = m_children.size();
+    for (size_t index = 0; index < child_count && index < m_children.size();) {
+        Node* child = m_children[index].get();
+        if (child->m_removal_pending) {
+            detach_child(index);
+            --child_count;
+            continue;
+        }
+
+        child->update(dt);
+        if (m_removal_pending) {
+            return;
+        }
+
+        ++index;
     }
 }
 
 void Node::apply_theme(const Theme& theme) {
     apply_theme_defaults(theme);
     for (const auto& child : m_children) {
-        child->apply_theme(theme);
+        if (!child->m_removal_pending) {
+            child->apply_theme(theme);
+        }
     }
 }
 
@@ -396,13 +452,17 @@ void Node::invalidate_measure_subtree() {
 void Node::measure_tree() {
     UI_PROFILE_NODE(m_profiler, "Node::measure", m_identity);
 
-    if (!m_visible || !m_measure_dirty) {
+    if (!m_visible || m_removal_pending || !m_measure_dirty) {
         return;
     }
 
     // measure children first so containers use measurements from this frame.
-    for (const auto& child : m_children) {
-        child->measure_tree();
+    const size_t child_count = m_children.size();
+    for (size_t index = 0; index < child_count && index < m_children.size(); ++index) {
+        Node* child = m_children[index].get();
+        if (!child->m_removal_pending) {
+            child->measure_tree();
+        }
     }
 
     on_measure();
@@ -412,7 +472,7 @@ void Node::measure_tree() {
 void Node::draw() {
     UI_PROFILE_NODE(m_profiler, "Node::draw", m_identity);
 
-    if (!m_visible) {
+    if (!m_visible || m_removal_pending) {
         return;
     }
 
@@ -424,11 +484,13 @@ void Node::draw() {
     prepare_layout();
     draw_before();
     const bool draw_content = on_draw();
+
     if (draw_content) {
         draw_children();
         on_draw_end();
         draw_after();
     }
+
     submit_positioned_item();
 
     if (!draw_content) return;
@@ -480,8 +542,12 @@ void Node::prepare_layout() {
 
     const bool parent_content_changed = capture_parent_content();
     const bool layout_dirty = m_layout_dirty || parent_content_changed || m_parent == nullptr;
+
     m_layout_dirty = false;
-    if (layout_dirty) on_layout();
+    if (layout_dirty) {
+        on_layout();
+    }
+
     m_layout.clear_parent_size_assignment();
     resolve_position();
     m_layout.clear_size_assignment();
@@ -489,7 +555,9 @@ void Node::prepare_layout() {
 
 void Node::draw_children() {
     for (const auto& child : m_children) {
-        child->draw();
+        if (!child->m_removal_pending) {
+            child->draw();
+        }
     }
 }
 

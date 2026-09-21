@@ -107,8 +107,13 @@ namespace ui_test {
     }
 
     inline void draw_surface(ui::UI& surface, std::optional<float> delta_time = std::nullopt) {
+        if (!delta_time.has_value()) {
+            surface.frame();
+            return;
+        }
+
         surface.begin_frame();
-        surface.update(delta_time.value_or(ImGui::GetIO().DeltaTime));
+        surface.update(*delta_time);
         surface.draw();
         surface.end_frame();
     }
