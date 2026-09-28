@@ -1,14 +1,15 @@
 #pragma once
 
 #include "../backend.hpp"
+#include "../opengl/gpu-timer.hpp"
 
 namespace ui {
     class UI;
 
     class RaylibBackend final : public Backend {
     public:
-        /// uses the application's initialized raylib window.
-        /// the application must close that window after UI destruction.
+        /// uses the application's initialized raylib window. UI::begin_frame and UI::end_frame own the raylib drawing
+        /// cycle, so the application must not wrap them in BeginDrawing and EndDrawing. close the window after UI destruction.
         RaylibBackend() = default;
 
         bool initialize() override;
@@ -16,14 +17,14 @@ namespace ui {
         void register_effects(EffectRegistry& effects) override;
         bool initialize_imgui() override;
         void shutdown_imgui() override;
-        void begin_frame(ImVec4 clear_color) override;
+        void begin_frame(ui::Color clear_color) override;
         void set_mouse_cursor(ImGuiMouseCursor cursor) override;
         void render(ImDrawData* draw_data) override;
+        std::optional<double> render_profiled(ImDrawData* draw_data, bool profile_gpu) override;
         float content_scale() const override;
         uint64_t window_id() const override;
         ImVec2 display_size() const override;
 
-        /// forwards the current raylib input state to the retained tree.
     private:
         void apply_mouse_cursor();
 
@@ -31,5 +32,6 @@ namespace ui {
         ImGuiMouseCursor m_mouse_cursor = ImGuiMouseCursor_Arrow;
         ImVec2 m_pointer_position{};
         bool m_has_pointer_position = false;
+        OpenGLGpuTimer m_gpu_timer;
     };
 } // namespace ui

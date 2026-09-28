@@ -3,6 +3,7 @@
 #include "../../constants.hpp"
 #include "../../imgui/context-scope.hpp"
 #include "../../imgui/effects/blur/opengl.hpp"
+#include "../../imgui/effects/gradient/opengl.hpp"
 #include "../../imgui/effects/shadow/opengl.hpp"
 #include "../../ui.hpp"
 
@@ -196,7 +197,7 @@ static std::string utf8_from_codepoint(int codepoint) {
     return result;
 }
 
-static Color raylib_color(ImVec4 color) {
+static ::Color raylib_color(ImVec4 color) {
     return {
         static_cast<unsigned char>(std::clamp(color.x, 0.0F, 1.0F) * 255.0F),
         static_cast<unsigned char>(std::clamp(color.y, 0.0F, 1.0F) * 255.0F),
@@ -221,6 +222,7 @@ bool RaylibBackend::initialize() {
 void RaylibBackend::register_effects(EffectRegistry& effects) {
     register_opengl_blur(effects);
     register_opengl_box_shadow(effects);
+    register_opengl_gradient(effects);
 }
 
 bool RaylibBackend::initialize_imgui() {
@@ -235,13 +237,14 @@ bool RaylibBackend::initialize_imgui() {
 
 void RaylibBackend::shutdown_imgui() {
     if (!m_imgui_initialized) return;
+    m_gpu_timer.shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     m_imgui_initialized = false;
 }
 
-void RaylibBackend::begin_frame(ImVec4 clear_color) {
+void RaylibBackend::begin_frame(ui::Color clear_color) {
     BeginDrawing();
-    ClearBackground(raylib_color(clear_color));
+    ClearBackground(raylib_color(clear_color.rgba()));
 
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = display_size();
@@ -266,10 +269,18 @@ void RaylibBackend::apply_mouse_cursor() {
 }
 
 void RaylibBackend::render(ImDrawData* draw_data) {
+    render_profiled(draw_data, false);
+}
+
+std::optional<double> RaylibBackend::render_profiled(ImDrawData* draw_data, bool profile_gpu) {
     rlDrawRenderBatchActive();
+    const std::optional<double> gpu_ms = m_gpu_timer.begin(profile_gpu);
     ImGui_ImplOpenGL3_RenderDrawData(draw_data);
+    m_gpu_timer.end();
     apply_mouse_cursor();
+    // EndDrawing swaps buffers and polls the next input state, so it must run once per application frame.
     EndDrawing();
+    return gpu_ms;
 }
 
 float RaylibBackend::content_scale() const {

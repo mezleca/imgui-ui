@@ -52,13 +52,13 @@ static void apply_style_property(Style& style, StyleAnimationProperty property, 
             style.scale(std::get<ImVec2>(value));
             return;
         case StyleAnimationProperty::Color:
-            style.color(std::get<ImColor>(value));
+            style.color(std::get<Color>(value));
             return;
         case StyleAnimationProperty::BorderColor:
-            style.border_color(std::get<ImColor>(value));
+            style.border_color(std::get<Color>(value));
             return;
         case StyleAnimationProperty::BackgroundColor:
-            style.background_color(std::get<ImColor>(value));
+            style.background_color(std::get<Color>(value));
             return;
         case StyleAnimationProperty::Count:
             return;
@@ -77,23 +77,85 @@ static void write_style_animation_slot(void* context, const AnimationValue& valu
     auto& slot = *static_cast<StyleAnimationSlot*>(context);
     slot.current = value;
     slot.override = value;
-    if (slot.affects_layout) *slot.layout_dirty = true;
+    if (slot.layout_dirty != nullptr) *slot.layout_dirty = true;
 }
 
 static void release_style_animation_slot(void* context) {
     auto& slot = *static_cast<StyleAnimationSlot*>(context);
     slot.current = slot.base;
     slot.override.reset();
-    if (slot.affects_layout) *slot.layout_dirty = true;
+    if (slot.layout_dirty != nullptr) *slot.layout_dirty = true;
 }
 
 VisualState::VisualState() {
     for (std::size_t index = 0; index < m_animation_slots.size(); ++index) {
-        m_animation_slots[index].affects_layout = index < static_cast<std::size_t>(StyleAnimationProperty::Rotation);
-        m_animation_slots[index].layout_dirty = &m_layout_dirty;
+        if (index < static_cast<std::size_t>(StyleAnimationProperty::Rotation)) {
+            m_animation_slots[index].layout_dirty = &m_layout_dirty;
+        }
     }
     current_opacity.value = m_opacity;
     snap_to_style(StyleType::DEFAULT);
+}
+
+void VisualState::set_change_callback(void* owner, Style::ChangeCallback callback) {
+    m_change_owner = owner;
+    m_change_callback = callback;
+
+    // both configured styles and the active transition must invalidate the same owner after a change.
+    for (Style& style : styles) {
+        style.set_change_callback(owner, callback);
+    }
+    if (m_transition_style.has_value()) m_transition_style->set_change_callback(owner, callback);
+}
+
+void VisualState::set_opacity(float value, TransitionSpec transition) {
+    m_opacity_transition = transition;
+    m_opacity = std::clamp(value, 0.0f, 1.0f);
+}
+
+void VisualState::fade_in(TransitionSpec transition) {
+    visible = true;
+    if (first_frame) current_opacity.value = 0.0F;
+    set_opacity(1.0f, transition);
+}
+
+bool VisualState::transitioning() const {
+    return current_opacity.value != m_opacity || m_transition_style.has_value() || m_style_animator.transitioning() ||
+           m_animator.transitioning();
+}
+
+void VisualState::update(float dt) {
+    if (!first_frame && !transitioning()) return;
+
+    const FloatValue target_opacity{m_opacity, m_opacity_transition};
+    current_opacity.tick(target_opacity, dt);
+
+    // finish the style blend before applying animation overrides for this frame.
+    if (m_transition_style.has_value()) {
+        const Style& target_style = styles[static_cast<size_t>(m_target_style)];
+        if (!Style::lerp(*m_transition_style, target_style, dt)) m_transition_style.reset();
+    }
+
+    first_frame = false;
+    update_animations(dt);
+}
+
+void VisualState::set_style(StyleType type) {
+    if (m_target_style == type) return;
+    if (!m_transition_style.has_value()) m_transition_style.emplace(styles[static_cast<size_t>(m_target_style)]);
+    m_target_style = type;
+}
+
+void VisualState::set_item_state(bool hovered, bool active, bool focused) {
+    if (active) {
+        set_style(StyleType::ACTIVE);
+        return;
+    }
+    if (focused) {
+        set_style(StyleType::FOCUS);
+        return;
+    }
+    set_style(hovered ? StyleType::HOVER : StyleType::DEFAULT);
 }
 
 StyleAnimationSequence VisualState::animate() {
@@ -103,22 +165,21 @@ StyleAnimationSequence VisualState::animate() {
 }
 
 void VisualState::cancel_animations() {
-    const auto slots = animation_slots();
-    const bool layout_changed = std::any_of(slots.begin(), slots.end(), [](const auto& slot) {
-        return slot.affects_layout && slot.override.has_value();
+    const bool layout_changed = std::any_of(m_animation_slots.begin(), m_animation_slots.end(), [](const auto& slot) {
+        return slot.layout_dirty != nullptr && slot.override.has_value();
     });
 
     m_style_animator.cancel();
     m_animator.cancel();
 
-    for (StyleAnimationSlot& slot : slots) {
+    for (StyleAnimationSlot& slot : m_animation_slots) {
         slot.override.reset();
     }
 
     m_has_presentation_style = false;
 
     // canceled inset tracks may have changed measured bounds and must trigger one layout pass.
-    if (layout_changed && m_change_callback != nullptr) m_change_callback(m_change_owner);
+    if (layout_changed && m_change_callback != nullptr) m_change_callback(m_change_owner, false);
 }
 
 void VisualState::update_animations(float dt) {
@@ -150,7 +211,7 @@ void VisualState::update_animations(float dt) {
     }
 
     m_has_presentation_style = has_animation_overrides();
-    if (m_layout_dirty && m_change_callback != nullptr) m_change_callback(m_change_owner);
+    if (m_layout_dirty && m_change_callback != nullptr) m_change_callback(m_change_owner, false);
 }
 
 AnimationTarget VisualState::target(StyleAnimationSlot& slot) {
@@ -165,6 +226,7 @@ AnimationTarget VisualState::target(StyleAnimationSlot& slot) {
 }
 
 bool VisualState::has_animation_overrides() const {
-    const auto slots = animation_slots();
-    return std::any_of(slots.begin(), slots.end(), [](const auto& slot) { return slot.override.has_value(); });
+    return std::any_of(m_animation_slots.begin(), m_animation_slots.end(), [](const auto& slot) {
+        return slot.override.has_value();
+    });
 }

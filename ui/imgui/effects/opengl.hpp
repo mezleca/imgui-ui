@@ -20,6 +20,9 @@ namespace ui {
         // begin intersects bounds with command.ClipRect before enabling the scissor test.
         bool begin(const ImDrawCmd& command, Rect bounds);
         GLint uniform(const char* name) const;
+        GLuint program() const {
+            return m_program;
+        }
 
         // y uses the opengl framebuffer's bottom-left origin.
         Rect framebuffer_bounds() const;
@@ -33,7 +36,7 @@ namespace ui {
         GLuint m_program = 0;
         GLuint m_vertex_array = 0;
         GLuint m_texture = 0;
-        ImVec2 m_texture_size{};
+        ImVec2 m_texture_size;
         Rect m_bounds;
     };
 } // namespace ui

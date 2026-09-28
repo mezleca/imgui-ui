@@ -21,11 +21,3 @@ Texture* TextureRegistry::add(std::string id, const std::filesystem::path& locat
 Texture* TextureRegistry::add(std::string id, std::string_view content) {
     return load_asset(std::move(id), content);
 }
-
-Texture* TextureRegistry::find(std::string_view id) {
-    return find_asset(id);
-}
-
-const Texture* TextureRegistry::find(std::string_view id) const {
-    return find_asset(id);
-}

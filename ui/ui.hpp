@@ -20,7 +20,7 @@ namespace ui {
     class Font;
 
     struct UIConfig {
-        /// backend that drives the application's platform window and renders imgui draw data.
+        /// required backend that drives the application's platform window and renders imgui draw data.
         std::unique_ptr<Backend> backend;
         /// creates the debugger overlay when the surface initializes.
         bool enable_debugger = false;
@@ -31,6 +31,7 @@ namespace ui {
     /// owns one imgui surface, its backend, input router, retained tree, and optional debugger.
     class UI {
     public:
+        /// keeps a reference to runtime. destroy the surface before runtime and before its backend's platform window.
         explicit UI(Runtime& runtime, UIConfig config = {});
         ~UI();
 
@@ -45,14 +46,13 @@ namespace ui {
         /// forwards pending platform events through the active backend.
         void process_events();
 
-        /// starts an imgui frame and clears the previous frame's routed input.
-        /// call after platform events and before update() or draw().
+        /// starts the backend draw cycle and an imgui frame. call after process_events and before update or draw.
         void begin_frame();
 
-        /// renders the current imgui frame and restores the previous context.
+        /// renders imgui, completes the backend draw cycle, and restores the previous imgui context.
         void end_frame();
 
-        /// begins, updates, and renders one backend-timed frame.
+        /// calls begin_frame, update, draw, and end_frame in order.
         void frame();
 
         /// updates the application tree for the current frame.

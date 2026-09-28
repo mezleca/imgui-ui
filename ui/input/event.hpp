@@ -3,33 +3,29 @@
 #include <imgui.h>
 
 #include <cstdint>
+#include <functional>
 #include <string>
 
 namespace ui {
+    class Node;
+    struct UiEvent;
+
+    using InputCallback = std::function<void(UiEvent&)>;
+
     enum class EventType : uint8_t {
-        /// pointer moved without a button transition.
         PointerMove,
-        /// a pointer button was pressed.
         PointerDown,
-        /// a pointer button was released.
         PointerUp,
+        Scroll,
+        KeyDown,
+        KeyUp,
         /// a matching pointer press and release occurred on one target.
         Click,
         /// a matching secondary pointer press and release occurred on one target.
         ContextClick,
-        /// the pointer wheel changed.
-        Scroll,
-        /// a keyboard key was pressed.
-        KeyDown,
-        /// a keyboard key was released.
-        KeyUp,
-        /// text input produced a character sequence.
         TextInput,
-        /// focus moved to a node.
         FocusGained,
-        /// focus moved away from a node.
         FocusLost,
-        /// the active input operation was canceled.
         Cancel,
     };
 
@@ -38,11 +34,11 @@ namespace ui {
         PointerMove = 1 << 0,
         PointerDown = 1 << 1,
         PointerUp = 1 << 2,
-        Click = 1 << 3,
-        ContextClick = 1 << 4,
-        Scroll = 1 << 5,
-        KeyDown = 1 << 6,
-        KeyUp = 1 << 7,
+        Scroll = 1 << 3,
+        KeyDown = 1 << 4,
+        KeyUp = 1 << 5,
+        Click = 1 << 6,
+        ContextClick = 1 << 7,
         TextInput = 1 << 8,
         FocusGained = 1 << 9,
         FocusLost = 1 << 10,
@@ -65,34 +61,8 @@ namespace ui {
     }
 
     constexpr EventMask event_mask(EventType type) {
-        switch (type) {
-            case EventType::PointerMove:
-                return EventMask::PointerMove;
-            case EventType::PointerDown:
-                return EventMask::PointerDown;
-            case EventType::PointerUp:
-                return EventMask::PointerUp;
-            case EventType::Click:
-                return EventMask::Click;
-            case EventType::ContextClick:
-                return EventMask::ContextClick;
-            case EventType::Scroll:
-                return EventMask::Scroll;
-            case EventType::KeyDown:
-                return EventMask::KeyDown;
-            case EventType::KeyUp:
-                return EventMask::KeyUp;
-            case EventType::TextInput:
-                return EventMask::TextInput;
-            case EventType::FocusGained:
-                return EventMask::FocusGained;
-            case EventType::FocusLost:
-                return EventMask::FocusLost;
-            case EventType::Cancel:
-                return EventMask::Cancel;
-        }
-
-        return EventMask::None;
+        const auto index = static_cast<uint8_t>(type);
+        return index <= static_cast<uint8_t>(EventType::Cancel) ? static_cast<EventMask>(1U << index) : EventMask::None;
     }
 
     enum class PointerButton : uint8_t {
@@ -114,15 +84,18 @@ namespace ui {
     };
 
     struct UiEvent {
-        ImVec2 position{};
-        ImVec2 scroll{};
+        /// target of the current branch. stays unchanged while bubbling through parents, then changes for underlying targets.
+        Node* target = nullptr;
+
+        ImVec2 position;
+        ImVec2 scroll;
 
         std::string text;
 
         /// the target or one of its ancestors consumed the event.
         bool handled = false;
 
-        /// parent nodes no longer receive the event.
+        /// remaining handlers, ancestors, and underlying targets no longer receive the event.
         bool propagation_stopped = false;
 
         /// pointer release will not synthesize a click from this press.
@@ -136,7 +109,9 @@ namespace ui {
         Key key = Key::Unknown;
 
         static UiEvent make(EventType type) {
-            return {.type = type};
+            UiEvent event;
+            event.type = type;
+            return event;
         }
 
         /// consumes the event without stopping its parent traversal.
@@ -144,7 +119,7 @@ namespace ui {
             handled = true;
         }
 
-        /// consumes the event and stops dispatching it to parent nodes.
+        /// consumes the event and stops the remaining handlers and routing branches.
         void stop_propagation() {
             handled = true;
             propagation_stopped = true;

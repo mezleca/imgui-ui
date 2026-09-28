@@ -7,7 +7,7 @@
 namespace ui {
     class LineWidget : public StyledNode {
     public:
-        LineWidget(ImVec2 start, ImVec2 end, ImColor color, float thickness = 1.0f);
+        LineWidget(ImVec2 start, ImVec2 end, const Color& color, float thickness = 1.0f);
 
     private:
         bool paint() override;

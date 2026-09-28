@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <string_view>
 #include <utility>
 
@@ -126,7 +127,7 @@ TEST_CASE("debugger hotkey toggles on the target surface") {
 TEST_CASE("debugger clicks preserve an open popup") {
     ui::Runtime runtime;
     ui::UI surface = ui_test::make_surface(runtime, true);
-    ImColor color = {0.26F, 0.59F, 0.98F, 1.0F};
+    ui::Color color = ui::rgb(0.26F, 0.59F, 0.98F);
     auto& picker = surface.root().add<ui::ColorPickerWidget>(color);
 
     const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
@@ -246,6 +247,15 @@ TEST_CASE("effect registry invokes lifecycle callbacks and queues draw callbacks
     REQUIRE(effects.unregister_effect(pass));
     REQUIRE(probe.shutdown == 1);
     REQUIRE_FALSE(pass.submit(*draw_list, 42));
+
+    effects.shutdown();
+    effects.register_effect<int>({render_test_effect, initialize_test_effect, nullptr, shutdown_test_effect, &probe});
+    effects.register_effect<int>({render_test_effect, [](void*) { return false; }});
+    REQUIRE_FALSE(effects.initialize());
+    REQUIRE(probe.shutdown == 2);
+
+    effects.shutdown();
+    REQUIRE(probe.shutdown == 2);
 }
 
 TEST_CASE("ui profiler records completed zones and frame metrics") {
@@ -258,6 +268,7 @@ TEST_CASE("ui profiler records completed zones and frame metrics") {
         ui::ScopedProfileZone inner(&profiler, "Node::draw", 20);
     }
     profiler.record_frame_metrics(2, 7);
+    profiler.record_gpu_render_ms(1.25);
 
     profiler.end_frame();
     const std::span<const ui::ProfileEvent> events = profiler.latest_events();
@@ -271,6 +282,9 @@ TEST_CASE("ui profiler records completed zones and frame metrics") {
     REQUIRE(profiler.dropped_events() == 0);
     REQUIRE(profiler.latest_metrics().input_entries == 2);
     REQUIRE(profiler.latest_metrics().input_entry_checks == 7);
+    REQUIRE(profiler.latest_metrics().gpu_render_ms.has_value());
+    REQUIRE(*profiler.latest_metrics().gpu_render_ms == 1.25);
+    REQUIRE(profiler.gpu_render_summary().average_ms == 1.25);
     REQUIRE(profiler.has_report());
     REQUIRE(profiler.save_report());
 
@@ -285,6 +299,8 @@ TEST_CASE("ui profiler records completed zones and frame metrics") {
         REQUIRE(contents.find("latest.draw_ms =") != std::string::npos);
         REQUIRE(contents.find("latest.input_ms =") != std::string::npos);
         REQUIRE(contents.find("latest.render_ms =") != std::string::npos);
+        REQUIRE(contents.find("latest.gpu_render_ms = 1.25") != std::string::npos);
+        REQUIRE(contents.find("gpu_render.average_ms = 1.25") != std::string::npos);
         REQUIRE(contents.find("memory") == std::string::npos);
         REQUIRE(contents.find("style_") == std::string::npos);
         REQUIRE(contents.find("draw_commands") == std::string::npos);
@@ -294,6 +310,43 @@ TEST_CASE("ui profiler records completed zones and frame metrics") {
 
     profiler.clear_report();
     REQUIRE_FALSE(profiler.has_report());
+    REQUIRE(profiler.gpu_render_summary().samples == 0);
+}
+
+TEST_CASE("gpu profiling summarizes recent completed queries") {
+    ui::Profiler profiler;
+    profiler.set_enabled(true);
+    for (int sample = 0; sample < 61; ++sample) {
+        profiler.begin_frame();
+        profiler.record_gpu_render_ms(static_cast<double>(sample));
+        profiler.end_frame();
+    }
+
+    profiler.begin_frame();
+    profiler.record_gpu_render_ms(std::nullopt);
+    profiler.end_frame();
+
+    const ui::ProfileGpuSummary summary = profiler.gpu_render_summary();
+    REQUIRE(summary.samples == 60);
+    REQUIRE(summary.minimum_ms == 1.0);
+    REQUIRE(summary.maximum_ms == 60.0);
+    REQUIRE(summary.average_ms == 30.5);
+
+    profiler.set_enabled(false);
+    REQUIRE(profiler.gpu_render_summary().samples == 0);
+}
+
+TEST_CASE("ui closes render profiling before publishing the frame") {
+    ui::Runtime runtime;
+    ui::UI surface = ui_test::make_surface(runtime);
+    const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
+    surface.profiler().set_enabled(true);
+
+    surface.begin_frame();
+    surface.draw();
+    surface.end_frame();
+
+    REQUIRE(surface.profiler().latest_metrics().render_ms > 0.0);
 }
 
 TEST_CASE("ui profiler separates root update and draw time") {

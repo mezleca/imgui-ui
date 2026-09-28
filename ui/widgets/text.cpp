@@ -20,10 +20,6 @@ TextWidget& TextWidget::set_wrap(float width) {
 }
 
 TextWidget& TextWidget::set_overflow(TextOverflow overflow) {
-    if (m_overflow == overflow) {
-        return *this;
-    }
-
     m_overflow = overflow;
     return *this;
 }
@@ -60,9 +56,9 @@ bool TextWidget::paint() {
     const ImVec4 clip_rect = {content.min.x, content.min.y, content.max.x, content.max.y};
 
     if (m_wrap < 0.0F && m_overflow == TextOverflow::Ellipsis) {
-        draw_text_ellipsis(draw_list, content.min, current_style.color().get_col(), m_text, clip_rect);
+        draw_text_ellipsis(draw_list, content.min, current_style.color().value, m_text, clip_rect);
     } else {
-        draw_text(draw_list, content.min, current_style.color().get_col(), m_text, m_wrap < 0.0F ? &clip_rect : nullptr);
+        draw_text(draw_list, content.min, current_style.color().value, m_text, m_wrap < 0.0F ? &clip_rect : nullptr);
     }
 
     return true;

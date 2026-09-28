@@ -8,7 +8,6 @@ using namespace ui;
 
 FileDialogWidget::FileDialogWidget(std::string label, std::string id)
     : Container(std::move(id), StackDirection::Horizontal), m_value(std::move(label)), m_field(add<TextWidget>(m_value)) {
-    set_input_mode(InputMode::Target);
     set_type_name("FileDialog");
     set_content_alignment({0.5F, 0.5F});
     set_size({fit(), fit()});
@@ -26,32 +25,14 @@ void FileDialogWidget::apply_theme_defaults(const Theme& theme) {
             .border_radius(4.0F)
             .border_style(BorderStyle::Dashed);
     });
-    configure_style(StyleType::HOVER, [&theme](Style& style) {
-        style.background_color(theme.background_secondary_color).border_color(theme.accent_color);
-    });
+    style(StyleType::HOVER).background_color(theme.background_secondary_color).border_color(theme.accent_color);
     m_field.configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BORDER_NONE);
     });
 }
 
-FileDialogResult FileDialogWidget::select_file(const FileDialogOptions& options) {
-    return surface().file_dialog().open_file(options);
-}
-
-FileDialogResult FileDialogWidget::select_files(const FileDialogOptions& options) {
-    return surface().file_dialog().open_files(options);
-}
-
-FileDialogResult FileDialogWidget::save_file(const FileDialogOptions& options) {
-    return surface().file_dialog().save_file(options);
-}
-
-FileDialogResult FileDialogWidget::select_folder(const FileDialogOptions& options) {
-    return surface().file_dialog().select_folder(options);
-}
-
-FileDialogResult FileDialogWidget::select_folders(const FileDialogOptions& options) {
-    return surface().file_dialog().select_folders(options);
+FileDialogResult FileDialogWidget::show_dialog(FileDialogOperation operation, const FileDialogOptions& options) {
+    return surface().file_dialog().show(operation, options);
 }
 
 const std::string& FileDialogWidget::value() const {

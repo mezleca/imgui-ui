@@ -6,6 +6,7 @@
 #include <ui/imgui/effects/blur/blur.hpp>
 #include <ui/imgui/effects/effects.hpp>
 #include <ui/imgui/effects/shadow/shadow.hpp>
+#include <ui/style/gradient-data.hpp>
 #include <ui/layout/container.hpp>
 #include <ui/layout/geometry.hpp>
 #include <ui/layout/layer-container.hpp>
@@ -25,6 +26,35 @@
 #include <vector>
 
 using namespace ui;
+
+TEST_CASE("integer colors normalize channels and preserve float color semantics", "[color]") {
+    const ImVec4 color = rgba(49, 128, 255, 64).rgba();
+    REQUIRE(color.x == Catch::Approx(49.0F / 255.0F));
+    REQUIRE(color.y == Catch::Approx(128.0F / 255.0F));
+    REQUIRE(color.z == 1.0F);
+    REQUIRE(color.w == Catch::Approx(64.0F / 255.0F));
+
+    REQUIRE(rgb(255, 0, 0) == rgb(1.0F, 0.0F, 0.0F));
+    REQUIRE(rgba(-1, 256, 0, 300) == rgba(0.0F, 1.0F, 0.0F, 1.0F));
+}
+
+TEST_CASE("colors retain directional gradients and solid fallbacks") {
+    const Color vertical = gradient(
+        GradientType::Linear, {{0.0F, rgb(1.0F, 0.0F, 0.0F)}, {1.0F, rgb(0.0F, 0.0F, 1.0F)}}, {0.0F, 0.0F}, {0.0F, 1.0F}
+    );
+    REQUIRE(vertical.gradient() != nullptr);
+    REQUIRE(vertical.gradient()->type == GradientType::Linear);
+    REQUIRE(vertical.gradient()->start.y == 0.0F);
+    REQUIRE(vertical.gradient()->end.y == 1.0F);
+    REQUIRE(vertical.rgba().x == Catch::Approx(0.5F));
+    REQUIRE(vertical.rgba().z == Catch::Approx(0.5F));
+
+    const Color radial =
+        gradient(GradientType::Radial, {{0.0F, rgba(1.0F, 1.0F, 1.0F, 0.5F)}, {1.0F, rgba(0.0F, 0.0F, 0.0F, 0.0F)}});
+    REQUIRE(radial.gradient()->start.x == 0.5F);
+    REQUIRE(radial.max_alpha() == 0.5F);
+    REQUIRE(radial == radial);
+}
 
 static const BoxShadowRegion* collected_shadow_region = nullptr;
 static const BlurRegion* collected_blur_region = nullptr;
@@ -107,7 +137,7 @@ TEST_CASE("partial borders keep every draw style inside its selected side") {
 
         const auto require_left_bounds = [&](BorderStyle style) {
             const int first_vertex = draw_list->VtxBuffer.Size;
-            draw_border_path(ui::draw_list(), path, BORDER_LEFT, ImColor{255, 255, 255, 255}, 2.0F, style);
+            draw_border_path(ui::draw_list(), path, BORDER_LEFT, rgb(255, 255, 255), 2.0F, style);
             REQUIRE(draw_list->VtxBuffer.Size > first_vertex);
 
             float min_y = std::numeric_limits<float>::max();
@@ -122,7 +152,7 @@ TEST_CASE("partial borders keep every draw style inside its selected side") {
             REQUIRE(max_y < 79.0F);
         };
 
-        draw_border_path(ui::draw_list(), path, BORDER_NONE, ImColor{255, 255, 255, 255}, 2.0F, BorderStyle::Solid);
+        draw_border_path(ui::draw_list(), path, BORDER_NONE, rgb(255, 255, 255), 2.0F, BorderStyle::Solid);
         REQUIRE(draw_list->VtxBuffer.Size == vertices_before);
 
         require_left_bounds(BorderStyle::Solid);
@@ -138,7 +168,7 @@ TEST_CASE("patterned borders keep every side visible") {
     ui_test::draw_window("patterned-border-test", [&] {
         const auto require_sides = [&](BorderStyle style) {
             const int first_vertex = ImGui::GetWindowDrawList()->VtxBuffer.Size;
-            draw_border_path(ui::draw_list(), path, BORDER_ALL, ImColor{255, 255, 255, 255}, 2.0F, style);
+            draw_border_path(ui::draw_list(), path, BORDER_ALL, rgb(255, 255, 255), 2.0F, style);
             const auto& vertices = ImGui::GetWindowDrawList()->VtxBuffer;
             const auto has_side = [&](auto&& predicate) {
                 for (int index = first_vertex; index < vertices.Size; ++index) {
@@ -218,12 +248,12 @@ TEST_CASE("style normalizes discrete fields and interpolates effect values") {
     REQUIRE(shadow_current.box_shadow().offset.y == Catch::Approx(2.0F));
     REQUIRE(shadow_current.box_shadow().blur == Catch::Approx(6.0F));
     REQUIRE(shadow_current.box_shadow().spread == Catch::Approx(1.0F));
-    REQUIRE(shadow_current.box_shadow().color.Value.w == Catch::Approx(0.5F));
+    REQUIRE(shadow_current.box_shadow().color.rgba().w == Catch::Approx(0.5F));
 
     Style normalized;
     normalized.box_shadow({.blur = -4.0F, .color = ImColor{0.0F, 0.0F, 0.0F, -1.0F}});
     REQUIRE(normalized.box_shadow().blur == 0.0F);
-    REQUIRE(normalized.box_shadow().color.Value.w == 0.0F);
+    REQUIRE(normalized.box_shadow().color.rgba().w == 0.0F);
 }
 
 TEST_CASE("container shadows stay in their owner draw list") {
@@ -240,12 +270,12 @@ TEST_CASE("container shadows stay in their owner draw list") {
     Container node("container");
     node.set_size({px(100.0F), px(60.0F)});
     node.configure_all_styles([](Style& style) {
-        style.background_color(ImColor{0.2F, 0.2F, 0.2F, 1.0F})
+        style.background_color(rgb(0.2F, 0.2F, 0.2F))
             .box_shadow({
                 .offset = {4.0F, 6.0F},
                 .blur = 12.0F,
                 .spread = 40.0F,
-                .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F},
+                .color = rgb(0.0F, 0.0F, 0.0F),
             });
     });
     node.update(1.0F);
@@ -284,9 +314,7 @@ TEST_CASE("tree shadows use the tree outer rect") {
     page.set_size({px(240.0F), px(160.0F)});
     auto& tree = page.add<TreeContainer>("tree");
     tree.set_size({px(160.0F), px(100.0F)});
-    tree.configure_all_styles([](Style& style) {
-        style.box_shadow({.spread = 40.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}});
-    });
+    tree.configure_all_styles([](Style& style) { style.box_shadow({.spread = 40.0F, .color = rgb(0.0F, 0.0F, 0.0F)}); });
     page.update(1.0F);
 
     ImGui::SetNextItemOpen(true, ImGuiCond_Always);
@@ -313,7 +341,7 @@ TEST_CASE("dropdown trigger shadows use the trigger rect below its label") {
         value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "dropdown"
     );
     dropdown.set_label("label").set_size({px(180.0F), fit()});
-    dropdown.trigger().style().box_shadow({.spread = 8.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}});
+    dropdown.trigger().style().box_shadow({.spread = 8.0F, .color = rgb(0.0F, 0.0F, 0.0F)});
     surface.effects().register_effect<BoxShadowRegion>(EffectSlot::BoxShadow, {collect_shadow_callback});
 
     const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 180.0F});
@@ -395,8 +423,8 @@ TEST_CASE("styled paint slots render before the node and above completed subtree
     ui_test::draw_window("decoration-test", [&] {
         StyledNode node("node");
         node.set_size({px(80.0F), px(40.0F)});
-        node.before().style().background_color(ImColor{255, 0, 0, 255});
-        node.after().style().border(BORDER_ALL).border_color(ImColor{255, 255, 255, 255});
+        node.before().style().background_color(rgb(255, 0, 0));
+        node.after().style().border(BORDER_ALL).border_color(rgb(255, 255, 255));
         node.update(1.0F);
 
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -546,6 +574,42 @@ TEST_CASE("node measurement only reruns after invalidation") {
     REQUIRE(child_measurements == 2);
 }
 
+TEST_CASE("external subtrees transfer ownership and reconnect surface input", "[node][ownership]") {
+    class AttachedWidget final : public Widget {
+    public:
+        using Node::surface;
+        using Widget::Widget;
+    };
+
+    auto page = std::make_unique<Container>("page");
+    auto& field = page->add<AttachedWidget>("field");
+    Container* original = page.get();
+
+    Runtime runtime;
+    UI surface = ui_test::make_surface(runtime);
+    auto& first = surface.root().add<Container>("first");
+    auto& second = surface.root().add<Container>("second");
+
+    Container& attached = first.add(std::move(page));
+    REQUIRE(page == nullptr);
+    REQUIRE(&attached == original);
+    REQUIRE(attached.parent() == &first);
+    REQUIRE(field.parent() == &attached);
+    REQUIRE(&field.surface() == &surface);
+    REQUIRE(surface.input_router().set_focus(&field));
+
+    auto detached = first.detach(attached);
+    REQUIRE(surface.input_router().focused_node() == nullptr);
+
+    Node& moved = second.add(std::move(detached));
+    REQUIRE(first.children().empty());
+    REQUIRE(&moved == original);
+    REQUIRE(moved.parent() == &second);
+    REQUIRE(&field.surface() == &surface);
+    REQUIRE(surface.input_router().set_focus(&field));
+    REQUIRE_THROWS_AS(second.add(std::unique_ptr<Node>{}), std::invalid_argument);
+}
+
 TEST_CASE("clearing children defers subtree destruction and clears input targets") {
     int destructions = 0;
 
@@ -566,7 +630,7 @@ TEST_CASE("clearing children defers subtree destruction and clears input targets
 
     InputRouter router;
     parent.set_input_router(&router);
-    REQUIRE(router.set_focus(child));
+    REQUIRE(router.set_focus(&child));
     REQUIRE(router.capture_pointer(child));
 
     parent.clear();
@@ -799,7 +863,7 @@ TEST_CASE("nodes register only explicitly configured local input entries") {
             : Node(std::move(id)), m_rect(rect), m_callback(std::move(callback)) {}
 
     private:
-        void on_event(UiEvent& event) override {
+        void event(UiEvent& event) override {
             if (m_callback) {
                 m_callback(event);
             }

@@ -29,6 +29,8 @@ list(FILTER IMGUI_UI_CORE_SOURCES EXCLUDE REGEX "/backends/")
 set(IMGUI_UI_OPENGL_EFFECT_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/opengl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/blur/opengl.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/gradient/opengl.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/gradient/opengl-shared.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/shadow/opengl.cpp"
 )
 list(REMOVE_ITEM IMGUI_UI_CORE_SOURCES ${IMGUI_UI_OPENGL_EFFECT_SOURCES})
@@ -58,6 +60,7 @@ if(IMGUI_UI_BUILD_SDL)
     list(APPEND IMGUI_UI_SDL_SOURCES ${IMGUI_UI_OPENGL_EFFECT_SOURCES})
     list(APPEND IMGUI_UI_SDL_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/backends/opengl/texture-loader.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/backends/opengl/gpu-timer.cpp"
         "${IMGUI_UI_IMGUI_BACKENDS_DIR}/imgui_impl_sdl3.cpp"
         "${IMGUI_UI_IMGUI_BACKENDS_DIR}/imgui_impl_opengl3.cpp"
     )
@@ -81,6 +84,7 @@ if(IMGUI_UI_BUILD_RAYLIB)
     list(APPEND IMGUI_UI_RAYLIB_SOURCES ${IMGUI_UI_OPENGL_EFFECT_SOURCES})
     list(APPEND IMGUI_UI_RAYLIB_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/backends/opengl/texture-loader.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/backends/opengl/gpu-timer.cpp"
         "${IMGUI_UI_IMGUI_BACKENDS_DIR}/imgui_impl_opengl3.cpp"
     )
 

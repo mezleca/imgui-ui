@@ -20,9 +20,13 @@ static float saturate(float value) {
     return std::clamp(value, 0.0F, 1.0F);
 }
 
-static bool equal_color(ImColor left, ImColor right) {
-    return left.Value.x == right.Value.x && left.Value.y == right.Value.y && left.Value.z == right.Value.z &&
-           left.Value.w == right.Value.w;
+static void draw_picker_gradient(
+    ImDrawList& draw_list, Rect rect, ImVec4 top_left, ImVec4 top_right, ImVec4 bottom_right, ImVec4 bottom_left
+) {
+    draw_list.AddRectFilledMultiColor(
+        rect.min, rect.max, ImGui::GetColorU32(top_left), ImGui::GetColorU32(top_right), ImGui::GetColorU32(bottom_right),
+        ImGui::GetColorU32(bottom_left)
+    );
 }
 
 static std::string format_hex(ImColor color) {
@@ -61,7 +65,7 @@ static bool parse_hex(const std::string& text, ImColor& color) {
     return true;
 }
 
-static void draw_checkerboard(ImDrawList& draw_list, Rect rect, float cell_size, ImColor light, ImColor dark) {
+static void draw_checkerboard(ImDrawList& draw_list, Rect rect, float cell_size, const Color& light, const Color& dark) {
     cell_size = std::max(1.0F, cell_size);
     const int rows = std::max(0, static_cast<int>(std::ceil((rect.max.y - rect.min.y) / cell_size)));
     const int columns = std::max(0, static_cast<int>(std::ceil((rect.max.x - rect.min.x) / cell_size)));
@@ -86,7 +90,7 @@ static ImColor hsv_color(float hue, float saturation, float value, float alpha =
 
 class ui::ColorPickerPreviewNode final : public DrawListWidget {
 public:
-    ColorPickerPreviewNode(ColorPickerWidget& owner, ImColor& color)
+    ColorPickerPreviewNode(ColorPickerWidget& owner, Color& color)
         : DrawListWidget("preview", "ColorPickerPreview"), m_owner(owner), m_color(&color) {}
 
     void set_open(bool open) {
@@ -103,7 +107,7 @@ private:
         StyledNode::draw_surface(draw_list, rect, *m_color);
     }
 
-    void on_click(UiEvent& event) override {
+    void click_event(UiEvent& event) override {
         if (event.button != PointerButton::Left) {
             return;
         }
@@ -121,7 +125,7 @@ private:
     }
 
     ColorPickerWidget& m_owner;
-    ImColor* m_color = nullptr;
+    Color* m_color = nullptr;
 };
 
 class ui::ColorPickerPopup final : public Widget {
@@ -132,7 +136,7 @@ public:
         set_layout({.in_flow = false});
 
         m_hex_input = &add<TextInputWidget>(m_hex, "hex");
-        m_hex_input->set_on_change([this] {
+        m_hex_input->on_change([this] {
             ImColor parsed;
             if (parse_hex(m_hex, parsed)) {
                 m_owner.set_color(parsed);
@@ -141,7 +145,7 @@ public:
     }
 
     void show() {
-        m_hex = format_hex(*m_owner.m_color);
+        m_hex = format_hex(m_owner.m_color->rgba());
     }
 
 private:
@@ -169,9 +173,9 @@ private:
                 .border_thickness(theme.controls.border_thickness)
                 .padding(theme.metrics.item_inner_spacing);
         });
-        m_hex_input->configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_hover_color); });
-        m_hex_input->configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color); });
-        m_hex_input->configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
+        m_hex_input->style(StyleType::HOVER).border_color(theme.accent_hover_color);
+        m_hex_input->style(StyleType::ACTIVE).border_color(theme.accent_color);
+        m_hex_input->style(StyleType::FOCUS).border_color(theme.accent_color);
     }
 
     bool paint() override {
@@ -227,7 +231,7 @@ private:
         const ImVec2 spacing = theme.metrics.item_spacing;
         const float bar_size = std::max(1.0F, theme.controls.thumb_size);
 
-        ImColor color = *m_owner.m_color;
+        ImColor color = m_owner.m_color->rgba();
         float hue = 0.0F;
         float saturation = 0.0F;
         float value = 0.0F;
@@ -248,7 +252,7 @@ private:
             saturation = saturate((mouse.x - selector.min.x) / selector.size().x);
             value = 1.0F - saturate((mouse.y - selector.min.y) / selector.size().y);
             set_hsv(hue, saturation, value, color.Value.w);
-            color = *m_owner.m_color;
+            color = m_owner.m_color->rgba();
         }
 
         ImGui::SetCursorScreenPos(hue_bar.min);
@@ -256,7 +260,7 @@ private:
         if (ImGui::IsItemActive()) {
             hue = saturate((ImGui::GetIO().MousePos.y - hue_bar.min.y) / hue_bar.size().y);
             set_hsv(hue, saturation, value, color.Value.w);
-            color = *m_owner.m_color;
+            color = m_owner.m_color->rgba();
         }
 
         ImGui::SetCursorScreenPos(alpha_bar.min);
@@ -269,10 +273,8 @@ private:
 
         ImDrawList& draw_list = ui::draw_list();
         const ImColor hue_color = hsv_color(hue, 1.0F, 1.0F);
-        draw_rect_filled_gradient(draw_list, selector, ImColor{IM_COL32_WHITE}, hue_color, hue_color, ImColor{IM_COL32_WHITE});
-        draw_rect_filled_gradient(
-            draw_list, selector, ImColor{0, 0, 0, 0}, ImColor{0, 0, 0, 0}, ImColor{0, 0, 0, 255}, ImColor{0, 0, 0, 255}
-        );
+        draw_picker_gradient(draw_list, selector, rgb(255, 255, 255), hue_color, hue_color, rgb(255, 255, 255));
+        draw_picker_gradient(draw_list, selector, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0), rgb(0, 0, 0), rgb(0, 0, 0));
         draw_rect_outline(draw_list, selector, theme.controls.border_color);
 
         for (int index = 0; index < 6; ++index) {
@@ -280,7 +282,7 @@ private:
             const float bottom = hue_bar.min.y + (hue_bar.size().y * static_cast<float>(index + 1) / 6.0F);
             const ImColor first = hsv_color(static_cast<float>(index) / 6.0F, 1.0F, 1.0F);
             const ImColor second = hsv_color(static_cast<float>(index + 1) / 6.0F, 1.0F, 1.0F);
-            draw_rect_filled_gradient(draw_list, {{hue_bar.min.x, top}, {hue_bar.max.x, bottom}}, first, first, second, second);
+            draw_picker_gradient(draw_list, {{hue_bar.min.x, top}, {hue_bar.max.x, bottom}}, first, first, second, second);
         }
         draw_rect_outline(draw_list, hue_bar, theme.controls.border_color);
 
@@ -291,7 +293,7 @@ private:
         const ImColor opaque = ImColor(color.Value.x, color.Value.y, color.Value.z, 1.0F);
         const ImColor transparent = ImColor(color.Value.x, color.Value.y, color.Value.z, 0.0F);
 
-        draw_rect_filled_gradient(draw_list, alpha_bar, transparent, opaque, opaque, transparent);
+        draw_picker_gradient(draw_list, alpha_bar, transparent, opaque, opaque, transparent);
         draw_rect_outline(draw_list, alpha_bar, theme.controls.border_color);
 
         const ImVec2 selector_cursor = {
@@ -329,7 +331,7 @@ private:
 
     void set_hsv(float hue, float saturation, float value, float alpha) {
         m_owner.set_color(hsv_color(hue, saturation, value, alpha));
-        m_hex = format_hex(*m_owner.m_color);
+        m_hex = format_hex(m_owner.m_color->rgba());
     }
 
     void draw_children() override {}
@@ -340,7 +342,7 @@ private:
     TextInputWidget* m_hex_input = nullptr;
 };
 
-ColorPickerWidget::ColorPickerWidget(ImColor& color, std::string label, std::string id)
+ColorPickerWidget::ColorPickerWidget(Color& color, std::string label, std::string id)
     : Container(std::move(id), StackDirection::Vertical), m_color(&color) {
     m_label_node = &add<TextWidget>(std::move(label));
     m_label_node->set_visible(!m_label_node->empty());
@@ -379,12 +381,12 @@ void ColorPickerWidget::apply_theme_defaults(const Theme& theme) {
             .cursor(ImGuiMouseCursor_Hand);
     });
 
-    m_preview->configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_hover_color); });
-    m_preview->configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.border_color(theme.accent_color); });
+    m_preview->style(StyleType::HOVER).border_color(theme.accent_hover_color);
+    m_preview->style(StyleType::ACTIVE).border_color(theme.accent_color);
 }
 
-bool ColorPickerWidget::set_color(ImColor color) {
-    if (equal_color(*m_color, color)) {
+bool ColorPickerWidget::set_color(const Color& color) {
+    if (*m_color == color) {
         return false;
     }
 

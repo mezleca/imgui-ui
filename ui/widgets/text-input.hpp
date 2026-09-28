@@ -9,10 +9,7 @@ namespace ui {
     class ImageWidget;
     class TextWidget;
 
-    /// edits a bound UTF-8 string through ImGui while exposing it as one retained, stylable input node.
-    ///
-    /// the widget owns focus routing and an optional decorative icon; ImGui handles text editing, selection, clipboard, and IME
-    /// input.
+    /// exposes a bound UTF-8 string as one stylable text field backed by ImGui's text editor.
     class TextInputWidget : public Container {
     public:
         TextInputWidget(std::string& value, std::string id = {});
@@ -24,10 +21,9 @@ namespace ui {
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;
-        void on_event(UiEvent& event) override;
+        void event(UiEvent& event) override;
         void input_state_changed() override;
-        void arrange_children() override;
-        ImVec2 child_window_padding() const override;
+        Rect hit_rect(Rect visual_rect) const override;
 
     private:
         class FieldNode;
@@ -41,7 +37,7 @@ namespace ui {
         ImageWidget* m_icon_node = nullptr;
         FieldNode* m_field_node = nullptr;
         LabelPlacement m_label_placement = LabelPlacement::Inline;
-        ImVec2 m_label_spacing{};
+        ImVec2 m_label_spacing;
         bool m_focus_requested = false;
     };
 } // namespace ui

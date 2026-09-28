@@ -40,13 +40,12 @@ namespace ui {
 
         Texture* add(std::string id, const std::filesystem::path& location);
         Texture* add(std::string id, std::string_view content);
-        Texture* find(std::string_view id);
-        const Texture* find(std::string_view id) const;
 
     private:
         template <typename Source>
         Texture* load_asset(std::string id, Source&& source) {
-            if (Texture* existing = find(id); existing != nullptr) {
+            Texture* existing = find(id);
+            if (existing != nullptr) {
                 return existing;
             }
 

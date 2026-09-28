@@ -5,20 +5,16 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
-#include <limits>
+#include <memory>
+#include <optional>
 #include <vector>
 
 namespace ui {
     class Node;
 
-    using InputCallback = std::function<void(UiEvent&)>;
-
     /// stores frame-local hit regions in paint order for InputRouter target and blocker queries.
     class HitTestIndex {
     public:
-        static constexpr uint32_t no_callback = std::numeric_limits<uint32_t>::max();
-
         enum class EntryKind : uint8_t {
             Target,
             Blocker,
@@ -27,8 +23,8 @@ namespace ui {
         struct Entry {
             Node* node = nullptr;
             Rect rect;
+            std::shared_ptr<InputCallback> callback;
             EventMask events = EventMask::Pointer;
-            uint32_t callback = no_callback;
             EntryKind kind = EntryKind::Target;
         };
 
@@ -38,20 +34,19 @@ namespace ui {
         void erase(Node& node);
         void erase_subtree(Node& subtree);
 
-        const Entry* resolve(ImVec2 position, EventType type, const Entry*& blocker) const;
-        const Entry* target_at(ImVec2 position, EventType type = EventType::PointerMove, const Node* scope = nullptr) const;
+        struct Route {
+            std::vector<Entry> targets;
+            std::optional<Entry> blocker;
+        };
 
-        bool invoke_callback(const Entry& entry, UiEvent& event) const;
+        /// snapshots the deepest hit nodes of each branch front to back, restricted to the active blocker's subtree.
+        Route route_at(ImVec2 position, EventType type) const;
 
         std::size_t size() const;
         std::size_t checks() const;
 
     private:
-        const Entry* blocking_entry_at(ImVec2 position, EventType type, const Node* target) const;
-
         std::vector<Entry> m_entries;
-        std::vector<InputCallback> m_callbacks;
-        bool m_has_blockers = false;
         mutable std::size_t m_checks = 0;
     };
 

@@ -115,11 +115,11 @@ TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regre
         .in_flow = false,
     });
     panel.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F})
+        style.background_color(ui::rgb(1.0F, 1.0F, 1.0F))
             .box_shadow({
                 .blur = 20.0F,
                 .spread = 20.0F,
-                .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F},
+                .color = ui::rgb(0.0F, 0.0F, 0.0F),
             });
     });
 
@@ -161,17 +161,17 @@ TEST_CASE("opengl blur excludes content outside its rect", "[render][regression]
         .placement = {.offset = {20.0F, 20.0F}},
         .in_flow = false,
     });
-    parent.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F}); });
+    parent.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(0.0F, 0.0F, 0.0F)); });
     auto& outside = parent.add<ui::Container>("outside");
     outside.set_layout({
         .size = {ui::px(20.0F), ui::px(60.0F)},
         .placement = {.offset = {80.0F, 0.0F}},
         .in_flow = false,
     });
-    outside.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F}); });
+    outside.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(0.0F, 0.0F, 1.0F)); });
     auto& blurred = parent.add<ui::Container>("blurred");
     blurred.set_size({ui::px(80.0F), ui::px(60.0F)});
-    blurred.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F}).blur(12); });
+    blurred.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgba(0.0F, 0.0F, 0.0F, 0.0F)).blur(12); });
 
     draw_frame(surface);
     draw_frame(surface);
@@ -204,9 +204,9 @@ TEST_CASE("container border stays above a child widget surface", "[render][regre
     });
     parent.set_spacing(6.0F);
     parent.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+        style.background_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .border(ui::BORDER_ALL)
-            .border_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+            .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .border_thickness(1.0F)
             .padding({});
     });
@@ -215,7 +215,7 @@ TEST_CASE("container border stays above a child widget surface", "[render][regre
     auto& dialog = parent.add<ui::FileDialogWidget>("file");
     dialog.set_size({ui::grow(), ui::px(60.0F)});
     dialog.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F}).border(ui::BORDER_NONE).padding({});
+        style.background_color(ui::rgb(0.0F, 0.0F, 1.0F)).border(ui::BORDER_NONE).padding({});
     });
 
     draw_frame(surface);
@@ -275,9 +275,9 @@ TEST_CASE("scrolling keeps inline overlay panels above earlier content", "[Layer
         .in_flow = false,
     });
     input.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+        style.background_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .border(ui::BORDER_ALL)
-            .border_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+            .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .padding({});
     });
 
@@ -291,9 +291,9 @@ TEST_CASE("scrolling keeps inline overlay panels above earlier content", "[Layer
         .in_flow = false,
     });
     panel.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F})
+        style.background_color(ui::rgb(0.0F, 1.0F, 0.0F))
             .border(ui::BORDER_ALL)
-            .border_color(ImColor{0.5F, 0.5F, 0.5F, 1.0F})
+            .border_color(ui::rgb(0.5F, 0.5F, 0.5F))
             .padding({});
     });
     auto& resize = panel.add<ui::ResizableContainer>("resize");
@@ -397,10 +397,14 @@ TEST_CASE("scrolled inline layers keep virtual list input separate", "[LayerCont
         scroll({100.0F, 240.0F});
         draw_frame(surface);
     }
+    for (int frame = 0; frame < 15; ++frame) {
+        draw_frame(surface);
+    }
 
     REQUIRE(list.scrollbar.GetHeight() > 0.0F);
     REQUIRE(list.layout().visual_rect().contains({100.0F, 240.0F}));
     scroll({100.0F, 240.0F});
+    draw_frame(surface);
     draw_frame(surface);
     REQUIRE(list.window->Scroll.y > 0.0F);
 
@@ -423,6 +427,7 @@ TEST_CASE("scrolled inline layers keep virtual list input separate", "[LayerCont
     draw_frame(surface);
 
     scroll(list_position);
+    draw_frame(surface);
     draw_frame(surface);
 
     REQUIRE(list.window->Scroll.y > dragged_scroll);
@@ -450,16 +455,16 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
     });
     draw_frame(surface, 0.1F);
     file.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F})
+        style.background_color(ui::rgb(0.0F, 0.0F, 0.0F))
             .border(ui::BORDER_ALL)
-            .border_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+            .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .border_thickness(20.0F)
             .padding({});
     });
-    dropdown.body().style().background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F}).border(ui::BORDER_NONE).padding({});
+    dropdown.body().style().background_color(ui::rgb(0.0F, 1.0F, 0.0F)).border(ui::BORDER_NONE).padding({});
     draw_frame(surface, 0.1F);
-    CHECK(file.computed_style().border_color().value.Value.x > 0.9F);
-    CHECK(dropdown.body().computed_style().background_color().value.Value.y > 0.9F);
+    CHECK(file.computed_style().border_color().value.rgba().x > 0.9F);
+    CHECK(dropdown.body().computed_style().background_color().value.rgba().y > 0.9F);
     dropdown.open();
     for (int frame = 0; frame < 5; ++frame) {
         draw_frame(surface, 0.1F);
@@ -488,7 +493,7 @@ TEST_CASE("visible file dialog overflow lets text shadows cross its border", "[r
 
     auto& backdrop = surface.root().add<ui::Container>("backdrop");
     backdrop.set_layout({.size = {ui::px(180.0F), ui::px(140.0F)}, .in_flow = false});
-    backdrop.style().background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F});
+    backdrop.style().background_color(ui::rgb(1.0F, 1.0F, 1.0F));
 
     auto& dialog = surface.root().add<ui::FileDialogWidget>("file");
     dialog.set_layout({
@@ -498,19 +503,19 @@ TEST_CASE("visible file dialog overflow lets text shadows cross its border", "[r
     });
     dialog.set_content_alignment({0.0F, 0.5F});
     dialog.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F})
+        style.background_color(ui::rgb(1.0F, 1.0F, 1.0F))
             .border(ui::BORDER_ALL)
-            .border_color(ImColor{0.5F, 0.5F, 0.5F, 1.0F})
+            .border_color(ui::rgb(0.5F, 0.5F, 0.5F))
             .border_thickness(4.0F)
             .overflow(ui::Overflow::Visible)
             .padding({});
     });
     auto& text = static_cast<ui::TextWidget&>(*dialog.children().front());
     text.configure_all_styles([](ui::Style& style) {
-        style.color(ImColor{0.0F, 0.0F, 0.0F, 1.0F})
-            .background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F})
+        style.color(ui::rgb(0.0F, 0.0F, 0.0F))
+            .background_color(ui::rgba(0.0F, 0.0F, 0.0F, 0.0F))
             .border(ui::BORDER_NONE)
-            .box_shadow({.spread = 16.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}})
+            .box_shadow({.spread = 16.0F, .color = ui::rgb(0.0F, 0.0F, 0.0F)})
             .padding({});
     });
 
@@ -553,9 +558,9 @@ TEST_CASE("container borders stay below window-layer panels", "[render][regressi
         .in_flow = false,
     });
     input.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F})
+        style.background_color(ui::rgb(0.0F, 0.0F, 0.0F))
             .border(ui::BORDER_ALL)
-            .border_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+            .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .border_thickness(2.0F)
             .padding({});
     });
@@ -568,7 +573,7 @@ TEST_CASE("container borders stay below window-layer panels", "[render][regressi
         .in_flow = false,
     });
     panel.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F}).border(ui::BORDER_NONE).padding({});
+        style.background_color(ui::rgb(0.0F, 1.0F, 0.0F)).border(ui::BORDER_NONE).padding({});
     });
 
     draw_frame(surface);
@@ -589,7 +594,7 @@ TEST_CASE("dropdown trigger shadows render below its label", "[render][regressio
     ui::UI surface(runtime, {.backend = std::move(backend)});
     auto& backdrop = surface.root().add<ui::Container>("backdrop");
     backdrop.set_layout({.size = {ui::px(240.0F), ui::px(140.0F)}, .in_flow = false});
-    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F}); });
+    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(1.0F, 1.0F, 1.0F)); });
 
     std::string value = "first";
     auto& dropdown = surface.root().add<ui::DropdownWidget>(
@@ -602,9 +607,9 @@ TEST_CASE("dropdown trigger shadows render below its label", "[render][regressio
     });
     dropdown.set_label("label");
     dropdown.trigger().configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F})
+        style.background_color(ui::rgb(1.0F, 1.0F, 1.0F))
             .border(ui::BORDER_NONE)
-            .box_shadow({.spread = 8.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}});
+            .box_shadow({.spread = 8.0F, .color = ui::rgb(0.0F, 0.0F, 0.0F)});
     });
 
     draw_frame(surface);
@@ -643,7 +648,7 @@ TEST_CASE("container overflow controls child surfaces", "[render][regression]") 
         });
         draw_frame(surface);
         parent.style().overflow(overflow).border(ui::BORDER_NONE).padding({});
-        child.style().background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F}).padding({});
+        child.style().background_color(ui::rgb(0.0F, 0.0F, 1.0F)).padding({});
         for (int frame = 0; frame < 2; ++frame) {
             draw_frame(surface);
         }
@@ -694,17 +699,17 @@ TEST_CASE("scrolled tree bodies clip oversized checkbox surfaces", "[TreeContain
     ui::UI surface(runtime, {.backend = std::move(backend)});
     auto& backdrop = surface.root().add<ui::Container>("backdrop");
     backdrop.set_layout({.size = {ui::px(240.0F), ui::px(180.0F)}, .in_flow = false});
-    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F}); });
+    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(1.0F, 1.0F, 1.0F)); });
     auto& parent = surface.root().add<ScrollContainer>();
-    parent.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F}).padding({}); });
+    parent.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(0.0F, 1.0F, 0.0F)).padding({}); });
 
     auto& tree = parent.add<ui::TreeContainer>("widgets");
     auto& panel = tree.add<ui::Container>("panel");
     panel.set_size({ui::px(80.0F), ui::px(64.0F)});
     panel.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F})
+        style.background_color(ui::rgb(0.0F, 0.0F, 0.0F))
             .border(ui::BORDER_ALL)
-            .border_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+            .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .padding({});
     });
     bool checked = false;
@@ -712,7 +717,7 @@ TEST_CASE("scrolled tree bodies clip oversized checkbox surfaces", "[TreeContain
     checkbox.set_size({ui::px(160.0F), ui::px(40.0F)});
     checkbox.set_box_size(120.0F);
     checkbox.frame().configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F}).border(ui::BORDER_NONE).padding({});
+        style.background_color(ui::rgb(0.0F, 0.0F, 1.0F)).border(ui::BORDER_NONE).padding({});
     });
     parent.add<ui::Container>("filler").set_size({ui::px(160.0F), ui::px(280.0F)});
 
@@ -749,7 +754,7 @@ TEST_CASE("tree widget viewports clip oversized file dialog surfaces", "[TreeCon
     ui::UI surface(runtime, {.backend = std::move(backend)});
     auto& backdrop = surface.root().add<ui::Container>("backdrop");
     backdrop.set_layout({.size = {ui::px(240.0F), ui::px(180.0F)}, .in_flow = false});
-    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F}); });
+    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(0.0F, 1.0F, 0.0F)); });
 
     auto& visual = surface.root().add<ui::Container>("visual-tests");
     visual.set_layout({
@@ -758,22 +763,22 @@ TEST_CASE("tree widget viewports clip oversized file dialog surfaces", "[TreeCon
         .in_flow = false,
     });
     visual.set_scrollable(true);
-    visual.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{0.0F, 1.0F, 0.0F, 1.0F}); });
+    visual.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(0.0F, 1.0F, 0.0F)); });
     auto& outer = visual.add<ui::TreeContainer>("ui visual tests");
     auto& tree = outer.add<ui::TreeContainer>("widgets");
     auto& widgets = tree.add<ui::Container>("widget-view");
     widgets.set_size({ui::px(100.0F), ui::px(80.0F)});
     widgets.set_scrollable(true);
     widgets.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 1.0F})
+        style.background_color(ui::rgb(0.0F, 0.0F, 0.0F))
             .border(ui::BORDER_ALL)
-            .border_color(ImColor{1.0F, 0.0F, 0.0F, 1.0F})
+            .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .padding({12.0F, 12.0F});
     });
     auto& dialog = widgets.add<ui::FileDialogWidget>("file dialog");
     dialog.set_size({ui::px(240.0F), ui::px(100.0F)});
     dialog.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 1.0F, 1.0F}).border(ui::BORDER_NONE).padding({});
+        style.background_color(ui::rgb(0.0F, 0.0F, 1.0F)).border(ui::BORDER_NONE).padding({});
     });
     widgets.add<ui::Container>("filler").set_size({ui::px(100.0F), ui::px(200.0F)});
 
@@ -816,7 +821,7 @@ TEST_CASE("nested tree shadows escape their parent body clip", "[render][regress
         .size = {ui::px(200.0F), ui::px(180.0F)},
         .in_flow = false,
     });
-    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F}); });
+    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(1.0F, 1.0F, 1.0F)); });
     auto& visual_tests = surface.root().add<ui::Container>("visual-tests");
     visual_tests.set_layout({
         .size = {ui::px(140.0F), ui::px(140.0F)},
@@ -828,14 +833,12 @@ TEST_CASE("nested tree shadows escape their parent body clip", "[render][regress
     auto& inner = outer.add<ui::TreeContainer>("inner");
     inner.set_size({ui::grow(), ui::px(80.0F)});
     inner.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F})
-            .box_shadow({.spread = 16.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}});
+        style.background_color(ui::rgb(1.0F, 1.0F, 1.0F)).box_shadow({.spread = 16.0F, .color = ui::rgb(0.0F, 0.0F, 0.0F)});
     });
     auto& child = inner.add<ui::Container>("child");
     child.set_size({ui::grow(), ui::px(40.0F)});
     child.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{1.0F, 1.0F, 1.0F, 1.0F})
-            .box_shadow({.spread = 16.0F, .color = ImColor{0.0F, 0.0F, 0.0F, 1.0F}});
+        style.background_color(ui::rgb(1.0F, 1.0F, 1.0F)).box_shadow({.spread = 16.0F, .color = ui::rgb(0.0F, 0.0F, 0.0F)});
     });
     auto& filler = visual_tests.add<ui::Container>("filler");
     filler.set_size({ui::grow(), ui::px(200.0F)});
@@ -903,7 +906,7 @@ TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regr
 
     int click_count = 0;
     auto& button = surface.root().add<ui::ButtonWidget>("test button", ui::LayoutSize{ui::px(160.0F), ui::px(36.0F)});
-    button.set_on_event([&click_count](ui::UiEvent& event) {
+    button.on_event([&click_count](ui::UiEvent& event) {
         if (event.type == ui::EventType::Click) {
             ++click_count;
             event.mark_handled();
@@ -951,7 +954,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
     auto& modal_layer = surface.root().add<ui::LayerContainer>("modal-layer");
     modal_layer.set_input_mode(ui::InputMode::Blocker);
     modal_layer.configure_all_styles([](ui::Style& style) {
-        style.background_color(ImColor{0.0F, 0.0F, 0.0F, 0.0F}).blur(5.0F);
+        style.background_color(ui::rgba(0.0F, 0.0F, 0.0F, 0.0F)).blur(5.0F);
     });
 
     auto& modal = modal_layer.add<ui::Container>("modal");
@@ -966,10 +969,10 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
     int value = 5;
     auto& input = modal.add<ui::NumberInputWidget>(value, "modal-blur");
     input.set_range(0, 32).set_size({ui::px(180.0F), ui::px(48.0F)});
-    input.set_on_change([&modal_layer, &value] {
+    input.on_change([&modal_layer, &value] {
         modal_layer.configure_all_styles([&value](ui::Style& style) { style.blur(value); });
     });
-    surface.input_router().set_focus(modal_layer);
+    surface.input_router().set_focus(&modal_layer);
     const SDL_WindowID window_id = surface.backend().window_id();
     const auto send_pointer = [&](SDL_EventType type, ImVec2 position) {
         SDL_Event event{};
@@ -1120,13 +1123,14 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
     const ImVec2 overlay_position = checkbox_center(overlay_checkbox);
     const SDL_WindowID window_id = surface.backend().window_id();
 
-    const auto click = [&](ImVec2 position, bool expected_handled) {
+    // the blocker consumes each event. native forwarding is verified by the control state after drawing.
+    const auto click = [&](ImVec2 position) {
         SDL_Event motion{};
         motion.type = SDL_EVENT_MOUSE_MOTION;
         motion.motion.windowID = window_id;
         motion.motion.x = position.x;
         motion.motion.y = position.y;
-        CHECK(process_sdl_event(surface, motion) == expected_handled);
+        CHECK(process_sdl_event(surface, motion));
 
         SDL_Event down{};
         down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
@@ -1134,23 +1138,23 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
         down.button.x = position.x;
         down.button.y = position.y;
         down.button.button = SDL_BUTTON_LEFT;
-        CHECK(process_sdl_event(surface, down) == expected_handled);
+        CHECK(process_sdl_event(surface, down));
 
         SDL_Event up = down;
         up.type = SDL_EVENT_MOUSE_BUTTON_UP;
-        CHECK(process_sdl_event(surface, up) == expected_handled);
+        CHECK(process_sdl_event(surface, up));
         ui_test::draw_surface(surface);
         ui_test::draw_surface(surface);
     };
 
-    click(content_position, true);
+    click(content_position);
     CHECK_FALSE(content_value);
 
-    click(dropdown_position, true);
+    click(dropdown_position);
     CHECK_FALSE(content_dropdown.is_open());
     CHECK(dropdown_value == "one");
 
-    click(overlay_position, false);
+    click(overlay_position);
     CHECK(overlay_value);
 }
 
@@ -1171,7 +1175,7 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
         .placement = {.offset = {20.0F, 20.0F}},
         .in_flow = false,
     });
-    dropdown.set_on_change([&changes] { ++changes; });
+    dropdown.on_change([&changes] { ++changes; });
 
     const SDL_WindowID window_id = surface.backend().window_id();
     const auto send_pointer = [window_id, &surface](SDL_EventType type, ImVec2 position) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../transition.hpp"
+#include "../color.hpp"
 
 #include <concepts>
 #include <functional>
@@ -10,7 +11,7 @@
 #include <imgui.h>
 
 namespace ui {
-    using AnimationValue = std::variant<float, ImVec2, ImColor>;
+    using AnimationValue = std::variant<float, ImVec2, Color>;
 
     struct AnimationTarget {
         // reads the value displayed when a track starts.
@@ -26,23 +27,13 @@ namespace ui {
     };
 
     template <typename T>
-    concept Animatable = std::same_as<T, float> || std::same_as<T, ImVec2> || std::same_as<T, ImColor>;
-
-    template <Animatable T>
-    AnimationValue read_animation_reference(void* context) {
-        return *static_cast<T*>(context);
-    }
-
-    template <Animatable T>
-    void write_animation_reference(void* context, const AnimationValue& value) {
-        *static_cast<T*>(context) = std::get<T>(value);
-    }
+    concept Animatable = std::same_as<T, float> || std::same_as<T, ImVec2> || std::same_as<T, Color>;
 
     template <Animatable T>
     AnimationTarget animation_target(T& value) {
         return {
-            .read = &read_animation_reference<T>,
-            .write = &write_animation_reference<T>,
+            .read = [](void* context) -> AnimationValue { return *static_cast<T*>(context); },
+            .write = [](void* context, const AnimationValue& value) { *static_cast<T*>(context) = std::get<T>(value); },
             .context = &value,
             .identity = &value,
         };
@@ -51,9 +42,10 @@ namespace ui {
     class Animator;
     struct AnimatorState;
 
-    /// appends ordered value tracks and callbacks to one Animator timeline.
+    /// defines when value changes and callbacks run on one Animator timeline.
     class AnimationSequence final {
     public:
+        /// writes interpolated values to a float, ImVec2, or Color reference that must remain alive until this track ends.
         template <Animatable T>
         AnimationSequence& to(T& value, T target, TransitionSpec transition = {}) {
             return to(animation_target(value), target, transition);
@@ -67,8 +59,11 @@ namespace ui {
         AnimationSequence& to(AnimationTarget target, AnimationValue value, TransitionSpec transition = {});
         AnimationSequence& by(AnimationTarget target, AnimationValue value, TransitionSpec transition = {});
         AnimationSequence& release(AnimationTarget target, TransitionSpec transition = {});
+        /// starts the next group after the longest track scheduled so far, plus an optional delay.
         AnimationSequence& then(float delay = 0.0F);
+        /// moves the cursor forward without waiting for tracks already scheduled in parallel.
         AnimationSequence& delay(float duration);
+        /// runs callback after the sequence's latest track or cursor delay. captured objects must remain alive until it runs.
         AnimationSequence& end(std::function<void()> callback);
 
     private:
@@ -81,7 +76,7 @@ namespace ui {
         float m_end = 0.0F;
     };
 
-    /// owns timed value tracks and invokes their writes as callers advance elapsed frame time.
+    /// owns one timeline of value tracks and callbacks advanced by update(dt).
     class Animator final {
     public:
         Animator();
@@ -91,7 +86,9 @@ namespace ui {
         Animator(Animator&&) noexcept;
         Animator& operator=(Animator&&) noexcept;
 
+        /// opens a sequence at the current timeline time. tracks added before then() can run in parallel.
         AnimationSequence animate();
+        /// advances tracks and invokes callbacks whose scheduled time has arrived.
         void update(float dt);
         void cancel();
 

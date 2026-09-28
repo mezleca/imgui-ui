@@ -5,16 +5,21 @@
 
 #include <imgui_internal.h>
 
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 #include <vector>
 
 using namespace ui;
 
-void StyledNode::style_changed(void* owner) {
+void StyledNode::style_changed(void* owner, bool font_changed) {
     auto* node = static_cast<StyledNode*>(owner);
-    node->invalidate_font_cache_subtree();
-    node->invalidate_measure();
+    // font changes invalidate inherited metrics throughout the subtree. other style changes remeasure this node.
+    if (font_changed) {
+        invalidate_font_cache_subtree(*node);
+    } else {
+        node->invalidate_measure();
+    }
 }
 
 StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::move(id)), m_type_name(type_name) {
@@ -23,20 +28,73 @@ StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::m
 
 StyledNode::~StyledNode() = default;
 
-void StyledNode::draw_surface(ImDrawList& draw_list, Rect rect) const {
-    if (EffectRegistry* effects = effect_registry(); effects != nullptr) {
-        ui::draw_frame(*effects, draw_list, rect, computed_style());
-        return;
-    }
-    ui::draw_frame(draw_list, rect, computed_style());
+void StyledNode::set_surface(UI* surface) {
+    m_font_cache_valid = false;
+    Node::set_surface(surface);
 }
 
-void StyledNode::draw_surface(ImDrawList& draw_list, Rect rect, ImColor background) const {
-    if (EffectRegistry* effects = effect_registry(); effects != nullptr) {
-        ui::draw_frame(*effects, draw_list, rect, computed_style(), background);
-        return;
+StyledNode& StyledNode::set_font(ImFont* font) {
+    configure_all_styles([font](Style& style) { style.font(font); });
+    return *this;
+}
+
+ImFont* StyledNode::font() const {
+    const ComputedStyle& current_style = computed_style();
+    if (current_style.font() != nullptr) return current_style.font();
+    if (m_font_cache_valid) return m_cached_font;
+
+    // resolve inherited fonts from the nearest styled ancestor and cache that result until a style changes.
+    for (const Node* ancestor = parent(); ancestor != nullptr; ancestor = ancestor->parent()) {
+        const auto* styled_ancestor = dynamic_cast<const StyledNode*>(ancestor);
+        if (styled_ancestor == nullptr) continue;
+
+        const ComputedStyle& ancestor_style = styled_ancestor->computed_style();
+        if (ancestor_style.font() != nullptr) {
+            m_cached_font = ancestor_style.font();
+            m_font_cache_valid = true;
+            return m_cached_font;
+        }
     }
-    ui::draw_frame(draw_list, rect, computed_style(), background);
+
+    return ImGui::GetFont();
+}
+
+BoxInsets StyledNode::box_insets() const {
+    const ComputedStyle& style = computed_style();
+    const ImVec2 padding = style.padding();
+    const float thickness = style.border_thickness();
+    const uint8_t border = style.border();
+    return {
+        padding.x + ((border & BORDER_LEFT) != 0 ? thickness : 0.0F),
+        padding.y + ((border & BORDER_TOP) != 0 ? thickness : 0.0F),
+        padding.x + ((border & BORDER_RIGHT) != 0 ? thickness : 0.0F),
+        padding.y + ((border & BORDER_BOTTOM) != 0 ? thickness : 0.0F),
+    };
+}
+
+void StyledNode::set_measured_content_size(ImVec2 size, bool measured_width, bool measured_height) {
+    ImGui::PushFont(font());
+    const float line_height = ImGui::GetTextLineHeight();
+    ImGui::PopFont();
+
+    size.y = std::max(size.y, line_height * computed_style().line_height());
+    set_measured_size(outer_size(size), measured_width, measured_height);
+}
+
+void StyledNode::invalidate_font_cache_subtree(Node& node) {
+    auto* styled = dynamic_cast<StyledNode*>(&node);
+    if (styled != nullptr) styled->m_font_cache_valid = false;
+
+    node.invalidate_measure();
+    for (const auto& child : node.children()) {
+        if (child->removal_pending()) continue;
+
+        invalidate_font_cache_subtree(*child);
+    }
+}
+
+void StyledNode::draw_surface(ImDrawList& draw_list, Rect rect, const std::optional<Color>& background) const {
+    ui::draw_frame(draw_list, rect, computed_style(), effect_registry(), 1.0F, background);
 }
 
 PaintSlot& StyledNode::before() {
@@ -84,6 +142,7 @@ void StyledNode::draw() {
     struct DrawListSnapshot {
         ImDrawList* draw_list = nullptr;
         int vertex_count = 0;
+        ImGuiWindow* window = nullptr;
     };
 
     ImGuiContext& context = *ImGui::GetCurrentContext();
@@ -93,9 +152,10 @@ void StyledNode::draw() {
     std::vector<DrawListSnapshot> draw_list_snapshots;
     draw_list_snapshots.reserve(context.Windows.Size + 2);
 
-    // capture the existing vertices so only this subtree is transformed.
+    // active windows already contain this frame's vertices. opening an inactive child resets its buffer, so start at zero.
     for (ImGuiWindow* window : context.Windows) {
-        draw_list_snapshots.push_back({window->DrawList, window->DrawList->VtxBuffer.Size});
+        const int first_vertex = window->LastFrameActive == context.FrameCount ? window->DrawList->VtxBuffer.Size : 0;
+        draw_list_snapshots.push_back({window->DrawList, first_vertex, window});
     }
     draw_list_snapshots.push_back({background_draw_list, background_draw_list->VtxBuffer.Size});
     draw_list_snapshots.push_back({foreground_draw_list, foreground_draw_list->VtxBuffer.Size});
@@ -121,8 +181,10 @@ void StyledNode::draw() {
     };
 
     for (const DrawListSnapshot& snapshot : draw_list_snapshots) {
+        if (snapshot.window != nullptr && snapshot.window->LastFrameActive != context.FrameCount) continue;
         transform_draw_list(*snapshot.draw_list, snapshot.vertex_count);
     }
+
     for (int index = initial_window_count; index < context.Windows.Size; ++index) {
         transform_draw_list(*context.Windows[index]->DrawList, 0);
     }
@@ -154,7 +216,7 @@ void StyledNode::update_cursor() {
     }
 
     const ImGuiMouseCursor cursor = style(style_type()).cursor();
-    ImGui::SetMouseCursor(cursor == ImGuiMouseCursor_None ? ImGuiMouseCursor_Arrow : cursor);
+    if (cursor != ImGuiMouseCursor_None) ImGui::SetMouseCursor(cursor);
 }
 
 void StyledNode::draw_before() {

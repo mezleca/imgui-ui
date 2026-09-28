@@ -22,7 +22,7 @@ namespace ui {
         bool set_checked(bool checked);
         CheckboxWidget& set_type(CheckboxType type);
         CheckboxWidget& set_box_size(float size);
-        CheckboxWidget& set_mark_color(ImColor color);
+        CheckboxWidget& set_mark_color(const Color& color);
 
         StyledNode& frame();
         const StyledNode& frame() const;
@@ -33,7 +33,7 @@ namespace ui {
         void apply_theme_defaults(const Theme& theme) override;
 
     private:
-        void on_click(UiEvent&) override;
+        void click_event(UiEvent&) override;
         void input_state_changed() override;
         void on_update(float) override;
         Rect hit_rect(Rect visual_rect) const override;

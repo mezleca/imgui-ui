@@ -36,10 +36,14 @@ namespace ui {
 
         ContextMenuWidget& set_items(ContextMenuItems items);
         ContextMenuWidget& set_submenu_icon(Texture* icon);
+        /// sets how long an open menu waits after the pointer leaves before closing.
         ContextMenuWidget& set_hover_close_delay(float seconds);
 
+        /// opens the root menu at the current imgui pointer position.
         void open();
+        /// opens the root menu near screen_position, clamped to the viewport work area.
         void open_at(ImVec2 screen_position);
+        /// starts a fade out. the menu remains visible until its opacity reaches the visibility threshold.
         void close();
         void cancel_close();
 
@@ -58,7 +62,7 @@ namespace ui {
         friend class ContextMenuItemNode;
 
         void on_update(float) override;
-        void on_event(UiEvent& event) override;
+        void mouse_move_event(UiEvent& event) override;
         void draw_children() override;
         void on_draw_end() override;
 

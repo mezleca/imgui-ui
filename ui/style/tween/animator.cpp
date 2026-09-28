@@ -1,4 +1,5 @@
 #include "animator.hpp"
+#include "../values.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -37,46 +38,33 @@ struct ui::AnimatorState {
 };
 
 static AnimationValue interpolate_animation_value(const AnimationValue& start, const AnimationValue& target, float progress) {
-    if (const auto* start_float = std::get_if<float>(&start); start_float != nullptr) {
-        return std::lerp(*start_float, std::get<float>(target), progress);
-    }
-
-    if (const auto* start_vec2 = std::get_if<ImVec2>(&start); start_vec2 != nullptr) {
-        const ImVec2& target_vec2 = std::get<ImVec2>(target);
-        return ImVec2{
-            std::lerp(start_vec2->x, target_vec2.x, progress),
-            std::lerp(start_vec2->y, target_vec2.y, progress),
-        };
-    }
-
-    const ImVec4& start_color = std::get<ImColor>(start).Value;
-    const ImVec4& target_color = std::get<ImColor>(target).Value;
-    return ImColor{
-        std::lerp(start_color.x, target_color.x, progress),
-        std::lerp(start_color.y, target_color.y, progress),
-        std::lerp(start_color.z, target_color.z, progress),
-        std::lerp(start_color.w, target_color.w, progress),
-    };
+    return std::visit(
+        [&](const auto& value) -> AnimationValue {
+            using T = std::decay_t<decltype(value)>;
+            return interpolate_value(value, std::get<T>(target), progress);
+        },
+        start
+    );
 }
 
 static AnimationValue add_animation_value(const AnimationValue& value, const AnimationValue& amount) {
-    if (const auto* float_value = std::get_if<float>(&value); float_value != nullptr) {
+    const auto* float_value = std::get_if<float>(&value);
+    if (float_value != nullptr) {
         return *float_value + std::get<float>(amount);
     }
 
-    if (const auto* vec2_value = std::get_if<ImVec2>(&value); vec2_value != nullptr) {
+    const auto* vec2_value = std::get_if<ImVec2>(&value);
+    if (vec2_value != nullptr) {
         const ImVec2& amount_vec2 = std::get<ImVec2>(amount);
         return ImVec2{vec2_value->x + amount_vec2.x, vec2_value->y + amount_vec2.y};
     }
 
-    const ImVec4& color = std::get<ImColor>(value).Value;
-    const ImVec4& color_amount = std::get<ImColor>(amount).Value;
-    return ImColor{
-        std::clamp(color.x + color_amount.x, 0.0F, 1.0F),
-        std::clamp(color.y + color_amount.y, 0.0F, 1.0F),
-        std::clamp(color.z + color_amount.z, 0.0F, 1.0F),
-        std::clamp(color.w + color_amount.w, 0.0F, 1.0F),
-    };
+    const ImVec4 color = std::get<Color>(value).rgba();
+    const ImVec4 color_amount = std::get<Color>(amount).rgba();
+    return rgba(
+        std::clamp(color.x + color_amount.x, 0.0F, 1.0F), std::clamp(color.y + color_amount.y, 0.0F, 1.0F),
+        std::clamp(color.z + color_amount.z, 0.0F, 1.0F), std::clamp(color.w + color_amount.w, 0.0F, 1.0F)
+    );
 }
 
 static AnimationValue animation_track_value(const AnimationTrack& track, float time) {
@@ -118,18 +106,26 @@ void Animator::update(float dt) {
         const auto track_it = std::find_if(state.tracks.begin(), state.tracks.end(), [step_it](const AnimationTrack& track) {
             return track.target.identity == step_it->target.identity;
         });
-        const AnimationValue start = track_it == state.tracks.end() ? step_it->target.read(step_it->target.context)
-                                                                    : animation_track_value(*track_it, state.time);
-        const AnimationValue target = step_it->release
-                                          ? step_it->target.base(step_it->target.context)
-                                          : (step_it->relative ? add_animation_value(start, step_it->value) : step_it->value);
+        AnimationValue start = track_it == state.tracks.end() ? step_it->target.read(step_it->target.context)
+                                                              : animation_track_value(*track_it, state.time);
+        AnimationValue target;
+
+        if (step_it->release) {
+            target = step_it->target.base(step_it->target.context);
+        } else if (step_it->relative) {
+            target = add_animation_value(start, step_it->value);
+        } else {
+            target = step_it->value;
+        }
 
         // each target has one track, so replacing it starts from the exact value it would draw in this frame.
         if (track_it != state.tracks.end()) {
             state.tracks.erase(track_it);
         }
 
-        state.tracks.push_back({step_it->target, start, target, step_it->transition, step_it->start, step_it->release});
+        state.tracks.push_back(
+            {step_it->target, std::move(start), std::move(target), step_it->transition, step_it->start, step_it->release}
+        );
         step_it = state.steps.erase(step_it);
     }
 
@@ -183,9 +179,7 @@ void Animator::schedule(AnimationTarget target, AnimationValue value, bool relat
         return;
     }
 
-    const float scheduled_at = std::max(start, time());
-    AnimatorState& animator_state = ensure_state();
-    animator_state.steps.push_back({target, std::move(value), transition, scheduled_at, relative, false});
+    ensure_state().steps.push_back({target, std::move(value), transition, std::max(start, time()), relative, false});
 }
 
 void Animator::schedule_release(AnimationTarget target, float start, TransitionSpec transition) {
@@ -194,16 +188,12 @@ void Animator::schedule_release(AnimationTarget target, float start, TransitionS
         return;
     }
 
-    const float scheduled_at = std::max(start, time());
-    AnimatorState& animator_state = ensure_state();
-    animator_state.steps.push_back({target, 0.0F, transition, scheduled_at, false, true});
+    ensure_state().steps.push_back({target, 0.0F, transition, std::max(start, time()), false, true});
 }
 
 void Animator::schedule_callback(float at, std::function<void()> callback) {
     if (callback) {
-        const float scheduled_at = std::max(at, time());
-        AnimatorState& animator_state = ensure_state();
-        animator_state.callbacks.push_back({scheduled_at, std::move(callback)});
+        ensure_state().callbacks.push_back({std::max(at, time()), std::move(callback)});
     }
 }
 

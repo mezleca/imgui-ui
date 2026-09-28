@@ -59,7 +59,6 @@ private:
 
 TextInputWidget::TextInputWidget(std::string& value, std::string id)
     : Container(std::move(id), StackDirection::Horizontal), m_value(&value) {
-    set_input_mode(InputMode::Target);
     set_size({grow(), fit()});
 
     set_type_name("TextInput");
@@ -69,6 +68,7 @@ TextInputWidget::TextInputWidget(std::string& value, std::string id)
     m_label_node->set_visible(false);
 
     m_input_node = &add<Container>("input", StackDirection::Horizontal, "TextInputField");
+    m_input_node->set_input_mode(InputMode::None);
     m_input_node->set_size({grow(), fit()});
     m_input_node->set_content_alignment(Anchor::CenterLeft);
 
@@ -80,9 +80,9 @@ TextInputWidget::TextInputWidget(std::string& value, std::string id)
     m_field_node = &m_input_node->add<FieldNode>(value, m_focus_requested);
 }
 
-void TextInputWidget::on_event(UiEvent& event) {
+void TextInputWidget::event(UiEvent& event) {
     if (event.type == EventType::PointerDown && event.button == PointerButton::Left) {
-        m_focus_requested = surface().input_router().set_focus(*this);
+        m_focus_requested = surface().input_router().set_focus(this);
     }
 
     if (event.type == EventType::Cancel || (event.type == EventType::KeyDown && event.key == Key::Escape)) {
@@ -112,14 +112,12 @@ void TextInputWidget::apply_theme_defaults(const Theme& theme) {
         style.control(theme, {10.0F, 8.0F}, transition).border_radius(4.0F);
     });
 
-    const auto configure_active_style = [&theme, transition](Style& style) {
-        style.background_color(theme.controls.active_color, transition).border_color(theme.accent_color, transition);
-    };
-    m_input_node->configure_style(StyleType::ACTIVE, configure_active_style);
-    m_input_node->configure_style(StyleType::FOCUS, configure_active_style);
-    m_input_node->configure_style(StyleType::HOVER, [&theme, transition](Style& style) {
-        style.background_color(theme.controls.hover_color, transition);
-    });
+    for (StyleType type : {StyleType::ACTIVE, StyleType::FOCUS}) {
+        m_input_node->style(type)
+            .background_color(theme.controls.active_color, transition)
+            .border_color(theme.accent_color, transition);
+    }
+    m_input_node->style(StyleType::HOVER).background_color(theme.controls.hover_color, transition);
 
     m_field_node->configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BORDER_NONE);
@@ -132,42 +130,8 @@ void TextInputWidget::input_state_changed() {
     m_input_node->set_interaction_style(state.hovered, state.active, state.focused);
 }
 
-void TextInputWidget::arrange_children() {
-    const ImVec2 content = layout().size();
-    if (!m_label_node->visible()) {
-        arrange_child(*m_input_node, content);
-        return;
-    }
-
-    const ImVec2 label_margin = m_label_node->layout_margin();
-    const ImVec2 label_size = m_label_node->layout().resolve_size(content);
-    const ImVec2 field_margin = m_input_node->layout_margin();
-
-    if (m_label_placement == LabelPlacement::Inline) {
-        const float label_y = std::max(0.0F, (content.y - label_size.y - (label_margin.y * 2.0F)) * 0.5F);
-        arrange_child(*m_label_node, label_size, {.offset = {label_margin.x, label_y + label_margin.y}});
-
-        const float field_x = label_size.x + (label_margin.x * 2.0F) + m_label_spacing.x;
-        const ImVec2 field_size = {
-            std::max(0.0F, content.x - field_x - (field_margin.x * 2.0F)),
-            std::max(0.0F, content.y - (field_margin.y * 2.0F)),
-        };
-        arrange_child(*m_input_node, field_size, {.offset = {field_x + field_margin.x, field_margin.y}});
-        return;
-    }
-
-    arrange_child(*m_label_node, label_size, {.offset = label_margin});
-
-    const float field_y = label_size.y + (label_margin.y * 2.0F) + m_label_spacing.y;
-    const ImVec2 field_size = {
-        std::max(0.0F, content.x - (field_margin.x * 2.0F)),
-        std::max(0.0F, content.y - field_y - (field_margin.y * 2.0F)),
-    };
-    arrange_child(*m_input_node, field_size, {.offset = {field_margin.x, field_y + field_margin.y}});
-}
-
-ImVec2 TextInputWidget::child_window_padding() const {
-    return {};
+Rect TextInputWidget::hit_rect(Rect) const {
+    return m_input_node->layout().visual_rect();
 }
 
 TextInputWidget& TextInputWidget::set_label(std::string label) {

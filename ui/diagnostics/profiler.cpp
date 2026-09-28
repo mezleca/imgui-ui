@@ -42,15 +42,10 @@ Profiler::Profiler(std::filesystem::path output_directory) {
 }
 
 void Profiler::MetricSummary::record(double value) {
-    if (samples == 0) {
-        minimum = value;
-        maximum = value;
-    }
-
+    minimum = samples == 0 ? value : std::min(minimum, value);
+    maximum = samples == 0 ? value : std::max(maximum, value);
     ++samples;
     total += value;
-    minimum = std::min(minimum, value);
-    maximum = std::max(maximum, value);
     last = value;
 }
 
@@ -66,6 +61,8 @@ void Profiler::set_enabled(bool enabled) {
     m_enabled = enabled;
     if (!enabled) {
         m_frame_open = false;
+        m_gpu_sample_count = 0;
+        m_gpu_sample_next = 0;
     }
 }
 
@@ -119,6 +116,21 @@ const ProfileFrameMetrics& Profiler::latest_metrics() const {
     return m_frames[m_read_index].metrics;
 }
 
+ProfileGpuSummary Profiler::gpu_render_summary() const {
+    ProfileGpuSummary summary;
+    summary.samples = m_gpu_sample_count;
+    for (std::size_t index = 0; index < m_gpu_sample_count; ++index) {
+        const double sample = m_gpu_samples[index];
+        summary.average_ms += sample;
+        summary.minimum_ms = index == 0 ? sample : std::min(summary.minimum_ms, sample);
+        summary.maximum_ms = index == 0 ? sample : std::max(summary.maximum_ms, sample);
+    }
+    if (summary.samples > 0) {
+        summary.average_ms /= static_cast<double>(summary.samples);
+    }
+    return summary;
+}
+
 double Profiler::latest_frame_ms() const {
     const FrameBuffer& frame = m_frames[m_read_index];
     return profile_milliseconds(frame.start, frame.end);
@@ -159,8 +171,21 @@ void Profiler::record_frame_metrics(std::size_t input_entries, std::size_t input
     metrics.input_entry_checks = input_entry_checks;
 }
 
+void Profiler::record_gpu_render_ms(std::optional<double> gpu_ms) {
+    if (!m_enabled || !m_frame_open) return;
+
+    m_frames[m_write_index].metrics.gpu_render_ms = gpu_ms;
+    if (!gpu_ms) return;
+
+    m_gpu_samples[m_gpu_sample_next] = *gpu_ms;
+    m_gpu_sample_next = (m_gpu_sample_next + 1) % m_gpu_samples.size();
+    m_gpu_sample_count = std::min(m_gpu_sample_count + 1, m_gpu_samples.size());
+}
+
 void Profiler::clear_report() {
     m_frame_metric = {};
+    m_gpu_sample_count = 0;
+    m_gpu_sample_next = 0;
 }
 
 bool Profiler::has_report() const {
@@ -205,6 +230,16 @@ bool Profiler::save_report() const {
     output << "latest.draw_ms = " << metrics.draw_ms << '\n';
     output << "latest.input_ms = " << metrics.input_ms << '\n';
     output << "latest.render_ms = " << metrics.render_ms << '\n';
+    if (metrics.gpu_render_ms) {
+        output << "latest.gpu_render_ms = " << *metrics.gpu_render_ms << '\n';
+    }
+    const ProfileGpuSummary gpu = gpu_render_summary();
+    if (gpu.samples > 0) {
+        output << "gpu_render.samples = " << gpu.samples << '\n';
+        output << "gpu_render.average_ms = " << gpu.average_ms << '\n';
+        output << "gpu_render.min_ms = " << gpu.minimum_ms << '\n';
+        output << "gpu_render.max_ms = " << gpu.maximum_ms << '\n';
+    }
 
     return output.good();
 }
@@ -278,7 +313,7 @@ void Profiler::record_root_phase_times(FrameBuffer& frame) const {
 }
 
 ScopedProfileZone::ScopedProfileZone(Profiler* profiler, std::string_view name, uint64_t node_identity) {
-    if (profiler != nullptr && profiler->enabled()) {
+    if (profiler != nullptr) {
         m_profiler = profiler;
         m_token = profiler->begin_zone(name, node_identity);
     }

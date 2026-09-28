@@ -2,6 +2,7 @@
 #include "../constants.hpp"
 #include "../imgui/draw.hpp"
 
+#include <imgui_internal.h>
 #include <utility>
 
 using namespace ui;
@@ -9,7 +10,7 @@ using namespace ui;
 static constexpr ImGuiWindowFlags LAYER_WINDOW_FLAGS = constants::WINDOW_FLAGS;
 
 static bool needs_child_window(const ComputedStyle& style) {
-    return style.background_color().value.Value.w > 0.0F || style.blur() > 0 || style.box_shadow().color.Value.w > 0.0F ||
+    return style.background_color().value.max_alpha() > 0.0F || style.blur() > 0 || style.box_shadow().color.max_alpha() > 0.0F ||
            style.border() != BORDER_NONE || style.padding().x > 0.0F || style.padding().y > 0.0F ||
            style.overflow() != Overflow::Visible;
 }
@@ -25,7 +26,7 @@ ImGuiWindowFlags LayerContainer::child_window_flags() const {
     return Container::child_window_flags() | ImGuiWindowFlags_NoMouseInputs;
 }
 
-void LayerContainer::resolve_layout() {
+void LayerContainer::on_layout() {
     if (has_size()) {
         return;
     }
@@ -48,8 +49,10 @@ bool LayerContainer::paint() {
 bool LayerContainer::paint_inline() {
     const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
     const bool scrolled = scroll.x != 0.0F || scroll.y != 0.0F;
-    // keep controls under the same imgui parent across frames.
-    m_inline_child_window = m_inline_child_window || scrolled || needs_child_window(computed_style());
+    const bool parent_scrollable = parent() != nullptr && (ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_NoScrollbar) == 0;
+    // open the child before the parent scrolls so anchored descendants keep the same content coordinate space.
+    m_inline_child_window =
+        m_inline_child_window || parent_scrollable || scrolled || scrollable() || needs_child_window(computed_style());
     if (m_inline_child_window) {
         if (scrolled) {
             const ImVec2 cursor = ImGui::GetCursorPos();

@@ -28,7 +28,7 @@ namespace ui_test {
         }
 
         void shutdown_imgui() override {}
-        void begin_frame(ImVec4) override {}
+        void begin_frame(ui::Color) override {}
         void set_mouse_cursor(ImGuiMouseCursor) override {}
         void render(ImDrawData*) override {}
 

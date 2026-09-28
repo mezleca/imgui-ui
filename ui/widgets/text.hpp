@@ -20,10 +20,6 @@ namespace ui {
         TextWidget& set_wrap(float width);
         TextWidget& set_overflow(TextOverflow overflow);
         bool empty() const;
-        TextWidget& set_size(LayoutSize size) {
-            StyledNode::set_size(size);
-            return *this;
-        }
         TextWidget& set_text(std::string text);
 
     protected:

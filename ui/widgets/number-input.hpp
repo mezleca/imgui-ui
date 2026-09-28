@@ -33,7 +33,7 @@ namespace ui {
         NumberInputWidget& set_format(std::string format);
         NumberInputWidget& set_thumb_visible(bool visible);
         NumberInputWidget& set_thumb_size(float size);
-        NumberInputWidget& set_thumb_color(ImColor color);
+        NumberInputWidget& set_thumb_color(Color color);
 
         template <typename T>
             requires std::constructible_from<NumberValue, T*>
@@ -63,7 +63,7 @@ namespace ui {
 
     private:
         bool paint() override;
-        void on_event(UiEvent& event) override;
+        void mouse_press_event(UiEvent& event) override;
         template <typename T>
         bool draw_value(T& value);
 
@@ -80,7 +80,7 @@ namespace ui {
         std::string m_format;
         std::optional<double> m_minimum = 0;
         std::optional<double> m_maximum = 100;
-        ImColor m_thumb_color;
+        Color m_thumb_color;
         LabelPlacement m_label_placement = LabelPlacement::Inline;
         float m_label_spacing = 0.0F;
         float m_speed;

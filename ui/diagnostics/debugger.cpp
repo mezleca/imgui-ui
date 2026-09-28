@@ -18,7 +18,6 @@
 #include <algorithm>
 #include <array>
 #include <format>
-#include <limits>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -32,7 +31,8 @@ static Node* find_node_by_identity(Node& root, uint64_t identity) {
     }
 
     for (const auto& child : root.children()) {
-        if (Node* result = find_node_by_identity(*child, identity); result != nullptr) {
+        Node* result = find_node_by_identity(*child, identity);
+        if (result != nullptr) {
             return result;
         }
     }
@@ -46,7 +46,8 @@ static bool is_effectively_visible(const Node& node) {
             return false;
         }
 
-        if (const auto* styled = dynamic_cast<const StyledNode*>(current); styled != nullptr && !styled->visually_visible()) {
+        const auto* styled = dynamic_cast<const StyledNode*>(current);
+        if (styled != nullptr && !styled->visually_visible()) {
             return false;
         }
     }
@@ -60,7 +61,8 @@ static Node* pick_node(Node& root, ImVec2 position) {
     }
 
     for (auto it = root.children().rbegin(); it != root.children().rend(); ++it) {
-        if (Node* candidate = pick_node(**it, position); candidate != nullptr) {
+        Node* candidate = pick_node(**it, position);
+        if (candidate != nullptr) {
             return candidate;
         }
     }
@@ -69,7 +71,7 @@ static Node* pick_node(Node& root, ImVec2 position) {
         return nullptr;
     }
 
-    // layer containers draw no surface, so selecting one would hide the painted child beneath it.
+    // skip the full-area layer when no descendant was hit, so inspection does not select an overlay instead of its content.
     if (dynamic_cast<const LayerContainer*>(&root) != nullptr) {
         return nullptr;
     }
@@ -108,7 +110,7 @@ static constexpr double DEBUGGER_FOCUS_DELAY = 0.1;
 static constexpr int HIGHLIGHT_MIN_LINE_THICKNESS = 1;
 static constexpr int HIGHLIGHT_MAX_LINE_THICKNESS = 10;
 
-// imgui closes unrelated root popups when a debugger press changes focus, so save their stack before that press is consumed.
+// preserves unrelated root popups across debugger focus changes.
 class ui::DebuggerPopupState {
 public:
     void save() {
@@ -147,6 +149,7 @@ public:
     double node_ms = 0.0;
     uint32_t dropped_events = 0;
     ProfileFrameMetrics metrics;
+    ProfileGpuSummary gpu;
     std::vector<ProfileEvent> events;
     bool valid = false;
 };
@@ -302,7 +305,7 @@ static bool draw_color_input(std::string_view label, ImVec4& value) {
     });
 }
 
-static bool draw_highlight_option(std::string_view label, bool& enabled, ImVec4& color) {
+static bool draw_highlight_option(std::string_view label, bool& enabled, Color& color) {
     ImGui::PushID(label.data(), label.data() + label.size());
     push_input_style();
     bool changed = ImGui::Checkbox("##enabled", &enabled);
@@ -311,7 +314,11 @@ static bool draw_highlight_option(std::string_view label, bool& enabled, ImVec4&
     ImGui::TextUnformatted(label.data(), label.data() + label.size());
     if (enabled) {
         ImGui::SameLine(0.0F, ITEM_SPACING);
-        changed = ImGui::ColorEdit4("##color", &color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar) || changed;
+        ImVec4 solid = color.rgba();
+        if (ImGui::ColorEdit4("##color", &solid.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar)) {
+            color = solid;
+            changed = true;
+        }
     }
     pop_input_style();
     ImGui::PopID();
@@ -569,7 +576,8 @@ void Debugger::set_open(bool open) {
     m_open = open;
     set_visible(open);
 
-    if (auto* content = dynamic_cast<ResizableContainer*>(&m_target.root()); content != nullptr) {
+    auto* content = dynamic_cast<ResizableContainer*>(&m_target.root());
+    if (content != nullptr) {
         content->set_resize(open ? ResizeAxes::X : ResizeAxes::None);
         if (!open) {
             content->set_size({grow(), grow()});
@@ -627,7 +635,7 @@ void Debugger::set_overlay_focus(bool focused) {
     m_overlay_focused = focused;
     m_target.set_debug_pointer_blocked(focused);
     if (focused) {
-        m_target.input_router().clear_focus();
+        m_target.input_router().set_focus(nullptr);
     }
 }
 
@@ -874,19 +882,20 @@ void Debugger::draw_highlight() {
     const Rect local_rect = target_layout.local_rect();
     const Rect layout_rect = target_layout.layout_rect();
     const Placement& placement = target_layout.placement();
-    const ImVec2 origin_factor = target_layout.in_flow()              ? ImVec2{}
-                                 : placement.origin == Anchor::Custom ? placement.origin_position
-                                                                      : alignment_factor(placement.origin);
-    const ImVec2 anchor_factor = target_layout.in_flow()              ? ImVec2{}
-                                 : placement.anchor == Anchor::Custom ? placement.anchor_position
-                                                                      : alignment_factor(placement.anchor);
+    ImVec2 origin_factor;
+    ImVec2 anchor_factor;
+    if (!target_layout.in_flow()) {
+        origin_factor = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
+        anchor_factor = placement.anchor == Anchor::Custom ? placement.anchor_position : alignment_factor(placement.anchor);
+    }
+
     const Rect parent_rect = target_layout.parent_content_rect();
     const ImVec2 anchor_local = parent_rect.valid()
-                                  ? ImVec2{parent_rect.min.x + parent_rect.size().x * anchor_factor.x,
-                                           parent_rect.min.y + parent_rect.size().y * anchor_factor.y}
+                                  ? ImVec2{parent_rect.min.x + (parent_rect.size().x * anchor_factor.x),
+                                           parent_rect.min.y + (parent_rect.size().y * anchor_factor.y)}
                                   : local_rect.min;
     const ImVec2 origin_local = {
-        local_rect.min.x + local_rect.size().x * origin_factor.x, local_rect.min.y + local_rect.size().y * origin_factor.y
+        local_rect.min.x + (local_rect.size().x * origin_factor.x), local_rect.min.y + (local_rect.size().y * origin_factor.y)
     };
     const ImVec2 screen_offset = {layout_rect.min.x - local_rect.min.x, layout_rect.min.y - local_rect.min.y};
     const auto to_screen = [screen_offset](ImVec2 position) {
@@ -1012,11 +1021,7 @@ void Debugger::render_node_properties() {
 
 void Debugger::update_profile_snapshot() {
     DebuggerProfileState& profile = *m_profile_state;
-    if (profile.frame_count == std::numeric_limits<uint64_t>::max()) {
-        profile.frame_count = 0;
-    } else {
-        ++profile.frame_count;
-    }
+    ++profile.frame_count;
 
     if (profile.valid && profile.frame_count % PROFILE_UPDATE_INTERVAL != 0) {
         return;
@@ -1025,6 +1030,7 @@ void Debugger::update_profile_snapshot() {
     const Profiler& profiler = m_target.profiler();
     profile.frame_ms = profiler.latest_frame_ms();
     profile.metrics = profiler.latest_metrics();
+    profile.gpu = profiler.gpu_render_summary();
     profile.dropped_events = profiler.dropped_events();
     profile.node_identity = m_node_target == nullptr ? 0 : m_node_target->identity();
     profile.node_ms = 0.0;
@@ -1082,7 +1088,13 @@ void Debugger::render_profiling() {
     draw_property_value("layout", "{:.3f} ms", metrics.layout_ms);
     draw_property_value("draw", "{:.3f} ms", metrics.draw_ms);
     draw_property_value("input", "{:.3f} ms", metrics.input_ms);
-    draw_property_value("render", "{:.3f} ms", metrics.render_ms);
+    draw_property_value("render call", "{:.3f} ms", metrics.render_ms);
+    if (profile.gpu.samples > 0) {
+        draw_property_value("render gpu avg", "{:.3f} ms ({} samples)", profile.gpu.average_ms, profile.gpu.samples);
+        draw_property_value("render gpu range", "{:.3f}–{:.3f} ms", profile.gpu.minimum_ms, profile.gpu.maximum_ms);
+    } else {
+        draw_property_value("render gpu avg", "{}", "n/a");
+    }
     end_property_section();
 
     draw_property_section("work");
@@ -1234,10 +1246,9 @@ void Debugger::render_style_variables(Style& style, std::span<Style*> all_styles
     m_variable_names.clear();
 
     const auto collect_names = [this](Style& candidate) {
-        candidate.variables().for_each([this](const std::string& name, const StyleValue&) {
+        for (const auto& [name, value] : candidate.variables()) {
             m_variable_names.push_back(name);
-            return true;
-        });
+        }
     };
 
     collect_names(style);
@@ -1302,7 +1313,7 @@ void Debugger::render_style_variables(Style& style, std::span<Style*> all_styles
                         apply_variable(StringValue{std::move(current)});
                     }
                 } else if constexpr (std::is_same_v<ValueType, ColorValue>) {
-                    ImVec4 current = value.value.Value;
+                    ImVec4 current = value.value.rgba();
                     if (draw_color_input(name, current)) {
                         apply_variable(ColorValue{ImColor{current}});
                     }
@@ -1382,9 +1393,9 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
             apply([shadow](Style& target) { target.box_shadow(shadow); });
         }
 
-        ImVec4 shadow_color = shadow.color.Value;
+        ImVec4 shadow_color = shadow.color.rgba();
         if (draw_color_input("shadow color", shadow_color)) {
-            shadow.color.Value = shadow_color;
+            shadow.color = shadow_color;
             apply([shadow](Style& target) { target.box_shadow(shadow); });
         }
 

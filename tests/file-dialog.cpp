@@ -28,7 +28,8 @@ TEST_CASE("UI uses the configured file dialog backend") {
     UI surface(runtime, {.backend = ui_test::make_backend(), .file_dialog_backend = std::move(backend)});
 
     const std::vector<FileDialogFilter> filters{{"beatmaps", "osu"}};
-    const FileDialogResult result = surface.file_dialog().save_file(
+    const FileDialogResult result = surface.file_dialog().show(
+        FileDialogOperation::SaveFile,
         {.filters = filters, .default_path = "songs", .default_name = "collection.osu", .title = "Save collection"}
     );
 

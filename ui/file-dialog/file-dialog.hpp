@@ -51,27 +51,7 @@ namespace ui {
     public:
         virtual ~FileDialogBackend() = default;
 
-        FileDialogResult open_file(const FileDialogOptions& options = {}) {
-            return show(FileDialogOperation::OpenFile, options);
-        }
-
-        FileDialogResult open_files(const FileDialogOptions& options = {}) {
-            return show(FileDialogOperation::OpenFiles, options);
-        }
-
-        FileDialogResult save_file(const FileDialogOptions& options = {}) {
-            return show(FileDialogOperation::SaveFile, options);
-        }
-
-        FileDialogResult select_folder(const FileDialogOptions& options = {}) {
-            return show(FileDialogOperation::SelectFolder, options);
-        }
-
-        FileDialogResult select_folders(const FileDialogOptions& options = {}) {
-            return show(FileDialogOperation::SelectFolders, options);
-        }
-
-        virtual FileDialogResult show(FileDialogOperation operation, const FileDialogOptions& options) = 0;
+        virtual FileDialogResult show(FileDialogOperation operation, const FileDialogOptions& options = {}) = 0;
     };
 
 } // namespace ui

@@ -35,21 +35,21 @@ protected:
                 .cursor(ImGuiMouseCursor_Hand);
         });
 
-        configure_style(StyleType::HOVER, [&theme](Style& style) { style.background_color(theme.controls.hover_color); });
-        configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.background_color(theme.controls.active_color); });
+        style(StyleType::HOVER).background_color(theme.controls.hover_color);
+        style(StyleType::ACTIVE).background_color(theme.controls.active_color);
         set_size({grow(), px(20.0F)});
     }
 
 private:
     friend class ContextMenuWidget;
 
-    void on_event(UiEvent& event) override {
-        if (event.type == EventType::PointerMove && m_submenu != nullptr) {
+    void mouse_move_event(UiEvent&) override {
+        if (m_submenu != nullptr) {
             m_menu.open_submenu(*this);
         }
     }
 
-    void on_click(UiEvent& event) override {
+    void click_event(UiEvent& event) override {
         if (event.button != PointerButton::Left) {
             return;
         }
@@ -62,8 +62,7 @@ private:
         const Rect content = content_rect(rect);
         const ImVec2 text_size = ImGui::CalcTextSize(m_label.c_str());
         draw_text(
-            draw_list, {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)}, style.color().get_col(),
-            m_label
+            draw_list, {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)}, style.color().value, m_label
         );
 
         if (m_submenu != nullptr) {
@@ -80,7 +79,7 @@ private:
         if (m_submenu_icon == nullptr) {
             draw_triangle(
                 draw_list, {icon.min.x + (icon_size * 0.5F), icon.min.y + (icon_size * 0.5F)},
-                {icon_size * 0.5F, icon_size * 0.3F}, style.color().get_col(), TriangleDirection::Right
+                {icon_size * 0.5F, icon_size * 0.3F}, style.color().value, TriangleDirection::Right
             );
             return;
         }
@@ -105,15 +104,12 @@ ContextMenuWidget::ContextMenuWidget(ContextMenuItems items, Texture* submenu_ic
     set_layout({.in_flow = false});
     set_visible(false);
     set_enabled(false);
-    set_input_mode(InputMode::Target);
 
     set_items(std::move(items));
 }
 
-void ContextMenuWidget::on_event(UiEvent& event) {
-    if (event.type == EventType::PointerMove) {
-        root_menu().update_pointer_hover(event.position);
-    }
+void ContextMenuWidget::mouse_move_event(UiEvent& event) {
+    root_menu().update_pointer_hover(event.position);
 }
 
 void ContextMenuWidget::apply_theme_defaults(const Theme& theme) {
@@ -262,6 +258,7 @@ void ContextMenuWidget::on_update(float dt) {
 }
 
 void ContextMenuWidget::draw_children() {
+    arrange_children();
     for (ContextMenuItemNode* item : m_items) {
         if (!item->removal_pending()) {
             item->draw();

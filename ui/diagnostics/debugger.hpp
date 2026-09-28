@@ -95,8 +95,8 @@ namespace ui {
         Texture* m_close_icon = nullptr;
         Rect m_highlight{};
         bool m_highlight_valid = false;
-        ImVec4 m_anchor_color = {0.26F, 0.59F, 0.98F, 1.0F};
-        ImVec4 m_origin_color = {1.0F, 0.25F, 0.25F, 1.0F};
+        Color m_anchor_color = rgb(0.26F, 0.59F, 0.98F);
+        Color m_origin_color = rgb(1.0F, 0.25F, 0.25F);
         int m_highlight_line_thickness = 1;
         Rect m_overlay_rect{};
         ImGuiID m_overlay_window_id = 0;

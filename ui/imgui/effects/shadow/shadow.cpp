@@ -8,7 +8,7 @@
 void ui::draw_box_shadow(
     EffectRegistry& effects, ImDrawList& draw_list, Rect rect, const BoxShadow& shadow, float rounding, float opacity
 ) {
-    if (opacity <= 0.0F || shadow.color.Value.w <= 0.0F || !rect.valid()) {
+    if (opacity <= 0.0F || shadow.color.max_alpha() <= 0.0F || !rect.valid()) {
         return;
     }
 
@@ -33,8 +33,9 @@ void ui::draw_box_shadow(
                            std::max(0.0F, rounding + spread),
                            std::max(0.0F, rounding),
                            blur,
-                           {shadow.color.Value.x, shadow.color.Value.y, shadow.color.Value.z,
-                            shadow.color.Value.w * std::clamp(opacity, 0.0F, 1.0F)},
+                           shadow.color.rgba(),
+                           shadow.color.gradient() != nullptr ? *shadow.color.gradient() : GradientData{},
+                           std::clamp(opacity, 0.0F, 1.0F),
                        }
         );
 }

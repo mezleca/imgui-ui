@@ -55,28 +55,27 @@ bool Style::lerp(Style& style, const Style& target, float dt) {
 
     UI_STYLE_TRANSITION_PROPERTIES(UI_STYLE_TICK_PROPERTY)
 
-    style.m_vars.for_each([&](const std::string& key, StyleValue& value) {
+    for (auto& [key, value] : style.m_vars) {
         const StyleValue* target_value = target.m_vars.find(key);
 
         if (target_value == nullptr) {
-            return true;
+            continue;
         }
 
         std::visit(
             [&](auto& current_value) {
                 using T = std::decay_t<decltype(current_value)>;
-                if (const T* typed_target = std::get_if<T>(target_value)) {
+                const T* typed_target = std::get_if<T>(target_value);
+                if (typed_target != nullptr) {
                     current_value.tick(*typed_target, dt);
                 }
             },
             value
         );
-
-        return true;
-    });
+    }
 
     if (previous_font != style.m_font || previous_box_sizing != style.m_box_sizing || measure_changed) {
-        style.notify_change();
+        style.notify_change(previous_font != style.m_font);
     }
 
     UI_STYLE_TRANSITION_PROPERTIES(UI_STYLE_HAS_ACTIVE_TRANSITION)

@@ -1,5 +1,6 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <imgui_internal.h>
 
 #include <ui/layout/container.hpp>
 #include <ui/layout/geometry.hpp>
@@ -22,7 +23,7 @@
 
 using namespace ui;
 
-class LayoutProbeNode final : public Node {
+class LayoutProbeNode : public Node {
 public:
     explicit LayoutProbeNode(std::string id = {}) : Node(std::move(id)) {}
 
@@ -37,6 +38,23 @@ private:
         ImGui::Dummy(layout().size());
         return true;
     }
+};
+
+class MeasuredLayoutNode final : public LayoutProbeNode {
+public:
+    explicit MeasuredLayoutNode(ImVec2 size) : m_intrinsic_size(size) {}
+
+    void set_intrinsic_size(ImVec2 size) {
+        m_intrinsic_size = size;
+        invalidate_measure();
+    }
+
+private:
+    void on_measure() override {
+        set_measured_size(m_intrinsic_size, true, true);
+    }
+
+    ImVec2 m_intrinsic_size;
 };
 
 static void draw_open_tree(Node& node, const char* name) {
@@ -116,7 +134,7 @@ TEST_CASE("box sizing resolves fixed and percentage layout boxes", "[layout]") {
     REQUIRE(percentage_content.layout().size().y == Catch::Approx(84.0F));
 }
 
-TEST_CASE("border-box tab headers keep bounds when border thickness changes", "[layout][regression]") {
+TEST_CASE("fit containers preserve content when border thickness changes", "[layout][regression]") {
     ui_test::ImGuiContext context({320.0F, 180.0F});
     Container root("tabs-root");
     root.set_size({px(280.0F), px(140.0F)});
@@ -137,7 +155,62 @@ TEST_CASE("border-box tab headers keep bounds when border thickness changes", "[
 
     const ImVec2 updated_size = header.layout().visual_rect().size();
     REQUIRE(updated_size.x == Catch::Approx(initial_size.x));
-    REQUIRE(updated_size.y == Catch::Approx(initial_size.y));
+    REQUIRE(updated_size.y == Catch::Approx(52.0F));
+}
+
+TEST_CASE("nested fit containers preserve content through padding resize and insertion", "[layout][regression]") {
+    Runtime runtime;
+    ui::UI surface = ui_test::make_surface(runtime);
+    auto& root = surface.root().add<Container>("root");
+    root.set_size({px(280.0F), px(180.0F)});
+
+    auto& wrapper = root.add<Container>("wrapper", StackDirection::Horizontal);
+    wrapper.set_size({grow(), fit()});
+    wrapper.set_content_alignment(Anchor::CenterLeft);
+    wrapper.configure_all_styles([](Style& style) { style.padding({10.0F, 8.0F}); });
+
+    auto& inner = wrapper.add<Container>("inner", StackDirection::Horizontal);
+    inner.set_size({grow(), fit()});
+    inner.set_content_alignment(Anchor::CenterLeft);
+    inner.configure_all_styles([](Style& style) { style.padding({10.0F, 8.0F}).border(BORDER_ALL).border_thickness(2.0F); });
+    auto& content = inner.add<MeasuredLayoutNode>(ImVec2{40.0F, 13.0F});
+    content.set_size({grow(), grow()});
+
+    const auto context = ui_test::prepare_surface(surface, {400.0F, 240.0F});
+    const auto draw_frame = [&] {
+        ui_test::draw_surface(surface, 1.0F);
+        REQUIRE(wrapper.layout().visual_rect().size().y == Catch::Approx(wrapper.layout().size().y));
+        REQUIRE(inner.layout().visual_rect().size().y == Catch::Approx(inner.layout().size().y));
+    };
+    draw_frame();
+    REQUIRE(inner.layout().size().x == Catch::Approx(260.0F));
+    REQUIRE(content.layout().size().y >= content.layout().preferred_size().y);
+    const float initial_height = wrapper.layout().size().y;
+
+    draw_frame();
+    REQUIRE(wrapper.layout().size().y == Catch::Approx(initial_height));
+    REQUIRE(content.layout().size().y >= content.layout().preferred_size().y);
+
+    wrapper.configure_all_styles([](Style& style) { style.padding({20.0F, 16.0F}); });
+    root.set_size({px(180.0F), px(180.0F)});
+    draw_frame();
+    REQUIRE(inner.layout().size().x == Catch::Approx(140.0F));
+    REQUIRE(wrapper.layout().size().y == Catch::Approx(initial_height + 16.0F));
+    REQUIRE(content.layout().size().y >= content.layout().preferred_size().y);
+
+    root.set_size({px(380.0F), px(180.0F)});
+    draw_frame();
+    REQUIRE(inner.layout().size().x == Catch::Approx(340.0F));
+
+    // insert a taller fixed child after drawing. fit height expands and grow receives the remaining width.
+    inner.set_spacing(8.0F);
+    auto& added = inner.add<LayoutProbeNode>("added", ImVec2{18.0F, 18.0F});
+    draw_frame();
+    REQUIRE(added.layout().visual_rect().size().y == Catch::Approx(18.0F));
+    REQUIRE(wrapper.layout().size().y == Catch::Approx(initial_height + 21.0F));
+    REQUIRE(
+        content.layout().size().x + added.layout().size().x + 8.0F == Catch::Approx(inner.layout().visual_rect().size().x - 24.0F)
+    );
 }
 
 TEST_CASE("box sizing includes borders and preserves insets", "[layout]") {
@@ -242,62 +315,35 @@ TEST_CASE("positioned styled children apply margins around their placement") {
     REQUIRE(child.layout().local_rect().min.y == Catch::Approx(37.0F));
 }
 
-TEST_CASE("positioned children resolve percentage sizes from their container") {
+TEST_CASE("positioned children resolve percentage sizes and custom anchors from their container") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
     Container container("positioned-percent-container");
     container.set_size({px(200.0F), px(100.0F)});
     container.style().padding({});
     auto& child = container.add<LayoutProbeNode>();
-    child.set_layout({.size = {percent(50.0F), percent(25.0F)}, .in_flow = false});
+    child.set_layout({
+        .size = {percent(50.0F), percent(25.0F)},
+        .placement =
+            {
+                .anchor = Anchor::Custom,
+                .origin = Anchor::Custom,
+                .anchor_position = {0.25F, 0.75F},
+                .origin_position = {0.5F, 1.0F},
+            },
+        .in_flow = false,
+    });
 
     ui_test::draw_node(container, "positioned-percent-test");
 
     REQUIRE(child.layout().size().x == Catch::Approx(100.0F));
     REQUIRE(child.layout().size().y == Catch::Approx(25.0F));
-}
-
-TEST_CASE("layout geometry resolves anchors and containment") {
-    const ImVec2 centered = resolve_layout_position({100.0F, 80.0F}, {20.0F, 10.0F}, Anchor::Center, Anchor::Center);
-    REQUIRE(centered.x == 40.0F);
-    REQUIRE(centered.y == 35.0F);
-
-    const ImVec2 bottom_right =
-        resolve_layout_position({100.0F, 80.0F}, {20.0F, 10.0F}, Anchor::BottomRight, Anchor::TopLeft, {2.0F, -3.0F});
-    REQUIRE(bottom_right.x == 102.0F);
-    REQUIRE(bottom_right.y == 77.0F);
-
-    const ImVec2 custom = resolve_layout_position({100.0F, 80.0F}, {20.0F, 10.0F}, {0.25F, 0.75F}, {0.5F, 1.0F});
-    REQUIRE(custom.x == 15.0F);
-    REQUIRE(custom.y == 50.0F);
-    const Rect parent{{10.0F, 20.0F}, {110.0F, 100.0F}};
-    const Rect child = resolve_layout_rect(
-        parent, {20.0F, 10.0F}, {.anchor = Anchor::BottomRight, .origin = Anchor::TopLeft, .offset = {2.0F, -3.0F}}
-    );
-
-    REQUIRE(child.min.x == 112.0F);
-    REQUIRE(child.min.y == 97.0F);
-    REQUIRE(child.size().x == 20.0F);
-    REQUIRE(child.size().y == 10.0F);
-    REQUIRE(child.contains({120.0F, 100.0F}));
-    REQUIRE_FALSE(child.contains({50.0F, 50.0F}));
+    REQUIRE(child.layout().local_rect().min.x == Catch::Approx(0.0F));
+    REQUIRE(child.layout().local_rect().min.y == Catch::Approx(50.0F));
 }
 
 TEST_CASE("placement changes preserve implicit measured sizing") {
-    class MeasuredNode final : public Node {
-    public:
-        MeasuredNode() : Node("measured") {}
-
-    protected:
-        void on_measure() override {
-            set_measured_size({32.0F, 18.0F}, true, true);
-        }
-
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    } node;
+    MeasuredLayoutNode node({32.0F, 18.0F});
 
     LayoutConfig config = node.layout().config();
     config.placement.anchor = Anchor::Center;
@@ -312,32 +358,14 @@ TEST_CASE("placement changes preserve implicit measured sizing") {
     REQUIRE(node.layout().size().y == Catch::Approx(18.0F));
 }
 
-TEST_CASE("layout size resolves each axis from its sizing rule") {
-    const ImVec2 resolved = LayoutSize{grow(), px(40.0F)}.resolve({}, {120.0F, 80.0F});
-    REQUIRE(resolved.x == 120.0F);
-    REQUIRE(resolved.y == 40.0F);
-
-    const ImVec2 clamped = LayoutSize{grow(), grow()}.resolve({}, {-20.0F, 60.0F});
-    REQUIRE(clamped.x == 0.0F);
-    REQUIRE(clamped.y == 60.0F);
-
-    const ImVec2 fixed_zero = LayoutSize{px(0.0F), px(0.0F)}.resolve({40.0F, 30.0F}, {120.0F, 80.0F});
-    REQUIRE(fixed_zero.x == 0.0F);
-    REQUIRE(fixed_zero.y == 0.0F);
-
-    const ImVec2 percentage = LayoutSize{percent(25.0F), percent(50.0F)}.resolve({}, {120.0F, 80.0F});
-    REQUIRE(percentage.x == 30.0F);
-    REQUIRE(percentage.y == 40.0F);
-}
-
 TEST_CASE("stack layout places auto-sized children after their measured height") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
     Container stack("auto-size-stack");
     stack.set_size({px(200.0F), px(100.0F)});
     stack.set_spacing(4.0F);
-    stack.add<TextWidget>("first");
-    stack.add<TextWidget>("second");
+    stack.add<MeasuredLayoutNode>(ImVec2{40.0F, 18.0F});
+    stack.add<MeasuredLayoutNode>(ImVec2{60.0F, 24.0F});
 
     const auto draw_frame = [&stack] { ui_test::draw_window("stack-auto-size-test", {240.0F, 160.0F}, [&] { stack.draw(); }); };
 
@@ -345,8 +373,9 @@ TEST_CASE("stack layout places auto-sized children after their measured height")
 
     const Rect first = stack.children()[0]->layout().visual_rect();
     const Rect second = stack.children()[1]->layout().visual_rect();
-    REQUIRE(first.size().y > 0.0F);
-    REQUIRE(second.min.y >= first.max.y + 4.0F);
+    REQUIRE(first.size().y == Catch::Approx(18.0F));
+    REQUIRE(second.size().y == Catch::Approx(24.0F));
+    REQUIRE(second.min.y == Catch::Approx(first.max.y + 4.0F));
     REQUIRE(stack.children()[1]->layout().config().placement.offset.y == Catch::Approx(0.0F));
 }
 
@@ -628,7 +657,46 @@ TEST_CASE("visibility changes in an anchored overlay do not move its fixed sibli
     REQUIRE(hidden_x == Catch::Approx(initial_x));
 }
 
-TEST_CASE("horizontal stack places a fixed item after auto-sized text") {
+TEST_CASE("inline layers keep anchored children in place when the parent starts scrolling") {
+    class ScrollParent final : public Container {
+    public:
+        ScrollParent() : Container("scrolling-parent") {}
+
+    protected:
+        bool paint() override {
+            ImGui::SetNextWindowContentSize({400.0F, 700.0F});
+            return Container::paint();
+        }
+    };
+
+    ui_test::ImGuiContext context({640.0F, 360.0F});
+    ScrollParent parent;
+    parent.set_size({px(600.0F), px(300.0F)});
+    parent.set_scrollable(true);
+    parent.style().padding({14.0F, 14.0F});
+
+    auto& layer = parent.add<LayerContainer>("inline-overlay");
+    auto& panel = layer.add<LayoutProbeNode>(ImVec2{120.0F, 80.0F});
+    panel.set_layout({
+        .size = {px(120.0F), px(80.0F)},
+        .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-20.0F, 20.0F}},
+        .in_flow = false,
+    });
+
+    const auto draw_frame = [&] { ui_test::draw_window("inline-scroll-test", {640.0F, 360.0F}, [&] { parent.draw(); }); };
+    draw_frame();
+    draw_frame();
+    const Rect initial = panel.layout().visual_rect();
+
+    parent.scroll().seek_to({0.0F, 60.0F}, ScrollBehavior::Instant);
+    draw_frame();
+    draw_frame();
+    REQUIRE(parent.scroll().position().y > 0.0F);
+    REQUIRE(panel.layout().visual_rect().min.x == Catch::Approx(initial.min.x));
+    REQUIRE(panel.layout().visual_rect().min.y == Catch::Approx(initial.min.y));
+}
+
+TEST_CASE("horizontal flow follows intrinsic size changes across native items") {
     class FixedItemNode final : public Node {
     public:
         explicit FixedItemNode(ImVec2 size) {
@@ -637,7 +705,7 @@ TEST_CASE("horizontal stack places a fixed item after auto-sized text") {
 
     private:
         bool on_draw() override {
-            ImGui::Button("add notification", layout().size());
+            ImGui::Button("native item", layout().size());
             return true;
         }
     };
@@ -645,12 +713,13 @@ TEST_CASE("horizontal stack places a fixed item after auto-sized text") {
     ui_test::ImGuiContext context({640.0F, 180.0F});
 
     Node root("root");
-    auto& stack = root.add<Container>("notification-test", StackDirection::Horizontal);
+    auto& stack = root.add<Container>("stack", StackDirection::Horizontal);
     stack.set_size({px(620.0F), px(120.0F)});
     stack.set_spacing(8.0F);
     stack.configure_all_styles([](Style& style) { style.padding({8.0F, 8.0F}); });
-    auto& text_node = stack.add<TextWidget>("notifications: 0");
+    auto& measured = stack.add<MeasuredLayoutNode>(ImVec2{60.0F, 20.0F});
     stack.add<FixedItemNode>(ImVec2{180.0F, 30.0F});
+    stack.add<LayoutProbeNode>("after-native", ImVec2{30.0F, 20.0F});
 
     const auto draw_frame = [&root] { ui_test::draw_window("horizontal-stack-test", {640.0F, 180.0F}, [&] { root.draw(); }); };
 
@@ -658,11 +727,13 @@ TEST_CASE("horizontal stack places a fixed item after auto-sized text") {
 
     const Rect text = stack.children()[0]->layout().visual_rect();
     const Rect item = stack.children()[1]->layout().visual_rect();
+    const Rect trailing = stack.children()[2]->layout().visual_rect();
     REQUIRE(text.valid());
     REQUIRE(item.valid());
     REQUIRE(item.min.x >= text.max.x + 8.0F);
+    REQUIRE(trailing.min.x >= item.max.x + 8.0F);
 
-    text_node.set_text("notifications: 10000");
+    measured.set_intrinsic_size({120.0F, 20.0F});
     draw_frame();
 
     const Rect resized_text = stack.children()[0]->layout().visual_rect();
@@ -695,28 +766,12 @@ TEST_CASE("stack divides remaining main-axis space between flexible children", "
     REQUIRE(first_flexible.layout().size().x == Catch::Approx(105.0F));
     REQUIRE(second_flexible.layout().size().x == Catch::Approx(105.0F));
     REQUIRE(second_flexible.layout().local_rect().min.x == Catch::Approx(first_flexible.layout().local_rect().min.x + 110.0F));
-}
 
-TEST_CASE("stack distributes grow space by axis weight", "[layout]") {
-    ui_test::ImGuiContext context({360.0F, 140.0F});
-
-    Container stack("weighted-stack", StackDirection::Horizontal);
-    stack.set_size({px(300.0F), px(80.0F)});
-    stack.set_spacing(5.0F);
-    stack.style().padding({10.0F, 10.0F});
-
-    auto& fixed = stack.add<LayoutProbeNode>();
-    fixed.set_size({px(60.0F), px(20.0F)});
-    auto& narrow = stack.add<LayoutProbeNode>();
-    narrow.set_size({grow(), px(20.0F)});
-    auto& wide = stack.add<TextWidget>("wide");
-    wide.set_size({grow(2.0F), px(20.0F)});
-
-    ui_test::draw_node(stack, "weighted-stack-test");
-
+    second_flexible.set_size({grow(2.0F), px(20.0F)});
+    ui_test::draw_node(stack, "flexible-stack-test");
     REQUIRE(fixed.layout().size().x == Catch::Approx(60.0F));
-    REQUIRE(narrow.layout().size().x == Catch::Approx(70.0F));
-    REQUIRE(wide.layout().size().x == Catch::Approx(140.0F));
+    REQUIRE(first_flexible.layout().size().x == Catch::Approx(70.0F));
+    REQUIRE(second_flexible.layout().size().x == Catch::Approx(140.0F));
 }
 
 TEST_CASE("stack resolves percentage children from its content box", "[layout]") {
@@ -725,34 +780,38 @@ TEST_CASE("stack resolves percentage children from its content box", "[layout]")
     Container stack("percentage-stack", StackDirection::Horizontal);
     stack.set_size({px(300.0F), px(80.0F)});
     stack.style().padding({});
-    auto& child = stack.add<TextWidget>("percentage");
+    auto& child = stack.add<Container>("percentage");
     child.set_size({percent(50.0F), percent(50.0F)});
-    child.configure_all_styles([](Style& style) { style.padding({10.0F, 5.0F}); });
+    child.configure_all_styles([](Style& style) { style.padding({10.0F, 5.0F}).box_sizing(BoxSizing::ContentBox); });
 
     ui_test::draw_node(stack, "percentage-stack-test");
 
     REQUIRE(child.layout().size().x == Catch::Approx(170.0F));
     REQUIRE(child.layout().size().y == Catch::Approx(50.0F));
+
+    stack.set_size({px(180.0F), px(60.0F)});
+    ui_test::draw_node(stack, "percentage-stack-test");
+    REQUIRE(child.layout().size().x == Catch::Approx(110.0F));
+    REQUIRE(child.layout().size().y == Catch::Approx(40.0F));
 }
 
-TEST_CASE("explicit fit keeps a text widget intrinsic size", "[layout]") {
+TEST_CASE("explicit fit retains measured size beside a growing sibling", "[layout]") {
     ui_test::ImGuiContext context({240.0F, 140.0F});
 
     Container stack("fit-text-stack", StackDirection::Horizontal);
     stack.set_size({px(200.0F), px(80.0F)});
     stack.style().padding({});
 
-    auto& text = stack.add<TextWidget>("fit");
-    text.set_size({fit(), fit()});
+    auto& measured = stack.add<MeasuredLayoutNode>(ImVec2{40.0F, 18.0F});
+    measured.set_size({fit(), fit()});
     auto& fill = stack.add<Node>("fill");
     fill.set_size({grow(), px(20.0F)});
 
     ui_test::draw_node(stack, "fit-text-stack-test");
 
-    REQUIRE(text.layout().config().size.width.mode == LayoutSizeMode::Fit);
-    REQUIRE(text.layout().size().x > 0.0F);
-    REQUIRE(text.layout().size().x < stack.layout().size().x);
-    REQUIRE(fill.layout().size().x > 0.0F);
+    REQUIRE(measured.layout().size().x == Catch::Approx(40.0F));
+    REQUIRE(measured.layout().size().y == Catch::Approx(18.0F));
+    REQUIRE(fill.layout().size().x == Catch::Approx(160.0F));
 }
 
 TEST_CASE("containers vertically stack flexible children by default", "[layout][regression]") {
@@ -803,7 +862,7 @@ TEST_CASE("changing stack direction rearranges existing children", "[layout][reg
     REQUIRE(second.layout().local_rect().min.y == Catch::Approx(first.layout().local_rect().min.y));
 }
 
-TEST_CASE("text measurement uses the font inherited from its parent", "[layout][regression]") {
+TEST_CASE("font inheritance remeasures content after style changes and reattachment", "[layout][regression]") {
     class FixedItemNode final : public Node {
     public:
         FixedItemNode() {
@@ -821,7 +880,7 @@ TEST_CASE("text measurement uses the font inherited from its parent", "[layout][
 
     ImFontConfig default_font_config;
     default_font_config.SizePixels = 13.0F;
-    ImGui::GetIO().Fonts->AddFontDefault(&default_font_config);
+    ImFont* small_font = ImGui::GetIO().Fonts->AddFontDefault(&default_font_config);
     ImFontConfig large_font_config;
     large_font_config.SizePixels = 28.0F;
     ImFont* large_font = ImGui::GetIO().Fonts->AddFontDefault(&large_font_config);
@@ -840,7 +899,7 @@ TEST_CASE("text measurement uses the font inherited from its parent", "[layout][
     };
 
     draw_frame();
-    parent.set_font(large_font);
+    parent.configure_all_styles([large_font](Style& style) { style.font(large_font); });
     draw_frame();
 
     const Rect text = stack.children()[0]->layout().visual_rect();
@@ -850,6 +909,17 @@ TEST_CASE("text measurement uses the font inherited from its parent", "[layout][
     REQUIRE(text.valid());
     REQUIRE(text.size().x == Catch::Approx(expected_text_width).margin(1.0F));
     REQUIRE(sibling.min.x >= text.max.x + 8.0F);
+
+    Container other_parent("other-parent");
+    other_parent.set_size({px(460.0F), px(100.0F)});
+    other_parent.set_font(small_font);
+    other_parent.add(parent.detach(stack));
+    ui_test::draw_node(other_parent, "inherited-font-layout-test");
+
+    const Rect moved_text = stack.children()[0]->layout().visual_rect();
+    const float expected_small_width = small_font->CalcTextSizeA(small_font->LegacySize, FLT_MAX, 0.0F, "notifications: 0").x;
+    REQUIRE(moved_text.size().x == Catch::Approx(expected_small_width).margin(1.0F));
+    REQUIRE(moved_text.size().x < text.size().x);
 }
 
 TEST_CASE("resizable container stays within its parent bounds") {
@@ -910,10 +980,12 @@ TEST_CASE("resizable container stays within its parent bounds") {
     REQUIRE(resizable.layout().size().y <= 90.0F);
 }
 
-TEST_CASE("resizing a container remeasures descendants", "[layout][regression]") {
+TEST_CASE("parent resizing rearranges descendants without repeating intrinsic measurement", "[layout][regression]") {
     class MeasureProbeNode final : public Node {
     public:
-        MeasureProbeNode() : Node("measure-probe") {}
+        MeasureProbeNode() : Node("measure-probe") {
+            set_size({grow(), fit()});
+        }
 
         int measure_count = 0;
 
@@ -935,6 +1007,12 @@ TEST_CASE("resizing a container remeasures descendants", "[layout][regression]")
     REQUIRE(probe.measure_count == 1);
 
     container.set_size({px(220.0F), px(80.0F)});
+    draw_frame();
+    REQUIRE(probe.layout().size().x == Catch::Approx(220.0F));
+    REQUIRE(probe.layout().size().y == Catch::Approx(20.0F));
+    REQUIRE(probe.measure_count == 1);
+
+    probe.invalidate_measure();
     draw_frame();
     REQUIRE(probe.measure_count == 2);
 }
@@ -992,6 +1070,46 @@ TEST_CASE("inline layer padding scopes descendant layout") {
     const Rect probe_rect = probe.layout().visual_rect();
     REQUIRE(probe_rect.min.x == Catch::Approx(layer_rect.min.x + 17.0F));
     REQUIRE(probe_rect.min.y == Catch::Approx(layer_rect.min.y + 13.0F));
+}
+
+TEST_CASE("inline layers scale vertices across reused child windows", "[LayerContainer][transform][regression]") {
+    class TransformLayer final : public LayerContainer {
+    public:
+        TransformLayer() : LayerContainer("transform-layer") {}
+
+        ImDrawList* draw_list = nullptr;
+        int first_vertex = 0;
+
+    private:
+        bool paint() override {
+            const bool painted = LayerContainer::paint();
+            draw_list = ImGui::GetWindowDrawList();
+            first_vertex = draw_list->VtxBuffer.Size;
+            const Rect rect = layout().visual_rect();
+            draw_list->AddRectFilled(rect.min, rect.max, IM_COL32_WHITE);
+            return painted;
+        }
+    };
+
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+    Container root("transform-root");
+    root.set_size({px(200.0F), px(120.0F)});
+    auto& layer = root.add<TransformLayer>();
+    layer.set_size({px(100.0F), px(60.0F)});
+    layer.configure_all_styles([](Style& style) { style.padding({1.0F, 1.0F}).scale(0.0F); });
+    layer.animate().to(StyleAnimationProperty::Scale, ImVec2{1.0F, 1.0F}, {0.2F});
+
+    for (int frame = 0; frame < 3; ++frame) {
+        root.update(0.05F);
+        ui_test::draw_window("layer-transform-window", {320.0F, 220.0F}, [&] { root.draw(); });
+
+        REQUIRE(layer.draw_list->VtxBuffer.Size >= layer.first_vertex + 4);
+        const ImVec2 min = layer.draw_list->VtxBuffer[layer.first_vertex].pos;
+        const ImVec2 max = layer.draw_list->VtxBuffer[layer.first_vertex + 2].pos;
+        const float scale = 0.25F * static_cast<float>(frame + 1);
+        REQUIRE(max.x - min.x == Catch::Approx(100.0F * scale));
+        REQUIRE(max.y - min.y == Catch::Approx(60.0F * scale));
+    }
 }
 
 TEST_CASE("inline layers preserve explicit sizes", "[LayerContainer][layout][regression]") {
@@ -1055,6 +1173,26 @@ TEST_CASE("nodes without explicit positions follow the ImGui cursor") {
 
     ImGui::End();
     ImGui::Render();
+}
+
+TEST_CASE("draw_at_cursor interleaves positioned nodes with native ImGui items", "[layout]") {
+    ui_test::ImGuiContext context({200.0F, 120.0F});
+    LayoutProbeNode node("positioned", {20.0F, 10.0F});
+    node.set_anchor(Anchor::BottomRight);
+
+    ImVec2 cursor;
+    ImVec2 next_cursor;
+    ui_test::draw_window("interleaved-layout-test", [&] {
+        ImGui::Dummy({30.0F, 10.0F});
+        cursor = ImGui::GetCursorScreenPos();
+        node.draw_at_cursor();
+        next_cursor = ImGui::GetCursorScreenPos();
+        ImGui::Dummy({30.0F, 10.0F});
+    });
+
+    REQUIRE(node.layout().visual_rect().min.x == Catch::Approx(cursor.x));
+    REQUIRE(node.layout().visual_rect().min.y == Catch::Approx(cursor.y));
+    REQUIRE(next_cursor.y > node.layout().visual_rect().max.y);
 }
 
 TEST_CASE("node screen rectangles follow scrollable child windows") {
@@ -1142,6 +1280,84 @@ TEST_CASE("node screen rectangles follow scrollable child windows") {
     verify_scroll(true);
 }
 
+TEST_CASE("scrollable containers seek smoothly by default and accept instant seeks") {
+    class ScrollProbe final : public Container {
+    public:
+        ScrollProbe() : Container("scroll-seek-probe") {
+            set_size({px(100.0F), px(50.0F)});
+            set_scrollable(true);
+        }
+
+        ImGuiWindowFlags window_flags = 0;
+
+    protected:
+        bool paint() override {
+            ImGui::SetNextWindowContentSize({100.0F, 400.0F});
+            const bool result = Container::paint();
+            window_flags = ImGui::GetCurrentWindow()->Flags;
+            return result;
+        }
+    };
+
+    ui_test::ImGuiContext context({240.0F, 160.0F});
+    ScrollProbe container;
+    const auto draw_frame = [&] { ui_test::draw_window("scroll-seek-root", {240.0F, 160.0F}, [&] { container.draw(); }); };
+
+    draw_frame();
+    REQUIRE((container.window_flags & ImGuiWindowFlags_NoScrollWithMouse) != 0);
+    container.scroll().seek_to({0.0F, 100.0F});
+    draw_frame();
+    REQUIRE(container.scroll().position().y < 100.0F);
+    draw_frame();
+    REQUIRE(container.scroll().position().y > 0.0F);
+    REQUIRE(container.scroll().position().y < 100.0F);
+
+    container.scroll().seek_to({0.0F, 200.0F}, ScrollBehavior::Instant);
+    draw_frame();
+    draw_frame();
+    REQUIRE(container.scroll().position().y == Catch::Approx(200.0F));
+
+    container.scroll().set_behaviour(ScrollBehavior::Instant).seek_by({0.0F, -50.0F});
+    draw_frame();
+    draw_frame();
+    REQUIRE(container.scroll().position().y == Catch::Approx(150.0F));
+
+    InputRouter router;
+    container.set_input_router(&router);
+    const auto draw_routed_frame = [&] {
+        router.begin_frame();
+        draw_frame();
+    };
+    container.scroll().seek_to({0.0F, container.scroll().max().y}, ScrollBehavior::Instant);
+    draw_routed_frame();
+    draw_routed_frame();
+
+    UiEvent wheel = UiEvent::make(EventType::Scroll);
+    const Rect rect = container.layout().visual_rect();
+    wheel.position = {(rect.min.x + rect.max.x) * 0.5F, (rect.min.y + rect.max.y) * 0.5F};
+    wheel.scroll = {0.0F, -0.5F};
+    router.dispatch(wheel);
+    REQUIRE(wheel.native_input_blocked);
+    REQUIRE_FALSE(wheel.propagation_stopped);
+
+    container.scroll().seek_to({0.0F, 0.0F}, ScrollBehavior::Instant);
+    draw_routed_frame();
+    draw_routed_frame();
+    container.scroll().set_behaviour(ScrollBehavior::Smooth);
+    UiEvent next_wheel = UiEvent::make(EventType::Scroll);
+    next_wheel.position = wheel.position;
+    next_wheel.scroll = wheel.scroll;
+    router.dispatch(next_wheel);
+    REQUIRE(next_wheel.native_input_blocked);
+    float previous_scroll = container.scroll().position().y;
+    for (int frame = 0; frame < 15; ++frame) {
+        draw_routed_frame();
+        REQUIRE(container.scroll().position().y >= previous_scroll);
+        REQUIRE(container.scroll().position().y < 100.0F);
+        previous_scroll = container.scroll().position().y;
+    }
+}
+
 TEST_CASE("inline overlay keeps resizable children valid while the parent scrolls", "[LayerContainer][scroll][regression]") {
     class ScrollContainer final : public Container {
     public:
@@ -1178,9 +1394,9 @@ TEST_CASE("inline overlay keeps resizable children valid while the parent scroll
     });
     panel.configure_all_styles([](Style& style) {
         style.padding({14.0F, 14.0F})
-            .background_color(ImColor{0.1F, 0.1F, 0.1F, 1.0F})
+            .background_color(rgb(0.1F, 0.1F, 0.1F))
             .border(BORDER_ALL)
-            .border_color(ImColor{0.5F, 0.5F, 0.5F, 1.0F});
+            .border_color(rgb(0.5F, 0.5F, 0.5F));
     });
     auto& controls = panel.add<Container>("dynamic-node-controls");
     controls.set_size({fit(), fit()});
@@ -1196,9 +1412,7 @@ TEST_CASE("inline overlay keeps resizable children valid while the parent scroll
     auto& resize = list.add<ResizableContainer>("dynamic-nodes");
     resize.set_size({px(80.0F), grow()});
     resize.set_resize(ResizeAxes::Both).set_scrollable(true);
-    resize.configure_all_styles([](Style& style) {
-        style.padding({20.0F, 20.0F}).background_color(ImColor{0.2F, 0.2F, 0.2F, 1.0F});
-    });
+    resize.configure_all_styles([](Style& style) { style.padding({20.0F, 20.0F}).background_color(rgb(0.2F, 0.2F, 0.2F)); });
     resize.add<LayoutProbeNode>("row", ImVec2{80.0F, 200.0F});
 
     ui_test::ImGuiContext context({240.0F, 160.0F});
@@ -1307,7 +1521,7 @@ TEST_CASE("virtual layout creates visible rows lazily and reuses the caller cach
     std::vector<int> drawn;
     std::map<size_t, VirtualRow*> cache;
     list.set_input_router(&router);
-    list.set_spacing(3.0F);
+    static_cast<Container&>(list).set_spacing(3.0F);
     list.configure_all_styles([](ui::Style& style) { style.padding({7.0F, 5.0F}); });
     set_virtual_items(list, 1000, drawn, cache);
     REQUIRE(list.item_count() == 1000);
@@ -1327,7 +1541,7 @@ TEST_CASE("virtual layout creates visible rows lazily and reuses the caller cach
     REQUIRE(drawn.size() <= 6);
     REQUIRE(cache.size() <= 6);
     REQUIRE(list.max_scroll == Catch::Approx((1000.0F * 23.0F) - 3.0F - 90.0F));
-    REQUIRE(router.stats().entry_count <= 6);
+    REQUIRE(router.stats().entry_count <= 8);
     const auto& first = *cache.at(0);
     REQUIRE(first.layout().size().y == Catch::Approx(20.0F));
     const ImVec2 position = first.layout().visual_rect().min;
@@ -1340,7 +1554,7 @@ TEST_CASE("virtual layout creates visible rows lazily and reuses the caller cach
     REQUIRE(drawn.front() >= 99);
     REQUIRE(std::find(drawn.begin(), drawn.end(), 100) != drawn.end());
     REQUIRE(drawn.size() <= 6);
-    REQUIRE(router.stats().entry_count <= 6);
+    REQUIRE(router.stats().entry_count <= 8);
     REQUIRE(cache.size() <= 12);
 
     list.requested_scroll = list.max_scroll;

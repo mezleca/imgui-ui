@@ -17,20 +17,16 @@ void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
 
     configure_all_styles([&theme, transition](Style& style) { style.control(theme, {10.0F, 8.0F}, transition); });
 
-    configure_style(StyleType::HOVER, [&theme, transition](Style& style) {
-        style.background_color(theme.controls.hover_color, transition);
-    });
-
-    const auto configure_active_style = [&theme, transition](Style& style) {
-        style.background_color(theme.controls.active_color, transition).border_color(theme.accent_color, transition);
-    };
-    configure_style(StyleType::ACTIVE, configure_active_style);
-    configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
+    style(StyleType::HOVER).background_color(theme.controls.hover_color, transition);
+    style(StyleType::ACTIVE)
+        .background_color(theme.controls.active_color, transition)
+        .border_color(theme.accent_color, transition);
+    style(StyleType::FOCUS).border_color(theme.accent_color);
 }
 
-void NumberInputWidget::on_event(UiEvent& event) {
-    if (event.type == EventType::PointerDown && event.button == PointerButton::Left) {
-        surface().input_router().set_focus(*this);
+void NumberInputWidget::mouse_press_event(UiEvent& event) {
+    if (event.button == PointerButton::Left) {
+        surface().input_router().set_focus(this);
     }
 }
 
@@ -95,8 +91,8 @@ NumberInputWidget& NumberInputWidget::set_thumb_size(float size) {
     return *this;
 }
 
-NumberInputWidget& NumberInputWidget::set_thumb_color(ImColor color) {
-    m_thumb_color = color;
+NumberInputWidget& NumberInputWidget::set_thumb_color(Color color) {
+    m_thumb_color = std::move(color);
     return *this;
 }
 
@@ -176,8 +172,8 @@ bool NumberInputWidget::paint() {
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, frame_padding);
     ImGui::PushStyleVar(ImGuiStyleVar_GrabMinSize, m_thumb_size);
     ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, current_style.border_radius());
-    ImGui::PushStyleColor(ImGuiCol_SliderGrab, m_thumb_color.Value);
-    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, m_thumb_color.Value);
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab, m_thumb_color.rgba());
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, m_thumb_color.rgba());
 
     float input_width = layout().size().x;
     if (label_size.x > 0.0F && m_label_placement == LabelPlacement::Inline) {
@@ -201,7 +197,7 @@ bool NumberInputWidget::paint() {
 
     set_interaction_style(ImGui::IsItemHovered(), ImGui::IsItemActive(), input_state().focused);
 
-    ImColor border = current_style.border_color().value;
+    ImColor border = current_style.border_color().value.rgba();
     border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
     draw_border(*ImGui::GetWindowDrawList(), {ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style, border);
 

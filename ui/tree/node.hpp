@@ -27,18 +27,21 @@ namespace ui {
     };
 
     enum class InputMode : uint8_t {
-        /// does not register this node with the input router.
+        /// default for plain nodes. the node's background is not a pointer target.
+        /// descendants can register their own targets independently.
         None,
-        /// registers the node as the normal event target for its hit rectangle.
+        /// default for widgets and containers. the hit rectangle receives pointer events, including empty space between children.
+        /// events continue to underlying targets unless propagation is stopped.
         Target,
-        /// consumes events in the hit rectangle before underlying targets resolve.
+        /// restricts pointer routing to this subtree within the hit rectangle. underlying targets do not receive events.
+        /// the last attached active blocker also restricts keyboard routing to its subtree.
         Blocker,
     };
 
-    /// node coordinates lifecycle, layout, rendering, input registration, and propagation of the owning surface services to
-    /// descendants.
+    /// owns a subtree and runs its update, layout, paint, and input registration lifecycle.
     class Node {
     public:
+        /// creates a detached node. parent is assigned only after construction, when another node takes ownership with add.
         explicit Node(std::string id = {});
         Node(const Node&) = delete;
         virtual ~Node();
@@ -47,14 +50,17 @@ namespace ui {
         /// constructs and owns a child.
         template <typename T, typename... Args>
         T& add(Args&&... args) {
-            auto child = std::make_unique<T>(std::forward<Args>(args)...);
+            return add(std::make_unique<T>(std::forward<Args>(args)...));
+        }
 
-            T& result = *child;
-            prepare_child(result);
-            m_children.emplace_back(std::move(child));
-            invalidate_input_state_cache();
-            invalidate_measure();
-            return result;
+        /// transfers ownership of a non-null child and connects its subtree to this parent. applies the theme when this
+        /// parent belongs to a surface.
+        Node& add(std::unique_ptr<Node> child);
+
+        /// transfers ownership while preserving the child's concrete type in the returned reference.
+        template <typename T>
+        T& add(std::unique_ptr<T> child) {
+            return static_cast<T&>(add(std::unique_ptr<Node>(std::move(child))));
         }
 
         /// updates this node and its visible descendants.
@@ -70,10 +76,10 @@ namespace ui {
         /// use it when a custom parent interleaves tree nodes or other native imgui items with framework children.
         void draw_at_cursor();
 
-        /// marks a direct child for removal; it is destroyed by the parent before its next update.
+        /// marks a direct child for removal. the parent destroys it before its next update.
         bool remove(Node& child);
 
-        /// immediately transfers ownership of a direct child. Use remove() from tree callbacks.
+        /// immediately transfers ownership of a direct child. use remove() from tree callbacks.
         std::unique_ptr<Node> detach(Node& child);
 
         /// marks every child for removal.
@@ -85,12 +91,10 @@ namespace ui {
         /// records update and draw zones for this subtree.
         void set_profiler(Profiler* profiler);
 
-        /// returns the first depth-first node with this id.
-        /// returns null when absent.
+        /// searches this node and its descendants by string id, skipping nodes pending removal. returns null when absent.
         Node* find(std::string_view id);
 
-        /// returns the first depth-first node with this id.
-        /// returns null when absent.
+        /// searches this node and its descendants by string id, skipping nodes pending removal. returns null when absent.
         const Node* find(std::string_view id) const;
 
         /// returns true when node is this node or a descendant.
@@ -133,7 +137,7 @@ namespace ui {
             return m_removal_pending;
         }
 
-        /// hides this subtree and removes it from hit testing.
+        /// hides or shows this subtree. hiding stops updates and drawing and clears its hit regions immediately.
         void set_visible(bool visible);
 
         bool enabled() const {
@@ -144,7 +148,7 @@ namespace ui {
         void set_enabled(bool enabled);
 
         virtual bool accepts_input() const {
-            return m_visible && m_enabled;
+            return m_visible && m_enabled && !m_removal_pending && (m_parent == nullptr || m_parent->accepts_input());
         }
 
         const InputState& input_state() const {
@@ -152,9 +156,14 @@ namespace ui {
         }
 
         /// returns direct focus plus hover and active state from the subtree.
-        InputState subtree_input_state() const;
+        InputState subtree_input_state() const {
+            return m_subtree_input_state;
+        }
 
-        /// configures this node's persistent input behavior. an empty area uses its visual box.
+        /// configures this node's persistent input behavior. a valid area is local to the node's visual rectangle
+        /// and replaces hit_rect(). an empty area uses hit_rect().
+        /// target receives pointer events without blocking underlying nodes. none leaves only descendant hit regions.
+        /// registering a target does not give it keyboard focus. use input_router().set_focus() for that.
         Node& set_input_mode(InputMode mode, Rect area = {});
 
         /// returns geometry from the last draw pass.
@@ -165,32 +174,10 @@ namespace ui {
         virtual ImVec2 layout_margin() const;
 
         /// replaces the width and height sizing modes interpreted by this node's box sizing style.
-        Node& set_size(LayoutSize size) {
-            const LayoutSize& current = m_layout.size_spec();
-            if (m_layout.m_has_explicit_size_request && current == size) {
-                return *this;
-            }
-
-            m_layout.set_size(size);
-            invalidate_measure_subtree();
-            return *this;
-        }
+        Node& set_size(LayoutSize size);
 
         /// replaces the complete layout request.
-        Node& set_layout(LayoutConfig config) {
-            if (m_layout.config() == config) {
-                return *this;
-            }
-
-            const bool size_changed = m_layout.size_spec() != config.size;
-            m_layout.set_config(config);
-            if (size_changed) {
-                invalidate_measure_subtree();
-            } else {
-                invalidate_measure();
-            }
-            return *this;
-        }
+        Node& set_layout(LayoutConfig config);
 
         /// positions this node at the matching point in its parent and removes it from flow layout.
         Node& set_anchor(Anchor anchor) {
@@ -198,18 +185,14 @@ namespace ui {
         }
 
         /// positions this node using explicit parent and node anchor points and removes it from flow layout.
-        Node& set_anchor(Anchor anchor, Anchor origin) {
-            LayoutConfig config = m_layout.config();
-            config.placement.anchor = anchor;
-            config.placement.origin = origin;
-            config.in_flow = false;
-            return set_layout(config);
-        }
+        Node& set_anchor(Anchor anchor, Anchor origin);
 
         /// invalidates this node and its size-dependent ancestors.
         void invalidate_measure();
 
     protected:
+        /// reconnects surface context and remeasures the subtree after attachment or detachment.
+        virtual void set_surface(UI* surface);
         /// returns the UI that owns this attached node.
         UI& surface() const;
         EffectRegistry* effect_registry() const;
@@ -217,13 +200,24 @@ namespace ui {
         /// dispatches an event to this node.
         virtual void dispatch_event(UiEvent& event);
 
-        /// handles the node's internal event behavior.
-        virtual void on_event(UiEvent&) {}
+        /// runs first for every event reaching this node. stopping propagation skips the specific handler and remaining routing.
+        virtual void event(UiEvent&) {}
+
+        /// runs after event() for the matching event type, unless propagation was stopped or this node was removed.
+        virtual void key_press_event(UiEvent&) {}
+        virtual void key_release_event(UiEvent&) {}
+        virtual void mouse_press_event(UiEvent&) {}
+        virtual void mouse_release_event(UiEvent&) {}
+        virtual void mouse_move_event(UiEvent&) {}
+        virtual void wheel_event(UiEvent&) {}
 
         /// resolves placement and stores local and screen bounds.
-        void resolve_position();
+        void resolve_position(bool at_cursor);
 
-        /// returns hit bounds for visual_rect().
+        /// returns the screen-space area used to select this node for pointer events. defaults to visual_rect.
+        /// called after drawing when input mode is target or blocker and no explicit input area was supplied.
+        /// the router clips the result to the current imgui clip. an invalid rectangle registers no target or blocker.
+        /// override to restrict input to a child control or extend it to resize handles without changing layout bounds.
         virtual Rect hit_rect(Rect visual_rect) const {
             return visual_rect;
         }
@@ -253,8 +247,6 @@ namespace ui {
         /// stores intrinsic size and measured axes.
         void set_measured_size(ImVec2 size, bool measured_width, bool measured_height);
 
-        /// stores a measured content size after applying this node's line height and padding.
-        void set_measured_content_size(ImVec2 size, bool measured_width, bool measured_height);
         ImVec2 content_size(ImVec2 size) const;
         ImVec2 outer_size(ImVec2 size) const;
         Rect content_rect(Rect rect) const;
@@ -270,8 +262,7 @@ namespace ui {
 
         bool capture_pointer();
         void release_pointer();
-
-        void invalidate_measure_subtree();
+        void register_scroll_target(Rect rect);
 
         virtual void on_update(float dt);
         virtual void advance_frame_state(float dt);
@@ -279,10 +270,10 @@ namespace ui {
         /// resets built-in appearance values for the supplied theme.
         virtual void apply_theme_defaults(const Theme&) {}
 
-        /// computes intrinsic size after children are measured.
+        /// computes intrinsic size after children are measured. parent allocation is resolved separately before paint.
         virtual void on_measure();
 
-        /// resolves size and placement before paint.
+        /// runs before each paint. resolves size from available content space when the parent has not assigned it.
         virtual void on_layout();
 
         /// paints this node and opens its child scope.
@@ -303,7 +294,6 @@ namespace ui {
 
         virtual BoxInsets box_insets() const;
         virtual BoxSizing box_sizing() const;
-        virtual float minimum_content_height() const;
 
         void set_input_state(InputState state);
 
@@ -312,16 +302,14 @@ namespace ui {
         friend class InputRouter;
         friend class HitTestIndex;
 
-        void prepare_child(Node& child);
-        void set_surface(UI* surface);
         void measure_tree();
         void detach_input_router(InputRouter& router);
-        void invalidate_input_state_cache();
-        void clear_input_state();
+        void refresh_input_state();
         std::unique_ptr<Node> detach_child(size_t index);
-        bool capture_parent_content();
-        void prepare_layout();
-        void submit_positioned_item();
+        void capture_parent_content();
+        void draw_impl(bool at_cursor);
+        void prepare_layout(bool at_cursor);
+        void submit_positioned_item(bool at_cursor);
 
         std::string m_id;
 
@@ -331,7 +319,6 @@ namespace ui {
         bool m_visible = true;
         bool m_enabled = true;
         bool m_measure_dirty = true;
-        bool m_layout_dirty = true;
         NodeLayout m_layout;
         UI* m_surface = nullptr;
         InputRouter* m_input_router = nullptr;
@@ -339,8 +326,7 @@ namespace ui {
         Rect m_input_area{};
         InputMode m_input_mode = InputMode::None;
         InputState m_input_state;
-        mutable InputState m_subtree_input_state;
-        mutable bool m_subtree_input_state_dirty = true;
+        InputState m_subtree_input_state;
         bool m_removal_pending = false;
     };
 

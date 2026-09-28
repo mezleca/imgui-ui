@@ -40,7 +40,7 @@ public:
         set_text_alignment({0.0F, 0.5F});
 
         // this index is valid because set_options rebuilds rows when the option count changes.
-        set_on_click([this] {
+        on_click([this] {
             if (m_state.is_open() && m_state.owner != nullptr) {
                 m_state.owner->select_value(m_state.options[m_index].value);
             }
@@ -64,8 +64,8 @@ protected:
                 .cursor(ImGuiMouseCursor_Hand);
         });
 
-        configure_style(StyleType::HOVER, [&theme](Style& style) { style.background_color(theme.controls.hover_color); });
-        configure_style(StyleType::ACTIVE, [&theme](Style& style) { style.background_color(theme.controls.active_color); });
+        style(StyleType::HOVER).background_color(theme.controls.hover_color);
+        style(StyleType::ACTIVE).background_color(theme.controls.active_color);
     }
 
 private:
@@ -100,7 +100,7 @@ private:
         );
     }
 
-    void on_click(UiEvent& event) override {
+    void click_event(UiEvent& event) override {
         if (event.button != PointerButton::Left) {
             return;
         }
@@ -119,14 +119,13 @@ private:
         const Rect content = content_rect(rect);
 
         draw_text(
-            draw_list, {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)},
-            current_style.color().get_col(), preview
+            draw_list, {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)}, current_style.color().value,
+            preview
         );
 
         draw_triangle(
             draw_list, {content.max.x - (m_state.arrow_size.x * 0.5F), content.min.y + (content.size().y * 0.5F)},
-            m_state.arrow_size, current_style.color().get_col(),
-            m_state.is_open() ? TriangleDirection::Up : TriangleDirection::Down
+            m_state.arrow_size, current_style.color().value, m_state.is_open() ? TriangleDirection::Up : TriangleDirection::Down
         );
     }
 
@@ -248,7 +247,7 @@ void DropdownBodyNode::draw_children() {
 
 void DropdownBodyNode::on_draw_end() {
     const ComputedStyle& style = computed_style();
-    ImColor border = style.border_color().value;
+    ImColor border = style.border_color().value.rgba();
     border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
     draw_border(*ImGui::GetWindowDrawList(), layout().visual_rect(), style, border);
 
@@ -286,21 +285,6 @@ void DropdownWidget::close() {
     m_state.close();
 }
 
-bool DropdownWidget::State::select(std::size_t index) {
-    if (index >= options.size()) {
-        return false;
-    }
-
-    const bool result = *value != options[index].value;
-
-    if (result) {
-        *value = options[index].value;
-    }
-
-    close();
-    return result;
-}
-
 void DropdownWidget::State::open() {
     if (visibility != Visibility::Closed) {
         return;
@@ -335,7 +319,6 @@ DropdownWidget::DropdownWidget(std::string& value, std::vector<DropdownOption> o
     : Container(std::move(id), StackDirection::Vertical), m_state{.value = &value, .options = std::move(options)} {
     set_type_name("Dropdown");
     set_size({fit(), fit()});
-    set_input_mode(InputMode::Target);
     m_state.owner = this;
 
     m_label_node = &add<TextWidget>("");
@@ -347,7 +330,7 @@ DropdownWidget::DropdownWidget(std::string& value, std::vector<DropdownOption> o
     m_body->set_enabled(false);
 }
 
-void DropdownWidget::on_event(UiEvent& event) {
+void DropdownWidget::event(UiEvent& event) {
     // prevent imgui from handling the same press or release.
     if (event.type == EventType::PointerDown || event.type == EventType::PointerUp) {
         event.block_native_input();
@@ -375,10 +358,8 @@ void DropdownWidget::apply_theme_defaults(const Theme& theme) {
     m_trigger->configure_all_styles([&theme](Style& style) {
         style.control(theme, {10.0F, 6.0F}).cursor(ImGuiMouseCursor_Hand);
     });
-    m_trigger->configure_style(StyleType::HOVER, [&theme](Style& style) { style.background_color(theme.controls.hover_color); });
-    m_trigger->configure_style(StyleType::ACTIVE, [&theme](Style& style) {
-        style.background_color(theme.controls.active_color);
-    });
+    m_trigger->style(StyleType::HOVER).background_color(theme.controls.hover_color);
+    m_trigger->style(StyleType::ACTIVE).background_color(theme.controls.active_color);
 }
 
 DropdownWidget& DropdownWidget::set_label(std::string label) {
@@ -393,11 +374,8 @@ bool DropdownWidget::select_value(std::string_view value) {
         return false;
     }
 
-    const std::size_t index = static_cast<std::size_t>(option - m_state.options.data());
-    if (!m_state.select(index)) {
-        return false;
-    }
-
+    *m_state.value = option->value;
+    m_state.close();
     invalidate_measure();
     notify_change();
     return true;

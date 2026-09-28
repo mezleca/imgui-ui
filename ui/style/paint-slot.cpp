@@ -32,9 +32,5 @@ void PaintSlot::paint(EffectRegistry* effects, ImDrawList& draw_list, Rect rect,
         return;
     }
 
-    if (effects != nullptr) {
-        draw_frame(*effects, context.draw_list, context.rect, context.style, context.opacity * context.style.alpha());
-        return;
-    }
-    draw_frame(context.draw_list, context.rect, context.style, context.opacity * context.style.alpha());
+    draw_frame(draw_list, rect, m_style, effects, m_opacity * m_style.alpha());
 }

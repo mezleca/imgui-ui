@@ -16,7 +16,11 @@ namespace ui {
 
     inline BoxShadow normalize_style_box_shadow(BoxShadow value) {
         value.blur = std::max(0.0F, value.blur);
-        value.color.Value.w = std::clamp(value.color.Value.w, 0.0F, 1.0F);
+        if (value.color.gradient() == nullptr) {
+            ImVec4 solid = value.color.rgba();
+            solid.w = std::clamp(solid.w, 0.0F, 1.0F);
+            value.color = solid;
+        }
         return value;
     }
 
@@ -32,7 +36,7 @@ namespace ui {
         /// base appearance with no interaction state.
         DEFAULT = 0,
         /// appearance while the pointer is over the node.
-        HOVER = 1,
+        HOVER,
         /// appearance while the pointer button is held.
         ACTIVE,
         /// appearance while the node owns keyboard focus.
@@ -75,7 +79,7 @@ namespace ui {
         }
 
     public:
-        using ChangeCallback = void (*)(void*);
+        using ChangeCallback = void (*)(void*, bool font_changed);
 
         using ComputedStyle::alpha;
         using ComputedStyle::background_color;
@@ -112,7 +116,11 @@ namespace ui {
         static bool lerp(Style& style, const Style& target, float dt);
 
         Style& font(ImFont* value) {
-            return set_property(&ComputedStyle::m_font, value);
+            if (m_font == value) return *this;
+
+            m_font = value;
+            notify_change(true);
+            return *this;
         }
 
         StyleVariableStore& variables() {
@@ -204,36 +212,38 @@ namespace ui {
             });
         }
 
-        Style& scrollbar_background_color(ImColor value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_scrollbar_background_color, value, transition);
+        Style& scrollbar_background_color(Color value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_scrollbar_background_color, std::move(value), transition);
         }
 
-        Style& scrollbar_grab_color(ImColor value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_color, value, transition);
+        Style& scrollbar_grab_color(Color value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_color, std::move(value), transition);
         }
 
-        Style& scrollbar_grab_hovered_color(ImColor value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_hovered_color, value, transition);
+        Style& scrollbar_grab_hovered_color(Color value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_hovered_color, std::move(value), transition);
         }
 
-        Style& scrollbar_grab_active_color(ImColor value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_active_color, value, transition);
+        Style& scrollbar_grab_active_color(Color value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_active_color, std::move(value), transition);
         }
 
-        Style& color(ImColor value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_color, value, transition);
+        Style& color(Color value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_color, std::move(value), transition);
         }
 
-        Style& border_color(ImColor value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_border_color, value, transition);
+        Style& border_color(Color value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_border_color, std::move(value), transition);
         }
 
-        Style& background_color(ImColor value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_background_color, value, transition);
+        Style& background_color(Color value, TransitionSpec transition = {}) {
+            return set_animated_transition(&ComputedStyle::m_background_color, std::move(value), transition);
         }
 
         Style& box_shadow(BoxShadow value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_box_shadow, normalize_style_box_shadow(value), transition);
+            return set_animated_transition(
+                &ComputedStyle::m_box_shadow, normalize_style_box_shadow(std::move(value)), transition
+            );
         }
 
         Style& blur(int value) {
@@ -272,9 +282,9 @@ namespace ui {
             m_change_callback = callback;
         }
 
-        void notify_change() const {
+        void notify_change(bool font_changed = false) const {
             if (m_change_callback != nullptr) {
-                m_change_callback(m_change_owner);
+                m_change_callback(m_change_owner, font_changed);
             }
         }
 

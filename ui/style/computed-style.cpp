@@ -54,26 +54,19 @@ PushState ComputedStyle::push(float opacity, ImFont* effective_font) const {
     const float alpha = current.Alpha * m_alpha * opacity;
     if (current.Alpha != alpha) push_var(ImGuiStyleVar_Alpha, alpha);
 
-    const ImVec4 text = m_color.get();
-    const ImVec4 border = m_border_color.get();
     const ImVec4 background = m_background_color.get();
-    const ImVec4 scrollbar_background = m_scrollbar_background_color.get();
-    const ImVec4 scrollbar_grab = m_scrollbar_grab_color.get();
-    const ImVec4 scrollbar_grab_hovered = m_scrollbar_grab_hovered_color.get();
-    const ImVec4 scrollbar_grab_active = m_scrollbar_grab_active_color.get();
-
-    push_color(ImGuiCol_Text, text);
-    push_color(ImGuiCol_Border, border);
+    push_color(ImGuiCol_Text, m_color.get());
+    push_color(ImGuiCol_Border, m_border_color.get());
     push_color(ImGuiCol_FrameBg, background);
     push_color(ImGuiCol_FrameBgHovered, background);
     push_color(ImGuiCol_FrameBgActive, background);
     push_color(ImGuiCol_Button, background);
     push_color(ImGuiCol_ButtonHovered, background);
     push_color(ImGuiCol_ButtonActive, background);
-    push_color(ImGuiCol_ScrollbarBg, scrollbar_background);
-    push_color(ImGuiCol_ScrollbarGrab, scrollbar_grab);
-    push_color(ImGuiCol_ScrollbarGrabHovered, scrollbar_grab_hovered);
-    push_color(ImGuiCol_ScrollbarGrabActive, scrollbar_grab_active);
+    push_color(ImGuiCol_ScrollbarBg, m_scrollbar_background_color.get());
+    push_color(ImGuiCol_ScrollbarGrab, m_scrollbar_grab_color.get());
+    push_color(ImGuiCol_ScrollbarGrabHovered, m_scrollbar_grab_hovered_color.get());
+    push_color(ImGuiCol_ScrollbarGrabActive, m_scrollbar_grab_active_color.get());
     return state;
 }
 

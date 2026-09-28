@@ -3,10 +3,8 @@
 #include "../string-hash.hpp"
 #include "values.hpp"
 
-#include <functional>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
@@ -14,16 +12,7 @@ namespace ui {
     /// stores key-value while preserving their concrete type for debugger controls.
     class StyleVariableStore {
     public:
-        void set(std::string_view key, StyleValue value) {
-            auto existing_it = m_vars.find(key);
-
-            if (existing_it != m_vars.end()) {
-                existing_it->second = std::move(value);
-                return;
-            }
-
-            m_vars.emplace(key, std::move(value));
-        }
+        void set(std::string_view key, StyleValue value);
 
         template <typename T>
         void set(std::string_view key, T value) {
@@ -32,66 +21,36 @@ namespace ui {
 
         template <typename T>
         T* get(std::string_view key) {
-            auto value_it = m_vars.find(key);
-            return value_it == m_vars.end() ? nullptr : std::get_if<T>(&value_it->second);
+            StyleValue* value = find(key);
+            return value == nullptr ? nullptr : std::get_if<T>(value);
         }
 
         template <typename T>
         const T* get(std::string_view key) const {
-            auto value_it = m_vars.find(key);
-            return value_it == m_vars.end() ? nullptr : std::get_if<T>(&value_it->second);
+            const StyleValue* value = find(key);
+            return value == nullptr ? nullptr : std::get_if<T>(value);
         }
 
-        StyleValue* find(std::string_view key) {
-            auto value_it = m_vars.find(key);
-            return value_it == m_vars.end() ? nullptr : &value_it->second;
+        StyleValue* find(std::string_view key);
+
+        const StyleValue* find(std::string_view key) const;
+
+        bool is_transitioning() const;
+
+        auto begin() {
+            return m_vars.begin();
         }
 
-        const StyleValue* find(std::string_view key) const {
-            auto value_it = m_vars.find(key);
-            return value_it == m_vars.end() ? nullptr : &value_it->second;
+        auto end() {
+            return m_vars.end();
         }
 
-        bool is_transitioning() const {
-            for (const auto& entry : m_vars) {
-                if (std::visit([](const auto& item) { return item.is_transitioning(); }, entry.second)) {
-                    return true;
-                }
-            }
-
-            return false;
+        auto begin() const {
+            return m_vars.begin();
         }
 
-        template <typename Func>
-        bool for_each(Func&& func) {
-            static_assert(
-                std::is_invocable_r_v<bool, Func&, const std::string&, StyleValue&>,
-                "StyleVariableStore::for_each callback must return bool"
-            );
-
-            for (auto& [key, value] : m_vars) {
-                if (!std::invoke(func, key, value)) {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        template <typename Func>
-        bool for_each(Func&& func) const {
-            static_assert(
-                std::is_invocable_r_v<bool, Func&, const std::string&, const StyleValue&>,
-                "StyleVariableStore::for_each callback must return bool"
-            );
-
-            for (const auto& [key, value] : m_vars) {
-                if (!std::invoke(func, key, value)) {
-                    return false;
-                }
-            }
-
-            return true;
+        auto end() const {
+            return m_vars.end();
         }
 
     private:

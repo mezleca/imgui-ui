@@ -8,13 +8,13 @@ using namespace ui;
 
 StyleAnimationSequence&
 StyleAnimationSequence::to(StyleAnimationProperty property, AnimationValue value, TransitionSpec transition) {
-    m_sequence.to(VisualState::target(m_state.slot(property)), value, transition);
+    m_sequence.to(VisualState::target(m_state.slot(property)), std::move(value), transition);
     return *this;
 }
 
 StyleAnimationSequence&
 StyleAnimationSequence::by(StyleAnimationProperty property, AnimationValue value, TransitionSpec transition) {
-    m_sequence.by(VisualState::target(m_state.slot(property)), value, transition);
+    m_sequence.by(VisualState::target(m_state.slot(property)), std::move(value), transition);
     return *this;
 }
 
@@ -24,7 +24,7 @@ StyleAnimationSequence& StyleAnimationSequence::release(StyleAnimationProperty p
 }
 
 StyleAnimationSequence& StyleAnimationSequence::release_all(TransitionSpec transition) {
-    for (StyleAnimationSlot& slot : m_state.animation_slots()) {
+    for (StyleAnimationSlot& slot : m_state.m_animation_slots) {
         m_sequence.release(VisualState::target(slot), transition);
     }
     return *this;

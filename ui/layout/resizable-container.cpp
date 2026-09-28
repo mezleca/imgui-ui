@@ -45,10 +45,6 @@ void ResizableContainer::on_draw_end() {
     m_parent_content_max = {cursor.x + available.x, cursor.y + available.y};
 }
 
-void ResizableContainer::on_event(UiEvent& event) {
-    handle_resize(event);
-}
-
 Rect ResizableContainer::hit_rect(Rect visual_rect) const {
     if (m_resize == ResizeAxes::None) {
         return visual_rect;
@@ -66,39 +62,33 @@ Rect ResizableContainer::resize_handle() const {
     );
 }
 
-void ResizableContainer::handle_resize(UiEvent& event) {
-    if (m_resize == ResizeAxes::None) {
-        return;
-    }
+void ResizableContainer::mouse_release_event(UiEvent& event) {
+    if (event.button != PointerButton::Left || !m_dragging) return;
 
-    if (event.type == EventType::PointerUp && event.button == PointerButton::Left && m_dragging) {
-        m_dragging = false;
-        m_resizing = ResizeAxes::None;
-        release_pointer();
-        event.block_native_input();
-        event.stop_propagation();
-        return;
-    }
+    m_dragging = false;
+    m_resizing = ResizeAxes::None;
+    release_pointer();
+    event.block_native_input();
+    event.stop_propagation();
+}
 
-    // capture after the pointer enters the handle. later moves use the original size and pointer position.
-    if (event.type == EventType::PointerDown && event.button == PointerButton::Left && resize_handle().contains(event.position)) {
-        m_dragging = capture_pointer();
-        if (!m_dragging) {
-            return;
-        }
+void ResizableContainer::mouse_press_event(UiEvent& event) {
+    if (m_resize == ResizeAxes::None || event.button != PointerButton::Left || !resize_handle().contains(event.position)) return;
 
-        m_drag_start = event.position;
-        m_previous_size = layout().size();
-        m_resizing = m_resize;
-        event.prevent_default();
-        event.block_native_input();
-        event.stop_propagation();
-        return;
-    }
+    // capture the drag before recording its origin. later motion uses this pointer position and size.
+    m_dragging = capture_pointer();
+    if (!m_dragging) return;
 
-    if (event.type != EventType::PointerMove || !m_dragging) {
-        return;
-    }
+    m_drag_start = event.position;
+    m_previous_size = layout().size();
+    m_resizing = m_resize;
+    event.prevent_default();
+    event.block_native_input();
+    event.stop_propagation();
+}
+
+void ResizableContainer::mouse_move_event(UiEvent& event) {
+    if (!m_dragging) return;
 
     // clamp the dragged size to the parent content bounds and the minimum widget size.
     const ImVec2 child_min = layout().visual_rect().min;
@@ -107,23 +97,13 @@ void ResizableContainer::handle_resize(UiEvent& event) {
         std::max(MIN_CHILD_SIZE, m_parent_content_max.y - child_min.y),
     };
 
-    ImVec2 size = layout().size();
-
-    if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) {
-        size.x = std::clamp(m_previous_size.x + event.position.x - m_drag_start.x, MIN_CHILD_SIZE, max_size.x);
-    }
-
-    if ((m_resizing & ResizeAxes::Y) != ResizeAxes::None) {
-        size.y = std::clamp(m_previous_size.y + event.position.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y);
-    }
-
     LayoutSize updated = layout().size_spec();
     if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) {
-        updated.width = px(size.x);
+        updated.width = px(std::clamp(m_previous_size.x + event.position.x - m_drag_start.x, MIN_CHILD_SIZE, max_size.x));
     }
 
     if ((m_resizing & ResizeAxes::Y) != ResizeAxes::None) {
-        updated.height = px(size.y);
+        updated.height = px(std::clamp(m_previous_size.y + event.position.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y));
     }
 
     set_size(updated);
@@ -144,12 +124,12 @@ void ResizableContainer::draw_resize_indicator() {
     for (int i = 0; i < 3; ++i) {
         const float distance = 3.0F + (static_cast<float>(i) * 4.0F);
         draw_line(
-            window_draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, current_style.border_color().get_col(),
+            window_draw_list, {max.x - distance - 1.0f, max.y}, {max.x, max.y - distance}, current_style.border_color().value,
             border_thickness
         );
         draw_line(
             window_draw_list, {max.x - distance + border_thickness + 0.5f, max.y},
-            {max.x, max.y - distance + border_thickness + 0.5f}, current_style.background_color().get_col(), border_thickness
+            {max.x, max.y - distance + border_thickness + 0.5f}, current_style.background_color().value, border_thickness
         );
     }
 }

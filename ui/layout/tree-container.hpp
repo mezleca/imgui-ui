@@ -21,6 +21,6 @@ namespace ui {
         std::string m_label;
         bool m_open = false;
         Rect m_outer_rect{};
-        ImVec2 m_body_size{};
+        ImVec2 m_body_size;
     };
 } // namespace ui

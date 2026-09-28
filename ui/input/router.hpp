@@ -20,10 +20,7 @@ namespace ui {
         std::size_t entry_checks = 0;
     };
 
-    /// routes one ui surface's input through its retained node tree.
-    ///
-    /// hit regions are rebuilt after layout because their screen bounds are frame-local.
-    /// focus, pointer capture, and pressed buttons are surface-wide state.
+    /// owns a surface's hit regions, focus, and pointer capture while routing events to retained nodes.
     class InputRouter {
     public:
         InputRouter() = default;
@@ -34,13 +31,13 @@ namespace ui {
         /// starts a frame by clearing entries, callbacks, statistics, and stale input state.
         void begin_frame();
 
-        /// adds a screen-space target that bypasses node input registration.
-        void register_target(Node& node, Rect rect, InputCallback callback = {});
+        /// attaches node to this router and adds a screen-space target independently of its input mode.
+        void register_target(Node& node, Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
         /// consumes selected events in rect and prevents imgui from receiving them.
         void register_blocker(Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
-        /// consumes selected events outside the visible owner's input descendants.
+        /// attaches owner and consumes selected events outside its input descendants within rect.
         void register_blocker(Node& owner, Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
         /// routes later pointer moves and releases to node until released.
@@ -52,14 +49,9 @@ namespace ui {
         /// releases capture and presses pointing into a subtree.
         void release_pointer(Node& subtree);
 
-        /// gives keyboard focus to a visible, enabled node that accepts input.
-        bool set_focus(Node& node);
-
-        /// sends a focus-lost event and clears the current focus.
-        void clear_focus();
-
-        /// clears focus when it points into a subtree.
-        void clear_focus(Node& subtree);
+        /// changes keyboard focus, or clears it with nullptr. sends focus loss before focus gain.
+        /// a non-null node must be visible, enabled and accept input. input mode does not restrict explicit focus.
+        bool set_focus(Node* node);
 
         /// moves focus from a subtree to its nearest active blocker ancestor.
         void restore_focus(Node& subtree);
@@ -75,13 +67,16 @@ namespace ui {
         }
 
         /// routes one event to its focused, captured, or hit-tested node.
+        /// pointer events traverse overlapping targets front to back and bubble through each target's parents once.
+        /// keyboard events visit focus first, then the remaining attached nodes. pointer presses do not clear focus.
+        /// stop_propagation or an explicit blocker ends traversal. mark_handled does not stop it.
         bool dispatch(UiEvent& event);
 
         /// dispatches to target, then walks its parent chain until propagation stops.
         static bool dispatch(Node& target, UiEvent& event);
 
-        /// returns the eligible target at position without applying blockers.
-        Node* node_at(ImVec2 position) const;
+        /// returns the front target or blocking owner using the same hit rules as event dispatch.
+        Node* node_at(ImVec2 position, EventType type = EventType::PointerMove) const;
 
         /// returns current entry count and scans performed since begin_frame().
         InputRouterStats stats() const;
@@ -98,7 +93,7 @@ namespace ui {
 
         /// preserves press state until the matching release decides click synthesis.
         struct PressedPointer {
-            Node* target = nullptr;
+            std::vector<Node*> targets;
             /// suppresses a synthesized click after the press prevents its default action.
             bool prevent_click = false;
             /// repeats native input blocking on the matching pointer release.
@@ -111,40 +106,30 @@ namespace ui {
         /// blocks application hover while the debugger owns the pointer.
         void set_debug_pointer_blocked(bool blocked);
 
-        /// removes entries whose target or blocker owner is node.
-        void erase_entries(Node& node);
-        /// removes subtree entries and clears their hover and active flags.
-        void clear_subtree_entries(Node& subtree);
+        /// removes subtree hit regions and clears its hover, active, focus, capture and presses.
+        void clear_input_state(Node& subtree);
         /// clears every router reference into subtree before it is detached.
         void detach(Node& subtree);
-        /// records node so the destructor can detach this router from it.
-        void attach_node(Node& node);
-        /// removes node from the destructor's attachment list.
-        void detach_node(Node& node);
-        /// clears flag when current points into subtree.
-        static void clear_input_flag(Node& subtree, Node*& current, InputFlag flag);
-        /// resolves a node hit rect into one clipped screen-space entry.
-        void register_node(Node& node, bool blocker, Rect input_rect, Rect visual_rect);
         /// clears focus, capture, hover, active, and press state for inactive nodes.
         void clear_inactive_targets();
         /// updates hover from a position without dispatching an event.
         void refresh_pointer_state(ImVec2 position);
-        /// moves one input flag between nodes and resets the cursor when hover clears.
+        static void set_input_flag(Node& node, InputFlag flag, bool enabled);
         static void set_input_flag(Node*& current, Node* next, InputFlag flag);
-        /// resolves a pointer entry, dispatches a matching blocker, and updates hover.
-        const HitTestIndex::Entry* pointer_target(UiEvent& event, bool& blocked);
-        /// returns the target or blocker owner visible to debugger inspection.
-        Node* inspect_node_at(ImVec2 position, EventType type) const;
-        /// runs the entry callback before bubbling the event from its target node.
-        bool dispatch_target(const HitTestIndex::Entry& target, UiEvent& event);
-        static bool dispatch_bubble(Node& target, UiEvent& event);
+        void set_hovered(const HitTestIndex::Route& route);
+        bool dispatch_pointer(
+            UiEvent& event, std::vector<Node*>* pressed = nullptr, const std::vector<Node*>* released = nullptr,
+            Node* captured = nullptr
+        );
+        bool dispatch_keyboard(UiEvent& event);
+        static void dispatch_branch(Node& target, UiEvent& event, std::vector<Node*>& visited, Node* scope = nullptr);
 
         HitTestIndex m_hit_test;
         Node* m_focused_node = nullptr;
         bool m_debug_inspect_mode = false;
         bool m_debug_pointer_blocked = false;
         Node* m_pointer_capture = nullptr;
-        Node* m_hovered_node = nullptr;
+        std::vector<Node*> m_hovered_nodes;
         Node* m_active_node = nullptr;
         std::array<PressedPointer, POINTER_BUTTON_COUNT> m_pressed{};
         std::vector<Node*> m_attached_nodes;

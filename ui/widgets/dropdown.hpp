@@ -27,6 +27,7 @@ namespace ui {
 
         DropdownWidget& set_label(std::string label);
         DropdownWidget& set_placeholder(std::string placeholder);
+        /// returns false if value is absent or already selected. a change closes the popup and notifies listeners.
         bool select_value(std::string_view value);
         /// replaces visible options without changing the bound value.
         DropdownWidget& set_options(std::vector<DropdownOption> options);
@@ -65,10 +66,8 @@ namespace ui {
                 return visibility == Visibility::Closed;
             }
 
-            // trigger and option rows use these shared selection operations.
             const DropdownOption* find_option(std::string_view option_value) const;
             const DropdownOption* selected_option() const;
-            bool select(std::size_t index);
 
             void open();
 
@@ -89,7 +88,7 @@ namespace ui {
             DropdownBodyNode* body = nullptr;
             DropdownTriggerNode* trigger = nullptr;
             Visibility visibility = Visibility::Closed;
-            ImVec2 arrow_size{};
+            ImVec2 arrow_size;
             float popup_gap = 0.0F;
             float transition_duration = 0.0F;
         };
@@ -98,7 +97,7 @@ namespace ui {
         friend class DropdownOptionNode;
         friend class DropdownTriggerNode;
 
-        void on_event(UiEvent& event) override;
+        void event(UiEvent& event) override;
 
         TextWidget* m_label_node = nullptr;
         DropdownTriggerNode* m_trigger = nullptr;

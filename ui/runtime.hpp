@@ -14,9 +14,7 @@ namespace ui {
         std::unique_ptr<TextureLoader> texture_loader;
     };
 
-    /// owns assets and visual defaults copied by every UI surface created from it.
-    ///
-    /// runtime outlives its surfaces so fonts and textures can safely cache data for each surface's imgui context.
+    /// owns font and texture registries and the theme used to initialize UI surfaces.
     class Runtime {
     public:
         explicit Runtime(RuntimeConfig config = {});

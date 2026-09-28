@@ -31,7 +31,7 @@ EffectPass EffectRegistry::register_effect(EffectDefinition definition, std::siz
     }
 
     const uint32_t id = m_next_id++;
-    m_entries.push_back({id, definition, command_size, command_alignment, m_initialized});
+    m_entries.push_back({definition, command_size, command_alignment, id, m_initialized});
     return {this, id};
 }
 
@@ -65,16 +65,8 @@ bool EffectRegistry::initialize() {
 
     for (Entry& entry : m_entries) {
         if (entry.definition.initialize != nullptr && !entry.definition.initialize(entry.definition.user_data)) {
-            for (Entry& initialized_entry : m_entries) {
-                if (!initialized_entry.initialized) {
-                    break;
-                }
-
-                if (initialized_entry.definition.shutdown != nullptr) {
-                    initialized_entry.definition.shutdown(initialized_entry.definition.user_data);
-                }
-                initialized_entry.initialized = false;
-            }
+            // release the effects that initialized before this failure in reverse registration order.
+            shutdown();
             return false;
         }
 

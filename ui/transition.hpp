@@ -19,7 +19,7 @@ namespace ui {
         }
 
         inline float in_out_quad(float progress) {
-            return progress < 0.5F ? 2.0F * progress * progress : 1.0F - std::pow(-2.0F * progress + 2.0F, 2.0F) / 2.0F;
+            return progress < 0.5F ? 2.0F * progress * progress : 1.0F - (std::pow((-2.0F * progress) + 2.0F, 2.0F) / 2.0F);
         }
 
         inline float in_cubic(float progress) {
@@ -32,7 +32,7 @@ namespace ui {
 
         inline float in_out_cubic(float progress) {
             return progress < 0.5F ? 4.0F * progress * progress * progress
-                                   : 1.0F - std::pow(-2.0F * progress + 2.0F, 3.0F) / 2.0F;
+                                   : 1.0F - (std::pow((-2.0F * progress) + 2.0F, 3.0F) / 2.0F);
         }
 
         inline float in_sine(float progress) {
@@ -49,24 +49,24 @@ namespace ui {
 
         inline float in_back(float progress) {
             constexpr float overshoot = 1.70158F;
-            return (overshoot + 1.0F) * progress * progress * progress - overshoot * progress * progress;
+            return ((overshoot + 1.0F) * progress * progress * progress) - (overshoot * progress * progress);
         }
 
         inline float out_back(float progress) {
             constexpr float overshoot = 1.70158F;
             const float shifted = progress - 1.0F;
-            return 1.0F + (overshoot + 1.0F) * shifted * shifted * shifted + overshoot * shifted * shifted;
+            return 1.0F + ((overshoot + 1.0F) * shifted * shifted * shifted) + (overshoot * shifted * shifted);
         }
 
         inline float in_out_back(float progress) {
             constexpr float overshoot = 1.70158F * 1.525F;
             const float scaled = progress * 2.0F;
             if (scaled < 1.0F) {
-                return scaled * scaled * ((overshoot + 1.0F) * scaled - overshoot) / 2.0F;
+                return scaled * scaled * (((overshoot + 1.0F) * scaled) - overshoot) / 2.0F;
             }
 
             const float shifted = scaled - 2.0F;
-            return (shifted * shifted * ((overshoot + 1.0F) * shifted + overshoot) + 2.0F) / 2.0F;
+            return ((shifted * shifted * (((overshoot + 1.0F) * shifted) + overshoot)) + 2.0F) / 2.0F;
         }
     } // namespace easing
 

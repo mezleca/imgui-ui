@@ -11,12 +11,14 @@ CheckboxWidget::CheckboxWidget(bool& value, std::string label, std::string id)
     : Container(std::move(id), StackDirection::Horizontal), m_value(&value) {
     set_type_name("Checkbox");
     set_size({fit(), fit()});
-    set_input_mode(InputMode::Target);
     set_content_alignment(Anchor::CenterLeft);
 
+    // the checkbox owns the frame's hit region. decorative containers must not register additional targets.
     m_box_node = &add<Container>("box", "Box");
+    m_box_node->set_input_mode(InputMode::None);
     m_box_node->set_size({px(m_box_size), px(m_box_size)});
     m_frame_node = &m_box_node->add<Container>("frame", "Box");
+    m_frame_node->set_input_mode(InputMode::None);
     m_frame_node->set_size({grow(), grow()});
     m_fill_node = &m_frame_node->add<BoxWidget>("fill", LayoutSize{grow(), grow()});
     m_label_node = &add<TextWidget>(std::move(label));
@@ -39,13 +41,8 @@ void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
         style.background_color(theme.controls.mark_color).border(BORDER_NONE);
     });
 
-    m_frame_node->configure_style(StyleType::HOVER, [&theme](Style& style) {
-        style.background_color(theme.controls.hover_color).border_color(theme.accent_hover_color);
-    });
-
-    m_frame_node->configure_style(StyleType::ACTIVE, [&theme](Style& style) {
-        style.background_color(theme.controls.active_color).border_color(theme.accent_color);
-    });
+    m_frame_node->style(StyleType::HOVER).background_color(theme.controls.hover_color).border_color(theme.accent_hover_color);
+    m_frame_node->style(StyleType::ACTIVE).background_color(theme.controls.active_color).border_color(theme.accent_color);
 
     update_shape();
 }
@@ -66,7 +63,7 @@ bool CheckboxWidget::set_checked(bool checked) {
     return true;
 }
 
-void CheckboxWidget::on_click(UiEvent& event) {
+void CheckboxWidget::click_event(UiEvent& event) {
     if (event.button != PointerButton::Left) {
         return;
     }
@@ -103,8 +100,8 @@ CheckboxWidget& CheckboxWidget::set_box_size(float size) {
     return *this;
 }
 
-CheckboxWidget& CheckboxWidget::set_mark_color(ImColor color) {
-    m_fill_node->configure_all_styles([color](Style& style) { style.background_color(color); });
+CheckboxWidget& CheckboxWidget::set_mark_color(const Color& color) {
+    m_fill_node->configure_all_styles([&color](Style& style) { style.background_color(color); });
     return *this;
 }
 

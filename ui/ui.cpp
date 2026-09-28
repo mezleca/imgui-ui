@@ -58,7 +58,7 @@ void UI::process_events() {
 }
 
 void UI::set_theme(Theme theme) {
-    m_theme = theme;
+    m_theme = std::move(theme);
 
     const ImGuiContextScope scope(m_context);
 
@@ -70,7 +70,8 @@ void UI::set_theme(Theme theme) {
 
 ImFont* UI::resolve_font(Font* font, int size) {
     if (font != nullptr) {
-        if (ImFont* result = font->get(size); result != nullptr) {
+        ImFont* result = font->get(size);
+        if (result != nullptr) {
             return result;
         }
     }
@@ -225,7 +226,7 @@ void UI::set_debug_pointer_blocked(bool blocked) {
 }
 
 Node* UI::inspect_input_target(ImVec2 position, EventType type) const {
-    return m_input_router.inspect_node_at(position, type);
+    return m_input_router.node_at(position, type);
 }
 
 void UI::begin_frame() {
@@ -274,8 +275,10 @@ void UI::end_frame() {
         m_profiler->record_frame_metrics(input_stats.entry_count, input_stats.entry_checks);
     }
 
-    UI_PROFILE_SCOPE(m_profiler.get(), "UI::render");
-    m_backend->render(draw_data);
+    {
+        UI_PROFILE_SCOPE(m_profiler.get(), "UI::render");
+        m_profiler->record_gpu_render_ms(m_backend->render_profiled(draw_data, m_profiler->enabled()));
+    }
 
     m_profiler->end_frame();
     ImGui::SetCurrentContext(m_previous_context);

@@ -3,6 +3,7 @@
 #include "../../constants.hpp"
 #include "../../imgui/context-scope.hpp"
 #include "../../imgui/effects/blur/opengl.hpp"
+#include "../../imgui/effects/gradient/opengl.hpp"
 #include "../../imgui/effects/shadow/opengl.hpp"
 #include "../../ui.hpp"
 
@@ -121,12 +122,8 @@ static std::optional<UiEvent> event_from_sdl(const SDL_Event& event) {
             result.text = event.text.text != nullptr ? event.text.text : "";
             break;
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
-            result.type = EventType::PointerDown;
-            result.position = {event.button.x, event.button.y};
-            result.button = pointer_button(event.button.button);
-            break;
         case SDL_EVENT_MOUSE_BUTTON_UP:
-            result.type = EventType::PointerUp;
+            result.type = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? EventType::PointerDown : EventType::PointerUp;
             result.position = {event.button.x, event.button.y};
             result.button = pointer_button(event.button.button);
             break;
@@ -208,6 +205,7 @@ void SdlBackend::process_events(UI& surface) {
 void SdlBackend::register_effects(EffectRegistry& effects) {
     register_opengl_blur(effects);
     register_opengl_box_shadow(effects);
+    register_opengl_gradient(effects);
 }
 
 bool SdlBackend::initialize_imgui() {
@@ -229,15 +227,18 @@ void SdlBackend::shutdown_imgui() {
         return;
     }
 
+    SDL_GL_MakeCurrent(m_window, m_context);
+    m_gpu_timer.shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     m_imgui_initialized = false;
 }
 
-void SdlBackend::begin_frame(ImVec4 clear_color) {
+void SdlBackend::begin_frame(Color clear) {
     SDL_GL_MakeCurrent(m_window, m_context);
     const ImVec2 size = display_size();
     glViewport(0, 0, static_cast<int>(size.x), static_cast<int>(size.y));
+    const ImVec4 clear_color = clear.rgba();
     glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -246,9 +247,16 @@ void SdlBackend::begin_frame(ImVec4 clear_color) {
 }
 
 void SdlBackend::render(ImDrawData* draw_data) {
+    render_profiled(draw_data, false);
+}
+
+std::optional<double> SdlBackend::render_profiled(ImDrawData* draw_data, bool profile_gpu) {
+    const std::optional<double> gpu_ms = m_gpu_timer.begin(profile_gpu);
     ImGui_ImplOpenGL3_RenderDrawData(draw_data);
+    m_gpu_timer.end();
     apply_mouse_cursor(m_mouse_cursor_type);
     SDL_GL_SwapWindow(m_window);
+    return gpu_ms;
 }
 
 float SdlBackend::content_scale() const {
@@ -312,14 +320,15 @@ bool SdlBackend::process_event(UI& surface, const SDL_Event& event) {
         ImGui::GetIO().AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     }
 
-    // imgui still receives unhandled events for its text and scalar controls.
+    // native controls receive consumed events unless routing explicitly blocks imgui input.
     SDL_Event imgui_event = event;
     if (imgui_event.type == SDL_EVENT_MOUSE_WHEEL) {
         imgui_event.wheel.x *= constants::SCROLL_WHEEL_SCALE;
         imgui_event.wheel.y *= constants::SCROLL_WHEEL_SCALE;
     }
 
-    // a release clears a retained native control; an active drag continues after crossing a blocking layer.
+    // forward the release to clear native controls.
+    // keep forwarding motion during an active drag after it crosses a blocking layer.
     if (!native_input_blocked || event.type == SDL_EVENT_MOUSE_BUTTON_UP || (blocked_pointer_move && native_drag_active)) {
         ImGui_ImplSDL3_ProcessEvent(&imgui_event);
     }

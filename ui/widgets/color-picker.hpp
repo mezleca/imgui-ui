@@ -11,10 +11,10 @@ namespace ui {
 
     class ColorPickerWidget : public Container {
     public:
-        ColorPickerWidget(ImColor& color, std::string label = {}, std::string id = {});
+        ColorPickerWidget(Color& color, std::string label = {}, std::string id = {});
 
         ColorPickerWidget& set_label(std::string label);
-        bool set_color(ImColor color);
+        bool set_color(const Color& color);
         void open();
         void close();
 
@@ -32,7 +32,7 @@ namespace ui {
     private:
         friend class ColorPickerPopup;
 
-        ImColor* m_color = nullptr;
+        Color* m_color = nullptr;
         TextWidget* m_label_node = nullptr;
         ColorPickerPreviewNode* m_preview = nullptr;
         ColorPickerPopup* m_popup = nullptr;

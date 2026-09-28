@@ -8,44 +8,28 @@
 
 namespace ui {
     enum class Anchor : uint8_t {
-        /// aligns the top-left corner.
         TopLeft,
-        /// aligns the top center.
         TopCenter,
-        /// aligns the top-right corner.
         TopRight,
-        /// aligns the center-left edge.
         CenterLeft,
-        /// aligns both centers.
         Center,
-        /// aligns the center-right edge.
         CenterRight,
-        /// aligns the bottom-left corner.
         BottomLeft,
-        /// aligns the bottom center.
         BottomCenter,
-        /// aligns the bottom-right corner.
         BottomRight,
-        /// uses anchor_position or origin_position instead of a named point.
         Custom,
     };
 
     enum class StackDirection : uint8_t {
-        /// places flow children from left to right.
         Horizontal,
-        /// places flow children from top to bottom.
         Vertical,
     };
 
     enum class ResizeAxes : uint8_t {
-        /// disables resizing.
         None = 0,
-        /// allows horizontal resizing.
         X = 1 << 0,
-        /// allows vertical resizing.
         Y = 1 << 1,
-        /// allows horizontal and vertical resizing.
-        Both = static_cast<uint8_t>(X) | static_cast<uint8_t>(Y),
+        Both = X | Y,
     };
 
     enum class LayoutSizeMode : uint8_t {
@@ -60,22 +44,6 @@ namespace ui {
     };
 
     struct LayoutAxis {
-        static constexpr LayoutAxis grow(float weight = 1.0F) {
-            return {LayoutSizeMode::Grow, weight > 0.0F ? weight : 1.0F};
-        }
-
-        static constexpr LayoutAxis fixed(float value) {
-            return {LayoutSizeMode::Fixed, std::max(0.0F, value)};
-        }
-
-        static constexpr LayoutAxis percent(float value) {
-            return {LayoutSizeMode::Percent, std::clamp(value, 0.0F, 100.0F)};
-        }
-
-        static constexpr LayoutAxis fit() {
-            return {LayoutSizeMode::Fit, 0.0F};
-        }
-
         float intrinsic(float measured) const {
             if (mode == LayoutSizeMode::Fixed) {
                 return value;
@@ -106,40 +74,32 @@ namespace ui {
         LayoutAxis width{};
         LayoutAxis height{};
 
-        ImVec2 intrinsic(ImVec2 measured) const {
-            return {width.intrinsic(measured.x), height.intrinsic(measured.y)};
-        }
-
-        ImVec2 resolve(ImVec2 measured, ImVec2 available) const {
-            return {width.resolve(measured.x, available.x), height.resolve(measured.y, available.y)};
-        }
-
         constexpr bool operator==(const LayoutSize&) const = default;
     };
 
     constexpr LayoutAxis px(float value) {
-        return LayoutAxis::fixed(value);
+        return {LayoutSizeMode::Fixed, std::max(0.0F, value)};
     }
 
     /// returns an axis sized to a percentage in the inclusive 0–100 range of its available parent space.
     constexpr LayoutAxis percent(float value) {
-        return LayoutAxis::percent(value);
+        return {LayoutSizeMode::Percent, std::clamp(value, 0.0F, 100.0F)};
     }
 
     constexpr LayoutAxis grow(float weight = 1.0F) {
-        return LayoutAxis::grow(weight);
+        return {LayoutSizeMode::Grow, weight > 0.0F ? weight : 1.0F};
     }
 
     constexpr LayoutAxis fit() {
-        return LayoutAxis::fit();
+        return {LayoutSizeMode::Fit, 0.0F};
     }
 
     struct Placement {
         Anchor anchor = Anchor::TopLeft;
         Anchor origin = Anchor::TopLeft;
-        ImVec2 offset{};
-        ImVec2 anchor_position{};
-        ImVec2 origin_position{};
+        ImVec2 offset;
+        ImVec2 anchor_position;
+        ImVec2 origin_position;
 
         bool operator==(const Placement& other) const {
             return anchor == other.anchor && origin == other.origin && offset.x == other.offset.x && offset.y == other.offset.y &&
@@ -163,8 +123,8 @@ namespace ui {
 
     /// axis-aligned bounds in one coordinate space.
     struct Rect {
-        ImVec2 min{};
-        ImVec2 max{};
+        ImVec2 min;
+        ImVec2 max;
 
         /// returns false for empty or inverted bounds.
         bool valid() const {
@@ -242,36 +202,6 @@ namespace ui {
                 return {};
         }
         return {};
-    }
-
-    /// resolves a child top-left position inside a parent extent.
-    inline ImVec2 resolve_layout_position(
-        ImVec2 parent_size, ImVec2 child_size, ImVec2 anchor_factor, ImVec2 origin_factor, ImVec2 offset = {}
-    ) {
-        return {
-            parent_size.x * anchor_factor.x - child_size.x * origin_factor.x + offset.x,
-            parent_size.y * anchor_factor.y - child_size.y * origin_factor.y + offset.y,
-        };
-    }
-
-    /// resolves a child top-left position from named anchor and origin points.
-    inline ImVec2
-    resolve_layout_position(ImVec2 parent_size, ImVec2 child_size, Anchor anchor, Anchor origin, ImVec2 offset = {}) {
-        return resolve_layout_position(parent_size, child_size, alignment_factor(anchor), alignment_factor(origin), offset);
-    }
-
-    /// resolves child bounds in the same coordinate space as the parent rectangle.
-    inline Rect
-    resolve_layout_rect(Rect parent, ImVec2 child_size, ImVec2 anchor_factor, ImVec2 origin_factor, ImVec2 offset = {}) {
-        const ImVec2 position = resolve_layout_position(parent.size(), child_size, anchor_factor, origin_factor, offset);
-        return Rect::from_position_size({parent.min.x + position.x, parent.min.y + position.y}, child_size);
-    }
-
-    /// resolves child bounds from a placement request.
-    inline Rect resolve_layout_rect(Rect parent, ImVec2 child_size, const Placement& placement) {
-        const ImVec2 anchor = placement.anchor == Anchor::Custom ? placement.anchor_position : alignment_factor(placement.anchor);
-        const ImVec2 origin = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
-        return resolve_layout_rect(parent, child_size, anchor, origin, placement.offset);
     }
 
     inline ImVec2 clamp_position(Rect bounds, ImVec2 size, ImVec2 position) {
@@ -390,18 +320,16 @@ namespace ui {
             m_config = config;
             m_has_explicit_size_request = m_has_explicit_size_request || size_changed;
             m_has_arranged_position = false;
-            invalidate_resolved_size();
+            if (size_changed) {
+                invalidate_resolved_size();
+            }
         }
 
         void set_measured_size(ImVec2 size, bool measured_width, bool measured_height) {
             m_measured_size = size;
             if (!m_has_explicit_size_request) {
-                if (measured_width) {
-                    m_config.size.width = LayoutAxis::fit();
-                }
-                if (measured_height) {
-                    m_config.size.height = LayoutAxis::fit();
-                }
+                if (measured_width) m_config.size.width = fit();
+                if (measured_height) m_config.size.height = fit();
             }
 
             invalidate_resolved_size();
@@ -425,11 +353,9 @@ namespace ui {
             invalidate_resolved_size();
         }
 
-        bool set_arranged_placement(Placement placement) {
-            const bool changed = m_arranged_placement != placement;
+        void set_arranged_placement(Placement placement) {
             m_arranged_placement = placement;
             m_has_arranged_position = true;
-            return changed;
         }
 
         bool has_position() const {
@@ -446,16 +372,15 @@ namespace ui {
             m_layout_rect = rect;
         }
 
-        bool assign_size(ImVec2 size, bool assigned_by_parent = false) {
-            const bool changed = m_size.x != size.x || m_size.y != size.y;
+        void assign_size(ImVec2 size, bool assigned_by_parent = false) {
             m_size = size;
             m_has_size = true;
             m_size_assigned_by_parent = assigned_by_parent;
-            return changed;
         }
 
         void clear_size_assignment() {
             m_has_size = false;
+            m_size_assigned_by_parent = false;
         }
 
         void invalidate_resolved_size() {
@@ -464,43 +389,31 @@ namespace ui {
             m_size_assigned_by_parent = false;
         }
 
-        void clear_parent_size_assignment() {
-            m_size_assigned_by_parent = false;
-        }
-
         void set_visual_rect(Rect rect) {
             m_visual_rect = rect;
         }
 
-        bool set_parent_content_rect(Rect rect, ImVec2 available_size = {}) {
-            const ImVec2 previous_size = m_parent_content_rect.size();
-            const bool changed = previous_size.x != rect.size().x || previous_size.y != rect.size().y ||
-                                 m_available_size.x != available_size.x || m_available_size.y != available_size.y;
+        void set_parent_content_rect(Rect rect, ImVec2 available_size = {}) {
             m_parent_content_rect = rect;
             m_available_size = available_size;
-            return changed;
-        }
-
-        static float border_box_extent(float value, float insets) {
-            return std::max(value, insets);
         }
 
         static float intrinsic_axis(LayoutAxis axis, float measured, float insets, BoxSizing box_sizing) {
             if (axis.mode == LayoutSizeMode::Fixed) {
-                return box_sizing == BoxSizing::ContentBox ? axis.value + insets : border_box_extent(axis.value, insets);
+                return box_sizing == BoxSizing::ContentBox ? axis.value + insets : std::max(axis.value, insets);
             }
 
-            if (axis.mode == LayoutSizeMode::Grow) return border_box_extent(measured, insets);
+            if (axis.mode == LayoutSizeMode::Grow) return std::max(measured, insets);
             return axis.intrinsic(measured);
         }
 
         static float resolved_axis(LayoutAxis axis, float measured, float available, float insets, BoxSizing box_sizing) {
             const float resolved = axis.resolve(measured, available);
             if (axis.mode == LayoutSizeMode::Fixed || axis.mode == LayoutSizeMode::Percent) {
-                return box_sizing == BoxSizing::ContentBox ? resolved + insets : border_box_extent(resolved, insets);
+                return box_sizing == BoxSizing::ContentBox ? resolved + insets : std::max(resolved, insets);
             }
 
-            if (axis.mode == LayoutSizeMode::Grow) return border_box_extent(resolved, insets);
+            if (axis.mode == LayoutSizeMode::Grow) return std::max(resolved, insets);
 
             return resolved;
         }
@@ -514,15 +427,15 @@ namespace ui {
         }
 
         LayoutConfig m_config{};
-        ImVec2 m_measured_size{};
+        ImVec2 m_measured_size;
         BoxInsets m_box_insets{};
         BoxSizing m_box_sizing = BoxSizing::ContentBox;
-        ImVec2 m_size = {};
+        ImVec2 m_size;
         Rect m_local_rect{};
         Rect m_layout_rect{};
         Rect m_visual_rect{};
         Rect m_parent_content_rect{};
-        ImVec2 m_available_size{};
+        ImVec2 m_available_size;
         Placement m_arranged_placement{};
         bool m_has_explicit_size_request = false;
         bool m_has_size = false;

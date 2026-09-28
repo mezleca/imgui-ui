@@ -201,7 +201,6 @@ blur_pass(GLuint input, GLuint output, int width, int height, int radius, float 
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, output, 0);
     glViewport(0, 0, width, height);
     glDisable(GL_BLEND);
-    glDisable(GL_SCISSOR_TEST);
     glUseProgram(textures->program);
     glUniform1i(textures->image, 0);
     glUniform2f(textures->texel, 1.0F / static_cast<float>(width), 1.0F / static_cast<float>(height));
@@ -236,6 +235,12 @@ static std::array<int, 3> box_widths(int sigma) {
 
 static void blur(int width, int height, int sigma, ImVec4 bounds) {
     const std::array<int, 3> widths = box_widths(sigma);
+    const int left = std::clamp(static_cast<int>(std::floor(bounds.x)) - 1, 0, width);
+    const int right = std::clamp(static_cast<int>(std::ceil(bounds.z)) + 1, 0, width);
+    const int bottom = std::clamp(static_cast<int>(std::floor(bounds.y)) - 1, 0, height);
+    const int top = std::clamp(static_cast<int>(std::ceil(bounds.w)) + 1, 0, height);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(left, bottom, right - left, top - bottom);
     GLuint input = textures->source;
     GLuint output = textures->ping;
 
@@ -284,15 +289,6 @@ static void render_blur(void*, const ImDrawList*, const ImDrawCmd* command, cons
         (region->sample.max.y - display_position.y) * scale.y,
     };
 
-    // each backdrop samples the framebuffer immediately before its own node is drawn.
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(framebuffer));
-    glBindTexture(GL_TEXTURE_2D, textures->source);
-    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
-    blur(
-        width, height, region->strength,
-        {minimum.x, static_cast<float>(height) - maximum.y, maximum.x, static_cast<float>(height) - minimum.y}
-    );
-
     const ImVec2 output_minimum = {
         (region->output.min.x - display_position.x) * scale.x,
         (region->output.min.y - display_position.y) * scale.y,
@@ -332,6 +328,26 @@ static void render_blur(void*, const ImDrawList*, const ImDrawCmd* command, cons
     if (clipped_right <= clipped_left || clipped_top <= clipped_bottom) {
         return;
     }
+
+    const ImVec4 sample_bounds = {
+        minimum.x, static_cast<float>(height) - maximum.y, maximum.x, static_cast<float>(height) - minimum.y
+    };
+    const int sample_left = std::clamp(static_cast<int>(std::floor(sample_bounds.x)) - 1, 0, width);
+    const int sample_right = std::clamp(static_cast<int>(std::ceil(sample_bounds.z)) + 1, 0, width);
+    const int sample_bottom = std::clamp(static_cast<int>(std::floor(sample_bounds.y)) - 1, 0, height);
+    const int sample_top = std::clamp(static_cast<int>(std::ceil(sample_bounds.w)) + 1, 0, height);
+    if (sample_right <= sample_left || sample_top <= sample_bottom) {
+        return;
+    }
+
+    // each backdrop reads the current framebuffer before its own node is drawn.
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(framebuffer));
+    glBindTexture(GL_TEXTURE_2D, textures->source);
+    glCopyTexSubImage2D(
+        GL_TEXTURE_2D, 0, sample_left, sample_bottom, sample_left, sample_bottom, sample_right - sample_left,
+        sample_top - sample_bottom
+    );
+    blur(width, height, region->strength, sample_bounds);
 
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(framebuffer));
     glViewport(0, 0, width, height);

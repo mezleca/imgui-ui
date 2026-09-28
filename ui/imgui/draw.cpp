@@ -1,6 +1,7 @@
 #include "draw.hpp"
 
 #include "effects/blur/blur.hpp"
+#include "effects/gradient/gradient.hpp"
 #include "effects/effects.hpp"
 #include "effects/shadow/shadow.hpp"
 #include "../widgets/text-value.hpp"
@@ -36,9 +37,10 @@ static float current_draw_alpha() {
     return std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
 }
 
-static ImColor apply_draw_alpha(ImColor color) {
-    color.Value.w *= current_draw_alpha();
-    return color;
+static ImColor apply_draw_alpha(const Color& color) {
+    ImVec4 solid = color.rgba();
+    solid.w *= current_draw_alpha();
+    return ImColor{solid};
 }
 
 struct BorderEntry {
@@ -334,32 +336,23 @@ Rect ui::viewport_work_area() {
     return Rect::from_position_size(viewport->WorkPos, size);
 }
 
-void ui::draw_line(ImDrawList& draw_list, ImVec2 start, ImVec2 end, ImColor color, float thickness) {
+void ui::draw_line(ImDrawList& draw_list, ImVec2 start, ImVec2 end, const Color& color, float thickness) {
     draw_list.AddLine(start, end, apply_draw_alpha(color), thickness);
 }
 
-void ui::draw_circle(ImDrawList& draw_list, ImVec2 center, float radius, ImColor color) {
+void ui::draw_circle(ImDrawList& draw_list, ImVec2 center, float radius, const Color& color) {
     draw_list.AddCircleFilled(center, radius, apply_draw_alpha(color));
 }
 
-void ui::draw_circle_outline(ImDrawList& draw_list, ImVec2 center, float radius, ImColor color, float thickness) {
+void ui::draw_circle_outline(ImDrawList& draw_list, ImVec2 center, float radius, const Color& color, float thickness) {
     draw_list.AddCircle(center, radius, apply_draw_alpha(color), 0, thickness);
 }
 
-void ui::draw_rect_filled(ImDrawList& draw_list, Rect rect, ImColor color, float rounding, ImDrawFlags flags) {
+void ui::draw_rect_filled(ImDrawList& draw_list, Rect rect, const Color& color, float rounding, ImDrawFlags flags) {
     draw_list.AddRectFilled(rect.min, rect.max, apply_draw_alpha(color), rounding, flags);
 }
 
-void ui::draw_rect_filled_gradient(
-    ImDrawList& draw_list, Rect rect, ImColor top_left, ImColor top_right, ImColor bottom_right, ImColor bottom_left
-) {
-    draw_list.AddRectFilledMultiColor(
-        rect.min, rect.max, apply_draw_alpha(top_left), apply_draw_alpha(top_right), apply_draw_alpha(bottom_right),
-        apply_draw_alpha(bottom_left)
-    );
-}
-
-void ui::draw_rect_outline(ImDrawList& draw_list, Rect rect, ImColor color, float thickness, float rounding) {
+void ui::draw_rect_outline(ImDrawList& draw_list, Rect rect, const Color& color, float thickness, float rounding) {
     if (thickness <= 0.0F) {
         return;
     }
@@ -369,12 +362,14 @@ void ui::draw_rect_outline(ImDrawList& draw_list, Rect rect, ImColor color, floa
     );
 }
 
-void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, std::string_view text) {
+void ui::draw_text(ImDrawList& draw_list, ImVec2 position, const Color& color, std::string_view text) {
     draw_list.AddText(position, apply_draw_alpha(color), text.data(), text.data() + text.size());
 }
 
-void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, const GenericValue& text, const ImVec4* clip_rect) {
-    color = apply_draw_alpha(color);
+void ui::draw_text(
+    ImDrawList& draw_list, ImVec2 position, const Color& source, const GenericValue& text, const ImVec4* clip_rect
+) {
+    ImColor color = apply_draw_alpha(source);
     ImFont* font = text.font() != nullptr ? text.font() : ImGui::GetFont();
     const float font_size = ImGui::GetFontSize();
     const float wrap_width = std::max(0.0F, text.wrap_width());
@@ -422,8 +417,10 @@ void ui::draw_text(ImDrawList& draw_list, ImVec2 position, ImColor color, const 
     }
 }
 
-void ui::draw_text_ellipsis(ImDrawList& draw_list, ImVec2 position, ImColor color, const GenericValue& text, ImVec4 clip_rect) {
-    color = apply_draw_alpha(color);
+void ui::draw_text_ellipsis(
+    ImDrawList& draw_list, ImVec2 position, const Color& source, const GenericValue& text, ImVec4 clip_rect
+) {
+    ImColor color = apply_draw_alpha(source);
     ImFont* font = text.font() != nullptr ? text.font() : ImGui::GetFont();
     const float font_size = ImGui::GetFontSize();
     const char* const value = text.c_str();
@@ -460,7 +457,7 @@ void ui::draw_text_ellipsis(ImDrawList& draw_list, ImVec2 position, ImColor colo
     }
 }
 
-void ui::draw_triangle(ImDrawList& draw_list, ImVec2 center, ImVec2 size, ImColor color, TriangleDirection direction) {
+void ui::draw_triangle(ImDrawList& draw_list, ImVec2 center, ImVec2 size, const Color& color, TriangleDirection direction) {
     static constexpr std::array<std::array<ImVec2, 3>, 4> DIRECTION_OFFSETS = {{
         {{{-1.0F, 1.0F}, {0.0F, -1.0F}, {1.0F, 1.0F}}},  // up
         {{{-1.0F, -1.0F}, {1.0F, -1.0F}, {0.0F, 1.0F}}}, // down
@@ -499,15 +496,31 @@ static void draw_full_frame(ImDrawList& draw_list, Rect rect, const ComputedStyl
     );
 }
 
-static void
-draw_frame_surface_impl(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background, float alpha) {
+static void draw_frame_surface_impl(
+    EffectRegistry* effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, const Color& background_color,
+    float alpha
+) {
+    ImColor background = background_color.rgba();
     background.Value.w *= alpha;
 
-    ImColor border = style.border_color().value;
+    const Color border_color = style.border_color().value;
+    ImColor border = border_color.rgba();
     border.Value.w *= alpha;
-
+    if (effects != nullptr && background_color.gradient() != nullptr &&
+        draw_gradient_rect(*effects, draw_list, rect, background_color, style.border_radius(), alpha)) {
+        background.Value.w = 0.0F;
+    }
+    const bool gradient_border = effects != nullptr && border_color.gradient() != nullptr && style.border() == BORDER_ALL &&
+                                 style.border_style() == BorderStyle::Solid && style.border_thickness() > 0.0F;
     if (style.border() == BORDER_ALL && style.border_style() == BorderStyle::Solid) {
-        draw_full_frame(draw_list, rect, style, background, border);
+        ImColor frame_border = border;
+        if (gradient_border) frame_border.Value.w = 0.0F;
+        draw_full_frame(draw_list, rect, style, background, frame_border);
+        if (gradient_border && !draw_gradient_rect(
+                                   *effects, draw_list, rect, border_color, style.border_radius(), alpha, style.border_thickness()
+                               )) {
+            draw_border(draw_list, rect, style, border);
+        }
         return;
     }
 
@@ -515,17 +528,19 @@ draw_frame_surface_impl(ImDrawList& draw_list, Rect rect, const ComputedStyle& s
     draw_border(draw_list, rect, style, border);
 }
 
-static void draw_frame_impl(
-    EffectRegistry* effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background, float alpha
+void ui::draw_frame(
+    ImDrawList& draw_list, Rect rect, const ComputedStyle& style, EffectRegistry* effects, float opacity,
+    const std::optional<Color>& background
 ) {
-    const bool has_effects = effects != nullptr && (style.box_shadow().color.Value.w > 0.0F || style.blur() > 0);
+    const float alpha = std::clamp(opacity, 0.0F, 1.0F) * current_draw_alpha();
+    const bool has_effects = effects != nullptr && (style.box_shadow().color.max_alpha() > 0.0F || style.blur() > 0);
     const bool clip_effects = has_effects && !effect_clip_stack.empty();
     if (has_effects) {
         if (clip_effects) {
             const ImVec4 clip = effect_clip_stack.back();
             draw_list.PushClipRect({clip.x, clip.y}, {clip.z, clip.w}, false);
         }
-        if (style.box_shadow().color.Value.w > 0.0F) {
+        if (style.box_shadow().color.max_alpha() > 0.0F) {
             draw_box_shadow(*effects, draw_list, rect, style.box_shadow(), style.border_radius(), alpha);
         }
         if (style.blur() > 0) {
@@ -535,33 +550,11 @@ static void draw_frame_impl(
             draw_list.PopClipRect();
         }
     }
-    draw_frame_surface_impl(draw_list, rect, style, background, alpha);
+    draw_frame_surface_impl(effects, draw_list, rect, style, background ? *background : style.background_color().value, alpha);
 }
 
-void ui::draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) {
-    draw_frame_impl(nullptr, draw_list, rect, style, style.background_color().value, current_draw_alpha());
-}
-
-void ui::draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background) {
-    draw_frame_impl(nullptr, draw_list, rect, style, background, current_draw_alpha());
-}
-
-void ui::draw_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity) {
-    const float alpha = std::clamp(opacity, 0.0F, 1.0F) * current_draw_alpha();
-    draw_frame_impl(nullptr, draw_list, rect, style, style.background_color().value, alpha);
-}
-
-void ui::draw_frame(EffectRegistry& effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style) {
-    draw_frame_impl(&effects, draw_list, rect, style, style.background_color().value, current_draw_alpha());
-}
-
-void ui::draw_frame(EffectRegistry& effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background) {
-    draw_frame_impl(&effects, draw_list, rect, style, background, current_draw_alpha());
-}
-
-void ui::draw_frame(EffectRegistry& effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, float opacity) {
-    const float alpha = std::clamp(opacity, 0.0F, 1.0F) * current_draw_alpha();
-    draw_frame_impl(&effects, draw_list, rect, style, style.background_color().value, alpha);
+void ui::draw_frame_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, EffectRegistry* effects) {
+    draw_frame_surface_impl(effects, draw_list, rect, style, style.background_color().value, current_draw_alpha());
 }
 
 static BorderPathSegment line(ImVec2 start, ImVec2 end, uint8_t sides) {
@@ -637,7 +630,7 @@ static const BorderPath& border_path(Rect rect, float rounding) {
 }
 
 void ui::draw_border_path(
-    ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImColor color, float thickness, BorderStyle style
+    ImDrawList& draw_list, const BorderPath& path, uint8_t border, const Color& color, float thickness, BorderStyle style
 ) {
     if (border == BORDER_NONE || thickness <= 0.0F) {
         return;
@@ -645,7 +638,7 @@ void ui::draw_border_path(
 
     thickness = std::max(MIN_BORDER_THICKNESS, thickness);
 
-    const ImU32 draw_color = color;
+    const ImU32 draw_color = ImColor{color.rgba()};
     if ((draw_color & IM_COL32_A_MASK) == 0) {
         return;
     }
@@ -663,9 +656,9 @@ void ui::draw_border_path(
     }
 }
 
-void ui::draw_border(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor color) {
+void ui::draw_border(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, const Color& color) {
     if (style.border() == BORDER_ALL && style.border_style() == BorderStyle::Solid) {
-        draw_list.AddRect(rect.min, rect.max, color, style.border_radius(), style.border_thickness());
+        draw_list.AddRect(rect.min, rect.max, ImColor{color.rgba()}, style.border_radius(), style.border_thickness());
         return;
     }
 

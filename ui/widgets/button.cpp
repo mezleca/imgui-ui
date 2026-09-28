@@ -24,11 +24,9 @@ void ButtonWidget::apply_theme_defaults(const Theme& theme) {
             .cursor(ImGuiMouseCursor_Hand);
     });
 
-    configure_style(StyleType::ACTIVE, [&theme](Style& style) {
-        style.background_color(theme.controls.active_color).border_color(theme.accent_color, 0.2F);
-    });
-    configure_style(StyleType::FOCUS, [&theme](Style& style) { style.border_color(theme.accent_color); });
-    configure_style(StyleType::HOVER, [&theme](Style& style) { style.border_color(theme.accent_hover_color); });
+    style(StyleType::ACTIVE).background_color(theme.controls.active_color).border_color(theme.accent_color, 0.2F);
+    style(StyleType::FOCUS).border_color(theme.accent_color);
+    style(StyleType::HOVER).border_color(theme.accent_hover_color);
 }
 
 ButtonWidget& ButtonWidget::set_text(std::string text) {
@@ -40,7 +38,7 @@ ButtonWidget& ButtonWidget::set_text(std::string text) {
     return *this;
 }
 
-void ButtonWidget::on_click(UiEvent&) {
+void ButtonWidget::click_event(UiEvent&) {
     animate()
         .to(StyleAnimationProperty::BackgroundColor, style(StyleType::ACTIVE).background_color().value)
         .then(0.04F)
@@ -67,6 +65,6 @@ void ButtonWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const Compu
             content.min.x + ((content.size().x - text_size.x) * m_text_alignment.x),
             content.min.y + ((content.size().y - text_size.y) * m_text_alignment.y),
         },
-        style.color().get_col(), m_text
+        style.color().value, m_text
     );
 }

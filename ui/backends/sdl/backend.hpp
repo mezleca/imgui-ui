@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../backend.hpp"
+#include "../opengl/gpu-timer.hpp"
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
@@ -20,9 +21,10 @@ namespace ui {
         void register_effects(EffectRegistry& effects) override;
         bool initialize_imgui() override;
         void shutdown_imgui() override;
-        void begin_frame(ImVec4 clear_color) override;
+        void begin_frame(Color clear_color) override;
         void set_mouse_cursor(ImGuiMouseCursor cursor) override;
         void render(ImDrawData* draw_data) override;
+        std::optional<double> render_profiled(ImDrawData* draw_data, bool profile_gpu) override;
         float content_scale() const override;
         uint64_t window_id() const override;
         ImVec2 display_size() const override;
@@ -38,6 +40,7 @@ namespace ui {
         SDL_Cursor* m_mouse_cursor = nullptr;
         ImGuiMouseCursor m_mouse_cursor_type = ImGuiMouseCursor_Arrow;
         bool m_imgui_initialized = false;
+        OpenGLGpuTimer m_gpu_timer;
     };
 
 } // namespace ui

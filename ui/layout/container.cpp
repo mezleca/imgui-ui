@@ -46,18 +46,25 @@ Container::Container(std::string id, std::string_view type_name)
     : Container(std::move(id), StackDirection::Vertical, type_name) {}
 
 Container::Container(std::string id, StackDirection direction, std::string_view type_name)
-    : Widget(std::move(id), type_name, InputMode::None), m_direction(direction) {
+    : Widget(std::move(id), type_name, InputMode::Target), m_direction(direction) {
     configure_all_styles([](Style& style) { style.padding({}).box_sizing(BoxSizing::BorderBox); });
 }
 
 Container& Container::set_scrollable(bool vertical, bool horizontal) {
-    if (m_scroll_vertical == vertical && m_scroll_horizontal == horizontal) {
-        return *this;
-    }
-
-    m_scroll_vertical = vertical;
-    m_scroll_horizontal = horizontal;
+    m_scroll.set_axes(vertical, horizontal);
     return *this;
+}
+
+void Container::dispatch_event(UiEvent& event) {
+    Widget::dispatch_event(event);
+    // widget callbacks run first so they can cancel the wheel.
+    if (!removal_pending() && !event.propagation_stopped && event.type == EventType::Scroll && !event.default_prevented &&
+        scrollable() && computed_style().overflow() != Overflow::Clip) {
+        // keep imgui's native wheel path from writing a second scroll target for this child.
+        // a wheel at this child's limit still bubbles to a scrollable parent.
+        event.block_native_input();
+        if (m_scroll.wheel(event.scroll)) event.stop_propagation();
+    }
 }
 
 Container& Container::set_direction(StackDirection direction) {
@@ -104,19 +111,6 @@ void Container::apply_theme_defaults(const Theme& theme) {
     configure_all_styles([&theme](Style& style) { style.scrollbar(theme.scrollbar); });
 }
 
-void Container::on_layout() {
-    resolve_layout();
-    arrange_children();
-}
-
-void Container::resolve_layout() {
-    if (has_size()) {
-        return;
-    }
-
-    assign_size(layout().resolved_size());
-}
-
 void Container::on_measure() {
     const LayoutSize size = layout().size_spec();
     const bool fit_width = size.width.mode == LayoutSizeMode::Fit;
@@ -129,6 +123,7 @@ void Container::on_measure() {
     ImVec2 content_size{};
     size_t flow_count = 0;
 
+    // accumulate the preferred size and margins of visible children along the flow axis.
     for (const auto& child : children()) {
         if (!is_flow_child(*child)) {
             continue;
@@ -152,15 +147,8 @@ void Container::on_measure() {
     const float spacing = flow_count > 0 ? m_spacing * static_cast<float>(flow_count - 1) : 0.0F;
     set_axis_extent(content_size, horizontal, axis_extent(content_size, horizontal) + spacing);
 
-    ImVec2 measured_size = outer_size(content_size);
-    if (computed_style().box_sizing() == BoxSizing::BorderBox) {
-        const BoxInsets insets = box_insets();
-        const ImVec2 padding = computed_style().padding();
-        if (fit_width) measured_size.x -= insets.horizontal() - (padding.x * 2.0F);
-        if (fit_height) measured_size.y -= insets.vertical() - (padding.y * 2.0F);
-    }
-
-    set_measured_size(measured_size, fit_width, fit_height);
+    // fit includes padding and borders so arranging children can recover the measured content space.
+    set_measured_size(outer_size(content_size), fit_width, fit_height);
 }
 
 void Container::arrange_children() {
@@ -178,6 +166,7 @@ void Container::arrange_children(ImVec2 content_size) {
     const bool aligns_content = alignment.x > 0.0F || alignment.y > 0.0F;
     float flow_cross_extent = 0.0F;
 
+    // total fixed main-axis extents and grow weights before dividing the remaining space.
     for (const auto& child : children()) {
         if (!is_flow_child(*child)) {
             continue;
@@ -214,8 +203,8 @@ void Container::arrange_children(ImVec2 content_size) {
         const ImVec2 flow_size = horizontal ? ImVec2{flow_main, flow_cross_extent} : ImVec2{flow_cross_extent, flow_main};
         cursor = {(content_size.x - flow_size.x) * alignment.x, (content_size.y - flow_size.y) * alignment.y};
     }
-    m_content_size = content_size;
 
+    // assign each child's weighted size and aligned offset, then advance the flow cursor.
     for (const auto& child : children()) {
         if (!is_flow_child(*child)) {
             continue;
@@ -231,8 +220,6 @@ void Container::arrange_children(ImVec2 content_size) {
         }
 
         arrange_child(*child, child_size, {.offset = child_offset});
-        m_content_size.x = std::max(m_content_size.x, child_offset.x + child_size.x + margin.x);
-        m_content_size.y = std::max(m_content_size.y, child_offset.y + child_size.y + margin.y);
 
         set_axis_extent(
             cursor, horizontal,
@@ -240,10 +227,6 @@ void Container::arrange_children(ImVec2 content_size) {
                 m_spacing
         );
     }
-}
-
-ImVec2 Container::child_window_content_size() const {
-    return m_content_size;
 }
 
 ImVec2 Container::child_window_padding() const {
@@ -257,7 +240,7 @@ ImVec2 Container::child_window_size() const {
 ImGuiWindowFlags Container::child_window_flags() const {
     ImGuiWindowFlags flags = constants::WIDGET_WINDOW_FLAGS;
     // keep the parent pass-through until this container owns input or scrolling.
-    if (!has_input_mode() && !has_direct_input_child() && !m_scroll_vertical && !m_scroll_horizontal &&
+    if (!has_input_mode() && !has_direct_input_child() && !m_scroll.enabled() &&
         (ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_NoMouseInputs) != 0) {
         flags |= ImGuiWindowFlags_NoMouseInputs;
     }
@@ -273,6 +256,7 @@ ImVec2 Container::child_layout_size() const {
 }
 
 void Container::draw_children() {
+    arrange_children();
     const ImVec2 available = child_layout_size();
     for (const auto& child : children()) {
         if (child->removal_pending()) {

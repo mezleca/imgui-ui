@@ -22,6 +22,7 @@ namespace ui {
     enum class EffectSlot : uint8_t {
         Blur,
         BoxShadow,
+        Gradient,
     };
 
     class EffectPass {
@@ -94,10 +95,10 @@ namespace ui {
         };
 
         struct Entry {
-            uint32_t id = 0;
             EffectDefinition definition{};
             std::size_t command_size = 0;
             std::size_t command_alignment = 0;
+            uint32_t id = 0;
             bool initialized = false;
         };
 
@@ -109,7 +110,7 @@ namespace ui {
         std::vector<Entry> m_entries;
         mutable std::pmr::monotonic_buffer_resource m_command_memory;
         mutable std::deque<QueuedCommand> m_commands;
-        std::array<EffectPass, 2> m_slots;
+        std::array<EffectPass, 3> m_slots;
         uint32_t m_next_id = 1;
         bool m_initialized = false;
     };

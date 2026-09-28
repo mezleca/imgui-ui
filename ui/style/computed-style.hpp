@@ -49,9 +49,7 @@ namespace ui {
         int colors = 0;
     };
 
-    /// holds fully resolved visual values used by layout and paint during one frame.
-    ///
-    /// unlike Style, this type contains no transition targets and can be passed directly to draw helpers.
+    /// exposes the visual values read by layout and paint during one frame.
     class ComputedStyle {
     public:
         ComputedStyle();
@@ -180,8 +178,6 @@ namespace ui {
         friend class StyledNode;
 
         ImFont* m_font = nullptr;
-        BoxSizing m_box_sizing = BoxSizing::ContentBox;
-        Overflow m_overflow = Overflow::Visible;
         Vec2Value m_margin;
         Vec2Value m_padding;
         FloatValue m_line_height{1.0F};
@@ -196,6 +192,10 @@ namespace ui {
         int m_blur = 0;
         float m_border_thickness = 1.0F;
         float m_border_radius = 4.0F;
+        BoxSizing m_box_sizing = BoxSizing::ContentBox;
+        Overflow m_overflow = Overflow::Visible;
+        uint8_t m_border = BORDER_NONE;
+        BorderStyle m_border_style = BorderStyle::Solid;
         BoxShadowValue m_box_shadow;
         ColorValue m_color;
         ColorValue m_border_color;
@@ -204,8 +204,6 @@ namespace ui {
         ColorValue m_scrollbar_grab_color;
         ColorValue m_scrollbar_grab_hovered_color;
         ColorValue m_scrollbar_grab_active_color;
-        uint8_t m_border = BORDER_NONE;
-        BorderStyle m_border_style = BorderStyle::Solid;
         StyleVariableStore m_vars;
     };
 } // namespace ui

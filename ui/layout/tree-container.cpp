@@ -34,7 +34,8 @@ bool TreeContainer::paint() {
         invalidate_measure();
     }
 
-    // the TreeNodeEx call already consumed the header; only the remaining outer rect belongs to the body child.
+    // treenodeex has already consumed the header.
+    // the body child receives only the remaining outer rect.
     if (!open) {
         return false;
     }
@@ -45,7 +46,6 @@ bool TreeContainer::paint() {
         std::max(0.0F, m_outer_rect.max.x - body_position.x),
         std::max(0.0F, m_outer_rect.max.y - body_position.y),
     };
-    arrange_children();
     return Container::paint();
 }
 

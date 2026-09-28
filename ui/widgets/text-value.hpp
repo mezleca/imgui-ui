@@ -1,14 +1,9 @@
 #pragma once
 
-#include <algorithm>
-#include <charconv>
-#include <cmath>
 #include <concepts>
 #include <cstdint>
 #include <imgui.h>
 #include <string>
-#include <string_view>
-#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -34,72 +29,17 @@ namespace ui {
         }
 
         /// converts the value only when a consumer actually requests its string representation.
-        const std::string& str() const {
-            if (m_string_dirty) {
-                m_string = std::visit(
-                    [](const auto& value) -> std::string {
-                        using ValueType = std::remove_cvref_t<decltype(value)>;
-                        if constexpr (std::same_as<ValueType, std::string>) {
-                            return value;
-                        } else if constexpr (std::same_as<ValueType, bool>) {
-                            return value ? "true" : "false";
-                        } else {
-                            char buffer[64];
-                            const auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), value);
-                            return error == std::errc{} ? std::string(buffer, end) : std::string{};
-                        }
-                    },
-                    m_value
-                );
-                m_string_dirty = false;
-            }
+        const std::string& str() const;
 
-            return m_string;
-        }
+        void set_font(ImFont* font);
 
-        void set_font(ImFont* font) {
-            if (font == m_font) {
-                return;
-            }
+        void set_wrap(float wrap_width);
 
-            m_font = font;
-            m_dirty = true;
-        }
+        void set_line_height(float multiplier);
 
-        void set_wrap(float wrap_width) {
-            if (m_wrap_width == wrap_width) {
-                return;
-            }
+        ImVec2 text_size() const;
 
-            m_wrap_width = wrap_width;
-            m_dirty = true;
-        }
-
-        void set_line_height(float multiplier) {
-            const float resolved = std::max(0.0F, multiplier);
-            if (m_line_height_multiplier == resolved) {
-                return;
-            }
-
-            m_line_height_multiplier = resolved;
-            m_dirty = true;
-        }
-
-        ImVec2 text_size() const {
-            if (m_dirty) {
-                recompute();
-            }
-
-            return m_text_size;
-        }
-
-        float line_height() const {
-            if (m_dirty) {
-                recompute();
-            }
-
-            return m_line_height;
-        }
+        float line_height() const;
 
         ImFont* font() const {
             return m_font;
@@ -136,41 +76,10 @@ namespace ui {
             return true;
         }
 
-        bool set(std::string text) {
-            const auto* current_text = std::get_if<std::string>(&m_value);
-            if (current_text != nullptr && *current_text == text) {
-                return false;
-            }
-
-            m_value = std::move(text);
-            m_string_dirty = true;
-            m_dirty = true;
-            return true;
-        }
+        bool set(std::string text);
 
     private:
-        // measures the current text and applies the configured line-height multiplier to its total height.
-        void recompute() const {
-            if (ImGui::GetCurrentContext() == nullptr) {
-                m_text_size = {};
-                m_line_height = 0.0F;
-                return;
-            }
-
-            ImFont* font = m_font != nullptr ? m_font : ImGui::GetFont();
-            ImGui::PushFont(font);
-
-            m_line_height = ImGui::GetTextLineHeight();
-            m_text_size = ImGui::CalcTextSize(c_str(), nullptr, false, m_wrap_width);
-
-            // imgui measured wrapped and explicit lines with its native height. recover that line count before scaling it.
-            if (m_line_height > 0.0F) {
-                m_text_size.y = std::round(m_text_size.y / m_line_height) * m_line_height * m_line_height_multiplier;
-            }
-
-            ImGui::PopFont();
-            m_dirty = false;
-        }
+        void recompute() const;
 
         Value m_value;
         mutable std::string m_string;

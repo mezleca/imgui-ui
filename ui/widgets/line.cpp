@@ -6,9 +6,9 @@
 
 using namespace ui;
 
-LineWidget::LineWidget(ImVec2 start, ImVec2 end, ImColor color, float thickness)
+LineWidget::LineWidget(ImVec2 start, ImVec2 end, const Color& color, float thickness)
     : StyledNode({}, "Line"), m_start(start), m_end(end) {
-    configure_all_styles([color, thickness](Style& style) { style.color(color).border_thickness(thickness); });
+    configure_all_styles([&color, thickness](Style& style) { style.color(color).border_thickness(thickness); });
 }
 
 bool LineWidget::paint() {
@@ -18,6 +18,6 @@ bool LineWidget::paint() {
         {std::min(m_start.x, m_end.x) - half_thickness, std::min(m_start.y, m_end.y) - half_thickness},
         {std::max(m_start.x, m_end.x) + half_thickness, std::max(m_start.y, m_end.y) + half_thickness},
     });
-    draw_line(ui::draw_list(), m_start, m_end, current_style.color().get_col(), current_style.border_thickness());
+    draw_line(ui::draw_list(), m_start, m_end, current_style.color().value, current_style.border_thickness());
     return true;
 }

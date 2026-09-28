@@ -2,23 +2,26 @@
 
 #include "shadow.hpp"
 #include "../effects.hpp"
-
-#include <glad/gl.h>
+#include "../opengl.hpp"
+#include "../gradient/opengl-shared.hpp"
 
 #include <algorithm>
-#include <cmath>
+#include <string>
 #include <unordered_map>
 
+using namespace ui;
+
 struct BoxShadowGlState {
-    GLuint vertex_array = 0;
-    GLuint program = 0;
+    OpenGlFullscreenEffect effect;
     GLint shape = -1;
     GLint cutout = -1;
     GLint rounding = -1;
     GLint cutout_rounding = -1;
     GLint sigma = -1;
     GLint viewport_height = -1;
-    GLint color = -1;
+    GLint gradient_bounds = -1;
+    GLint opacity = -1;
+    GradientUniforms sampler;
 };
 
 static std::unordered_map<ImGuiContext*, BoxShadowGlState> gl_states;
@@ -35,23 +38,19 @@ static bool select_gl_state() {
     return true;
 }
 
-static constexpr const char* VERTEX_SHADER = R"(#version 330 core
-void main() {
-const vec2 positions[3] = vec2[](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
-gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
-})";
-
-static constexpr const char* FRAGMENT_SHADER = R"(#version 330 core
+static constexpr const char* FRAGMENT_BODY = R"(
 uniform vec4 shape;
 uniform vec4 cutout;
 uniform float rounding;
 uniform float cutout_rounding;
 uniform float sigma;
 uniform float viewport_height;
-uniform vec4 shadow_color;
+uniform vec4 gradient_bounds;
+uniform float opacity;
 out vec4 color;
 
-// adapted from evan wallace's cc0 rounded box shadow shader.
+// adapted from evan wallace's cc0 rounded box shadow shader:
+// https://madebyevan.com/shaders/fast-rounded-rectangle-shadows/
 float erf_approx(float value) {
 float direction = value < 0.0 ? -1.0 : 1.0;
 float absolute = abs(value);
@@ -113,84 +112,47 @@ float cutout_antialias = max(fwidth(cutout_distance), 0.5);
 // remove the owner shape so a deferred shadow cannot darken its own node.
 coverage *= smoothstep(-cutout_antialias, cutout_antialias, cutout_distance);
 
-color = vec4(shadow_color.rgb, shadow_color.a * coverage);
+// shadow colors span the blurred bounds, including pixels outside the owner shape.
+vec4 sampled = sample_color(point, gradient_bounds);
+color = vec4(sampled.rgb, sampled.a * coverage * opacity);
 })";
 
-static GLuint compile_shader(GLenum type, const char* source) {
-    const GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-
-    GLint compiled = GL_FALSE;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-    if (compiled == GL_TRUE) {
-        return shader;
-    }
-
-    glDeleteShader(shader);
-    return 0;
-}
-
 static bool create_program() {
-    const GLuint vertex = compile_shader(GL_VERTEX_SHADER, VERTEX_SHADER);
-    const GLuint fragment = compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SHADER);
-    if (vertex == 0 || fragment == 0) {
-        if (vertex != 0) glDeleteShader(vertex);
-        if (fragment != 0) glDeleteShader(fragment);
+    const std::string fragment_source = std::string{"#version 330 core\n"} + GRADIENT_SAMPLER_GLSL + FRAGMENT_BODY;
+    if (!gl_state->effect.initialize(fragment_source.c_str())) {
         return false;
     }
 
-    gl_state->program = glCreateProgram();
-    glAttachShader(gl_state->program, vertex);
-    glAttachShader(gl_state->program, fragment);
-    glLinkProgram(gl_state->program);
-    glDeleteShader(vertex);
-    glDeleteShader(fragment);
-
-    GLint linked = GL_FALSE;
-    glGetProgramiv(gl_state->program, GL_LINK_STATUS, &linked);
-    if (linked != GL_TRUE) {
-        glDeleteProgram(gl_state->program);
-        gl_state->program = 0;
-        return false;
-    }
-
-    gl_state->shape = glGetUniformLocation(gl_state->program, "shape");
-    gl_state->cutout = glGetUniformLocation(gl_state->program, "cutout");
-    gl_state->rounding = glGetUniformLocation(gl_state->program, "rounding");
-    gl_state->cutout_rounding = glGetUniformLocation(gl_state->program, "cutout_rounding");
-    gl_state->sigma = glGetUniformLocation(gl_state->program, "sigma");
-    gl_state->viewport_height = glGetUniformLocation(gl_state->program, "viewport_height");
-    gl_state->color = glGetUniformLocation(gl_state->program, "shadow_color");
+    const GLuint program = gl_state->effect.program();
+    gl_state->shape = glGetUniformLocation(program, "shape");
+    gl_state->cutout = glGetUniformLocation(program, "cutout");
+    gl_state->rounding = glGetUniformLocation(program, "rounding");
+    gl_state->cutout_rounding = glGetUniformLocation(program, "cutout_rounding");
+    gl_state->sigma = glGetUniformLocation(program, "sigma");
+    gl_state->viewport_height = glGetUniformLocation(program, "viewport_height");
+    gl_state->gradient_bounds = glGetUniformLocation(program, "gradient_bounds");
+    gl_state->opacity = glGetUniformLocation(program, "opacity");
+    gl_state->sampler = find_gradient_uniforms(program);
     return true;
 }
 
 static bool ensure_gl_state() {
-    if (gl_state->program == 0 && !create_program()) {
-        return false;
-    }
-
-    if (gl_state->vertex_array == 0) {
-        glGenVertexArrays(1, &gl_state->vertex_array);
-    }
-
-    return true;
+    return gl_state->effect.program() != 0 || create_program();
 }
 
 static void render_box_shadow(void*, const ImDrawList*, const ImDrawCmd* command, const void* payload) {
-    const auto* region = static_cast<const ui::BoxShadowRegion*>(payload);
+    const auto* region = static_cast<const BoxShadowRegion*>(payload);
     if (region == nullptr || !select_gl_state() || !ensure_gl_state()) {
+        return;
+    }
+
+    if (!gl_state->effect.begin(*command, region->bounds)) {
         return;
     }
 
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);
-    const int width = viewport[2];
     const int height = viewport[3];
-    if (width <= 0 || height <= 0) {
-        return;
-    }
-
     const ImDrawData* draw_data = ImGui::GetDrawData();
     const ImVec2 display_position = draw_data == nullptr ? ImVec2{} : draw_data->DisplayPos;
     const ImVec2 scale = draw_data == nullptr ? ImVec2{1.0F, 1.0F} : draw_data->FramebufferScale;
@@ -202,27 +164,7 @@ static void render_box_shadow(void*, const ImDrawList*, const ImDrawCmd* command
     const ImVec2 shape_max = to_framebuffer(region->shape.max);
     const ImVec2 cutout_min = to_framebuffer(region->cutout.min);
     const ImVec2 cutout_max = to_framebuffer(region->cutout.max);
-    const ImVec2 bounds_min = to_framebuffer(region->bounds.min);
-    const ImVec2 bounds_max = to_framebuffer(region->bounds.max);
-    const int left = std::clamp(static_cast<int>(std::floor(bounds_min.x)), 0, width);
-    const int right = std::clamp(static_cast<int>(std::ceil(bounds_max.x)), 0, width);
-    const int top = std::clamp(static_cast<int>(std::floor(bounds_min.y)), 0, height);
-    const int bottom = std::clamp(static_cast<int>(std::ceil(bounds_max.y)), 0, height);
-    const int clip_left =
-        std::clamp(static_cast<int>(std::floor((command->ClipRect.x - display_position.x) * scale.x)), 0, width);
-    const int clip_right =
-        std::clamp(static_cast<int>(std::ceil((command->ClipRect.z - display_position.x) * scale.x)), 0, width);
-    const int clip_top =
-        std::clamp(static_cast<int>(std::floor((command->ClipRect.y - display_position.y) * scale.y)), 0, height);
-    const int clip_bottom =
-        std::clamp(static_cast<int>(std::ceil((command->ClipRect.w - display_position.y) * scale.y)), 0, height);
-    const int clipped_left = std::max(left, clip_left);
-    const int clipped_right = std::min(right, clip_right);
-    const int clipped_top = std::max(top, clip_top);
-    const int clipped_bottom = std::min(bottom, clip_bottom);
-    if (clipped_right <= clipped_left || clipped_bottom <= clipped_top) {
-        return;
-    }
+    const Rect bounds = gl_state->effect.framebuffer_bounds();
 
     const float scale_factor = std::min(scale.x, scale.y);
     const float shape_width = shape_max.x - shape_min.x;
@@ -230,24 +172,21 @@ static void render_box_shadow(void*, const ImDrawList*, const ImDrawCmd* command
     const float radius = std::min(region->rounding * scale_factor, std::min(shape_width, shape_height) * 0.5F);
     const float blur = region->blur * 0.5F * scale_factor;
 
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(clipped_left, height - clipped_bottom, clipped_right - clipped_left, clipped_bottom - clipped_top);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glEnable(GL_BLEND);
     glBlendEquation(GL_FUNC_ADD);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glUseProgram(gl_state->program);
     glUniform4f(gl_state->shape, shape_min.x, shape_min.y, shape_max.x, shape_max.y);
     glUniform4f(gl_state->cutout, cutout_min.x, cutout_min.y, cutout_max.x, cutout_max.y);
     glUniform1f(gl_state->rounding, radius);
     glUniform1f(gl_state->cutout_rounding, region->cutout_rounding * scale_factor);
     glUniform1f(gl_state->sigma, blur);
     glUniform1f(gl_state->viewport_height, static_cast<float>(height));
-    glUniform4f(gl_state->color, region->color.x, region->color.y, region->color.z, region->color.w);
-    glBindVertexArray(gl_state->vertex_array);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
-    glDisable(GL_SCISSOR_TEST);
+    glUniform4f(gl_state->gradient_bounds, bounds.min.x, height - bounds.max.y, bounds.max.x, height - bounds.min.y);
+    glUniform1f(gl_state->opacity, region->opacity);
+    upload_gradient(gl_state->sampler, region->color, region->gradient);
+    gl_state->effect.draw();
 }
 
 static bool initialize_box_shadow_effect(void*) {
@@ -263,8 +202,7 @@ static void shutdown_box_shadow_effect(void*) {
         return;
     }
 
-    if (gl_state->program != 0) glDeleteProgram(gl_state->program);
-    if (gl_state->vertex_array != 0) glDeleteVertexArrays(1, &gl_state->vertex_array);
+    gl_state->effect.shutdown();
     gl_states.erase(ImGui::GetCurrentContext());
     gl_state = nullptr;
 }

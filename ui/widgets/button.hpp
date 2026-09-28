@@ -19,14 +19,14 @@ namespace ui {
 
         ButtonWidget& set_text(std::string text);
         /// runs after the click animation starts.
-        ButtonWidget& set_on_click(std::function<void()> callback) {
+        ButtonWidget& on_click(std::function<void()> callback) {
             m_on_click = std::move(callback);
             return *this;
         }
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;
-        void on_click(UiEvent&) override;
+        void click_event(UiEvent&) override;
         void on_measure() override;
 
     private:

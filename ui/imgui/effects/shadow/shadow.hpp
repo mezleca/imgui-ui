@@ -2,6 +2,7 @@
 
 #include "../../../layout/geometry.hpp"
 #include "../../../style/values.hpp"
+#include "../../../style/gradient-data.hpp"
 
 #include <imgui.h>
 
@@ -15,7 +16,9 @@ namespace ui {
         float rounding = 0.0F;
         float cutout_rounding = 0.0F;
         float blur = 0.0F;
-        ImVec4 color{};
+        ImVec4 color;
+        GradientData gradient{};
+        float opacity = 1.0F;
     };
 
     void draw_box_shadow(

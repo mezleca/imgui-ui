@@ -22,32 +22,29 @@ namespace ui {
             }
         }
 
+        T* find(std::string_view id) {
+            return const_cast<T*>(static_cast<const AssetRegistry&>(*this).find(id));
+        }
+
+        const T* find(std::string_view id) const {
+            const auto result = m_assets.find(id);
+            return result == m_assets.end() ? nullptr : result->second.get();
+        }
+
     protected:
         T* add_asset(std::string id, std::unique_ptr<T> asset) {
             if (asset == nullptr) {
                 return nullptr;
             }
 
-            if (const auto existing = m_assets.find(id); existing != m_assets.end()) {
+            const auto existing = m_assets.find(id);
+            if (existing != m_assets.end()) {
                 return existing->second.get();
             }
 
             T* result = asset.get();
             m_assets.emplace(std::move(id), std::move(asset));
             return result;
-        }
-
-        T* find_asset(std::string_view id) {
-            return const_cast<T*>(static_cast<const AssetRegistry&>(*this).find_asset(id));
-        }
-
-        const T* find_asset(std::string_view id) const {
-            const auto result = m_assets.find(id);
-            if (result == m_assets.end()) {
-                return nullptr;
-            }
-
-            return result->second.get();
         }
 
     private:

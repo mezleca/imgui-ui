@@ -32,10 +32,6 @@ namespace ui {
         }
 
         ImageWidget& set_fit(ImageFit fit) {
-            if (m_fit == fit) {
-                return *this;
-            }
-
             m_fit = fit;
             return *this;
         }
