@@ -40,13 +40,13 @@ namespace ui {
         /// attaches owner and consumes selected events outside its input descendants within rect.
         void register_blocker(Node& owner, Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
-        /// routes later pointer moves and releases to node until released.
+        /// routes later pointer moves and releases to node. transferring capture sends Cancel to the previous owner.
         bool capture_pointer(Node& node);
 
         /// releases the current pointer capture.
         void release_pointer();
 
-        /// releases capture and presses pointing into a subtree.
+        /// cancels capture and clears presses pointing into a subtree. the captured node receives Cancel.
         void release_pointer(Node& subtree);
 
         /// changes keyboard focus, or clears it with nullptr. sends focus loss before focus gain.
@@ -112,6 +112,7 @@ namespace ui {
         void detach(Node& subtree);
         /// clears focus, capture, hover, active, and press state for inactive nodes.
         void clear_inactive_targets();
+        void cancel_capture();
         /// updates hover from a position without dispatching an event.
         void refresh_pointer_state(ImVec2 position);
         static void set_input_flag(Node& node, InputFlag flag, bool enabled);

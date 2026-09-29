@@ -33,6 +33,7 @@ void InputRouter::set_debug_inspect_mode(bool enabled) {
 
     m_debug_inspect_mode = enabled;
     if (enabled) {
+        cancel_capture();
         set_hovered({});
         set_input_flag(m_active_node, nullptr, InputFlag::Active);
         set_focus(nullptr);
@@ -142,6 +143,9 @@ bool InputRouter::capture_pointer(Node& node) {
         return false;
     }
 
+    if (m_pointer_capture != &node) cancel_capture();
+    if (!is_input_target(&node)) return false;
+
     m_pointer_capture = &node;
     return true;
 }
@@ -150,9 +154,18 @@ void InputRouter::release_pointer() {
     m_pointer_capture = nullptr;
 }
 
+void InputRouter::cancel_capture() {
+    Node* captured = std::exchange(m_pointer_capture, nullptr);
+    if (captured == nullptr) return;
+
+    // clear ownership before notifying the former owner, whose handler may release or transfer capture.
+    UiEvent event = UiEvent::make(EventType::Cancel);
+    captured->dispatch_event(event);
+}
+
 void InputRouter::release_pointer(Node& subtree) {
     if (subtree.contains(m_pointer_capture)) {
-        release_pointer();
+        cancel_capture();
     }
 
     for (PressedPointer& pressed : m_pressed) {
@@ -386,7 +399,7 @@ void InputRouter::clear_inactive_targets() {
     }
 
     if (!is_input_target(m_pointer_capture)) {
-        m_pointer_capture = nullptr;
+        cancel_capture();
     }
 
     std::erase_if(m_hovered_nodes, [](Node* node) {

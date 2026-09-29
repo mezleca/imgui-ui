@@ -391,7 +391,7 @@ TEST_CASE("input router invalidates inactive focus and pointer capture") {
     node.set_enabled(false);
     auto disabled_move = event_of(EventType::PointerMove, {100.0F, 100.0F});
     REQUIRE_FALSE(router.dispatch(disabled_move));
-    REQUIRE(events.empty());
+    REQUIRE(events == std::vector<std::string>{"input"});
 }
 
 TEST_CASE("pointer presses outside a focused node preserve focus") {
@@ -442,6 +442,40 @@ TEST_CASE("input router clears targets when a node is detached") {
 
     auto move = event_of(EventType::PointerMove, {100.0F, 100.0F});
     REQUIRE_FALSE(router.dispatch(move));
+    REQUIRE(events.empty());
+}
+
+TEST_CASE("interrupted pointer capture notifies its owner but normal release does not") {
+    InputRouter router;
+    std::vector<EventType> events;
+    PointerCaptureNode owner(router, events);
+    Node other("other");
+    owner.set_input_router(&router);
+    other.set_input_router(&router);
+
+    // hiding and disabling the owner interrupt a drag without a pointer release.
+    REQUIRE(router.capture_pointer(owner));
+    owner.set_visible(false);
+    REQUIRE(events == std::vector<EventType>{EventType::Cancel});
+
+    events.clear();
+    owner.set_visible(true);
+    REQUIRE(router.capture_pointer(owner));
+    owner.set_enabled(false);
+    REQUIRE(events == std::vector<EventType>{EventType::Cancel});
+
+    // transferring capture cancels the previous owner once. normal release ends capture without cancellation.
+    events.clear();
+    owner.set_enabled(true);
+    REQUIRE(router.capture_pointer(owner));
+    REQUIRE(router.capture_pointer(owner));
+    REQUIRE(events.empty());
+    REQUIRE(router.capture_pointer(other));
+    REQUIRE(events == std::vector<EventType>{EventType::Cancel});
+
+    events.clear();
+    REQUIRE(router.capture_pointer(owner));
+    router.release_pointer();
     REQUIRE(events.empty());
 }
 
