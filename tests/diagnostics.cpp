@@ -1,13 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <ui/diagnostics/debugger.hpp>
-#include <ui/diagnostics/profiler.hpp>
-#include <ui/imgui/effects/effects.hpp>
-#include <ui/layout/resizable-container.hpp>
-#include <ui/style/styled-node.hpp>
-#include <ui/ui.hpp>
-#include <ui/widgets/checkbox.hpp>
-#include <ui/widgets/color-picker.hpp>
+#include <imgui-ui/diagnostics/debugger.hpp>
+#include <imgui-ui/diagnostics/profiler.hpp>
+#include <imgui-ui/imgui/effects/effects.hpp>
+#include <imgui-ui/layout/resizable-container.hpp>
+#include <imgui-ui/style/styled-node.hpp>
+#include <imgui-ui/surface.hpp>
+#include <imgui-ui/widgets/checkbox.hpp>
+#include <imgui-ui/widgets/color-picker.hpp>
 
 #include <imgui.h>
 
@@ -60,7 +60,7 @@ static int draw_list_index(const ImDrawData& draw_data, std::string_view owner) 
 
 TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
     ui::Runtime runtime;
-    ui::UI surface = ui_test::make_surface(runtime, true);
+    ui::Surface surface = ui_test::make_surface(runtime, true);
     REQUIRE(surface.debugger() != nullptr);
     REQUIRE_FALSE(surface.debugger()->is_open());
 
@@ -110,7 +110,7 @@ TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
 
 TEST_CASE("debugger hotkey toggles on the target surface") {
     ui::Runtime runtime;
-    ui::UI surface = ui_test::make_surface(runtime, true);
+    ui::Surface surface = ui_test::make_surface(runtime, true);
     REQUIRE(surface.debugger() != nullptr);
     REQUIRE_FALSE(surface.debugger()->is_open());
 
@@ -126,7 +126,7 @@ TEST_CASE("debugger hotkey toggles on the target surface") {
 
 TEST_CASE("debugger clicks preserve an open popup") {
     ui::Runtime runtime;
-    ui::UI surface = ui_test::make_surface(runtime, true);
+    ui::Surface surface = ui_test::make_surface(runtime, true);
     ui::Color color = ui::rgb(0.26F, 0.59F, 0.98F);
     auto& picker = surface.root().add<ui::ColorPickerWidget>(color);
 
@@ -164,7 +164,7 @@ TEST_CASE("debugger clicks preserve an open popup") {
 
 TEST_CASE("debugger renders as a panel in the surface layout") {
     ui::Runtime runtime;
-    ui::UI surface = ui_test::make_surface(runtime, true);
+    ui::Surface surface = ui_test::make_surface(runtime, true);
     surface.debugger()->set_open(true);
 
     const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
@@ -181,7 +181,7 @@ TEST_CASE("debugger renders as a panel in the surface layout") {
 
 TEST_CASE("debugger exposes the content resize handle", "[Debugger][ResizableContainer][regression]") {
     ui::Runtime runtime;
-    ui::UI surface = ui_test::make_surface(runtime, true);
+    ui::Surface surface = ui_test::make_surface(runtime, true);
     surface.debugger()->set_open(true);
 
     const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
@@ -338,7 +338,7 @@ TEST_CASE("gpu profiling summarizes recent completed queries") {
 
 TEST_CASE("ui closes render profiling before publishing the frame") {
     ui::Runtime runtime;
-    ui::UI surface = ui_test::make_surface(runtime);
+    ui::Surface surface = ui_test::make_surface(runtime);
     const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
     surface.profiler().set_enabled(true);
 
@@ -371,7 +371,7 @@ TEST_CASE("ui profiler separates root update and draw time") {
         ui::ScopedProfileZone layout(&profiler, "Node::layout", 20);
     }
     {
-        ui::ScopedProfileZone render(&profiler, "UI::render");
+        ui::ScopedProfileZone render(&profiler, "Surface::render");
     }
 
     profiler.end_frame();

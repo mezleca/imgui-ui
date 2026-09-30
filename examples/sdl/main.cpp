@@ -1,7 +1,7 @@
-#include <ui/backends/sdl/backend.hpp>
-#include <ui/tree/node.hpp>
-#include <ui/ui.hpp>
-#include <ui/runtime.hpp>
+#include <imgui-ui/backends/sdl/backend.hpp>
+#include <imgui-ui/tree/node.hpp>
+#include <imgui-ui/surface.hpp>
+#include <imgui-ui/runtime.hpp>
 #include "../demo.hpp"
 
 #include <SDL3/SDL.h>
@@ -50,7 +50,7 @@ int main() {
 
         // the backend only initializes imgui against this user-owned window and context.
         auto backend = std::make_unique<SdlBackend>(window, context);
-        UI surface(
+        Surface surface(
             runtime, {
                          .backend = std::move(backend),
                          .enable_debugger = true,

@@ -94,7 +94,7 @@ def build(build_type: str, backend: str, tests: bool = False) -> Path:
 
 
 def format_code() -> None:
-    run("clang-format -i $(rg --files -g '*.{h,hpp,cpp,cc,cxx}' ui tests examples)")
+    run("clang-format -i $(rg --files -g '*.{h,hpp,cpp,cc,cxx}' src include tests examples)")
 
 
 def check(build_type: str, backend: str, fix: bool) -> None:
@@ -103,7 +103,7 @@ def check(build_type: str, backend: str, fix: bool) -> None:
     build_dir = build(build_type, backend, tests=True)
     source_files = sorted(
         str(path.relative_to(ROOT))
-        for root in (ROOT / "ui", ROOT / "tests")
+        for root in (ROOT / "src", ROOT / "tests")
         for path in root.rglob("*.cpp")
     )
     if not source_files:

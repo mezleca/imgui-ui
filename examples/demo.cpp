@@ -1,25 +1,25 @@
 #include "demo.hpp"
 
-#include <ui/backends/opengl/texture-loader.hpp>
-#include <ui/imgui/effects/effects.hpp>
-#include <ui/imgui/effects/opengl.hpp>
-#include <ui/layout/layer-container.hpp>
-#include <ui/layout/resizable-container.hpp>
-#include <ui/layout/virtual-layout.hpp>
-#include <ui/resources/texture-registry.hpp>
-#include <ui/style/style.hpp>
-#include <ui/style/styled-node.hpp>
-#include <ui/ui.hpp>
-#include <ui/widgets/button.hpp>
-#include <ui/widgets/checkbox.hpp>
-#include <ui/widgets/color-picker.hpp>
-#include <ui/widgets/context-menu.hpp>
-#include <ui/widgets/dropdown.hpp>
-#include <ui/widgets/file-dialog.hpp>
-#include <ui/widgets/image.hpp>
-#include <ui/widgets/number-input.hpp>
-#include <ui/widgets/text-input.hpp>
-#include <ui/widgets/text.hpp>
+#include <imgui-ui/backends/opengl/texture-loader.hpp>
+#include <imgui-ui/imgui/effects/effects.hpp>
+#include <imgui-ui/imgui/effects/opengl.hpp>
+#include <imgui-ui/layout/layer-container.hpp>
+#include <imgui-ui/layout/resizable-container.hpp>
+#include <imgui-ui/layout/virtual-layout.hpp>
+#include <imgui-ui/resources/texture-registry.hpp>
+#include <imgui-ui/style/style.hpp>
+#include <imgui-ui/style/styled-node.hpp>
+#include <imgui-ui/surface.hpp>
+#include <imgui-ui/widgets/button.hpp>
+#include <imgui-ui/widgets/checkbox.hpp>
+#include <imgui-ui/widgets/color-picker.hpp>
+#include <imgui-ui/widgets/context-menu.hpp>
+#include <imgui-ui/widgets/dropdown.hpp>
+#include <imgui-ui/widgets/file-dialog.hpp>
+#include <imgui-ui/widgets/image.hpp>
+#include <imgui-ui/widgets/number-input.hpp>
+#include <imgui-ui/widgets/text-input.hpp>
+#include <imgui-ui/widgets/text.hpp>
 
 #include <algorithm>
 #include <array>
@@ -640,7 +640,7 @@ DemoScreen::DemoScreen() : Container("demo", StackDirection::Vertical) {
 }
 
 void DemoScreen::setup(std::string backend) {
-    UI& ui = surface();
+    Surface& ui = surface();
     auto& overview = add<DemoPanel>("overview");
     overview.set_size({grow(), fit()});
     overview.set_spacing(4.0F);
@@ -960,7 +960,7 @@ static void apply_border_style(Node& node, BorderStyle style) {
     }
 }
 
-void setup_demo(UI& surface, std::string backend) {
+void setup_demo(Surface& surface, std::string backend) {
     Runtime& runtime = surface.runtime();
 #ifdef IMGUI_UI_ASSETS_DIR
     // register paths before widgets request fonts. sizes load lazily per imgui context.

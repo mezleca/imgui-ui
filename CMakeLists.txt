@@ -110,7 +110,7 @@ if(NOT TARGET imgui-ui-imgui)
     )
 
     target_include_directories(imgui-ui-imgui PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/ui/imgui"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/imgui-ui/imgui"
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui"
         "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/misc/cpp"
     )
@@ -176,7 +176,7 @@ if(IMGUI_UI_BUILD_RAYLIB AND NOT TARGET raylib)
     add_subdirectory(vendor/raylib EXCLUDE_FROM_ALL)
 endif()
 
-add_subdirectory(ui)
+add_subdirectory(src)
 
 if(IMGUI_UI_BUILD_TESTS)
     add_subdirectory(vendor/Catch2 EXCLUDE_FROM_ALL)

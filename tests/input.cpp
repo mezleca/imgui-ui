@@ -1,10 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <ui/input/router.hpp>
-#include <ui/layout/layer-container.hpp>
-#include <ui/ui.hpp>
-#include <ui/widgets/widget.hpp>
-#include <ui/widgets/button.hpp>
+#include <imgui-ui/input/router.hpp>
+#include <imgui-ui/layout/layer-container.hpp>
+#include <imgui-ui/surface.hpp>
+#include <imgui-ui/widgets/widget.hpp>
+#include <imgui-ui/widgets/button.hpp>
 #include "imgui-context.hpp"
 
 #include <memory>
@@ -555,7 +555,7 @@ TEST_CASE("overlapping targets receive events in reverse paint order") {
 
 TEST_CASE("hidden layers release focus") {
     Runtime runtime;
-    UI surface = ui_test::make_surface(runtime);
+    Surface surface = ui_test::make_surface(runtime);
     LayerContainer layer("layer", LayerMode::Inline);
     layer.set_input_router(&surface.input_router());
 
@@ -812,7 +812,7 @@ TEST_CASE("overlapping layers share hover and clicks unless explicitly blocking"
     for (InputMode mode : {InputMode::Target, InputMode::Blocker}) {
         DYNAMIC_SECTION((mode == InputMode::Target ? "pass-through layer" : "blocking layer")) {
             Runtime runtime;
-            UI surface = ui_test::make_surface(runtime);
+            Surface surface = ui_test::make_surface(runtime);
             auto& content = surface.root().add<Container>("content");
             content.set_size({px(80.0F), px(40.0F)});
             auto& layer = surface.root().add<LayerContainer>("layer");

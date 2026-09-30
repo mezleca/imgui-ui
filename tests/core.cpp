@@ -2,19 +2,19 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "imgui-context.hpp"
-#include <ui/imgui/draw.hpp>
-#include <ui/imgui/effects/blur/blur.hpp>
-#include <ui/imgui/effects/effects.hpp>
-#include <ui/imgui/effects/shadow/shadow.hpp>
-#include <ui/style/gradient-data.hpp>
-#include <ui/layout/container.hpp>
-#include <ui/layout/geometry.hpp>
-#include <ui/layout/layer-container.hpp>
-#include <ui/layout/tree-container.hpp>
-#include <ui/tree/node.hpp>
-#include <ui/ui.hpp>
-#include <ui/widgets/dropdown.hpp>
-#include <ui/widgets/widget.hpp>
+#include <imgui-ui/imgui/draw.hpp>
+#include <imgui-ui/imgui/effects/blur/blur.hpp>
+#include <imgui-ui/imgui/effects/effects.hpp>
+#include <imgui-ui/imgui/effects/shadow/shadow.hpp>
+#include <imgui-ui/style/gradient-data.hpp>
+#include <imgui-ui/layout/container.hpp>
+#include <imgui-ui/layout/geometry.hpp>
+#include <imgui-ui/layout/layer-container.hpp>
+#include <imgui-ui/layout/tree-container.hpp>
+#include <imgui-ui/tree/node.hpp>
+#include <imgui-ui/surface.hpp>
+#include <imgui-ui/widgets/dropdown.hpp>
+#include <imgui-ui/widgets/widget.hpp>
 
 #include <imgui_internal.h>
 
@@ -89,7 +89,7 @@ static void initialize_effect(EffectRegistry& effects, EffectSlot slot, EffectRe
 
 TEST_CASE("ui does not write to imgui's fallback window") {
     Runtime runtime;
-    UI surface = ui_test::make_surface(runtime);
+    Surface surface = ui_test::make_surface(runtime);
     surface.root().add<Node>("content");
 
     const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
@@ -335,7 +335,7 @@ TEST_CASE("tree shadows use the tree outer rect") {
 
 TEST_CASE("dropdown trigger shadows use the trigger rect below its label") {
     Runtime runtime;
-    UI surface = ui_test::make_surface(runtime);
+    Surface surface = ui_test::make_surface(runtime);
     std::string value = "first";
     auto& dropdown = surface.root().add<DropdownWidget>(
         value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "dropdown"
@@ -586,7 +586,7 @@ TEST_CASE("external subtrees transfer ownership and reconnect surface input", "[
     Container* original = page.get();
 
     Runtime runtime;
-    UI surface = ui_test::make_surface(runtime);
+    Surface surface = ui_test::make_surface(runtime);
     auto& first = surface.root().add<Container>("first");
     auto& second = surface.root().add<Container>("second");
 

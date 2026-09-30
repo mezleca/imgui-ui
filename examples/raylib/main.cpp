@@ -1,7 +1,7 @@
-#include <ui/backends/raylib/backend.hpp>
-#include <ui/tree/node.hpp>
-#include <ui/ui.hpp>
-#include <ui/runtime.hpp>
+#include <imgui-ui/backends/raylib/backend.hpp>
+#include <imgui-ui/tree/node.hpp>
+#include <imgui-ui/surface.hpp>
+#include <imgui-ui/runtime.hpp>
 #include "../demo.hpp"
 
 #include <raylib.h>
@@ -23,7 +23,7 @@ int main() {
 
         // the backend only initializes imgui against the current raylib window.
         auto backend = std::make_unique<RaylibBackend>();
-        UI surface(
+        Surface surface(
             runtime, {
                          .backend = std::move(backend),
                          .enable_debugger = true,

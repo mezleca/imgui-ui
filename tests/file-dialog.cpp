@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <ui/ui.hpp>
+#include <imgui-ui/surface.hpp>
 
 #include "imgui-context.hpp"
 
@@ -21,11 +21,11 @@ public:
     FileDialogOptions received_options;
 };
 
-TEST_CASE("UI uses the configured file dialog backend") {
+TEST_CASE("Surface uses the configured file dialog backend") {
     Runtime runtime;
     auto backend = std::make_unique<TestFileDialogBackend>();
     TestFileDialogBackend* backend_ptr = backend.get();
-    UI surface(runtime, {.backend = ui_test::make_backend(), .file_dialog_backend = std::move(backend)});
+    Surface surface(runtime, {.backend = ui_test::make_backend(), .file_dialog_backend = std::move(backend)});
 
     const std::vector<FileDialogFilter> filters{{"beatmaps", "osu"}};
     const FileDialogResult result = surface.file_dialog().show(

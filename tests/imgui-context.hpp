@@ -1,11 +1,11 @@
 #pragma once
 
-#include <ui/backends/backend.hpp>
-#include <ui/imgui/context-scope.hpp>
-#include <ui/layout/geometry.hpp>
-#include <ui/runtime.hpp>
-#include <ui/tree/node.hpp>
-#include <ui/ui.hpp>
+#include <imgui-ui/backends/backend.hpp>
+#include <imgui-ui/imgui/context-scope.hpp>
+#include <imgui-ui/layout/geometry.hpp>
+#include <imgui-ui/runtime.hpp>
+#include <imgui-ui/tree/node.hpp>
+#include <imgui-ui/surface.hpp>
 
 #include <imgui.h>
 
@@ -21,7 +21,7 @@ namespace ui_test {
             return true;
         }
 
-        void process_events(ui::UI&) override {}
+        void process_events(ui::Surface&) override {}
 
         bool initialize_imgui() override {
             return true;
@@ -49,8 +49,8 @@ namespace ui_test {
         return std::make_unique<TestBackend>();
     }
 
-    inline ui::UI make_surface(ui::Runtime& runtime, bool enable_debugger = false) {
-        return ui::UI(runtime, {.backend = make_backend(), .enable_debugger = enable_debugger});
+    inline ui::Surface make_surface(ui::Runtime& runtime, bool enable_debugger = false) {
+        return ui::Surface(runtime, {.backend = make_backend(), .enable_debugger = enable_debugger});
     }
 
     class ImGuiContext {
@@ -86,7 +86,7 @@ namespace ui_test {
 
     class SurfaceContext {
     public:
-        explicit SurfaceContext(ui::UI& surface, ImVec2 display_size) : m_scope(surface.imgui_context()) {
+        explicit SurfaceContext(ui::Surface& surface, ImVec2 display_size) : m_scope(surface.imgui_context()) {
             ImGui::GetIO().DisplaySize = display_size;
             ImGuiContext::build_fonts();
         }
@@ -98,15 +98,15 @@ namespace ui_test {
         ui::ImGuiContextScope m_scope;
     };
 
-    [[nodiscard]] inline SurfaceContext prepare_surface(ui::UI& surface) {
+    [[nodiscard]] inline SurfaceContext prepare_surface(ui::Surface& surface) {
         return SurfaceContext(surface, surface.backend().display_size());
     }
 
-    [[nodiscard]] inline SurfaceContext prepare_surface(ui::UI& surface, ImVec2 display_size) {
+    [[nodiscard]] inline SurfaceContext prepare_surface(ui::Surface& surface, ImVec2 display_size) {
         return SurfaceContext(surface, display_size);
     }
 
-    inline void draw_surface(ui::UI& surface, std::optional<float> delta_time = std::nullopt) {
+    inline void draw_surface(ui::Surface& surface, std::optional<float> delta_time = std::nullopt) {
         if (!delta_time.has_value()) {
             surface.frame();
             return;

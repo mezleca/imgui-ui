@@ -2,14 +2,14 @@
 #include <catch2/catch_test_macros.hpp>
 #include <imgui_internal.h>
 
-#include <ui/layout/container.hpp>
-#include <ui/layout/geometry.hpp>
-#include <ui/layout/layer-container.hpp>
-#include <ui/layout/resizable-container.hpp>
-#include <ui/layout/tree-container.hpp>
-#include <ui/layout/virtual-layout.hpp>
-#include <ui/input/router.hpp>
-#include <ui/widgets/text.hpp>
+#include <imgui-ui/layout/container.hpp>
+#include <imgui-ui/layout/geometry.hpp>
+#include <imgui-ui/layout/layer-container.hpp>
+#include <imgui-ui/layout/resizable-container.hpp>
+#include <imgui-ui/layout/tree-container.hpp>
+#include <imgui-ui/layout/virtual-layout.hpp>
+#include <imgui-ui/input/router.hpp>
+#include <imgui-ui/widgets/text.hpp>
 #include "imgui-context.hpp"
 
 #include <cfloat>
@@ -160,7 +160,7 @@ TEST_CASE("fit containers preserve content when border thickness changes", "[lay
 
 TEST_CASE("nested fit containers preserve content through padding resize and insertion", "[layout][regression]") {
     Runtime runtime;
-    ui::UI surface = ui_test::make_surface(runtime);
+    ui::Surface surface = ui_test::make_surface(runtime);
     auto& root = surface.root().add<Container>("root");
     root.set_size({px(280.0F), px(180.0F)});
 
