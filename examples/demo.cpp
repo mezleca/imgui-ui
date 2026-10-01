@@ -101,7 +101,7 @@ static void render_demo_chromatic(void* data, const ImDrawList*, const ImDrawCmd
     glUniform1f(state->effect.uniform("redOffset"), 2.0F);
     glUniform1f(state->effect.uniform("greenOffset"), 0.5F);
     glUniform1f(state->effect.uniform("blueOffset"), -2.0F);
-    state->effect.draw();
+    OpenGlFullscreenEffect::draw();
 }
 
 static DemoChromaticState demo_chromatic_state;
@@ -294,7 +294,7 @@ void configure_demo_runtime(RuntimeConfig& config) {
 
 class DemoPanel : public Container {
 public:
-    DemoPanel(
+    explicit DemoPanel(
         std::string id, DemoPanelTone tone = DemoPanelTone::Base, ImVec2 padding = {14.0F, 14.0F}, uint8_t border = BORDER_NONE,
         bool accent_border = false, bool shadow = false
     )
@@ -371,14 +371,14 @@ protected:
         configure_all_styles([&](Style& style) {
             style.background_color(background);
             if (m_type == GradientType::Radial) {
-                style.box_shadow(
-                    {.offset = {0.0F, 8.0F},
-                     .blur = 18.0F,
-                     .spread = 2.0F,
-                     .color = gradient(
-                         GradientType::Radial, {{0.0F, rgba(0.26F, 0.59F, 0.98F, 0.55F)}, {1.0F, rgba(0.26F, 0.59F, 0.98F, 0.0F)}}
-                     )}
-                );
+                style.box_shadow({
+                    .offset = {0.0F, 8.0F},
+                    .blur = 18.0F,
+                    .spread = 2.0F,
+                    .color = gradient(
+                        GradientType::Radial, {{0.0F, rgba(0.26F, 0.59F, 0.98F, 0.55F)}, {1.0F, rgba(0.26F, 0.59F, 0.98F, 0.0F)}}
+                    ),
+                });
             }
         });
     }
@@ -988,9 +988,13 @@ void setup_demo(Surface& surface, std::string backend) {
         ContextMenuItem::action(
             "first action", [&context_status](auto&) { context_status.set_text("context menu: first action"); }
         ),
-        ContextMenuItem::submenu("more actions", {ContextMenuItem::action("second action", [&context_status](auto&) {
-                                     context_status.set_text("context menu: second action");
-                                 })}),
+        ContextMenuItem::submenu(
+            "more actions", {
+                                ContextMenuItem::action("second action", [&context_status](auto&) {
+                                    context_status.set_text("context menu: second action");
+                                }),
+                            }
+        ),
     };
 
     auto& context_menu = surface.root().add<ContextMenuWidget>(std::move(context_items), inline_icon);

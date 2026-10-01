@@ -24,25 +24,17 @@ namespace ui {
             return m_type_name;
         }
 
-        /// effective values for the current transition.
-        Style& style() {
-            return m_state.style();
+        /// edits configured values, never the transition or animation snapshot.
+        Style& style(StyleType type = StyleType::DEFAULT) {
+            return m_state.style(type);
         }
 
-        const Style& style() const {
-            return m_state.style();
+        const Style& style(StyleType type = StyleType::DEFAULT) const {
+            return m_state.style(type);
         }
 
         const ComputedStyle& computed_style() const {
             return m_state.computed_style();
-        }
-
-        Style& style(StyleType type) {
-            return m_state.style(type);
-        }
-
-        const Style& style(StyleType type) const {
-            return m_state.style(type);
         }
 
         template <typename Func>

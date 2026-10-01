@@ -2,6 +2,7 @@
 
 #include <imgui-ui/imgui/effects/blur/blur.hpp>
 #include <imgui-ui/imgui/effects/effects.hpp>
+#include <imgui-ui/imgui/effects/opengl.hpp>
 
 #include <glad/gl.h>
 
@@ -108,59 +109,25 @@ if (rounded_box(point, region.zw, rounding) > 0.0) discard;
 color = vec4(blurred.rgb, blurred.a * opacity);
 })";
 
-static GLuint compile_shader(GLenum type, const char* source) {
-    const GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-
-    GLint compiled = GL_FALSE;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-    if (compiled == GL_TRUE) {
-        return shader;
-    }
-
-    glDeleteShader(shader);
-    return 0;
-}
-
 static bool create_program() {
-    const GLuint vertex = compile_shader(GL_VERTEX_SHADER, VERTEX_SHADER);
-    const GLuint fragment = compile_shader(GL_FRAGMENT_SHADER, FRAGMENT_SHADER);
-    if (vertex == 0 || fragment == 0) {
-        if (vertex != 0) glDeleteShader(vertex);
-        if (fragment != 0) glDeleteShader(fragment);
+    textures->program = create_opengl_effect_program(VERTEX_SHADER, FRAGMENT_SHADER);
+    if (textures->program == 0) {
         return false;
     }
 
-    textures->program = glCreateProgram();
-
-    glAttachShader(textures->program, vertex);
-    glAttachShader(textures->program, fragment);
-    glLinkProgram(textures->program);
-    glDeleteShader(vertex);
-    glDeleteShader(fragment);
-
-    GLint linked = GL_FALSE;
-    glGetProgramiv(textures->program, GL_LINK_STATUS, &linked);
-    if (linked == GL_TRUE) {
-        textures->image = glGetUniformLocation(textures->program, "image");
-        textures->original = glGetUniformLocation(textures->program, "original");
-        textures->texel = glGetUniformLocation(textures->program, "texel");
-        textures->direction = glGetUniformLocation(textures->program, "direction");
-        textures->bounds = glGetUniformLocation(textures->program, "bounds");
-        textures->region = glGetUniformLocation(textures->program, "region");
-        textures->rounding = glGetUniformLocation(textures->program, "rounding");
-        textures->radius = glGetUniformLocation(textures->program, "radius");
-        textures->filtered = glGetUniformLocation(textures->program, "filtered");
-        textures->clipped = glGetUniformLocation(textures->program, "clipped");
-        textures->opacity = glGetUniformLocation(textures->program, "opacity");
-        textures->amount = glGetUniformLocation(textures->program, "amount");
-        return true;
-    }
-
-    glDeleteProgram(textures->program);
-    textures->program = 0;
-    return false;
+    textures->image = glGetUniformLocation(textures->program, "image");
+    textures->original = glGetUniformLocation(textures->program, "original");
+    textures->texel = glGetUniformLocation(textures->program, "texel");
+    textures->direction = glGetUniformLocation(textures->program, "direction");
+    textures->bounds = glGetUniformLocation(textures->program, "bounds");
+    textures->region = glGetUniformLocation(textures->program, "region");
+    textures->rounding = glGetUniformLocation(textures->program, "rounding");
+    textures->radius = glGetUniformLocation(textures->program, "radius");
+    textures->filtered = glGetUniformLocation(textures->program, "filtered");
+    textures->clipped = glGetUniformLocation(textures->program, "clipped");
+    textures->opacity = glGetUniformLocation(textures->program, "opacity");
+    textures->amount = glGetUniformLocation(textures->program, "amount");
+    return true;
 }
 
 static void create_texture(GLuint& texture, int width, int height) {
@@ -219,7 +186,7 @@ static std::array<int, 3> box_widths(int sigma) {
     constexpr int passes = 3;
     // three integer box widths approximate the requested gaussian standard deviation.
     int lower = static_cast<int>(std::floor(std::sqrt((12.0 * sigma * sigma / passes) + 1.0)));
-    if ((lower & 1) == 0) --lower;
+    if (lower % 2 == 0) --lower;
 
     const int upper = lower + 2;
     const int lower_count = static_cast<int>(std::round(

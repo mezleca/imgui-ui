@@ -89,7 +89,7 @@ void main() {
         glUniform1f(state.height, height);
         glUniform1f(state.opacity, region.opacity);
         upload_gradient(state.sampler, {}, region.gradient);
-        state.effect.draw();
+        OpenGlFullscreenEffect::draw();
     }
 
     void shutdown(void*) {

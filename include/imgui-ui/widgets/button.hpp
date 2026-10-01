@@ -10,7 +10,7 @@
 namespace ui {
     class ButtonWidget : public DrawListWidget {
     public:
-        ButtonWidget(std::string text, LayoutSize size = {fit(), fit()});
+        explicit ButtonWidget(std::string text, LayoutSize size = {fit(), fit()});
 
         ButtonWidget& set_text_alignment(ImVec2 alignment) {
             m_text_alignment = alignment;

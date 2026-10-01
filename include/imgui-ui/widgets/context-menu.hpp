@@ -32,7 +32,7 @@ namespace ui {
 
     class ContextMenuWidget : public Container {
     public:
-        ContextMenuWidget(ContextMenuItems items = {}, Texture* submenu_icon = nullptr);
+        explicit ContextMenuWidget(ContextMenuItems items = {}, Texture* submenu_icon = nullptr);
 
         ContextMenuWidget& set_items(ContextMenuItems items);
         ContextMenuWidget& set_submenu_icon(Texture* icon);

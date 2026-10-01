@@ -48,8 +48,10 @@ namespace ui {
     template <typename T>
     struct Value {
         Value() = default;
+
         Value(T initial_value, float transition_duration = 0.0F)
             : value(std::move(initial_value)), duration(std::max(0.0F, transition_duration)) {}
+
         Value(T initial_value, TransitionSpec transition)
             : value(std::move(initial_value)), duration(std::max(0.0F, transition.duration)),
               easing(transition.easing != nullptr ? transition.easing : easing::linear) {}

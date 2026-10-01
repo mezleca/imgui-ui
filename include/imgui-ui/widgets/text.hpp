@@ -30,7 +30,6 @@ namespace ui {
         void on_measure() override;
 
         GenericValue m_text;
-        float m_wrap = -1.0F;
         TextOverflow m_overflow = TextOverflow::Clip;
     };
 

@@ -6,7 +6,6 @@
 #include <concepts>
 #include <optional>
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -19,9 +18,9 @@ namespace ui {
     public:
         template <typename T>
             requires std::constructible_from<NumberValue, T*>
-        NumberInputWidget(T& value, std::string id = {})
-            : Widget(std::move(id), "NumberInput"), m_value(value), m_number(&value),
-              m_format(std::floating_point<T> ? "%.3f" : ""), m_speed(std::floating_point<T> ? 0.1F : 1.0F) {}
+        explicit NumberInputWidget(T& value, std::string id = {})
+            : Widget(std::move(id), "NumberInput"), m_number(&value), m_format(std::floating_point<T> ? "%.3f" : ""),
+              m_speed(std::floating_point<T> ? 0.1F : 1.0F) {}
 
         NumberInputWidget& set_label(std::string label);
         NumberInputWidget& set_label_placement(LabelPlacement placement);
@@ -38,43 +37,25 @@ namespace ui {
         template <typename T>
             requires std::constructible_from<NumberValue, T*>
         bool set_value(T value) {
-            const bool changed = std::visit(
-                [value](auto* bound_value) {
-                    using BoundValue = std::remove_cv_t<std::remove_pointer_t<decltype(bound_value)>>;
-                    if constexpr (std::same_as<BoundValue, T>) {
-                        if (*bound_value == value) {
-                            return false;
-                        }
+            T* const* bound = std::get_if<T*>(&m_number);
+            if (bound == nullptr || **bound == value) return false;
 
-                        *bound_value = value;
-                        return true;
-                    }
-
-                    return false;
-                },
-                m_number
-            );
-
-            if (changed) {
-                notify_change();
-            }
-            return changed;
+            **bound = value;
+            notify_change();
+            return true;
         }
-
-    private:
-        bool paint() override;
-        void mouse_press_event(UiEvent& event) override;
-        template <typename T>
-        bool draw_value(T& value);
-
-        void sync_value() const;
-        void on_measure() override;
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;
 
     private:
-        mutable GenericValue m_value;
+        void on_measure() override;
+        bool paint() override;
+        void mouse_press_event(UiEvent& event) override;
+
+        template <typename T>
+        bool draw_value(T& value);
+
         NumberValue m_number;
         GenericValue m_label;
         std::string m_format;

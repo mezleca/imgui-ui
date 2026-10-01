@@ -170,7 +170,7 @@ static void stroke_solid_path(ImDrawList& draw_list, const BorderPath& path, uin
             }
             append_segment_range(draw_list, segment, 0.0F, segment.length);
         },
-        [&]() {
+        [&] {
             if (has_path) {
                 draw_list.PathStroke(color, thickness);
                 has_path = false;
@@ -204,7 +204,7 @@ static void stroke_dashed_side(ImDrawList& draw_list, const BorderPath& path, ui
     bool drawing = false;
     bool has_path = false;
 
-    const auto flush = [&]() {
+    const auto flush = [&] {
         if (has_path) {
             draw_list.PathStroke(color, thickness);
             has_path = false;
@@ -458,12 +458,14 @@ void ui::draw_text_ellipsis(
 }
 
 void ui::draw_triangle(ImDrawList& draw_list, ImVec2 center, ImVec2 size, const Color& color, TriangleDirection direction) {
-    static constexpr std::array<std::array<ImVec2, 3>, 4> DIRECTION_OFFSETS = {{
-        {{{-1.0F, 1.0F}, {0.0F, -1.0F}, {1.0F, 1.0F}}},  // up
-        {{{-1.0F, -1.0F}, {1.0F, -1.0F}, {0.0F, 1.0F}}}, // down
-        {{{1.0F, -1.0F}, {1.0F, 1.0F}, {-1.0F, 0.0F}}},  // left
-        {{{-1.0F, -1.0F}, {-1.0F, 1.0F}, {1.0F, 0.0F}}}, // right
-    }};
+    static constexpr std::array<std::array<ImVec2, 3>, 4> DIRECTION_OFFSETS = {
+        {
+            {{{-1.0F, 1.0F}, {0.0F, -1.0F}, {1.0F, 1.0F}}},  // up
+            {{{-1.0F, -1.0F}, {1.0F, -1.0F}, {0.0F, 1.0F}}}, // down
+            {{{1.0F, -1.0F}, {1.0F, 1.0F}, {-1.0F, 0.0F}}},  // left
+            {{{-1.0F, -1.0F}, {-1.0F, 1.0F}, {1.0F, 0.0F}}}, // right
+        },
+    };
 
     const ImVec2 half_size = {size.x * 0.5F, size.y * 0.5F};
     const auto& offsets = DIRECTION_OFFSETS[static_cast<std::size_t>(direction)];
@@ -573,7 +575,7 @@ static BorderPathSegment arc(ImVec2 center, float radius, float start_angle, flo
         start_angle,
         end_angle,
         std::abs(end_angle - start_angle) * radius,
-        sides
+        sides,
     };
 }
 
@@ -588,20 +590,24 @@ BorderPath ui::rounded_rect_border_path(Rect rect, float rounding) {
     const ImVec2 bottom_right = {rect.max.x - radius, rect.max.y - radius};
     const ImVec2 bottom_left = {rect.min.x + radius, rect.max.y - radius};
 
-    BorderPath path = {.segments{
-        {line({top_left.x, rect.min.y}, {top_right.x, rect.min.y}, BORDER_TOP),
-         arc(top_right, radius, -HALF_PI, -QUARTER_PI, BORDER_TOP), arc(top_right, radius, -QUARTER_PI, 0.0F, BORDER_RIGHT),
-         line({rect.max.x, top_right.y}, {rect.max.x, bottom_right.y}, BORDER_RIGHT),
-         arc(bottom_right, radius, 0.0F, QUARTER_PI, BORDER_RIGHT), arc(bottom_right, radius, QUARTER_PI, HALF_PI, BORDER_BOTTOM),
-         line({bottom_right.x, rect.max.y}, {bottom_left.x, rect.max.y}, BORDER_BOTTOM),
-         arc(bottom_left, radius, HALF_PI, QUARTER_PI * 3.0F, BORDER_BOTTOM),
-         arc(bottom_left, radius, QUARTER_PI * 3.0F, PI, BORDER_LEFT),
-         line({rect.min.x, bottom_left.y}, {rect.min.x, top_left.y}, BORDER_LEFT),
-         arc(top_left, radius, PI, QUARTER_PI * 5.0F, BORDER_LEFT),
-         arc(top_left, radius, QUARTER_PI * 5.0F, PI + HALF_PI, BORDER_TOP)}
-    }};
-
-    return path;
+    return {
+        .segments = {
+            {
+                line({top_left.x, rect.min.y}, {top_right.x, rect.min.y}, BORDER_TOP),
+                arc(top_right, radius, -HALF_PI, -QUARTER_PI, BORDER_TOP),
+                arc(top_right, radius, -QUARTER_PI, 0.0F, BORDER_RIGHT),
+                line({rect.max.x, top_right.y}, {rect.max.x, bottom_right.y}, BORDER_RIGHT),
+                arc(bottom_right, radius, 0.0F, QUARTER_PI, BORDER_RIGHT),
+                arc(bottom_right, radius, QUARTER_PI, HALF_PI, BORDER_BOTTOM),
+                line({bottom_right.x, rect.max.y}, {bottom_left.x, rect.max.y}, BORDER_BOTTOM),
+                arc(bottom_left, radius, HALF_PI, QUARTER_PI * 3.0F, BORDER_BOTTOM),
+                arc(bottom_left, radius, QUARTER_PI * 3.0F, PI, BORDER_LEFT),
+                line({rect.min.x, bottom_left.y}, {rect.min.x, top_left.y}, BORDER_LEFT),
+                arc(top_left, radius, PI, QUARTER_PI * 5.0F, BORDER_LEFT),
+                arc(top_left, radius, QUARTER_PI * 5.0F, PI + HALF_PI, BORDER_TOP),
+            },
+        },
+    };
 }
 
 static const BorderPath& border_path(Rect rect, float rounding) {
@@ -612,7 +618,7 @@ static const BorderPath& border_path(Rect rect, float rounding) {
     const uint32_t max_x = std::bit_cast<uint32_t>(rect.max.x);
     const uint32_t max_y = std::bit_cast<uint32_t>(rect.max.y);
     const uint32_t rounded = std::bit_cast<uint32_t>(rounding);
-    const std::size_t index = (min_x ^ (min_y << 3) ^ (max_x << 7) ^ (max_y << 11) ^ (rounded << 13)) % paths.size();
+    const std::size_t index = (min_x ^ (min_y << 3U) ^ (max_x << 7U) ^ (max_y << 11U) ^ (rounded << 13U)) % paths.size();
 
     BorderEntry& entry = paths[index];
 

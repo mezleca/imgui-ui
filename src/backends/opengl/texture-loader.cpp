@@ -45,7 +45,7 @@ struct GifContextTexture {
     uint64_t revision = 0;
 };
 
-static constexpr std::size_t maximum_gif_bitmap_bytes = 512U * 1024U * 1024U;
+static constexpr std::size_t maximum_gif_bitmap_bytes = std::size_t{512} * 1024U * 1024U;
 
 static nsgif_bitmap_t* create_gif_bitmap(int width, int height) {
     if (width <= 0 || height <= 0) {
@@ -89,7 +89,8 @@ static nsgif_rect_t full_gif_area(ImVec2 size) {
 static void update_gif_texture(GLuint texture, const GifBitmap& bitmap, int bitmap_width, nsgif_rect_t area) {
     const int width = static_cast<int>(area.x1 - area.x0);
     const int height = static_cast<int>(area.y1 - area.y0);
-    const uint8_t* pixels = bitmap.pixels.data() + (static_cast<std::size_t>(area.y0) * bitmap_width + area.x0) * 4U;
+    const std::size_t pixel_offset = ((static_cast<std::size_t>(area.y0) * bitmap_width) + area.x0) * 4U;
+    const uint8_t* pixels = bitmap.pixels.data() + pixel_offset;
 
     glBindTexture(GL_TEXTURE_2D, texture);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, bitmap_width);
@@ -125,7 +126,7 @@ public:
 
         const int width = static_cast<int>(size.x);
         const int height = static_cast<int>(size.y);
-        const uint64_t size_key = (static_cast<uint64_t>(static_cast<uint32_t>(width)) << 32) | static_cast<uint32_t>(height);
+        const uint64_t size_key = (static_cast<uint64_t>(static_cast<uint32_t>(width)) << 32U) | static_cast<uint32_t>(height);
         BitmapCache& cache = m_bitmaps[context];
         const auto existing = cache.find(size_key);
         if (existing != cache.end()) {
@@ -326,7 +327,7 @@ private:
     std::unique_ptr<nsgif_t, decltype(&nsgif_destroy)> m_gif;
     std::unordered_map<ImGuiContext*, GifContextTexture> m_textures;
     GifBitmap* m_bitmap = nullptr;
-    ImVec2 m_size{};
+    ImVec2 m_size;
     nsgif_rect_t m_dirty{};
     double m_next_frame_time = 0.0;
     uint64_t m_revision = 0;

@@ -178,21 +178,22 @@ static Key core_key(int key) {
 }
 
 static std::string utf8_from_codepoint(int codepoint) {
+    const auto scalar = static_cast<unsigned int>(codepoint);
     std::string result;
-    if (codepoint <= 0x7f) {
-        result.push_back(static_cast<char>(codepoint));
-    } else if (codepoint <= 0x7ff) {
-        result.push_back(static_cast<char>(0xc0 | (codepoint >> 6)));
-        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
-    } else if (codepoint <= 0xffff) {
-        result.push_back(static_cast<char>(0xe0 | (codepoint >> 12)));
-        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
-        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+    if (scalar <= 0x7fU) {
+        result.push_back(static_cast<char>(scalar));
+    } else if (scalar <= 0x7ffU) {
+        result.push_back(static_cast<char>(0xc0U | (scalar >> 6U)));
+        result.push_back(static_cast<char>(0x80U | (scalar & 0x3fU)));
+    } else if (scalar <= 0xffffU) {
+        result.push_back(static_cast<char>(0xe0U | (scalar >> 12U)));
+        result.push_back(static_cast<char>(0x80U | ((scalar >> 6U) & 0x3fU)));
+        result.push_back(static_cast<char>(0x80U | (scalar & 0x3fU)));
     } else {
-        result.push_back(static_cast<char>(0xf0 | (codepoint >> 18)));
-        result.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3f)));
-        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
-        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+        result.push_back(static_cast<char>(0xf0U | (scalar >> 18U)));
+        result.push_back(static_cast<char>(0x80U | ((scalar >> 12U) & 0x3fU)));
+        result.push_back(static_cast<char>(0x80U | ((scalar >> 6U) & 0x3fU)));
+        result.push_back(static_cast<char>(0x80U | (scalar & 0x3fU)));
     }
     return result;
 }
@@ -206,7 +207,8 @@ static ::Color raylib_color(ImVec4 color) {
     };
 }
 
-static bool dispatch_pointer(Surface& surface, EventType type, ImVec2 position, PointerButton button, bool& native_input_blocked) {
+static bool
+dispatch_pointer(Surface& surface, EventType type, ImVec2 position, PointerButton button, bool& native_input_blocked) {
     UiEvent event = UiEvent::make(type);
     event.position = position;
     event.button = button;
@@ -258,7 +260,7 @@ void RaylibBackend::set_mouse_cursor(ImGuiMouseCursor cursor) {
     m_mouse_cursor = cursor;
 }
 
-void RaylibBackend::apply_mouse_cursor() {
+void RaylibBackend::apply_mouse_cursor() const {
     if (m_mouse_cursor == ImGuiMouseCursor_None) {
         HideCursor();
         return;

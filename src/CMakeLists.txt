@@ -26,13 +26,7 @@ endfunction()
 file(GLOB_RECURSE IMGUI_UI_CORE_SOURCES CONFIGURE_DEPENDS "*.cpp")
 list(FILTER IMGUI_UI_CORE_SOURCES EXCLUDE REGEX "/backends/")
 
-set(IMGUI_UI_OPENGL_EFFECT_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/opengl.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/blur/opengl.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/gradient/opengl.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/gradient/opengl-shared.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/imgui/effects/shadow/opengl.cpp"
-)
+file(GLOB_RECURSE IMGUI_UI_OPENGL_EFFECT_SOURCES CONFIGURE_DEPENDS "imgui/effects/opengl*.cpp")
 list(REMOVE_ITEM IMGUI_UI_CORE_SOURCES ${IMGUI_UI_OPENGL_EFFECT_SOURCES})
 
 set(IMGUI_UI_OPENGL_BACKEND_SOURCES

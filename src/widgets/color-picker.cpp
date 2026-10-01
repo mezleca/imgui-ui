@@ -58,7 +58,7 @@ static bool parse_hex(const std::string& text, ImColor& color) {
         if (high < 0 || low < 0) {
             return false;
         }
-        channels[index] = static_cast<unsigned char>((high << 4) | low);
+        channels[index] = static_cast<unsigned char>((high * 16) + low);
     }
 
     color = ImColor(channels[0], channels[1], channels[2], channels[3]);

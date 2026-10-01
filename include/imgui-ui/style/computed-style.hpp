@@ -6,7 +6,6 @@
 #include <cstdint>
 
 namespace ui {
-    class Style;
     class StyledNode;
 
     /// fractional layout coordinates can place a 1px dotted edge between pixel centers.
@@ -14,10 +13,11 @@ namespace ui {
 
     enum Border : uint8_t {
         BORDER_NONE = 0,
-        BORDER_LEFT = 1 << 0,
-        BORDER_TOP = 1 << 1,
-        BORDER_RIGHT = 1 << 2,
-        BORDER_BOTTOM = 1 << 3,
+        BORDER_LEFT = 1U << 0U,
+        BORDER_TOP = 1U << 1U,
+        BORDER_RIGHT = 1U << 2U,
+        BORDER_BOTTOM = 1U << 3U,
+
         BORDER_ALL = BORDER_LEFT | BORDER_TOP | BORDER_RIGHT | BORDER_BOTTOM,
     };
 
@@ -167,8 +167,6 @@ namespace ui {
         }
 
     protected:
-        friend class Style;
-
         /// pushes resolved style values into imgui and records exactly what must be restored.
         PushState push(float opacity, ImFont* effective_font) const;
 

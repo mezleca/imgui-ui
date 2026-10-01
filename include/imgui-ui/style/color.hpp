@@ -18,7 +18,9 @@ namespace ui {
     public:
         Color() = default;
         Color(float red, float green, float blue, float alpha = 1.0F) : m_rgba(red, green, blue, alpha) {}
+
         Color(ImVec4 color) : m_rgba(color) {}
+
         Color(ImColor color) : m_rgba(color.Value) {}
 
         operator ImVec4() const {

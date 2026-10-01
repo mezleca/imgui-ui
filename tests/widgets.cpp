@@ -526,7 +526,7 @@ TEST_CASE("text line height interpolates between visual states", "[TextWidget][s
     text.set_interaction_style(true, false);
     text.update(0.5F);
 
-    REQUIRE(text.style().line_height() == Catch::Approx(1.5F));
+    REQUIRE(text.computed_style().line_height() == Catch::Approx(1.5F));
 }
 
 TEST_CASE("value widgets notify only when their value changes", "[Widget][change]") {
@@ -564,6 +564,42 @@ TEST_CASE("value widgets notify only when their value changes", "[Widget][change
     REQUIRE(changes == 4);
 }
 
+TEST_CASE("paint-only animation overrides do not invalidate measurement", "[VisualState][animation][regression]") {
+    VisualState state;
+    int invalidations = 0;
+    state.set_change_callback(&invalidations, [](void* owner, bool) { ++*static_cast<int*>(owner); });
+    state.animate().to(StyleAnimationProperty::Color, rgb(1.0F, 0.0F, 0.0F), {0.2F, easing::linear});
+    state.update(0.1F);
+    REQUIRE(invalidations == 0);
+
+    state.cancel_animations();
+    state.animate().to(StyleAnimationProperty::PaddingX, 10.0F, {0.2F, easing::linear});
+    state.update(0.1F);
+    REQUIRE(invalidations == 1);
+    REQUIRE(state.computed_style().padding().x == Catch::Approx(5.0F));
+}
+
+TEST_CASE("style configuration stays separate from displayed transitions", "[VisualState][style]") {
+    VisualState state;
+    state.style().line_height(1.0F);
+    state.style(StyleType::HOVER).line_height(2.0F, {0.5F, easing::linear});
+    state.set_style(StyleType::HOVER);
+    state.update(0.25F);
+
+    REQUIRE(&state.style() == &state.style(StyleType::DEFAULT));
+    REQUIRE(state.computed_style().line_height() == Catch::Approx(1.5F));
+
+    state.style().line_height(3.0F);
+    REQUIRE(state.style(StyleType::DEFAULT).line_height() == Catch::Approx(3.0F));
+    REQUIRE(state.computed_style().line_height() == Catch::Approx(1.5F));
+    state.update(0.25F);
+    REQUIRE(state.computed_style().line_height() == Catch::Approx(2.0F));
+
+    state.set_style(StyleType::DEFAULT);
+    state.update(0.0F);
+    REQUIRE(state.computed_style().line_height() == Catch::Approx(3.0F));
+}
+
 TEST_CASE("style transitions remain active until their duration ends", "[VisualState][transition]") {
     VisualState state;
     state.style(StyleType::HOVER).line_height(2.0F, {0.5F, easing::out_cubic});
@@ -572,12 +608,12 @@ TEST_CASE("style transitions remain active until their duration ends", "[VisualS
     state.set_style(StyleType::HOVER);
     state.update(0.45F);
 
-    REQUIRE(state.style().line_height() < 2.0F);
+    REQUIRE(state.computed_style().line_height() < 2.0F);
     REQUIRE(state.transitioning());
 
     state.update(0.05F);
 
-    REQUIRE(state.style().line_height() == Catch::Approx(2.0F));
+    REQUIRE(state.computed_style().line_height() == Catch::Approx(2.0F));
     REQUIRE_FALSE(state.transitioning());
 }
 
@@ -780,11 +816,11 @@ TEST_CASE("border alpha fades out when a hover state is cleared", "[VisualState]
 
     state.set_style(StyleType::HOVER);
     state.update(0.2F);
-    const float visible_alpha = state.style().border_color().get().w;
+    const float visible_alpha = state.computed_style().border_color().get().w;
 
     state.set_style(StyleType::DEFAULT);
     state.update(0.1F);
-    const ImVec4 fading_color = state.style().border_color().get();
+    const ImVec4 fading_color = state.computed_style().border_color().get();
 
     REQUIRE(visible_alpha > 0.0F);
     REQUIRE(fading_color.w > 0.0F);
@@ -794,7 +830,7 @@ TEST_CASE("border alpha fades out when a hover state is cleared", "[VisualState]
     REQUIRE(fading_color.z == Catch::Approx(accent.rgba().z));
 
     state.update(0.1F);
-    REQUIRE(state.style().border_color().get().w == Catch::Approx(0.0F));
+    REQUIRE(state.computed_style().border_color().get().w == Catch::Approx(0.0F));
 }
 
 TEST_CASE("opacity ticks towards target and drives visibility", "[widget_state][opacity]") {
@@ -923,12 +959,12 @@ TEST_CASE("styled widgets advance visual state during update", "[Widget][style]"
     widget.set_visual_style(StyleType::HOVER);
 
     widget.update(0.1F);
-    const float color_after_update = widget.style().color().get().x;
+    const float color_after_update = widget.computed_style().color().get().x;
     REQUIRE(color_after_update == Catch::Approx(0.5F));
 
     ui_test::draw_node(widget, "style-tick-test");
 
-    REQUIRE(widget.style().color().get().x == Catch::Approx(color_after_update));
+    REQUIRE(widget.computed_style().color().get().x == Catch::Approx(color_after_update));
 }
 
 TEST_CASE("fade in starts new visual states transparent", "[widget_state][opacity]") {
@@ -948,11 +984,11 @@ TEST_CASE("style variables stay local to their declared state", "[VisualState][v
 
     state.set_style(StyleType::HOVER);
     state.update(1.0F / 60.0F);
-    REQUIRE(state.style().variables().get<FloatValue>("line_width") != nullptr);
+    REQUIRE(state.computed_style().variables().get<FloatValue>("line_width") != nullptr);
 
     state.set_style(StyleType::ACTIVE);
     state.update(1.0F / 60.0F);
-    REQUIRE(state.style().variables().get<FloatValue>("line_width") == nullptr);
+    REQUIRE(state.computed_style().variables().get<FloatValue>("line_width") == nullptr);
 }
 
 TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]") {

@@ -29,8 +29,6 @@ namespace ui {
         StyleAnimationSequence& end(std::function<void()> callback);
 
     private:
-        friend class VisualState;
-
         VisualState& m_state;
         AnimationSequence m_sequence;
     };

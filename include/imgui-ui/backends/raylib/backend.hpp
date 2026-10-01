@@ -9,7 +9,8 @@ namespace ui {
     class RaylibBackend final : public Backend {
     public:
         /// uses the application's initialized raylib window. Surface::begin_frame and Surface::end_frame own the raylib drawing
-        /// cycle, so the application must not wrap them in BeginDrawing and EndDrawing. close the window after Surface destruction.
+        /// cycle, so the application must not wrap them in BeginDrawing and EndDrawing. close the window after Surface
+        /// destruction.
         RaylibBackend() = default;
 
         bool initialize() override;
@@ -26,11 +27,11 @@ namespace ui {
         ImVec2 display_size() const override;
 
     private:
-        void apply_mouse_cursor();
+        void apply_mouse_cursor() const;
 
         bool m_imgui_initialized = false;
         ImGuiMouseCursor m_mouse_cursor = ImGuiMouseCursor_Arrow;
-        ImVec2 m_pointer_position{};
+        ImVec2 m_pointer_position;
         bool m_has_pointer_position = false;
         OpenGLGpuTimer m_gpu_timer;
     };

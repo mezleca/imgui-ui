@@ -10,8 +10,7 @@ void TextWidget::apply_theme_defaults(const Theme& theme) {
 }
 
 TextWidget& TextWidget::set_wrap(float width) {
-    if (m_wrap != width) {
-        m_wrap = width;
+    if (m_text.wrap_width() != width) {
         m_text.set_wrap(width);
         invalidate_measure();
     }
@@ -55,10 +54,10 @@ bool TextWidget::paint() {
     ImGui::Dummy(layout().size());
     const ImVec4 clip_rect = {content.min.x, content.min.y, content.max.x, content.max.y};
 
-    if (m_wrap < 0.0F && m_overflow == TextOverflow::Ellipsis) {
+    if (m_text.wrap_width() < 0.0F && m_overflow == TextOverflow::Ellipsis) {
         draw_text_ellipsis(draw_list, content.min, current_style.color().value, m_text, clip_rect);
     } else {
-        draw_text(draw_list, content.min, current_style.color().value, m_text, m_wrap < 0.0F ? &clip_rect : nullptr);
+        draw_text(draw_list, content.min, current_style.color().value, m_text, m_text.wrap_width() < 0.0F ? &clip_rect : nullptr);
     }
 
     return true;

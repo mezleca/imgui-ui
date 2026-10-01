@@ -22,10 +22,11 @@ void ui::upload_gradient(const GradientUniforms& uniforms, ImVec4 solid, const G
     for (uint8_t index = 0; index < gradient.count; ++index) {
         const GradientStop& stop = gradient.stops[index];
         positions[index] = stop.position;
-        colors[index * 4] = stop.color.x;
-        colors[index * 4 + 1] = stop.color.y;
-        colors[index * 4 + 2] = stop.color.z;
-        colors[index * 4 + 3] = stop.color.w;
+        const std::size_t color_index = std::size_t{index} * 4U;
+        colors[color_index] = stop.color.x;
+        colors[color_index + 1U] = stop.color.y;
+        colors[color_index + 2U] = stop.color.z;
+        colors[color_index + 3U] = stop.color.w;
     }
     glUniform1fv(uniforms.positions, gradient.count, positions);
     glUniform4fv(uniforms.colors, gradient.count, colors);

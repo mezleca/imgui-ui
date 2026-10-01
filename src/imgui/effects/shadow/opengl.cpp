@@ -183,10 +183,13 @@ static void render_box_shadow(void*, const ImDrawList*, const ImDrawCmd* command
     glUniform1f(gl_state->cutout_rounding, region->cutout_rounding * scale_factor);
     glUniform1f(gl_state->sigma, blur);
     glUniform1f(gl_state->viewport_height, static_cast<float>(height));
-    glUniform4f(gl_state->gradient_bounds, bounds.min.x, height - bounds.max.y, bounds.max.x, height - bounds.min.y);
+    const float framebuffer_height = static_cast<float>(height);
+    glUniform4f(
+        gl_state->gradient_bounds, bounds.min.x, framebuffer_height - bounds.max.y, bounds.max.x, framebuffer_height - bounds.min.y
+    );
     glUniform1f(gl_state->opacity, region->opacity);
     upload_gradient(gl_state->sampler, region->color, region->gradient);
-    gl_state->effect.draw();
+    OpenGlFullscreenEffect::draw();
 }
 
 static bool initialize_box_shadow_effect(void*) {

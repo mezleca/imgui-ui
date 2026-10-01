@@ -357,7 +357,8 @@ static bool draw_border_flags(std::string_view label, uint8_t* value) {
         const auto draw_flag = [&](const char* name, uint8_t flag) {
             bool enabled = (*value & flag) != 0;
             if (ImGui::Checkbox(name, &enabled)) {
-                *value = enabled ? static_cast<uint8_t>(*value | flag) : static_cast<uint8_t>(*value & ~flag);
+                *value =
+                    enabled ? static_cast<uint8_t>(*value | flag) : static_cast<uint8_t>(*value & ~static_cast<unsigned>(flag));
                 changed = true;
             }
         };
@@ -959,7 +960,7 @@ void Debugger::render_node_tree(Node& node, int depth) {
     if (!node_id.empty()) {
         node_label += " (";
         node_label += node_id;
-        node_label += ")";
+        node_label += ')';
     }
 
     if (node_label.empty()) {
@@ -1334,10 +1335,14 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
         apply_to_styles(style, all_styles, std::forward<decltype(update)>(update));
     };
 
-    ImVec4 color = style.color().get();
-    if (draw_color_input("color", color)) {
-        apply([&color](Style& target) { target.color(ImColor{color}); });
-    }
+    const auto edit_color = [&](std::string_view label, const ColorValue& value, Style& (Style::*setter)(Color, TransitionSpec)) {
+        ImVec4 color = value.get();
+        if (draw_color_input(label, color)) {
+            apply([&](Style& target) { (target.*setter)(ImColor{color}, {}); });
+        }
+    };
+
+    edit_color("color", style.color(), &Style::color);
 
     float alpha = style.alpha();
     if (draw_number_input("alpha", &alpha, 1, 0.01F, 0.0F, 1.0F)) {
@@ -1350,15 +1355,8 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
     }
 
     if (!is_line) {
-        ImVec4 background_color = style.background_color().get();
-        if (draw_color_input("background", background_color)) {
-            apply([&background_color](Style& target) { target.background_color(ImColor{background_color}); });
-        }
-
-        ImVec4 border_color = style.border_color().get();
-        if (draw_color_input("border color", border_color)) {
-            apply([&border_color](Style& target) { target.border_color(ImColor{border_color}); });
-        }
+        edit_color("background", style.background_color(), &Style::background_color);
+        edit_color("border color", style.border_color(), &Style::border_color);
 
         uint8_t border = style.border();
         if (draw_border_flags("border sides", &border)) {
@@ -1439,27 +1437,10 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
             apply([scrollbar_grab_rounding](Style& target) { target.scrollbar_grab_rounding(scrollbar_grab_rounding); });
         }
 
-        ImVec4 scrollbar_background = style.scrollbar_background_color().get();
-        if (draw_color_input("scrollbar background", scrollbar_background)) {
-            apply([scrollbar_background](Style& target) { target.scrollbar_background_color(ImColor{scrollbar_background}); });
-        }
-
-        ImVec4 scrollbar_grab = style.scrollbar_grab_color().get();
-        if (draw_color_input("scrollbar grab", scrollbar_grab)) {
-            apply([scrollbar_grab](Style& target) { target.scrollbar_grab_color(ImColor{scrollbar_grab}); });
-        }
-
-        ImVec4 scrollbar_grab_hovered = style.scrollbar_grab_hovered_color().get();
-        if (draw_color_input("scrollbar grab hovered", scrollbar_grab_hovered)) {
-            apply([scrollbar_grab_hovered](Style& target) {
-                target.scrollbar_grab_hovered_color(ImColor{scrollbar_grab_hovered});
-            });
-        }
-
-        ImVec4 scrollbar_grab_active = style.scrollbar_grab_active_color().get();
-        if (draw_color_input("scrollbar grab active", scrollbar_grab_active)) {
-            apply([scrollbar_grab_active](Style& target) { target.scrollbar_grab_active_color(ImColor{scrollbar_grab_active}); });
-        }
+        edit_color("scrollbar background", style.scrollbar_background_color(), &Style::scrollbar_background_color);
+        edit_color("scrollbar grab", style.scrollbar_grab_color(), &Style::scrollbar_grab_color);
+        edit_color("scrollbar grab hovered", style.scrollbar_grab_hovered_color(), &Style::scrollbar_grab_hovered_color);
+        edit_color("scrollbar grab active", style.scrollbar_grab_active_color(), &Style::scrollbar_grab_active_color);
     }
 }
 

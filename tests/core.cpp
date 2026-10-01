@@ -7,6 +7,7 @@
 #include <imgui-ui/imgui/effects/effects.hpp>
 #include <imgui-ui/imgui/effects/shadow/shadow.hpp>
 #include <imgui-ui/style/gradient-data.hpp>
+#include <imgui-ui/style/tween/animator.hpp>
 #include <imgui-ui/layout/container.hpp>
 #include <imgui-ui/layout/geometry.hpp>
 #include <imgui-ui/layout/layer-container.hpp>
@@ -26,6 +27,30 @@
 #include <vector>
 
 using namespace ui;
+
+TEST_CASE("animator callbacks keep registration order and defer callbacks scheduled during dispatch", "[Animator]") {
+    Animator animator;
+    std::vector<int> calls;
+
+    animator.animate().delay(1.0F).end([&] {
+        calls.push_back(1);
+        animator.animate().end([&] { calls.push_back(4); });
+    });
+    animator.animate().delay(3.0F).end([&] { calls.push_back(3); });
+    animator.animate().delay(2.0F).end([&] { calls.push_back(2); });
+    animator.animate().delay(1.0F).end([&] { calls.push_back(5); });
+
+    animator.update(2.0F);
+    REQUIRE(calls == (std::vector<int>{1, 2, 5}));
+    REQUIRE(animator.transitioning());
+
+    animator.update(0.0F);
+    REQUIRE(calls == (std::vector<int>{1, 2, 5, 4}));
+
+    animator.update(1.0F);
+    REQUIRE(calls == (std::vector<int>{1, 2, 5, 4, 3}));
+    REQUIRE_FALSE(animator.transitioning());
+}
 
 TEST_CASE("integer colors normalize channels and preserve float color semantics", "[color]") {
     const ImVec4 color = rgba(49, 128, 255, 64).rgba();
@@ -200,7 +225,8 @@ TEST_CASE("patterned borders keep every side visible") {
 
 TEST_CASE("style normalizes discrete fields and interpolates effect values") {
     Style style;
-    style.border(BORDER_LEFT | BORDER_BOTTOM | 0x80).border_style(BorderStyle::Dashed);
+    style.border(static_cast<unsigned>(BORDER_LEFT) | static_cast<unsigned>(BORDER_BOTTOM) | 0x80U)
+        .border_style(BorderStyle::Dashed);
 
     REQUIRE(style.border() == (BORDER_LEFT | BORDER_BOTTOM));
     REQUIRE(style.border_style() == BorderStyle::Dashed);

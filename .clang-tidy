@@ -40,6 +40,6 @@ Checks: >
   -portability-avoid-pragma-once,
   -concurrency-mt-unsafe,
 WarningsAsErrors: ''
-HeaderFilterRegex: '[/\\](ui|tests|examples)[/\\]'
+HeaderFilterRegex: '[/\\](include[/\\]imgui-ui|tests|examples)[/\\]'
 ExcludeHeaderFilterRegex: 'vendor|build'
 FormatStyle: none

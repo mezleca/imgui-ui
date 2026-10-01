@@ -117,18 +117,12 @@ const ProfileFrameMetrics& Profiler::latest_metrics() const {
 }
 
 ProfileGpuSummary Profiler::gpu_render_summary() const {
-    ProfileGpuSummary summary;
-    summary.samples = m_gpu_sample_count;
+    MetricSummary metric;
     for (std::size_t index = 0; index < m_gpu_sample_count; ++index) {
-        const double sample = m_gpu_samples[index];
-        summary.average_ms += sample;
-        summary.minimum_ms = index == 0 ? sample : std::min(summary.minimum_ms, sample);
-        summary.maximum_ms = index == 0 ? sample : std::max(summary.maximum_ms, sample);
+        metric.record(m_gpu_samples[index]);
     }
-    if (summary.samples > 0) {
-        summary.average_ms /= static_cast<double>(summary.samples);
-    }
-    return summary;
+
+    return {m_gpu_sample_count, metric.average(), metric.minimum, metric.maximum};
 }
 
 double Profiler::latest_frame_ms() const {

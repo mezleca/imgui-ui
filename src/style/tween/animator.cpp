@@ -146,15 +146,12 @@ void Animator::update(float dt) {
 
     // remove due callbacks before invoking user code because a callback may schedule more work on this animator.
     std::vector<std::function<void()>> callbacks;
-    for (auto callback_it = state.callbacks.begin(); callback_it != state.callbacks.end();) {
-        if (callback_it->at > state.time) {
-            ++callback_it;
-            continue;
-        }
+    std::erase_if(state.callbacks, [&](AnimationCallback& scheduled) {
+        if (scheduled.at > state.time) return false;
 
-        callbacks.push_back(std::move(callback_it->callback));
-        callback_it = state.callbacks.erase(callback_it);
-    }
+        callbacks.push_back(std::move(scheduled.callback));
+        return true;
+    });
 
     for (const auto& callback : callbacks) {
         callback();

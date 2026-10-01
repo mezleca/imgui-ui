@@ -12,7 +12,7 @@ using namespace ui;
 
 int main() {
     // all my homies hate xwayland
-#if defined(__linux__)
+#ifdef __linux__
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "wayland,x11");
 #endif
 

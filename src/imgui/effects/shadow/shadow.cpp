@@ -24,6 +24,8 @@ void ui::draw_box_shadow(
     const float blur = std::max(0.0F, shadow.blur);
     const float extent = std::max(1.0F, blur * 1.5F);
     const Rect bounds = {{shape.min.x - extent, shape.min.y - extent}, {shape.max.x + extent, shape.max.y + extent}};
+    const GradientData* gradient = shadow.color.gradient();
+
     effects.effect(EffectSlot::BoxShadow)
         .submit(
             draw_list, BoxShadowRegion{
@@ -34,7 +36,7 @@ void ui::draw_box_shadow(
                            std::max(0.0F, rounding),
                            blur,
                            shadow.color.rgba(),
-                           shadow.color.gradient() != nullptr ? *shadow.color.gradient() : GradientData{},
+                           gradient != nullptr ? *gradient : GradientData(),
                            std::clamp(opacity, 0.0F, 1.0F),
                        }
         );

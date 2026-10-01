@@ -3,34 +3,13 @@
 #include "computed-style.hpp"
 #include "theme.hpp"
 
-#include <algorithm>
 #include <cstdint>
-#include <cmath>
 #include <utility>
 
 namespace ui {
     inline constexpr int MAX_BLUR_STRENGTH = 32;  // three box-blur passes sample at most 32 texels from either side.
 
-    class StyledNode;
     class VisualState;
-
-    inline BoxShadow normalize_style_box_shadow(BoxShadow value) {
-        value.blur = std::max(0.0F, value.blur);
-        if (value.color.gradient() == nullptr) {
-            ImVec4 solid = value.color.rgba();
-            solid.w = std::clamp(solid.w, 0.0F, 1.0F);
-            value.color = solid;
-        }
-        return value;
-    }
-
-    inline ImVec2 normalize_style_insets(ImVec2 value) {
-        return {std::max(0.0F, value.x), std::max(0.0F, value.y)};
-    }
-
-    inline ImVec2 normalize_style_scale(ImVec2 value) {
-        return {std::isfinite(value.x) ? value.x : 1.0F, std::isfinite(value.y) ? value.y : 1.0F};
-    }
 
     enum class StyleType : uint8_t {
         /// base appearance with no interaction state.
@@ -42,42 +21,13 @@ namespace ui {
         /// appearance while the node owns keyboard focus.
         FOCUS,
         /// number of visual styles stored by a node.
-        COUNT
+        COUNT,
     };
 
     /// stores target visual values for one interaction state and optional transitions toward them.
     ///
     /// styled nodes resolve these values into a computed style each frame before measuring and painting.
     class Style : public ComputedStyle {
-        template <typename Field>
-        Style& set_property(Field ComputedStyle::* member, Field value) {
-            Field& current = this->*member;
-            if (transition_values_equal(current, value)) {
-                return *this;
-            }
-
-            current = std::move(value);
-            notify_change();
-            return *this;
-        }
-
-        template <typename Field, typename Normalize>
-        Style& set_property(Field ComputedStyle::* member, Field value, Normalize normalize) {
-            return set_property(member, normalize(std::move(value)));
-        }
-
-        template <typename ValueType, typename Field>
-        Style& set_animated_transition(ValueType ComputedStyle::* member, Field value, TransitionSpec transition) {
-            ValueType& current = this->*member;
-
-            const bool changed = !transition_values_equal(current.value, value);
-            if (changed) current.set(std::move(value));
-            current.set_transition(transition);
-            if (changed) notify_change();
-
-            return *this;
-        }
-
     public:
         using ChangeCallback = void (*)(void*, bool font_changed);
 
@@ -112,170 +62,73 @@ namespace ui {
 
         Style() = default;
 
-        /// updates the current style from the target and reports whether any transition remains active.
-        static bool lerp(Style& style, const Style& target, float dt);
-
-        Style& font(ImFont* value) {
-            if (m_font == value) return *this;
-
-            m_font = value;
-            notify_change(true);
-            return *this;
-        }
-
+        Style& font(ImFont* value);
         StyleVariableStore& variables() {
             return m_vars;
         }
 
-        Style& padding(ImVec2 value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_padding, normalize_style_insets(value), transition);
-        }
+        Style& padding(ImVec2 value, TransitionSpec transition = {});
+        Style& margin(ImVec2 value, TransitionSpec transition = {});
+        Style& line_height(float value, TransitionSpec transition = {});
+        Style& box_sizing(BoxSizing value);
+        Style& overflow(Overflow value);
 
-        Style& box_sizing(BoxSizing value) {
-            return set_property(&ComputedStyle::m_box_sizing, value);
-        }
+        /// transforms drawing without changing layout or input bounds.
+        Style& rotation(float value, TransitionSpec transition = {});
+        Style& scale(ImVec2 value, TransitionSpec transition = {});
+        Style& scale(float value, TransitionSpec transition = {});
+        Style& alpha(float value);
+        Style& cursor(ImGuiMouseCursor value);
 
-        Style& overflow(Overflow value) {
-            return set_property(&ComputedStyle::m_overflow, value);
-        }
+        Style& control(const Theme& theme, ImVec2 padding = {10.0F, 6.0F}, TransitionSpec transition = {0.15F});
+        Style& color(Color value, TransitionSpec transition = {});
+        Style& background_color(Color value, TransitionSpec transition = {});
+        Style& border_color(Color value, TransitionSpec transition = {});
+        Style& border_radius(float value);
+        Style& border_thickness(float value);
+        Style& border(uint8_t value);
+        Style& border_style(BorderStyle value);
+        Style& box_shadow(BoxShadow value, TransitionSpec transition = {});
+        Style& blur(int value);
 
-        Style& margin(ImVec2 value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_margin, normalize_style_insets(value), transition);
-        }
+        Style& scrollbar(const Theme::Scrollbar& value);
+        Style& scrollbar_size(float value);
+        Style& scrollbar_rounding(float value);
+        Style& scrollbar_minimum_grab_size(float value);
+        Style& scrollbar_grab_rounding(float value);
+        Style& scrollbar_background_color(Color value, TransitionSpec transition = {});
+        Style& scrollbar_grab_color(Color value, TransitionSpec transition = {});
+        Style& scrollbar_grab_hovered_color(Color value, TransitionSpec transition = {});
+        Style& scrollbar_grab_active_color(Color value, TransitionSpec transition = {});
 
-        Style& control(const Theme& theme, ImVec2 padding = {10.0F, 6.0F}, TransitionSpec transition = {0.15F}) {
-            return color(theme.text_color)
-                .background_color(theme.controls.background_color, transition)
-                .border_color(theme.controls.border_color, transition)
-                .padding(padding)
-                .border(BORDER_ALL)
-                .border_radius(theme.controls.rounding)
-                .border_thickness(theme.controls.border_thickness);
-        }
-
-        Style& line_height(float value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_line_height, std::max(0.0F, value), transition);
-        }
-
-        /// rotates drawing without changing layout or input bounds.
-        Style& rotation(float value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_rotation, std::isfinite(value) ? value : 0.0F, transition);
-        }
-
-        /// scales drawing without changing layout or input bounds.
-        Style& scale(ImVec2 value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_scale, normalize_style_scale(value), transition);
-        }
-
-        Style& scale(float value, TransitionSpec transition = {}) {
-            return scale({value, value}, transition);
-        }
-
-        Style& alpha(float value) {
-            return set_property(&ComputedStyle::m_alpha, value, [](float resolved) { return std::clamp(resolved, 0.0F, 1.0F); });
-        }
-
-        Style& cursor(ImGuiMouseCursor value) {
-            return set_property(&ComputedStyle::m_cursor, value);
-        }
-
-        Style& scrollbar(const Theme::Scrollbar& value) {
-            return scrollbar_size(value.size)
-                .scrollbar_rounding(value.rounding)
-                .scrollbar_minimum_grab_size(value.minimum_grab_size)
-                .scrollbar_grab_rounding(value.grab_rounding)
-                .scrollbar_background_color(value.background_color)
-                .scrollbar_grab_color(value.grab_color)
-                .scrollbar_grab_hovered_color(value.grab_hovered_color)
-                .scrollbar_grab_active_color(value.grab_active_color);
-        }
-
-        Style& scrollbar_size(float value) {
-            return set_property(&ComputedStyle::m_scrollbar_size, value, [](float size) { return std::max(0.0F, size); });
-        }
-
-        Style& scrollbar_rounding(float value) {
-            return set_property(&ComputedStyle::m_scrollbar_rounding, value, [](float rounding) {
-                return std::max(0.0F, rounding);
-            });
-        }
-
-        Style& scrollbar_minimum_grab_size(float value) {
-            return set_property(&ComputedStyle::m_scrollbar_minimum_grab_size, value, [](float size) {
-                return std::max(1.0F, size);
-            });
-        }
-
-        Style& scrollbar_grab_rounding(float value) {
-            return set_property(&ComputedStyle::m_scrollbar_grab_rounding, value, [](float rounding) {
-                return std::max(0.0F, rounding);
-            });
-        }
-
-        Style& scrollbar_background_color(Color value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_scrollbar_background_color, std::move(value), transition);
-        }
-
-        Style& scrollbar_grab_color(Color value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_color, std::move(value), transition);
-        }
-
-        Style& scrollbar_grab_hovered_color(Color value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_hovered_color, std::move(value), transition);
-        }
-
-        Style& scrollbar_grab_active_color(Color value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_scrollbar_grab_active_color, std::move(value), transition);
-        }
-
-        Style& color(Color value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_color, std::move(value), transition);
-        }
-
-        Style& border_color(Color value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_border_color, std::move(value), transition);
-        }
-
-        Style& background_color(Color value, TransitionSpec transition = {}) {
-            return set_animated_transition(&ComputedStyle::m_background_color, std::move(value), transition);
-        }
-
-        Style& box_shadow(BoxShadow value, TransitionSpec transition = {}) {
-            return set_animated_transition(
-                &ComputedStyle::m_box_shadow, normalize_style_box_shadow(std::move(value)), transition
-            );
-        }
-
-        Style& blur(int value) {
-            return set_property(&ComputedStyle::m_blur, value, [](int resolved) {
-                return std::clamp(resolved, 0, MAX_BLUR_STRENGTH);
-            });
-        }
-
-        Style& border_radius(float value) {
-            return set_property(&ComputedStyle::m_border_radius, value, [](float resolved) { return std::max(0.0F, resolved); });
-        }
-
-        Style& border_thickness(float value) {
-            return set_property(&ComputedStyle::m_border_thickness, value, [](float resolved) {
-                return resolved <= 0.0F ? 0.0F : std::max(MIN_BORDER_THICKNESS, resolved);
-            });
-        }
-
-        Style& border(uint8_t value) {
-            return set_property(&ComputedStyle::m_border, value, [](uint8_t resolved) {
-                return static_cast<uint8_t>(resolved & BORDER_ALL);
-            });
-        }
-
-        Style& border_style(BorderStyle value) {
-            return set_property(&ComputedStyle::m_border_style, value);
-        }
+        /// advances the displayed values toward the target and invalidates changed geometry.
+        static bool lerp(Style& style, const Style& target, float dt);
 
     private:
-        friend class StyledNode;
         friend class VisualState;
         friend class PaintSlot;
+
+        template <typename Field>
+        Style& set_property(Field ComputedStyle::* member, Field value) {
+            Field& current = this->*member;
+            if (transition_values_equal(current, value)) return *this;
+
+            current = std::move(value);
+            notify_change();
+            return *this;
+        }
+
+        template <typename ValueType, typename Field>
+        Style& set_animated_transition(ValueType ComputedStyle::* member, Field value, TransitionSpec transition) {
+            ValueType& current = this->*member;
+            const bool changed = !transition_values_equal(current.value, value);
+            if (changed) current.set(std::move(value));
+
+            current.set_transition(transition);
+            if (changed) notify_change();
+
+            return *this;
+        }
 
         void set_change_callback(void* owner, ChangeCallback callback) {
             m_change_owner = owner;

@@ -8,9 +8,6 @@
 #include <vector>
 
 namespace ui {
-    class DropdownBodyNode;
-    class DropdownOptionNode;
-    class DropdownTriggerNode;
     class TextWidget;
     struct Theme;
 
@@ -44,15 +41,19 @@ namespace ui {
         }
 
         /// returns the custom-painted trigger node.
-        Widget& trigger();
+        Widget& trigger() const;
 
         /// returns the popup body node used for layout and inspection.
-        Widget& body();
+        Widget& body() const;
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;
 
     private:
+        class Body;
+        class Option;
+        class Trigger;
+
         struct State {
             bool is_open() const {
                 return visibility == Visibility::Open;
@@ -85,23 +86,17 @@ namespace ui {
             std::vector<DropdownOption> options;
             std::string placeholder = "select an option";
             DropdownWidget* owner = nullptr;
-            DropdownBodyNode* body = nullptr;
-            DropdownTriggerNode* trigger = nullptr;
+            Body* body = nullptr;
+            Trigger* trigger = nullptr;
             Visibility visibility = Visibility::Closed;
             ImVec2 arrow_size;
             float popup_gap = 0.0F;
             float transition_duration = 0.0F;
         };
 
-        friend class DropdownBodyNode;
-        friend class DropdownOptionNode;
-        friend class DropdownTriggerNode;
-
         void event(UiEvent& event) override;
 
         TextWidget* m_label_node = nullptr;
-        DropdownTriggerNode* m_trigger = nullptr;
-        DropdownBodyNode* m_body = nullptr;
         State m_state;
     };
 } // namespace ui

@@ -244,6 +244,7 @@ ImGuiWindowFlags Container::child_window_flags() const {
         (ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_NoMouseInputs) != 0) {
         flags |= ImGuiWindowFlags_NoMouseInputs;
     }
+
     return flags;
 }
 

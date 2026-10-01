@@ -146,6 +146,11 @@ void VisualState::set_style(StyleType type) {
     m_target_style = type;
 }
 
+void VisualState::snap_to_style(StyleType type) {
+    m_target_style = type;
+    m_transition_style.reset();
+}
+
 void VisualState::set_item_state(bool hovered, bool active, bool focused) {
     if (active) {
         set_style(StyleType::ACTIVE);
@@ -189,11 +194,12 @@ void VisualState::update_animations(float dt) {
     if (!style_animating && !m_has_presentation_style && !has_animation_overrides()) return;
 
     // rebuild the displayed style before advancing tracks so each new track reads the value shown in the previous frame.
-    m_presentation_style = style();
+    m_presentation_style = active_style();
+    m_presentation_style.set_change_callback(nullptr, nullptr);
     for (std::size_t index = 0; index < m_animation_slots.size(); ++index) {
         StyleAnimationSlot& slot = m_animation_slots[index];
         const auto property = static_cast<StyleAnimationProperty>(index);
-        slot.base = read_style_property(style(), property);
+        slot.base = read_style_property(active_style(), property);
         if (slot.override.has_value()) apply_style_property(m_presentation_style, property, *slot.override);
         slot.current = read_style_property(m_presentation_style, property);
     }
@@ -202,7 +208,11 @@ void VisualState::update_animations(float dt) {
     m_style_animator.update(dt);
 
     // apply values written by tracks so this frame draws the updated presentation style.
-    m_presentation_style = style();
+    m_presentation_style = active_style();
+
+    // snapshots must not notify the owner.
+    // inset tracks invalidate measurement once after all overrides are applied.
+    m_presentation_style.set_change_callback(nullptr, nullptr);
     for (std::size_t index = 0; index < m_animation_slots.size(); ++index) {
         StyleAnimationSlot& slot = m_animation_slots[index];
         if (slot.override.has_value()) {

@@ -6,6 +6,8 @@
 #include <imgui.h>
 
 namespace ui {
+    GLuint create_opengl_effect_program(const char* vertex_shader, const char* fragment_shader);
+
     class OpenGlFullscreenEffect {
     public:
         OpenGlFullscreenEffect() = default;
@@ -30,7 +32,7 @@ namespace ui {
         // copies framebuffer_bounds into captured_texture for a pass that reads prior draw commands.
         bool capture();
         GLuint captured_texture() const;
-        void draw() const;
+        static void draw();
 
     private:
         GLuint m_program = 0;

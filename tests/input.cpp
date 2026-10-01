@@ -683,9 +683,14 @@ TEST_CASE("specific input callbacks receive the same event after the general cal
     widget.on_mouse_move(callback);
     widget.on_wheel(callback);
 
-    for (EventType type :
-         {EventType::KeyDown, EventType::KeyUp, EventType::PointerDown, EventType::PointerUp, EventType::PointerMove,
-          EventType::Scroll}) {
+    for (EventType type : {
+             EventType::KeyDown,
+             EventType::KeyUp,
+             EventType::PointerDown,
+             EventType::PointerUp,
+             EventType::PointerMove,
+             EventType::Scroll,
+         }) {
         events.clear();
         UiEvent event = event_of(type);
         REQUIRE_FALSE(InputRouter::dispatch(widget, event));

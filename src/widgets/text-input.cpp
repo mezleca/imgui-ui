@@ -139,7 +139,6 @@ TextInputWidget& TextInputWidget::set_label(std::string label) {
     m_label_node->set_text(std::move(label));
     m_label_node->set_visible(!m_label_node->empty());
     update_label_layout();
-    invalidate_measure();
     return *this;
 }
 

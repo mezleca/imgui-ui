@@ -12,15 +12,13 @@
 
 using namespace ui;
 
-class ui::DropdownBodyNode final : public Widget {
+class ui::DropdownWidget::Body final : public Widget {
 public:
-    explicit DropdownBodyNode(DropdownWidget::State& state);
+    explicit Body(DropdownWidget::State& state);
 
     void rebuild_options();
 
 private:
-    friend class DropdownWidget;
-
     bool paint() override;
     void draw_children() override;
     void on_draw_end() override;
@@ -32,9 +30,9 @@ private:
     bool m_popup_opened = false;
 };
 
-class ui::DropdownOptionNode final : public ButtonWidget {
+class ui::DropdownWidget::Option final : public ButtonWidget {
 public:
-    DropdownOptionNode(DropdownWidget::State& state, std::size_t index)
+    Option(DropdownWidget::State& state, std::size_t index)
         : ButtonWidget(state.options[index].label, {grow(), fit()}), m_state(state), m_index(index) {
         set_type_name("DropdownOption");
         set_text_alignment({0.0F, 0.5F});
@@ -73,9 +71,9 @@ private:
     std::size_t m_index;
 };
 
-class ui::DropdownTriggerNode final : public DrawListWidget {
+class ui::DropdownWidget::Trigger final : public DrawListWidget {
 public:
-    explicit DropdownTriggerNode(DropdownWidget::State& state) : DrawListWidget("trigger", "DropdownTrigger"), m_state(state) {
+    explicit Trigger(DropdownWidget::State& state) : DrawListWidget("trigger", "DropdownTrigger"), m_state(state) {
         set_size({grow(), fit()});
     }
 
@@ -139,14 +137,13 @@ private:
     DropdownWidget::State& m_state;
 };
 
-DropdownBodyNode::DropdownBodyNode(DropdownWidget::State& state)
-    : Widget("body", "DropdownBody", InputMode::None), m_state(state) {
+DropdownWidget::Body::Body(DropdownWidget::State& state) : Widget("body", "DropdownBody", InputMode::None), m_state(state) {
     set_layout({.size = {px(0.0F), px(0.0F)}, .in_flow = false});
     fade_out();
     rebuild_options();
 }
 
-void DropdownBodyNode::apply_theme_defaults(const Theme& theme) {
+void DropdownWidget::Body::apply_theme_defaults(const Theme& theme) {
     configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color)
             .background_color(theme.controls.background_color)
@@ -158,21 +155,21 @@ void DropdownBodyNode::apply_theme_defaults(const Theme& theme) {
     });
 }
 
-void DropdownBodyNode::rebuild_options() {
+void DropdownWidget::Body::rebuild_options() {
     if (children().size() == m_state.options.size()) {
         for (std::size_t index = 0; index < children().size(); ++index) {
-            static_cast<DropdownOptionNode&>(*children()[index]).set_text(m_state.options[index].label);
+            static_cast<Option&>(*children()[index]).set_text(m_state.options[index].label);
         }
         return;
     }
 
     clear();
     for (std::size_t index = 0; index < m_state.options.size(); ++index) {
-        add<DropdownOptionNode>(m_state, index);
+        add<Option>(m_state, index);
     }
 }
 
-bool DropdownBodyNode::paint() {
+bool DropdownWidget::Body::paint() {
     if (!m_state.is_open() && !m_state.is_closing()) {
         return false;
     }
@@ -191,7 +188,7 @@ bool DropdownBodyNode::paint() {
 
     const ComputedStyle& style = computed_style();
     const ImVec2 item_padding =
-        children().empty() ? ImVec2{} : static_cast<const DropdownOptionNode&>(*children().front()).computed_style().padding();
+        children().empty() ? ImVec2{} : static_cast<const Option&>(*children().front()).computed_style().padding();
     m_item_height = ImGui::GetTextLineHeight() + (item_padding.y * 2.0F);
     ImGui::SetNextWindowPos(popup_position, ImGuiCond_Always);
     ImGui::SetNextWindowSize(outer_size({popup_width, m_item_height * static_cast<float>(children().size())}));
@@ -221,7 +218,7 @@ bool DropdownBodyNode::paint() {
     return false;
 }
 
-void DropdownBodyNode::draw_children() {
+void DropdownWidget::Body::draw_children() {
     const float item_width = content_size(layout().visual_rect().size()).x;
     const ImVec2 item_size = {item_width, m_item_height};
 
@@ -231,7 +228,7 @@ void DropdownBodyNode::draw_children() {
             continue;
         }
 
-        auto& option_node = static_cast<DropdownOptionNode&>(*child);
+        auto& option_node = static_cast<Option&>(*child);
         arrange_child(option_node, item_size, {.offset = {0.0F, m_item_height * static_cast<float>(index)}});
         const InputState& input = option_node.input_state();
 
@@ -245,7 +242,7 @@ void DropdownBodyNode::draw_children() {
     }
 }
 
-void DropdownBodyNode::on_draw_end() {
+void DropdownWidget::Body::on_draw_end() {
     const ComputedStyle& style = computed_style();
     ImColor border = style.border_color().value.rgba();
     border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
@@ -257,7 +254,7 @@ void DropdownBodyNode::on_draw_end() {
     ImGui::PopID();
 }
 
-void DropdownBodyNode::on_update(float) {
+void DropdownWidget::Body::on_update(float) {
     if (!m_state.is_closing() || opacity() > VISIBILITY_OPACITY_THRESHOLD) {
         return;
     }
@@ -323,11 +320,9 @@ DropdownWidget::DropdownWidget(std::string& value, std::vector<DropdownOption> o
 
     m_label_node = &add<TextWidget>("");
     m_label_node->set_visible(false);
-    m_trigger = &add<DropdownTriggerNode>(m_state);
-    m_body = &add<DropdownBodyNode>(m_state);
-    m_state.body = m_body;
-    m_state.trigger = m_trigger;
-    m_body->set_enabled(false);
+    m_state.trigger = &add<Trigger>(m_state);
+    m_state.body = &add<Body>(m_state);
+    m_state.body->set_enabled(false);
 }
 
 void DropdownWidget::event(UiEvent& event) {
@@ -355,11 +350,11 @@ void DropdownWidget::apply_theme_defaults(const Theme& theme) {
 
     set_spacing(theme.metrics.item_spacing.y);
     m_label_node->style().color(theme.text_color);
-    m_trigger->configure_all_styles([&theme](Style& style) {
+    m_state.trigger->configure_all_styles([&theme](Style& style) {
         style.control(theme, {10.0F, 6.0F}).cursor(ImGuiMouseCursor_Hand);
     });
-    m_trigger->style(StyleType::HOVER).background_color(theme.controls.hover_color);
-    m_trigger->style(StyleType::ACTIVE).background_color(theme.controls.active_color);
+    m_state.trigger->style(StyleType::HOVER).background_color(theme.controls.hover_color);
+    m_state.trigger->style(StyleType::ACTIVE).background_color(theme.controls.active_color);
 }
 
 DropdownWidget& DropdownWidget::set_label(std::string label) {
@@ -397,15 +392,15 @@ DropdownWidget& DropdownWidget::set_options(std::vector<DropdownOption> options)
     }
 
     m_state.options = std::move(options);
-    m_body->rebuild_options();
+    m_state.body->rebuild_options();
     invalidate_measure();
     return *this;
 }
 
-Widget& DropdownWidget::trigger() {
-    return *m_trigger;
+Widget& DropdownWidget::trigger() const {
+    return *m_state.trigger;
 }
 
-Widget& DropdownWidget::body() {
-    return *m_body;
+Widget& DropdownWidget::body() const {
+    return *m_state.body;
 }

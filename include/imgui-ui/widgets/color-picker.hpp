@@ -11,7 +11,7 @@ namespace ui {
 
     class ColorPickerWidget : public Container {
     public:
-        ColorPickerWidget(Color& color, std::string label = {}, std::string id = {});
+        explicit ColorPickerWidget(Color& color, std::string label = {}, std::string id = {});
 
         ColorPickerWidget& set_label(std::string label);
         bool set_color(const Color& color);

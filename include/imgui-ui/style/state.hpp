@@ -38,48 +38,19 @@ namespace ui {
     class VisualState {
     public:
         VisualState();
-
         void set_change_callback(void* owner, Style::ChangeCallback callback);
 
-        void snap_to_style(StyleType type) {
-            m_target_style = type;
-            m_transition_style.reset();
+        Style& style(StyleType type = StyleType::DEFAULT) {
+            return styles[static_cast<size_t>(type)];
         }
 
-        bool is_visible() const {
-            return visible &&
-                   (m_opacity >= VISIBILITY_OPACITY_THRESHOLD || current_opacity.value >= VISIBILITY_OPACITY_THRESHOLD);
+        const Style& style(StyleType type = StyleType::DEFAULT) const {
+            return styles[static_cast<size_t>(type)];
         }
 
-        void set_visible(bool value) {
-            visible = value;
+        const ComputedStyle& computed_style() const {
+            return m_has_presentation_style ? m_presentation_style : active_style();
         }
-
-        void set_opacity(float value, TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear});
-        void fade_in(TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear});
-        void fade_out(TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear}) {
-            set_opacity(0.0f, transition);
-        }
-
-        bool accepts_input() const {
-            return visible && m_opacity >= VISIBILITY_OPACITY_THRESHOLD;
-        }
-
-        float opacity() const {
-            if (first_frame) {
-                return 0.0f;
-            }
-
-            return current_opacity.value;
-        }
-
-        bool transitioning() const;
-
-        void update(float dt);
-
-        void set_style(StyleType type);
-
-        void set_item_state(bool hovered, bool active, bool focused = false);
 
         template <typename Func>
         VisualState& configure_all_styles(Func&& func) {
@@ -90,12 +61,38 @@ namespace ui {
             return *this;
         }
 
+        void set_style(StyleType type);
+        void snap_to_style(StyleType type);
+        void set_item_state(bool hovered, bool active, bool focused = false);
         StyleType style_type() const {
             return m_target_style;
         }
 
-        StyleAnimationSequence animate();
+        void set_visible(bool value) {
+            visible = value;
+        }
 
+        bool is_visible() const {
+            return visible &&
+                   (m_opacity >= VISIBILITY_OPACITY_THRESHOLD || current_opacity.value >= VISIBILITY_OPACITY_THRESHOLD);
+        }
+
+        bool accepts_input() const {
+            return visible && m_opacity >= VISIBILITY_OPACITY_THRESHOLD;
+        }
+
+        void set_opacity(float value, TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear});
+        void fade_in(TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear});
+        void fade_out(TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear}) {
+            set_opacity(0.0F, transition);
+        }
+
+        float opacity() const {
+            return first_frame ? 0.0F : current_opacity.value;
+        }
+
+        StyleAnimationSequence animate();
+        void cancel_animations();
         Animator& animator() {
             return m_animator;
         }
@@ -104,30 +101,15 @@ namespace ui {
             return m_animator;
         }
 
-        void cancel_animations();
-
-        Style& style() {
-            return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(m_target_style)];
-        }
-
-        Style& style(StyleType type) {
-            return styles[static_cast<size_t>(type)];
-        }
-
-        const Style& style() const {
-            return m_transition_style.has_value() ? *m_transition_style : styles[static_cast<size_t>(m_target_style)];
-        }
-
-        const ComputedStyle& computed_style() const {
-            return m_has_presentation_style ? m_presentation_style : style();
-        }
-
-        const Style& style(StyleType type) const {
-            return styles[static_cast<size_t>(type)];
-        }
+        void update(float dt);
+        bool transitioning() const;
 
     private:
         friend class StyleAnimationSequence;
+
+        const Style& active_style() const {
+            return m_transition_style.has_value() ? *m_transition_style : style(m_target_style);
+        }
 
         void update_animations(float dt);
         StyleAnimationSlot& slot(StyleAnimationProperty property) {

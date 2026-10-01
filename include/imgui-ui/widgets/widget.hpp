@@ -38,19 +38,17 @@ namespace ui {
         bool accepts_input() const override;
 
     protected:
-        InputCallback m_on_event;
-        std::function<void()> m_on_change;
-
         void notify_change();
-
         void dispatch_event(UiEvent& event) override;
-
         virtual void click_event(UiEvent&) {}
 
     private:
         using EventCallbacks = std::array<InputCallback, static_cast<std::size_t>(EventType::Click)>;
 
         Widget& set_event_callback(EventType type, InputCallback callback);
+
+        InputCallback m_on_event;
+        std::function<void()> m_on_change;
         std::unique_ptr<EventCallbacks> m_event_callbacks;
     };
 

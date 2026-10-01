@@ -26,25 +26,53 @@ target_link_libraries(my-app PRIVATE imgui-ui::sdl)
 ```
 
 ```cpp
-#include <ui/backends/sdl/backend.hpp>
-#include <ui/ui.hpp>
-#include <imgui.hpp>
-#include <ui/widgets/button.hpp>
+#include <imgui-ui/backends/sdl/backend.hpp>
+#include <imgui-ui/runtime.hpp>
+#include <imgui-ui/surface.hpp>
+#include <imgui-ui/tree/node.hpp>
+#include <imgui-ui/widgets/button.hpp>
 
-ui::Runtime runtime;
-auto backend = std::make_unique<ui::SdlBackend>(ui::BackendConfig{
-    .title = "example",
-    .size = {900.0F, 600.0F},
-});
+#include <SDL3/SDL.h>
+#include <memory>
+#include <utility>
 
-ui::UI surface(runtime, {.backend = std::move(backend)});
-surface.root().add<ui::ButtonWidget>(surface, "hello");
+int main() {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        return 1;
+    }
 
-while (!surface.is_done()) {
-    surface.begin_frame();
-    surface.update(ImGui::GetIO().DeltaTime);
-    surface.draw();
-    surface.end_frame();
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_Window* window = SDL_CreateWindow("example", 900, 600, SDL_WINDOW_OPENGL);
+    if (window == nullptr) {
+        SDL_Quit();
+        return 1;
+    }
+
+    SDL_GLContext context = SDL_GL_CreateContext(window);
+    if (context == nullptr) {
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+
+    {
+        ui::Runtime runtime;
+        auto backend = std::make_unique<ui::SdlBackend>(window, context);
+        ui::Surface surface(runtime, {.backend = std::move(backend)});
+        surface.root().add<ui::ButtonWidget>("hello");
+
+        while (!surface.is_done()) {
+            surface.process_events();
+            surface.frame();
+        }
+    }
+
+    SDL_GL_DestroyContext(context);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return 0;
 }
 ```
 

@@ -76,26 +76,21 @@ VirtualLayout& VirtualLayout::set_extra_offset(size_t index, float offset) {
     }
 
     const auto current = m_extra_offsets.find(index);
-    if (current != m_extra_offsets.end() && current->second == offset) {
+    const float previous = current == m_extra_offsets.end() ? 0.0F : current->second;
+    if (previous == offset) {
         return *this;
     }
 
     // zero removes the map entry so only expanded rows split the uniform clipper runs.
     if (offset == 0.0F) {
-        if (current != m_extra_offsets.end()) {
-            m_extra_height -= current->second;
-            m_extra_offsets.erase(current);
-        }
+        m_extra_offsets.erase(current);
+    } else if (current == m_extra_offsets.end()) {
+        m_extra_offsets.emplace(index, offset);
     } else {
-        if (current == m_extra_offsets.end()) {
-            m_extra_offsets.emplace(index, offset);
-            m_extra_height += offset;
-        } else {
-            m_extra_height += offset - current->second;
-            current->second = offset;
-        }
+        current->second = offset;
     }
 
+    m_extra_height += offset - previous;
     invalidate_measure();
     return *this;
 }

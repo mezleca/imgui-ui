@@ -37,14 +37,8 @@ namespace ui {
                 return nullptr;
             }
 
-            const auto existing = m_assets.find(id);
-            if (existing != m_assets.end()) {
-                return existing->second.get();
-            }
-
-            T* result = asset.get();
-            m_assets.emplace(std::move(id), std::move(asset));
-            return result;
+            const auto [entry, inserted] = m_assets.try_emplace(std::move(id), std::move(asset));
+            return entry->second.get();
         }
 
     private:

@@ -14,7 +14,7 @@ bool ui::draw_gradient_rect(
         .submit(
             draw_list, GradientRegion{
                            rect, *color.gradient(), std::max(0.0F, rounding), std::max(0.0F, border_thickness),
-                           std::clamp(opacity, 0.0F, 1.0F)
+                           std::clamp(opacity, 0.0F, 1.0F),
                        }
         );
 }

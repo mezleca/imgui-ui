@@ -12,7 +12,7 @@ namespace ui {
     /// exposes a bound UTF-8 string as one stylable text field backed by ImGui's text editor.
     class TextInputWidget : public Container {
     public:
-        TextInputWidget(std::string& value, std::string id = {});
+        explicit TextInputWidget(std::string& value, std::string id = {});
 
         TextInputWidget& set_label(std::string label);
         TextInputWidget& set_label_placement(LabelPlacement placement);

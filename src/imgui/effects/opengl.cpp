@@ -26,27 +26,35 @@ static GLuint compile_shader(GLenum type, const char* source) {
     return 0;
 }
 
-bool OpenGlFullscreenEffect::initialize(const char* fragment_shader) {
-    const GLuint vertex = compile_shader(GL_VERTEX_SHADER, VERTEX_SHADER);
+GLuint ui::create_opengl_effect_program(const char* vertex_shader, const char* fragment_shader) {
+    const GLuint vertex = compile_shader(GL_VERTEX_SHADER, vertex_shader);
     const GLuint fragment = compile_shader(GL_FRAGMENT_SHADER, fragment_shader);
     if (vertex == 0 || fragment == 0) {
         if (vertex != 0) glDeleteShader(vertex);
         if (fragment != 0) glDeleteShader(fragment);
-        return false;
+        return 0;
     }
 
-    m_program = glCreateProgram();
-    glAttachShader(m_program, vertex);
-    glAttachShader(m_program, fragment);
-    glLinkProgram(m_program);
+    const GLuint program = glCreateProgram();
+    glAttachShader(program, vertex);
+    glAttachShader(program, fragment);
+    glLinkProgram(program);
     glDeleteShader(vertex);
     glDeleteShader(fragment);
 
     GLint linked = GL_FALSE;
-    glGetProgramiv(m_program, GL_LINK_STATUS, &linked);
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
     if (linked != GL_TRUE) {
-        glDeleteProgram(m_program);
-        m_program = 0;
+        glDeleteProgram(program);
+        return 0;
+    }
+
+    return program;
+}
+
+bool OpenGlFullscreenEffect::initialize(const char* fragment_shader) {
+    m_program = create_opengl_effect_program(VERTEX_SHADER, fragment_shader);
+    if (m_program == 0) {
         return false;
     }
 
@@ -97,7 +105,8 @@ bool OpenGlFullscreenEffect::begin(const ImDrawCmd& command, Rect bounds) {
         return false;
     }
 
-    m_bounds = {{bounds_min.x, height - bounds_max.y}, {bounds_max.x, height - bounds_min.y}};
+    const float framebuffer_height = static_cast<float>(height);
+    m_bounds = {{bounds_min.x, framebuffer_height - bounds_max.y}, {bounds_max.x, framebuffer_height - bounds_min.y}};
     glEnable(GL_SCISSOR_TEST);
     glScissor(left, height - bottom, right - left, bottom - top);
     glDisable(GL_BLEND);
@@ -134,9 +143,10 @@ bool OpenGlFullscreenEffect::capture() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    if (m_texture_size.x != width || m_texture_size.y != height) {
+    const ImVec2 texture_size = {static_cast<float>(width), static_cast<float>(height)};
+    if (m_texture_size.x != texture_size.x || m_texture_size.y != texture_size.y) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-        m_texture_size = {static_cast<float>(width), static_cast<float>(height)};
+        m_texture_size = texture_size;
     }
 
     m_bounds = {{static_cast<float>(left), static_cast<float>(bottom)}, {static_cast<float>(right), static_cast<float>(top)}};
@@ -148,7 +158,7 @@ GLuint OpenGlFullscreenEffect::captured_texture() const {
     return m_texture;
 }
 
-void OpenGlFullscreenEffect::draw() const {
+void OpenGlFullscreenEffect::draw() {
     glDrawArrays(GL_TRIANGLES, 0, 3);
     glDisable(GL_SCISSOR_TEST);
 }

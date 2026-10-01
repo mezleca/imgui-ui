@@ -96,18 +96,16 @@ NumberInputWidget& NumberInputWidget::set_thumb_color(Color color) {
     return *this;
 }
 
-void NumberInputWidget::sync_value() const {
-    std::visit([this](const auto* value) { m_value.set(*value); }, m_number);
-}
-
 void NumberInputWidget::on_measure() {
     ImVec2 size{};
-    sync_value();
-    m_value.set_font(font());
     m_label.set_font(font());
 
     if (layout().size_spec().height.mode != LayoutSizeMode::Fixed) {
-        size.y = m_value.line_height();
+        if (ImGui::GetCurrentContext() != nullptr) {
+            ImGui::PushFont(font() != nullptr ? font() : ImGui::GetFont());
+            size.y = ImGui::GetTextLineHeight();
+            ImGui::PopFont();
+        }
         if (!m_label.str().empty() && m_label_placement == LabelPlacement::Above) {
             size.y += m_label.line_height() + m_label_spacing;
         }
