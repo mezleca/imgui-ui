@@ -10,9 +10,7 @@ static constexpr float CHILD_RESIZE_HANDLE_INSET = 1.0F;
 
 using namespace ui;
 
-ResizableContainer::ResizableContainer(std::string id) : Container(std::move(id)) {
-    set_type_name("ResizableContainer");
-}
+ResizableContainer::ResizableContainer(std::string id) : Container(std::move(id), "ResizableContainer") {}
 
 ResizableContainer& ResizableContainer::set_resize(ResizeAxes resize) {
     if (m_resize == resize) {

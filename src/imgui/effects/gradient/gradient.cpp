@@ -13,7 +13,10 @@ bool ui::draw_gradient_rect(
     return effects.effect(EffectSlot::Gradient)
         .submit(
             draw_list, GradientRegion{
-                           rect, *color.gradient(), std::max(0.0F, rounding), std::max(0.0F, border_thickness),
+                           rect,
+                           *color.gradient(),
+                           std::max(0.0F, rounding),
+                           std::max(0.0F, border_thickness),
                            std::clamp(opacity, 0.0F, 1.0F),
                        }
         );

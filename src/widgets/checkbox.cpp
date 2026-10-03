@@ -8,8 +8,7 @@
 using namespace ui;
 
 CheckboxWidget::CheckboxWidget(bool& value, std::string label, std::string id)
-    : Container(std::move(id), StackDirection::Horizontal), m_value(&value) {
-    set_type_name("Checkbox");
+    : Container(std::move(id), StackDirection::Horizontal, "Checkbox"), m_value(&value) {
     set_size({fit(), fit()});
     set_content_alignment(Anchor::CenterLeft);
 

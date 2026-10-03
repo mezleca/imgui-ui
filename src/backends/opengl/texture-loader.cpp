@@ -127,39 +127,37 @@ public:
         const int width = static_cast<int>(size.x);
         const int height = static_cast<int>(size.y);
         const uint64_t size_key = (static_cast<uint64_t>(static_cast<uint32_t>(width)) << 32U) | static_cast<uint32_t>(height);
-        BitmapCache& cache = m_bitmaps[context];
+        auto& cache = m_textures[context];
         const auto existing = cache.find(size_key);
         if (existing != cache.end()) {
-            return static_cast<ImTextureID>(existing->second.first);
+            return static_cast<ImTextureID>(existing->second);
         }
 
-        lunasvg::Bitmap bitmap_data = m_document->renderToBitmap(width, height);
-        bitmap_data.convertToRGBA();
-        auto bitmap = std::make_unique<lunasvg::Bitmap>(bitmap_data);
+        lunasvg::Bitmap bitmap = m_document->renderToBitmap(width, height);
+        bitmap.convertToRGBA();
 
-        const GLuint texture = create_opengl_texture(width, height, GL_RGBA, bitmap->data());
+        // the upload copies these pixels. the size cache only needs the gpu texture id afterward.
+        const GLuint texture = create_opengl_texture(width, height, GL_RGBA, bitmap.data());
 
-        cache.emplace(size_key, std::make_pair(texture, std::move(bitmap)));
+        cache.emplace(size_key, texture);
         return static_cast<ImTextureID>(texture);
     }
 
     void release_context(ImGuiContext* context) override {
-        const auto found = m_bitmaps.find(context);
-        if (found == m_bitmaps.end()) {
+        const auto found = m_textures.find(context);
+        if (found == m_textures.end()) {
             return;
         }
 
         for (const auto& entry : found->second) {
-            const GLuint id = entry.second.first;
+            const GLuint id = entry.second;
             glDeleteTextures(1, &id);
         }
-        m_bitmaps.erase(found);
+        m_textures.erase(found);
     }
 
 private:
-    using BitmapCache = std::unordered_map<uint64_t, std::pair<GLuint, std::unique_ptr<lunasvg::Bitmap>>>;
-
-    std::unordered_map<ImGuiContext*, BitmapCache> m_bitmaps;
+    std::unordered_map<ImGuiContext*, std::unordered_map<uint64_t, GLuint>> m_textures;
     std::unique_ptr<lunasvg::Document> m_document;
 };
 

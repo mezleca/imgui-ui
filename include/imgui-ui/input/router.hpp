@@ -28,6 +28,9 @@ namespace ui {
         InputRouter(const InputRouter&) = delete;
         InputRouter& operator=(const InputRouter&) = delete;
 
+        /// replaces the callback invoked before routing events to nodes. persists across frames.
+        InputRouter& on_event(InputCallback callback);
+
         /// starts a frame by clearing entries, callbacks, statistics, and stale input state.
         void begin_frame();
 
@@ -67,6 +70,7 @@ namespace ui {
         }
 
         /// routes one event to its focused, captured, or hit-tested node.
+        /// the router callback runs first, including for synthesized clicks. stopped propagation skips node routing.
         /// pointer events traverse overlapping targets front to back and bubble through each target's parents once.
         /// keyboard events visit focus first, then the remaining attached nodes. pointer presses do not clear focus.
         /// stop_propagation or an explicit blocker ends traversal. mark_handled does not stop it.
@@ -126,6 +130,7 @@ namespace ui {
         static void dispatch_branch(Node& target, UiEvent& event, std::vector<Node*>& visited, Node* scope = nullptr);
 
         HitTestIndex m_hit_test;
+        InputCallback m_on_event;
         Node* m_focused_node = nullptr;
         bool m_debug_inspect_mode = false;
         bool m_debug_pointer_blocked = false;

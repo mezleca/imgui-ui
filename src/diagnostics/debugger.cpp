@@ -325,17 +325,17 @@ static bool draw_highlight_option(std::string_view label, bool& enabled, Color& 
     return changed;
 }
 
-static bool draw_inline_combo(std::string_view label, int* selected, const char* const items[], int item_count) {
-    return draw_labeled_input(label, [selected, items, item_count] {
-        const bool valid_selection = selected != nullptr && *selected >= 0 && *selected < item_count;
-        const char* preview = valid_selection ? items[*selected] : "select";
+static bool draw_inline_combo(std::string_view label, int& selected, const char* const items[], int item_count) {
+    return draw_labeled_input(label, [&selected, items, item_count] {
+        const bool valid_selection = selected >= 0 && selected < item_count;
+        const char* preview = valid_selection ? items[selected] : "select";
         bool changed = false;
 
         if (ImGui::BeginCombo("##value", preview, ImGuiComboFlags_NoArrowButton)) {
             for (int index = 0; index < item_count; ++index) {
-                const bool is_selected = selected != nullptr && *selected == index;
-                if (ImGui::Selectable(items[index], is_selected) && selected != nullptr) {
-                    *selected = index;
+                const bool is_selected = selected == index;
+                if (ImGui::Selectable(items[index], is_selected)) {
+                    selected = index;
                     changed = true;
                 }
 
@@ -1156,12 +1156,12 @@ void Debugger::render_layout_properties() {
     };
 
     int width_mode = static_cast<int>(size_spec.width.mode);
-    if (draw_inline_combo("width rule", &width_mode, SIZE_MODE_NAMES, IM_ARRAYSIZE(SIZE_MODE_NAMES))) {
+    if (draw_inline_combo("width rule", width_mode, SIZE_MODE_NAMES, IM_ARRAYSIZE(SIZE_MODE_NAMES))) {
         update_size_axis(true, static_cast<LayoutSizeMode>(width_mode));
     }
 
     int height_mode = static_cast<int>(size_spec.height.mode);
-    if (draw_inline_combo("height rule", &height_mode, SIZE_MODE_NAMES, IM_ARRAYSIZE(SIZE_MODE_NAMES))) {
+    if (draw_inline_combo("height rule", height_mode, SIZE_MODE_NAMES, IM_ARRAYSIZE(SIZE_MODE_NAMES))) {
         update_size_axis(false, static_cast<LayoutSizeMode>(height_mode));
     }
 
@@ -1206,7 +1206,7 @@ void Debugger::render_layout_properties() {
     }
 
     int anchor = static_cast<int>(request.placement.anchor);
-    if (draw_inline_combo("anchor (parent)", &anchor, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
+    if (draw_inline_combo("anchor (parent)", anchor, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
         update_request([&](LayoutConfig& config) {
             config.placement.anchor = static_cast<Anchor>(anchor);
             config.in_flow = should_restore_flow_position(config);
@@ -1214,7 +1214,7 @@ void Debugger::render_layout_properties() {
     }
 
     int origin = static_cast<int>(request.placement.origin);
-    if (draw_inline_combo("origin (node)", &origin, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
+    if (draw_inline_combo("origin (node)", origin, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
         update_request([&](LayoutConfig& config) {
             config.placement.origin = static_cast<Anchor>(origin);
             config.in_flow = should_restore_flow_position(config);
@@ -1364,7 +1364,7 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
         }
 
         int border_style = static_cast<int>(style.border_style());
-        if (draw_inline_combo("border style", &border_style, BORDER_STYLE_NAMES, IM_ARRAYSIZE(BORDER_STYLE_NAMES))) {
+        if (draw_inline_combo("border style", border_style, BORDER_STYLE_NAMES, IM_ARRAYSIZE(BORDER_STYLE_NAMES))) {
             apply([border_style](Style& target) { target.border_style(static_cast<BorderStyle>(border_style)); });
         }
 
@@ -1403,12 +1403,12 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
         }
 
         int box_sizing = static_cast<int>(style.box_sizing());
-        if (draw_inline_combo("box sizing", &box_sizing, BOX_SIZING_NAMES, IM_ARRAYSIZE(BOX_SIZING_NAMES))) {
+        if (draw_inline_combo("box sizing", box_sizing, BOX_SIZING_NAMES, IM_ARRAYSIZE(BOX_SIZING_NAMES))) {
             apply([box_sizing](Style& target) { target.box_sizing(static_cast<BoxSizing>(box_sizing)); });
         }
 
         int overflow = static_cast<int>(style.overflow());
-        if (draw_inline_combo("overflow", &overflow, OVERFLOW_NAMES, IM_ARRAYSIZE(OVERFLOW_NAMES))) {
+        if (draw_inline_combo("overflow", overflow, OVERFLOW_NAMES, IM_ARRAYSIZE(OVERFLOW_NAMES))) {
             apply([overflow](Style& target) { target.overflow(static_cast<Overflow>(overflow)); });
         }
 
@@ -1486,7 +1486,7 @@ void Debugger::render_style_properties() {
     draw_property_section("style");
 
     int style_index = m_inspected_style;
-    if (draw_inline_combo("state", &style_index, STYLE_NAMES, IM_ARRAYSIZE(STYLE_NAMES))) {
+    if (draw_inline_combo("state", style_index, STYLE_NAMES, IM_ARRAYSIZE(STYLE_NAMES))) {
         m_inspected_style = style_index;
     }
 

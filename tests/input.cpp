@@ -96,6 +96,143 @@ TEST_CASE("widget event handlers preserve internal behavior") {
     REQUIRE(events == std::vector<std::string>{"internal", "public"});
 }
 
+TEST_CASE("input router callbacks run before node routing") {
+    std::vector<std::string> events;
+    EventNode parent("parent", events);
+    auto& child = parent.add<EventNode>("child", events);
+    InputRouter router;
+    router.register_target(child, {{0.0F, 0.0F}, {10.0F, 10.0F}});
+    REQUIRE(router.set_focus(&child));
+    events.clear();
+
+    bool stop = false;
+    router.on_event([&](UiEvent& event) {
+        events.push_back("router");
+        if (stop) {
+            event.stop_propagation();
+        } else {
+            event.mark_handled();
+        }
+    });
+
+    SECTION("keyboard and pointer events") {
+        for (EventType type : {EventType::KeyDown, EventType::PointerDown}) {
+            events.clear();
+            auto event = event_of(type, {5.0F, 5.0F});
+            REQUIRE(router.dispatch(event));
+            REQUIRE(events == std::vector<std::string>{"router", "child", "parent"});
+        }
+    }
+
+    SECTION("stopped keyboard and pointer events") {
+        stop = true;
+        for (EventType type : {EventType::KeyDown, EventType::PointerDown}) {
+            events.clear();
+            auto event = event_of(type, {5.0F, 5.0F});
+            REQUIRE(router.dispatch(event));
+            REQUIRE(events == std::vector<std::string>{"router"});
+        }
+    }
+}
+
+TEST_CASE("input router callbacks persist without nodes and stay local to their router") {
+    InputRouter router;
+    InputRouter other;
+    int observed = 0;
+    router.on_event([count = 0, &observed](UiEvent& event) mutable {
+        observed = ++count;
+        event.mark_handled();
+    });
+
+    for (int expected : {1, 2}) {
+        router.begin_frame();
+        auto key = event_of(EventType::KeyDown);
+        REQUIRE(router.dispatch(key));
+        REQUIRE(observed == expected);
+
+        key = event_of(EventType::KeyDown);
+        REQUIRE_FALSE(other.dispatch(key));
+        REQUIRE(observed == expected);
+    }
+
+    router.on_event([&](UiEvent&) { observed = 10; });
+    auto move = event_of(EventType::PointerMove);
+    REQUIRE_FALSE(router.dispatch(move));
+    REQUIRE(observed == 10);
+
+    router.on_event({});
+    move = event_of(EventType::PointerMove);
+    REQUIRE_FALSE(router.dispatch(move));
+    REQUIRE(observed == 10);
+}
+
+TEST_CASE("input router callbacks can intercept synthesized clicks and captured releases") {
+    InputRouter router;
+    std::vector<EventType> events;
+    PointerCaptureNode node(router, events);
+    router.register_target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
+    std::vector<EventType> intercepted;
+    EventType stopped = EventType::Click;
+    router.on_event([&](UiEvent& event) {
+        intercepted.push_back(event.type);
+        if (event.type == EventType::PointerDown) event.block_native_input();
+        if (event.type == stopped) event.stop_propagation();
+    });
+
+    SECTION("synthesized click") {
+        auto down = event_of(EventType::PointerDown, {5.0F, 5.0F});
+        router.dispatch(down);
+        auto up = event_of(EventType::PointerUp, {5.0F, 5.0F});
+        REQUIRE(router.dispatch(up));
+        REQUIRE(intercepted == std::vector<EventType>{EventType::PointerDown, EventType::PointerUp, EventType::Click});
+        REQUIRE(events == std::vector<EventType>{EventType::PointerDown, EventType::PointerUp});
+    }
+
+    SECTION("stopped release clears capture and press state") {
+        stopped = EventType::PointerUp;
+        auto down = event_of(EventType::PointerDown, {5.0F, 5.0F});
+        router.dispatch(down);
+        auto up = event_of(EventType::PointerUp, {5.0F, 5.0F});
+        REQUIRE(router.dispatch(up));
+        REQUIRE(up.native_input_blocked);
+        REQUIRE_FALSE(node.input_state().active);
+        REQUIRE(intercepted == std::vector<EventType>{EventType::PointerDown, EventType::PointerUp});
+
+        auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
+        REQUIRE_FALSE(router.dispatch(move));
+        stopped = EventType::Cancel;
+        up = event_of(EventType::PointerUp, {5.0F, 5.0F});
+        router.dispatch(up);
+        REQUIRE(events == std::vector<EventType>{EventType::PointerDown, EventType::PointerUp});
+    }
+
+    SECTION("stopped press does not synthesize a click on release") {
+        stopped = EventType::PointerDown;
+        auto down = event_of(EventType::PointerDown, {5.0F, 5.0F});
+        REQUIRE(router.dispatch(down));
+        auto up = event_of(EventType::PointerUp, {5.0F, 5.0F});
+        REQUIRE(router.dispatch(up));
+        REQUIRE(up.native_input_blocked);
+        REQUIRE(intercepted == std::vector<EventType>{EventType::PointerDown, EventType::PointerUp});
+        REQUIRE(events == std::vector<EventType>{EventType::PointerUp});
+    }
+
+    SECTION("stopped move does not reach the captured node") {
+        stopped = EventType::PointerMove;
+        auto down = event_of(EventType::PointerDown, {5.0F, 5.0F});
+        router.dispatch(down);
+
+        auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
+        REQUIRE(router.dispatch(move));
+        REQUIRE(events == std::vector<EventType>{EventType::PointerDown});
+
+        auto up = event_of(EventType::PointerUp, {5.0F, 5.0F});
+        router.dispatch(up);
+        REQUIRE(events == std::vector<EventType>{EventType::PointerDown, EventType::PointerUp, EventType::Click});
+        REQUIRE_FALSE(node.input_state().active);
+    }
+}
+
 TEST_CASE("ui events bubble from the target to its ancestors") {
     std::vector<std::string> events;
     auto parent = std::make_unique<EventNode>("parent", events);

@@ -7,8 +7,8 @@
 using namespace ui;
 
 FileDialogWidget::FileDialogWidget(std::string label, std::string id)
-    : Container(std::move(id), StackDirection::Horizontal), m_value(std::move(label)), m_field(add<TextWidget>(m_value)) {
-    set_type_name("FileDialog");
+    : Container(std::move(id), StackDirection::Horizontal, "FileDialog"), m_value(std::move(label)),
+      m_field(add<TextWidget>(m_value)) {
     set_content_alignment({0.5F, 0.5F});
     set_size({fit(), fit()});
 }

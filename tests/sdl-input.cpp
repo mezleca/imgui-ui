@@ -877,6 +877,37 @@ TEST_CASE("nested tree shadows escape their parent body clip", "[render][regress
     CHECK(pixel[2] < 80);
 }
 
+TEST_CASE("svg textures cache uploads by size and release their context", "[texture][svg]") {
+    SdlVideoSession sdl({64.0F, 64.0F});
+    ui_test::ImGuiContext context({64.0F, 64.0F});
+    ui::OpenGLTextureLoader loader;
+    auto texture = loader.load(
+        std::string_view{R"(<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4">
+            <rect width="4" height="4" fill="#ff00ff"/>
+        </svg>)"},
+        "svg"
+    );
+    REQUIRE(texture != nullptr);
+
+    const ImTextureID small = texture->get({4.0F, 4.0F});
+    REQUIRE(small != 0);
+    REQUIRE(texture->get({4.0F, 4.0F}) == small);
+    const ImTextureID large = texture->get({8.0F, 8.0F});
+    REQUIRE(large != small);
+
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(small));
+    std::array<uint8_t, 4 * 4 * 4> pixels{};
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    REQUIRE(pixels[0] == 255);
+    REQUIRE(pixels[1] == 0);
+    REQUIRE(pixels[2] == 255);
+    REQUIRE(pixels[3] == 255);
+
+    texture->release_context(ImGui::GetCurrentContext());
+    REQUIRE(glIsTexture(static_cast<GLuint>(small)) == GL_FALSE);
+    REQUIRE(glIsTexture(static_cast<GLuint>(large)) == GL_FALSE);
+}
+
 TEST_CASE("gif texture data decodes into an opengl texture", "[texture][gif]") {
     static constexpr char gif_data[] = "GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x01\x00\x00\x00\x00,"
                                        "\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;";

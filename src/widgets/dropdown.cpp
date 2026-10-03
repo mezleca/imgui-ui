@@ -313,8 +313,7 @@ void DropdownWidget::State::finish_close() {
 }
 
 DropdownWidget::DropdownWidget(std::string& value, std::vector<DropdownOption> options, std::string id)
-    : Container(std::move(id), StackDirection::Vertical), m_state{.value = &value, .options = std::move(options)} {
-    set_type_name("Dropdown");
+    : Container(std::move(id), "Dropdown"), m_state{.value = &value, .options = std::move(options)} {
     set_size({fit(), fit()});
     m_state.owner = this;
 

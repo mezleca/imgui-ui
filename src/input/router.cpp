@@ -21,6 +21,11 @@ InputRouter::~InputRouter() {
     }
 }
 
+InputRouter& InputRouter::on_event(InputCallback callback) {
+    m_on_event = std::move(callback);
+    return *this;
+}
+
 void InputRouter::begin_frame() {
     m_hit_test.begin_frame(m_attached_nodes.size() + 8);
     clear_inactive_targets();
@@ -214,31 +219,36 @@ bool InputRouter::dispatch(UiEvent& event) {
         return true;
     }
 
+    if (m_on_event) m_on_event(event);
+
     if (contains(EventMask::Keyboard, event_mask(event.type))) {
-        return dispatch_keyboard(event);
+        return event.propagation_stopped ? event.handled : dispatch_keyboard(event);
     }
 
     if (!contains(EventMask::Pointer, event_mask(event.type))) {
-        return false;
+        return event.handled;
     }
 
     if (event.type == EventType::PointerMove && m_pointer_capture != nullptr) {
-        return dispatch(*m_pointer_capture, event);
+        return event.propagation_stopped ? event.handled : dispatch(*m_pointer_capture, event);
     }
 
     const int button_index = pointer_button_index(event.button);
+
     // keep the targets reached by this press and carry its native blocking and click prevention into release.
     if (event.type == EventType::PointerDown && button_index >= 0) {
         PressedPointer& pressed = m_pressed[button_index];
         pressed = {};
-        dispatch_pointer(event, &pressed.targets);
+
+        if (!event.propagation_stopped) dispatch_pointer(event, &pressed.targets);
+
         pressed.prevent_click = event.default_prevented;
         pressed.native_input_blocked = event.native_input_blocked;
         return event.handled;
     }
 
     if (event.type != EventType::PointerUp) {
-        return dispatch_pointer(event);
+        return event.propagation_stopped ? event.handled : dispatch_pointer(event);
     }
 
     // take the press before callbacks can hide, detach, or release its targets.
@@ -246,19 +256,23 @@ bool InputRouter::dispatch(UiEvent& event) {
     if (button_index >= 0) pressed = std::exchange(m_pressed[button_index], {});
     event.native_input_blocked |= pressed.native_input_blocked;
 
+    const bool route_release = !event.propagation_stopped;
     Node* captured = m_pointer_capture;
-    if (captured != nullptr) {
-        dispatch(*captured, event);
-        if (m_pointer_capture == captured) release_pointer();
-    }
+    if (captured != nullptr && route_release) dispatch(*captured, event);
+
+    // preserve capture transferred by the release handler.
+    if (m_pointer_capture == captured) release_pointer();
 
     std::vector<Node*> released;
-    if (captured != nullptr && node_at(event.position) == captured) released.push_back(captured);
+    if (route_release) {
+        if (captured != nullptr && node_at(event.position) == captured) released.push_back(captured);
 
-    dispatch_pointer(event, &released, nullptr, captured);
+        dispatch_pointer(event, &released, nullptr, captured);
+    }
+
     set_input_flag(m_active_node, nullptr, InputFlag::Active);
 
-    if (pressed.prevent_click || event.default_prevented ||
+    if (!route_release || pressed.prevent_click || event.default_prevented ||
         (event.button != PointerButton::Left && event.button != PointerButton::Right)) {
         return event.handled;
     }
@@ -267,12 +281,16 @@ bool InputRouter::dispatch(UiEvent& event) {
     std::erase_if(pressed.targets, [&released](Node* node) {
         return std::find(released.begin(), released.end(), node) == released.end();
     });
+    if (pressed.targets.empty()) return event.handled;
 
     UiEvent click = UiEvent::make(event.button == PointerButton::Left ? EventType::Click : EventType::ContextClick);
     click.position = event.position;
     click.button = event.button;
     click.native_input_blocked = event.native_input_blocked;
-    dispatch_pointer(click, nullptr, &pressed.targets);
+
+    if (m_on_event) m_on_event(click);
+    if (!click.propagation_stopped) dispatch_pointer(click, nullptr, &pressed.targets);
+
     event.native_input_blocked |= click.native_input_blocked;
     return event.handled || click.handled;
 }

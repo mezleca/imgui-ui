@@ -99,8 +99,7 @@ private:
 };
 
 ContextMenuWidget::ContextMenuWidget(ContextMenuItems items, Texture* submenu_icon)
-    : Container({}, StackDirection::Vertical), m_submenu_icon(submenu_icon) {
-    set_type_name("ContextMenu");
+    : Container({}, "ContextMenu"), m_submenu_icon(submenu_icon) {
     set_layout({.in_flow = false});
     set_visible(false);
     set_enabled(false);

@@ -59,10 +59,9 @@ private:
 };
 
 TextInputWidget::TextInputWidget(std::string& value, std::string id)
-    : Container(std::move(id), StackDirection::Horizontal), m_value(&value) {
+    : Container(std::move(id), StackDirection::Horizontal, "TextInput"), m_value(&value) {
     set_size({grow(), fit()});
 
-    set_type_name("TextInput");
     set_content_alignment(Anchor::CenterLeft);
     m_label_node = &add<TextWidget>("");
     m_label_node->set_id("label");

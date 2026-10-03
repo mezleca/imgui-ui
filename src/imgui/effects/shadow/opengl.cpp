@@ -185,7 +185,8 @@ static void render_box_shadow(void*, const ImDrawList*, const ImDrawCmd* command
     glUniform1f(gl_state->viewport_height, static_cast<float>(height));
     const float framebuffer_height = static_cast<float>(height);
     glUniform4f(
-        gl_state->gradient_bounds, bounds.min.x, framebuffer_height - bounds.max.y, bounds.max.x, framebuffer_height - bounds.min.y
+        gl_state->gradient_bounds, bounds.min.x, framebuffer_height - bounds.max.y, bounds.max.x,
+        framebuffer_height - bounds.min.y
     );
     glUniform1f(gl_state->opacity, region->opacity);
     upload_gradient(gl_state->sampler, region->color, region->gradient);

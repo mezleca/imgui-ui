@@ -207,14 +207,13 @@ static ::Color raylib_color(ImVec4 color) {
     };
 }
 
-static bool
+static void
 dispatch_pointer(Surface& surface, EventType type, ImVec2 position, PointerButton button, bool& native_input_blocked) {
     UiEvent event = UiEvent::make(type);
     event.position = position;
     event.button = button;
-    const bool handled = surface.dispatch(event);
+    surface.dispatch(event);
     native_input_blocked |= event.native_input_blocked;
-    return handled;
 }
 
 bool RaylibBackend::initialize() {

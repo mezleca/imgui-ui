@@ -296,14 +296,13 @@ bool SdlBackend::process_event(Surface& surface, const SDL_Event& event) {
     }
 
     const ImGuiContextScope scope(surface.imgui_context());
-    const std::optional<UiEvent> translated = event_from_sdl(event);
+    std::optional<UiEvent> translated = event_from_sdl(event);
 
     bool handled = false;
     bool native_input_blocked = false;
     if (translated.has_value()) {
-        UiEvent dispatched = *translated;
-        handled = surface.dispatch(dispatched);
-        native_input_blocked = dispatched.native_input_blocked;
+        handled = surface.dispatch(*translated);
+        native_input_blocked = translated->native_input_blocked;
     }
 
     // keep the coordinate visible to imgui even when the framework consumes the button event.
@@ -312,8 +311,7 @@ bool SdlBackend::process_event(Surface& surface, const SDL_Event& event) {
     }
 
     const bool native_drag_active = ImGui::IsAnyItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    const bool blocked_pointer_move =
-        native_input_blocked && translated.has_value() && translated->type == EventType::PointerMove;
+    const bool blocked_pointer_move = native_input_blocked && event.type == SDL_EVENT_MOUSE_MOTION;
 
     // a blocked click keeps the last pointer position while a native drag retains its pointer capture.
     if (blocked_pointer_move && !native_drag_active) {
