@@ -6,6 +6,22 @@
 
 using namespace ui;
 
+void InputRouter::set_input_flag(Node& node, InputFlag flag, bool enabled) {
+    InputState state = node.input_state();
+    if (flag == InputFlag::Hovered) state.hovered = enabled;
+    if (flag == InputFlag::Active) state.active = enabled;
+    if (flag == InputFlag::Focused) state.focused = enabled;
+    node.set_input_state(state);
+}
+
+void InputRouter::set_input_flag(Node*& current, Node* next, InputFlag flag) {
+    if (current == next) return;
+
+    if (current != nullptr) set_input_flag(*current, flag, false);
+    current = next;
+    if (current != nullptr) set_input_flag(*current, flag, true);
+}
+
 static int pointer_button_index(PointerButton button) {
     const int index = static_cast<int>(button) - 1;
     return index >= 0 && index < static_cast<int>(POINTER_BUTTON_COUNT) ? index : -1;
@@ -39,6 +55,7 @@ void InputRouter::set_debug_inspect_mode(bool enabled) {
     m_debug_inspect_mode = enabled;
     if (enabled) {
         cancel_capture();
+        m_pressed = {};
         set_hovered({});
         set_input_flag(m_active_node, nullptr, InputFlag::Active);
         set_focus(nullptr);
@@ -59,7 +76,7 @@ void InputRouter::set_debug_pointer_blocked(bool blocked) {
 void InputRouter::clear_input_state(Node& subtree) {
     // remove hit regions and their hover flags before clearing focus, capture and stored presses.
     m_hit_test.erase_subtree(subtree);
-    std::erase_if(m_hovered_nodes, [&subtree](Node* node) {
+    std::erase_if(m_hovered_nodes, [this, &subtree](Node* node) {
         if (!subtree.contains(node)) return false;
 
         set_input_flag(*node, InputFlag::Hovered, false);
@@ -91,22 +108,6 @@ void InputRouter::refresh_pointer_state(ImVec2 position) {
     }
 
     set_hovered(m_hit_test.route_at(position, EventType::PointerMove));
-}
-
-void InputRouter::set_input_flag(Node& node, InputFlag flag, bool enabled) {
-    InputState state = node.input_state();
-    if (flag == InputFlag::Hovered) state.hovered = enabled;
-    if (flag == InputFlag::Active) state.active = enabled;
-    if (flag == InputFlag::Focused) state.focused = enabled;
-    node.set_input_state(state);
-}
-
-void InputRouter::set_input_flag(Node*& current, Node* next, InputFlag flag) {
-    if (current == next) return;
-
-    if (current != nullptr) set_input_flag(*current, flag, false);
-    current = next;
-    if (current != nullptr) set_input_flag(*current, flag, true);
 }
 
 void InputRouter::set_hovered(const HitTestIndex::Route& route) {
@@ -225,22 +226,19 @@ bool InputRouter::dispatch(UiEvent& event) {
         return event.propagation_stopped ? event.handled : dispatch_keyboard(event);
     }
 
-    if (!contains(EventMask::Pointer, event_mask(event.type))) {
-        return event.handled;
-    }
+    return contains(EventMask::Pointer, event_mask(event.type)) ? dispatch_pointer(event) : event.handled;
+}
 
-    if (event.type == EventType::PointerMove && m_pointer_capture != nullptr) {
-        return event.propagation_stopped ? event.handled : dispatch(*m_pointer_capture, event);
-    }
-
+bool InputRouter::dispatch_pointer(UiEvent& event) {
     const int button_index = pointer_button_index(event.button);
 
     // keep the targets reached by this press and carry its native blocking and click prevention into release.
     if (event.type == EventType::PointerDown && button_index >= 0) {
         PressedPointer& pressed = m_pressed[button_index];
         pressed = {};
+        pressed.down = true;
 
-        if (!event.propagation_stopped) dispatch_pointer(event, &pressed.targets);
+        route_pointer(event, &pressed.targets);
 
         pressed.prevent_click = event.default_prevented;
         pressed.native_input_blocked = event.native_input_blocked;
@@ -248,7 +246,7 @@ bool InputRouter::dispatch(UiEvent& event) {
     }
 
     if (event.type != EventType::PointerUp) {
-        return event.propagation_stopped ? event.handled : dispatch_pointer(event);
+        return route_pointer(event);
     }
 
     // take the press before callbacks can hide, detach, or release its targets.
@@ -258,41 +256,48 @@ bool InputRouter::dispatch(UiEvent& event) {
 
     const bool route_release = !event.propagation_stopped;
     Node* captured = m_pointer_capture;
-    if (captured != nullptr && route_release) dispatch(*captured, event);
-
-    // preserve capture transferred by the release handler.
-    if (m_pointer_capture == captured) release_pointer();
-
     std::vector<Node*> released;
-    if (route_release) {
-        if (captured != nullptr && node_at(event.position) == captured) released.push_back(captured);
+    route_pointer(event, &released);
 
-        dispatch_pointer(event, &released, nullptr, captured);
+    const bool released_all = std::none_of(m_pressed.begin(), m_pressed.end(), [](const auto& press) { return press.down; });
+
+    // preserve capture transferred by the release handler. an intercepted release cancels the unfinished interaction.
+    if (m_pointer_capture == captured) {
+        if (!route_release) {
+            cancel_capture();
+        } else if (released_all) {
+            release_pointer();
+        }
     }
 
-    set_input_flag(m_active_node, nullptr, InputFlag::Active);
+    if (released_all || !route_release) set_input_flag(m_active_node, nullptr, InputFlag::Active);
 
-    if (!route_release || pressed.prevent_click || event.default_prevented ||
-        (event.button != PointerButton::Left && event.button != PointerButton::Right)) {
-        return event.handled;
+    return route_release ? dispatch_click(event, pressed, released) : event.handled;
+}
+
+bool InputRouter::dispatch_click(UiEvent& release, PressedPointer& pressed, const std::vector<Node*>& released) {
+    if (pressed.prevent_click || release.default_prevented ||
+        (release.button != PointerButton::Left && release.button != PointerButton::Right)) {
+        return release.handled;
     }
 
     // intersect pressed and released targets before delivering a click through the same pointer route.
     std::erase_if(pressed.targets, [&released](Node* node) {
         return std::find(released.begin(), released.end(), node) == released.end();
     });
-    if (pressed.targets.empty()) return event.handled;
 
-    UiEvent click = UiEvent::make(event.button == PointerButton::Left ? EventType::Click : EventType::ContextClick);
-    click.position = event.position;
-    click.button = event.button;
-    click.native_input_blocked = event.native_input_blocked;
+    if (pressed.targets.empty()) return release.handled;
+
+    UiEvent click = UiEvent::make(release.button == PointerButton::Left ? EventType::Click : EventType::ContextClick);
+    click.position = release.position;
+    click.button = release.button;
+    click.native_input_blocked = release.native_input_blocked;
 
     if (m_on_event) m_on_event(click);
-    if (!click.propagation_stopped) dispatch_pointer(click, nullptr, &pressed.targets);
+    route_pointer(click, nullptr, pressed.targets);
 
-    event.native_input_blocked |= click.native_input_blocked;
-    return event.handled || click.handled;
+    release.native_input_blocked |= click.native_input_blocked;
+    return release.handled || click.handled;
 }
 
 void InputRouter::dispatch_branch(Node& target, UiEvent& event, std::vector<Node*>& visited, Node* scope) {
@@ -328,7 +333,6 @@ bool InputRouter::dispatch_keyboard(UiEvent& event) {
 
     for (auto it = nodes.rbegin(); it != nodes.rend() && !event.propagation_stopped; ++it) {
         if ((*it)->m_input_router != this || !is_input_target(*it) || (scope != nullptr && !scope->contains(*it))) continue;
-
         dispatch_branch(**it, event, visited, scope);
     }
 
@@ -340,50 +344,71 @@ bool InputRouter::dispatch_keyboard(UiEvent& event) {
     return event.handled;
 }
 
-bool InputRouter::dispatch_pointer(
-    UiEvent& event, std::vector<Node*>* pressed, const std::vector<Node*>* released, Node* captured
-) {
+bool InputRouter::route_pointer(UiEvent& event, std::vector<Node*>* reached, const std::vector<Node*>& eligible) {
+    if (event.propagation_stopped) return event.handled;
+
+    if (event.type == EventType::PointerMove && m_pointer_capture != nullptr) return dispatch(*m_pointer_capture, event);
+
     // snapshot before callbacks can open another layer. newly registered targets wait for the next event.
     const auto route = m_hit_test.route_at(event.position, event.type);
     Node* scope = route.blocker ? route.blocker->node : nullptr;
-    std::vector<Node*> visited;
-    for (Node* node = captured; node != nullptr; node = node->parent())
-        visited.push_back(node);
-
     Node* front = route.targets.empty() ? scope : route.targets.front().node;
+
     if (event.type != EventType::Scroll && event.type != EventType::Click && event.type != EventType::ContextClick) {
         set_hovered(route);
     }
-    if (event.type == EventType::PointerDown) set_input_flag(m_active_node, front, InputFlag::Active);
+
+    if (event.type == EventType::PointerDown) {
+        set_input_flag(m_active_node, m_pointer_capture != nullptr ? m_pointer_capture : front, InputFlag::Active);
+    }
+
+    if (m_pointer_capture != nullptr && (event.type == EventType::PointerDown || event.type == EventType::PointerUp)) {
+        Node* captured = m_pointer_capture;
+        if (reached != nullptr && (event.type == EventType::PointerDown || front == captured)) reached->push_back(captured);
+        return dispatch(*captured, event);
+    }
+
+    dispatch_targets(event, route, reached, eligible);
+    return event.handled;
+}
+
+void InputRouter::dispatch_targets(
+    UiEvent& event, const HitTestIndex::Route& route, std::vector<Node*>* reached, const std::vector<Node*>& eligible
+) {
+    Node* scope = route.blocker ? route.blocker->node : nullptr;
+    std::vector<Node*> visited;
+
+    // no descendant was hit. deliver only to the blocker and suppress native input.
+    if (route.blocker && route.targets.empty()) {
+        event.block_native_input();
+        event.target = scope;
+        if (route.blocker->callback) (*route.blocker->callback)(event);
+        if (is_input_target(scope)) dispatch_branch(*scope, event, visited, scope);
+        event.stop_propagation();
+        return;
+    }
+
+    const auto still_attached = [this](Node* node) { return node->m_input_router == this && is_input_target(node); };
 
     for (const auto& entry : route.targets) {
         if (event.propagation_stopped) break;
-        if (entry.node->m_input_router != this || !is_input_target(entry.node) ||
-            std::find(visited.begin(), visited.end(), entry.node) != visited.end())
-            continue;
-        if (released != nullptr && std::find(released->begin(), released->end(), entry.node) == released->end()) continue;
+
+        if (!still_attached(entry.node)) continue;
+        if (std::find(visited.begin(), visited.end(), entry.node) != visited.end()) continue;
+        if (!eligible.empty() && std::find(eligible.begin(), eligible.end(), entry.node) == eligible.end()) continue;
 
         event.target = entry.node;
         if (entry.callback) (*entry.callback)(event);
-        if (entry.node->m_input_router != this || !is_input_target(entry.node)) continue;
 
-        if (pressed != nullptr) pressed->push_back(entry.node);
+        // the entry callback may detach or disable its node before bubbling.
+        if (!still_attached(entry.node)) continue;
+
+        if (reached != nullptr) reached->push_back(entry.node);
         dispatch_branch(*entry.node, event, visited, scope);
     }
 
-    if (!route.blocker) return event.handled;
-
-    // descendant controls keep native imgui input. only clicks outside the owner's targets invoke the blocking callback.
-    if (route.targets.empty()) {
-        event.block_native_input();
-        if (!event.propagation_stopped) {
-            event.target = scope;
-            if (route.blocker->callback) (*route.blocker->callback)(event);
-            if (is_input_target(scope)) dispatch_branch(*scope, event, visited, scope);
-        }
-    }
-    event.stop_propagation();
-    return event.handled;
+    // descendants keep native input, but propagation cannot escape the blocker.
+    if (route.blocker) event.stop_propagation();
 }
 
 bool InputRouter::dispatch(Node& target, UiEvent& event) {
@@ -420,7 +445,7 @@ void InputRouter::clear_inactive_targets() {
         cancel_capture();
     }
 
-    std::erase_if(m_hovered_nodes, [](Node* node) {
+    std::erase_if(m_hovered_nodes, [this](Node* node) {
         if (is_input_target(node)) return false;
 
         set_input_flag(*node, InputFlag::Hovered, false);

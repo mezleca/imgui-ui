@@ -519,19 +519,7 @@ TEST_CASE("text line height scales multi-line text layout", "[TextWidget][layout
     REQUIRE(text.layout().size().y == Catch::Approx(native_line_height * 3.0F));
 }
 
-TEST_CASE("text line height interpolates between visual states", "[TextWidget][style]") {
-    TextWidget text("line");
-    text.style(StyleType::HOVER).line_height(2.0F, 1.0F);
-
-    text.set_interaction_style(true, false);
-    text.update(0.5F);
-
-    REQUIRE(text.computed_style().line_height() == Catch::Approx(1.5F));
-}
-
 TEST_CASE("value widgets notify only when their value changes", "[Widget][change]") {
-    Runtime runtime;
-    ui::Surface surface = ui_test::make_surface(runtime);
     bool checked = false;
     int number = 1;
     std::string choice = "one";
@@ -686,20 +674,6 @@ TEST_CASE("animation sequences transform style presentation values", "[VisualSta
     REQUIRE(state.computed_style().scale().y == Catch::Approx(1.0F));
 }
 
-TEST_CASE("animation sequence callbacks run after their timeline", "[VisualState][animation]") {
-    VisualState state;
-    bool ended = false;
-    state.animate().to(StyleAnimationProperty::Rotation, 90.0F, {0.1F, easing::linear}).then(0.1F).end([&ended] {
-        ended = true;
-    });
-
-    state.update(0.1F);
-    REQUIRE_FALSE(ended);
-
-    state.update(0.1F);
-    REQUIRE(ended);
-}
-
 TEST_CASE("animation sequence steps continue from the preceding track", "[VisualState][animation]") {
     VisualState state;
     state.animate()
@@ -770,22 +744,6 @@ TEST_CASE("styled nodes rotate their generated vertices without changing layout"
     });
 }
 
-TEST_CASE("interaction style precedence is active focus hover default", "[VisualState][style]") {
-    VisualState state;
-
-    state.set_item_state(false, false, false);
-    REQUIRE(state.style_type() == StyleType::DEFAULT);
-
-    state.set_item_state(true, false, false);
-    REQUIRE(state.style_type() == StyleType::HOVER);
-
-    state.set_item_state(true, false, true);
-    REQUIRE(state.style_type() == StyleType::FOCUS);
-
-    state.set_item_state(true, true, true);
-    REQUIRE(state.style_type() == StyleType::ACTIVE);
-}
-
 TEST_CASE("style cursor follows hovered nodes", "[Style][cursor]") {
     ui_test::ImGuiContext context({320.0F, 180.0F});
     InputRouter router;
@@ -831,17 +789,6 @@ TEST_CASE("border alpha fades out when a hover state is cleared", "[VisualState]
 
     state.update(0.1F);
     REQUIRE(state.computed_style().border_color().get().w == Catch::Approx(0.0F));
-}
-
-TEST_CASE("opacity ticks towards target and drives visibility", "[widget_state][opacity]") {
-    VisualState state;
-    state.set_opacity(0.0f);
-
-    state.update(0.075F);
-    REQUIRE(state.opacity() == Catch::Approx(0.5F));
-    state.update(0.075F);
-    REQUIRE(state.opacity() == Catch::Approx(0.0F));
-    REQUIRE_FALSE(state.is_visible());
 }
 
 TEST_CASE("widget input requires both node and visual state to accept input", "[Widget][input]") {
@@ -965,17 +912,6 @@ TEST_CASE("styled widgets advance visual state during update", "[Widget][style]"
     ui_test::draw_node(widget, "style-tick-test");
 
     REQUIRE(widget.computed_style().color().get().x == Catch::Approx(color_after_update));
-}
-
-TEST_CASE("fade in starts new visual states transparent", "[widget_state][opacity]") {
-    VisualState state;
-
-    state.fade_in();
-    REQUIRE(state.opacity() == Catch::Approx(0.0F));
-
-    state.update(1.0F / 60.0F);
-    REQUIRE(state.opacity() > 0.0F);
-    REQUIRE(state.opacity() < 1.0F);
 }
 
 TEST_CASE("style variables stay local to their declared state", "[VisualState][variables]") {

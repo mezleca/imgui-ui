@@ -43,7 +43,8 @@ namespace ui {
         /// attaches owner and consumes selected events outside its input descendants within rect.
         void register_blocker(Node& owner, Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
-        /// routes later pointer moves and releases to node. transferring capture sends Cancel to the previous owner.
+        /// routes pointer presses, moves, and releases exclusively to node until all buttons are released.
+        /// transferring capture or intercepting its release sends Cancel to the previous owner.
         bool capture_pointer(Node& node);
 
         /// releases the current pointer capture.
@@ -69,11 +70,7 @@ namespace ui {
             return m_focused_node;
         }
 
-        /// routes one event to its focused, captured, or hit-tested node.
-        /// the router callback runs first, including for synthesized clicks. stopped propagation skips node routing.
-        /// pointer events traverse overlapping targets front to back and bubble through each target's parents once.
-        /// keyboard events visit focus first, then the remaining attached nodes. pointer presses do not clear focus.
-        /// stop_propagation or an explicit blocker ends traversal. mark_handled does not stop it.
+        /// invokes the router callback before node routing. stop_propagation skips node delivery.
         bool dispatch(UiEvent& event);
 
         /// dispatches to target, then walks its parent chain until propagation stops.
@@ -98,6 +95,8 @@ namespace ui {
         /// preserves press state until the matching release decides click synthesis.
         struct PressedPointer {
             std::vector<Node*> targets;
+            /// records the button even when delivery is stopped. capture ends after the last release.
+            bool down = false;
             /// suppresses a synthesized click after the press prevents its default action.
             bool prevent_click = false;
             /// repeats native input blocking on the matching pointer release.
@@ -116,17 +115,32 @@ namespace ui {
         void detach(Node& subtree);
         /// clears focus, capture, hover, active, and press state for inactive nodes.
         void clear_inactive_targets();
+        /// clears capture before sending Cancel directly to its former owner, without bubbling.
         void cancel_capture();
         /// updates hover from a position without dispatching an event.
         void refresh_pointer_state(ImVec2 position);
-        static void set_input_flag(Node& node, InputFlag flag, bool enabled);
-        static void set_input_flag(Node*& current, Node* next, InputFlag flag);
+        void set_input_flag(Node& node, InputFlag flag, bool enabled);
+        void set_input_flag(Node*& current, Node* next, InputFlag flag);
         void set_hovered(const HitTestIndex::Route& route);
-        bool dispatch_pointer(
-            UiEvent& event, std::vector<Node*>* pressed = nullptr, const std::vector<Node*>* released = nullptr,
-            Node* captured = nullptr
+
+        /// records presses, routes the event, and ends capture and active state on release before deciding a click.
+        bool dispatch_pointer(UiEvent& event);
+        /// emits Click or ContextClick only for targets reached by both press and release and not prevented.
+        bool dispatch_click(UiEvent& release, PressedPointer& pressed, const std::vector<Node*>& released);
+
+        /// selects capture or a hit-test snapshot and updates hover and active state before delivery.
+        /// reached optionally records delivered targets. a nonempty eligible list restricts click delivery.
+        bool route_pointer(UiEvent& event, std::vector<Node*>* reached = nullptr, const std::vector<Node*>& eligible = {});
+
+        /// delivers entry callbacks and bubbles front to back, visiting shared ancestors once within the blocker scope.
+        /// rechecks node attachment after callbacks. reached records only targets still attached at that point.
+        void dispatch_targets(
+            UiEvent& event, const HitTestIndex::Route& route, std::vector<Node*>* reached, const std::vector<Node*>& eligible
         );
+
+        /// delivers to focus first, then reverse attachment order, restricted to the active blocking subtree.
         bool dispatch_keyboard(UiEvent& event);
+        /// sets the branch target and bubbles through valid ancestors, stopping at scope or an already visited node.
         static void dispatch_branch(Node& target, UiEvent& event, std::vector<Node*>& visited, Node* scope = nullptr);
 
         HitTestIndex m_hit_test;

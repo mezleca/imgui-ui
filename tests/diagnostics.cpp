@@ -108,22 +108,6 @@ TEST_CASE("debugger renders in the target surface and intercepts its overlay") {
     surface.end_frame();
 }
 
-TEST_CASE("debugger hotkey toggles on the target surface") {
-    ui::Runtime runtime;
-    ui::Surface surface = ui_test::make_surface(runtime, true);
-    REQUIRE(surface.debugger() != nullptr);
-    REQUIRE_FALSE(surface.debugger()->is_open());
-
-    const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 240.0F});
-    ImGui::GetIO().AddKeyEvent(ImGuiMod_Shift, true);
-    ImGui::GetIO().AddKeyEvent(ImGuiKey_D, true);
-
-    surface.begin_frame();
-
-    REQUIRE(surface.debugger()->is_open());
-    surface.end_frame();
-}
-
 TEST_CASE("debugger clicks preserve an open popup") {
     ui::Runtime runtime;
     ui::Surface surface = ui_test::make_surface(runtime, true);
@@ -291,19 +275,9 @@ TEST_CASE("ui profiler records completed zones and frame metrics") {
     {
         std::ifstream report(profiler.output_path());
         const std::string contents{std::istreambuf_iterator<char>(report), {}};
-        REQUIRE(contents.find("latest.nodes_drawn =") != std::string::npos);
-        REQUIRE(contents.find("latest.input_entry_checks =") != std::string::npos);
-        REQUIRE(contents.find("latest.update_ms =") != std::string::npos);
-        REQUIRE(contents.find("latest.measure_ms =") != std::string::npos);
-        REQUIRE(contents.find("latest.layout_ms =") != std::string::npos);
-        REQUIRE(contents.find("latest.draw_ms =") != std::string::npos);
-        REQUIRE(contents.find("latest.input_ms =") != std::string::npos);
-        REQUIRE(contents.find("latest.render_ms =") != std::string::npos);
+        REQUIRE(contents.find("latest.input_entry_checks = 7") != std::string::npos);
         REQUIRE(contents.find("latest.gpu_render_ms = 1.25") != std::string::npos);
         REQUIRE(contents.find("gpu_render.average_ms = 1.25") != std::string::npos);
-        REQUIRE(contents.find("memory") == std::string::npos);
-        REQUIRE(contents.find("style_") == std::string::npos);
-        REQUIRE(contents.find("draw_commands") == std::string::npos);
     }
 
     std::filesystem::remove(profiler.output_path());

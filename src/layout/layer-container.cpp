@@ -20,6 +20,7 @@ LayerContainer::LayerContainer(std::string id, LayerMode mode) : LayerContainer(
 LayerContainer::LayerContainer(std::string id, LayerMode mode, std::string_view type_name)
     : Container(std::move(id), type_name), m_mode(mode) {
     set_layout({.in_flow = false});
+    set_input_mode(InputMode::None);
 }
 
 ImGuiWindowFlags LayerContainer::child_window_flags() const {

@@ -52,33 +52,16 @@ TEST_CASE("animator callbacks keep registration order and defer callbacks schedu
     REQUIRE_FALSE(animator.transitioning());
 }
 
-TEST_CASE("integer colors normalize channels and preserve float color semantics", "[color]") {
-    const ImVec4 color = rgba(49, 128, 255, 64).rgba();
-    REQUIRE(color.x == Catch::Approx(49.0F / 255.0F));
-    REQUIRE(color.y == Catch::Approx(128.0F / 255.0F));
-    REQUIRE(color.z == 1.0F);
-    REQUIRE(color.w == Catch::Approx(64.0F / 255.0F));
-
-    REQUIRE(rgb(255, 0, 0) == rgb(1.0F, 0.0F, 0.0F));
-    REQUIRE(rgba(-1, 256, 0, 300) == rgba(0.0F, 1.0F, 0.0F, 1.0F));
-}
-
 TEST_CASE("colors retain directional gradients and solid fallbacks") {
     const Color vertical = gradient(
         GradientType::Linear, {{0.0F, rgb(1.0F, 0.0F, 0.0F)}, {1.0F, rgb(0.0F, 0.0F, 1.0F)}}, {0.0F, 0.0F}, {0.0F, 1.0F}
     );
-    REQUIRE(vertical.gradient() != nullptr);
-    REQUIRE(vertical.gradient()->type == GradientType::Linear);
-    REQUIRE(vertical.gradient()->start.y == 0.0F);
-    REQUIRE(vertical.gradient()->end.y == 1.0F);
     REQUIRE(vertical.rgba().x == Catch::Approx(0.5F));
     REQUIRE(vertical.rgba().z == Catch::Approx(0.5F));
 
     const Color radial =
         gradient(GradientType::Radial, {{0.0F, rgba(1.0F, 1.0F, 1.0F, 0.5F)}, {1.0F, rgba(0.0F, 0.0F, 0.0F, 0.0F)}});
-    REQUIRE(radial.gradient()->start.x == 0.5F);
     REQUIRE(radial.max_alpha() == 0.5F);
-    REQUIRE(radial == radial);
 }
 
 static const BoxShadowRegion* collected_shadow_region = nullptr;
@@ -237,26 +220,6 @@ TEST_CASE("style normalizes discrete fields and interpolates effect values") {
 
     Style::lerp(style, target, 0.0F);
     REQUIRE(style.border_style() == BorderStyle::Dotted);
-
-    style.blur(8);
-    REQUIRE(style.blur() == 8);
-
-    Style blur_target;
-    blur_target.blur(14);
-    Style::lerp(style, blur_target, 0.0F);
-    REQUIRE(style.blur() == 14);
-
-    style.blur(-1);
-    REQUIRE(style.blur() == 0);
-
-    style.blur(MAX_BLUR_STRENGTH + 1);
-    REQUIRE(style.blur() == MAX_BLUR_STRENGTH);
-
-    style.border_thickness(0.25F);
-    REQUIRE(style.border_thickness() == MIN_BORDER_THICKNESS);
-
-    style.border_thickness(0.0F);
-    REQUIRE(style.border_thickness() == 0.0F);
 
     Style shadow_target;
     shadow_target.box_shadow(

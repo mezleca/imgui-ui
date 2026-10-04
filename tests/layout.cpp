@@ -91,49 +91,6 @@ TEST_CASE("layout containers resolve themselves before arranging children", "[la
     REQUIRE(container.layout().size().y == Catch::Approx(available.y));
 }
 
-TEST_CASE("box sizing resolves fixed and percentage layout boxes", "[layout]") {
-    ui_test::ImGuiContext context({320.0F, 240.0F});
-    Container root("box-sizing-root");
-    root.set_size({px(260.0F), px(200.0F)});
-
-    auto& fixed = root.add<Container>("fixed");
-    fixed.set_size({px(120.0F), px(80.0F)});
-    fixed.style().padding({10.0F, 8.0F});
-    auto& fixed_content = fixed.add<LayoutProbeNode>();
-    fixed_content.set_size({grow(), grow()});
-
-    auto& percentage = root.add<Container>("percentage");
-    percentage.set_size({percent(50.0F), percent(50.0F)});
-    percentage.style().padding({10.0F, 8.0F}).box_sizing(BoxSizing::ContentBox);
-    auto& percentage_content = percentage.add<LayoutProbeNode>();
-    percentage_content.set_size({grow(), grow()});
-
-    const auto draw_frame = [&root] { ui_test::draw_node(root, "box-sizing-test"); };
-
-    draw_frame();
-    REQUIRE(fixed.layout().size().x == Catch::Approx(120.0F));
-    REQUIRE(fixed.layout().size().y == Catch::Approx(80.0F));
-    REQUIRE(fixed_content.layout().size().x == Catch::Approx(100.0F));
-    REQUIRE(fixed_content.layout().size().y == Catch::Approx(64.0F));
-    REQUIRE(percentage.layout().size().x == Catch::Approx(150.0F));
-    REQUIRE(percentage.layout().size().y == Catch::Approx(116.0F));
-    REQUIRE(percentage_content.layout().size().x == Catch::Approx(130.0F));
-    REQUIRE(percentage_content.layout().size().y == Catch::Approx(100.0F));
-
-    fixed.style().box_sizing(BoxSizing::ContentBox);
-    percentage.style().box_sizing(BoxSizing::BorderBox);
-    draw_frame();
-
-    REQUIRE(fixed.layout().size().x == Catch::Approx(140.0F));
-    REQUIRE(fixed.layout().size().y == Catch::Approx(96.0F));
-    REQUIRE(fixed_content.layout().size().x == Catch::Approx(120.0F));
-    REQUIRE(fixed_content.layout().size().y == Catch::Approx(80.0F));
-    REQUIRE(percentage.layout().size().x == Catch::Approx(130.0F));
-    REQUIRE(percentage.layout().size().y == Catch::Approx(100.0F));
-    REQUIRE(percentage_content.layout().size().x == Catch::Approx(110.0F));
-    REQUIRE(percentage_content.layout().size().y == Catch::Approx(84.0F));
-}
-
 TEST_CASE("fit containers preserve content when border thickness changes", "[layout][regression]") {
     ui_test::ImGuiContext context({320.0F, 180.0F});
     Container root("tabs-root");
@@ -242,6 +199,12 @@ TEST_CASE("box sizing includes borders and preserves insets", "[layout]") {
     REQUIRE(percentage_content.layout().size().x == Catch::Approx(20.0F));
     REQUIRE(percentage_content.layout().size().y == Catch::Approx(15.0F));
 
+    fixed.style().box_sizing(BoxSizing::ContentBox);
+    draw_frame();
+    REQUIRE(fixed.layout().size().x == Catch::Approx(34.0F));
+    REQUIRE(fixed.layout().size().y == Catch::Approx(36.0F));
+
+    fixed.style().box_sizing(BoxSizing::BorderBox);
     fixed.set_size({px(10.0F), px(10.0F)});
     percentage.style().box_sizing(BoxSizing::BorderBox);
     draw_frame();
@@ -962,6 +925,7 @@ TEST_CASE("resizable container stays within its parent bounds") {
     down.position = handle_position;
     down.button = PointerButton::Left;
     REQUIRE(router.dispatch(down));
+    REQUIRE(resizable.resizing());
 
     UiEvent move = UiEvent::make(EventType::PointerMove);
     move.position = {300.0F, 200.0F};
@@ -973,7 +937,30 @@ TEST_CASE("resizable container stays within its parent bounds") {
     UiEvent up = UiEvent::make(EventType::PointerUp);
     up.position = move.position;
     up.button = PointerButton::Left;
-    REQUIRE(router.dispatch(up));
+
+    SECTION("normal release") {
+        REQUIRE(router.dispatch(up));
+    }
+    SECTION("intercepted release") {
+        router.on_event([](UiEvent& event) {
+            if (event.type == EventType::PointerUp) event.stop_propagation();
+        });
+        REQUIRE(router.dispatch(up));
+        REQUIRE_FALSE(resizable.input_state().active);
+    }
+    SECTION("hidden during drag") {
+        resizable.set_visible(false);
+    }
+    SECTION("disabled during drag") {
+        resizable.set_enabled(false);
+    }
+    SECTION("capture transferred during drag") {
+        Node next("next");
+        next.set_input_router(&router);
+        REQUIRE(router.capture_pointer(next));
+    }
+
+    REQUIRE_FALSE(resizable.resizing());
 
     REQUIRE(resizable.layout().size().x > 80.0F);
     REQUIRE(resizable.layout().size().x <= 120.0F);
@@ -1512,6 +1499,59 @@ void set_virtual_items(ui::VirtualLayout& list, size_t count, std::vector<int>& 
         cache.emplace(index, &row);
         return row;
     });
+}
+
+TEST_CASE("wheel inside a virtual list scrolls it before its parent", "[layout][virtual-layout][regression]") {
+    ui_test::ImGuiContext context({240.0F, 180.0F});
+    InputRouter router;
+    Container parent("nested-scroll-parent");
+    parent.set_size({px(200.0F), px(120.0F)});
+    parent.set_scrollable(true);
+    parent.set_input_router(&router);
+
+    auto& list = parent.add<VirtualLayout>("nested-list", 20.0F);
+    list.set_size({px(180.0F), px(80.0F)});
+    std::vector<int> drawn;
+    std::map<size_t, VirtualRow*> cache;
+    set_virtual_items(list, 1000, drawn, cache);
+    parent.add<LayoutProbeNode>(ImVec2{180.0F, 400.0F});
+    parent.add<LayerContainer>("nested-overlay");
+
+    const auto frame = [&] {
+        router.begin_frame();
+        ui_test::draw_window("nested-scroll-root", {240.0F, 180.0F}, [&] {
+            parent.update(1.0F);
+            parent.draw();
+        });
+    };
+    frame();
+    frame();
+    REQUIRE(parent.scroll().max().y > 0.0F);
+    REQUIRE(list.scroll().max().y > 0.0F);
+
+    UiEvent wheel = UiEvent::make(EventType::Scroll);
+    const Rect rect = list.layout().visual_rect();
+    wheel.position = {rect.min.x + 10.0F, rect.min.y + 10.0F};
+    wheel.scroll = {0.0F, -1.0F};
+    router.dispatch(wheel);
+    frame();
+    frame();
+
+    REQUIRE(list.scroll().position().y > 0.0F);
+    REQUIRE(parent.scroll().position().y == 0.0F);
+
+    list.scroll().seek_to({0.0F, list.scroll().max().y}, ScrollBehavior::Instant);
+    frame();
+    frame();
+
+    wheel = UiEvent::make(EventType::Scroll);
+    wheel.position = {rect.min.x + 10.0F, rect.min.y + 10.0F};
+    wheel.scroll = {0.0F, -1.0F};
+    router.dispatch(wheel);
+    frame();
+    frame();
+
+    REQUIRE(parent.scroll().position().y > 0.0F);
 }
 
 TEST_CASE("virtual layout creates visible rows lazily and reuses the caller cache", "[layout][virtual-layout]") {

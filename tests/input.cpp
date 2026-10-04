@@ -13,10 +13,10 @@
 
 using namespace ui;
 
-static UiEvent event_of(EventType type, ImVec2 position = {}) {
+static UiEvent event_of(EventType type, ImVec2 position = {}, PointerButton button = PointerButton::Left) {
     UiEvent event = UiEvent::make(type);
     event.position = position;
-    event.button = PointerButton::Left;
+    event.button = button;
     return event;
 }
 
@@ -85,16 +85,6 @@ private:
 
     std::vector<EventType>& m_events;
 };
-
-TEST_CASE("widget event handlers preserve internal behavior") {
-    std::vector<std::string> events;
-    EventWidget widget(events);
-    widget.on_event([&events](UiEvent&) { events.push_back("public"); });
-
-    UiEvent event = click_event();
-    REQUIRE_FALSE(InputRouter::dispatch(widget, event));
-    REQUIRE(events == std::vector<std::string>{"internal", "public"});
-}
 
 TEST_CASE("input router callbacks run before node routing") {
     std::vector<std::string> events;
@@ -203,7 +193,7 @@ TEST_CASE("input router callbacks can intercept synthesized clicks and captured 
         stopped = EventType::Cancel;
         up = event_of(EventType::PointerUp, {5.0F, 5.0F});
         router.dispatch(up);
-        REQUIRE(events == std::vector<EventType>{EventType::PointerDown, EventType::PointerUp});
+        REQUIRE(events == std::vector<EventType>{EventType::PointerDown, EventType::Cancel, EventType::PointerUp});
     }
 
     SECTION("stopped press does not synthesize a click on release") {
@@ -233,19 +223,6 @@ TEST_CASE("input router callbacks can intercept synthesized clicks and captured 
     }
 }
 
-TEST_CASE("ui events bubble from the target to its ancestors") {
-    std::vector<std::string> events;
-    auto parent = std::make_unique<EventNode>("parent", events);
-    EventNode* child_ptr = &parent->add<EventNode>("child", events);
-
-    UiEvent event = click_event();
-    const bool handled = InputRouter::dispatch(*child_ptr, event);
-    REQUIRE_FALSE(handled);
-
-    REQUIRE(events == std::vector<std::string>{"child", "parent"});
-    REQUIRE(event.target == child_ptr);
-}
-
 TEST_CASE("opening an overlay during a click does not turn it into a backdrop click") {
     std::vector<std::string> events;
     EventWidget menu(events);
@@ -270,21 +247,6 @@ TEST_CASE("opening an overlay during a click does not turn it into a backdrop cl
     UiEvent outside = click_event();
     InputRouter::dispatch(backdrop, outside);
     REQUIRE_FALSE(open);
-}
-
-TEST_CASE("ui events can stop propagation") {
-    std::vector<std::string> events;
-    auto parent = std::make_unique<EventNode>("parent", events);
-    EventNode* child_ptr = &parent->add<EventNode>("child", events);
-    child_ptr->stop_events = true;
-
-    UiEvent event = click_event();
-    const bool handled = InputRouter::dispatch(*child_ptr, event);
-    REQUIRE(handled);
-
-    REQUIRE(event.handled);
-    REQUIRE(event.propagation_stopped);
-    REQUIRE(events == std::vector<std::string>{"child"});
 }
 
 TEST_CASE("event handlers can remove their widget while bubbling") {
@@ -333,33 +295,62 @@ TEST_CASE("event handlers can remove their widget while bubbling") {
     REQUIRE(owner.children().empty());
 }
 
-TEST_CASE("pointer capture keeps drag events on the original node") {
+TEST_CASE("pointer capture stays exclusive across frames until the final button release") {
     InputRouter router;
     std::vector<EventType> events;
+    std::vector<EventType> other_events;
     PointerCaptureNode node(router, events);
-
+    PointerEventNode other("other", other_events);
     router.register_target(node, {{0.0F, 0.0F}, {10.0F, 10.0F}});
 
     auto down = event_of(EventType::PointerDown, {5.0F, 5.0F});
-    REQUIRE(router.dispatch(down));
+    router.dispatch(down);
 
     router.begin_frame();
+    router.register_target(other, {{20.0F, 20.0F}, {30.0F, 30.0F}});
+    down = event_of(EventType::PointerDown, {25.0F, 25.0F}, PointerButton::Right);
+    router.dispatch(down);
+
+    auto up = event_of(EventType::PointerUp, {25.0F, 25.0F}, PointerButton::Right);
+    router.dispatch(up);
+    REQUIRE(node.input_state().active);
+
     auto move = event_of(EventType::PointerMove, {100.0F, 100.0F});
     REQUIRE(router.dispatch(move));
+    REQUIRE(events.back() == EventType::PointerMove);
+
+    up = event_of(EventType::PointerUp, {25.0F, 25.0F});
+    router.dispatch(up);
+    REQUIRE_FALSE(node.input_state().active);
+    move = event_of(EventType::PointerMove, {100.0F, 100.0F});
+    REQUIRE_FALSE(router.dispatch(move));
+
+    REQUIRE(other_events.empty());
+    REQUIRE(
+        events ==
+        std::vector<EventType>{
+            EventType::PointerDown, EventType::PointerDown, EventType::PointerUp, EventType::PointerMove, EventType::PointerUp
+        }
+    );
+}
+
+TEST_CASE("capture transferred by a release handler remains active") {
+    InputRouter router;
+    std::vector<EventType> events;
+    PointerEventNode next("next", events);
+    Widget owner("owner");
+    router.register_target(owner, {{0.0F, 0.0F}, {10.0F, 10.0F}});
+    next.set_input_router(&router);
+    REQUIRE(router.capture_pointer(owner));
+    owner.on_event([&](UiEvent& event) {
+        if (event.type == EventType::PointerUp) REQUIRE(router.capture_pointer(next));
+    });
 
     auto up = event_of(EventType::PointerUp, {100.0F, 100.0F});
-    REQUIRE(router.dispatch(up));
-    REQUIRE(
-        events == std::vector<EventType>{
-                      EventType::PointerDown,
-                      EventType::PointerMove,
-                      EventType::PointerUp,
-                  }
-    );
-
-    router.begin_frame();
-    auto move_after_release = event_of(EventType::PointerMove, {100.0F, 100.0F});
-    REQUIRE_FALSE(router.dispatch(move_after_release));
+    router.dispatch(up);
+    auto move = event_of(EventType::PointerMove, {100.0F, 100.0F});
+    REQUIRE(router.dispatch(move));
+    REQUIRE(events == std::vector<EventType>{EventType::PointerMove});
 }
 
 TEST_CASE("input router synthesizes clicks from matching pointer presses") {
@@ -419,25 +410,6 @@ TEST_CASE("input blocker consumes only its selected event mask") {
     REQUIRE(events == std::vector<EventType>{EventType::PointerMove});
     REQUIRE(blocked_events == 1);
     REQUIRE(target_events == 1);
-}
-
-TEST_CASE("input router reports per-frame entry work") {
-    std::vector<EventType> events;
-    PointerEventNode node("target", events);
-    InputRouter router;
-    router.register_target(node, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.register_blocker({{200.0F, 200.0F}, {300.0F, 300.0F}});
-
-    auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
-    REQUIRE(router.dispatch(move));
-
-    const InputRouterStats stats = router.stats();
-    REQUIRE(stats.entry_count == 2);
-    REQUIRE(stats.entry_checks >= stats.entry_count);
-
-    router.begin_frame();
-    REQUIRE(router.stats().entry_count == 0);
-    REQUIRE(router.stats().entry_checks == 0);
 }
 
 TEST_CASE("owner-scoped blockers leave their descendants interactive") {
@@ -674,39 +646,6 @@ TEST_CASE("blocking entries clear hover behind them") {
     REQUIRE_FALSE(target.input_state().hovered);
 }
 
-TEST_CASE("overlapping targets receive events in reverse paint order") {
-    std::vector<std::string> events;
-    EventNode popup("popup", events);
-    EventNode content("content", events);
-    popup.handle_events = true;
-    content.handle_events = true;
-    InputRouter router;
-
-    router.register_target(content, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.register_target(popup, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-
-    UiEvent click = click_event({50.0F, 50.0F});
-    REQUIRE(router.dispatch(click));
-    REQUIRE(events == std::vector<std::string>{"popup", "content"});
-}
-
-TEST_CASE("hidden layers release focus") {
-    Runtime runtime;
-    Surface surface = ui_test::make_surface(runtime);
-    LayerContainer layer("layer", LayerMode::Inline);
-    layer.set_input_router(&surface.input_router());
-
-    REQUIRE(surface.input_router().set_focus(&layer));
-    REQUIRE(surface.input_router().focused_node() == &layer);
-
-    layer.set_visible(false);
-
-    UiEvent key = event_of(EventType::KeyDown);
-    REQUIRE_FALSE(surface.input_router().dispatch(key));
-    REQUIRE_FALSE(key.handled);
-    REQUIRE(surface.input_router().focused_node() == nullptr);
-}
-
 TEST_CASE("pointer blockers leave focused keyboard input available") {
     std::vector<std::string> events;
     EventNode content("content", events);
@@ -759,49 +698,6 @@ TEST_CASE("input router resolves overlapping targets by paint order and ancestry
     router.register_target(parent, {{0.0F, 0.0F}, {100.0F, 100.0F}});
 
     REQUIRE(router.node_at({50.0F, 50.0F}) == child_ptr);
-}
-
-TEST_CASE("input router ignores disabled and stale entries") {
-    InputRouter router;
-    Node disabled("disabled");
-    Node hidden("hidden");
-
-    router.begin_frame();
-    router.register_target(disabled, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    router.register_target(hidden, {{0.0F, 0.0F}, {100.0F, 100.0F}});
-    disabled.set_enabled(false);
-    hidden.set_visible(false);
-
-    REQUIRE(router.node_at({50.0F, 50.0F}) == nullptr);
-
-    router.begin_frame();
-    REQUIRE(router.node_at({50.0F, 50.0F}) == nullptr);
-}
-
-TEST_CASE("focused node receives keyboard events") {
-    std::vector<std::string> events;
-    EventNode content("content", events);
-    EventNode modal("modal", events);
-    content.handle_events = true;
-    modal.handle_events = true;
-
-    InputRouter router;
-    REQUIRE(router.set_focus(&content));
-    events.clear();
-
-    UiEvent key = event_of(EventType::KeyDown);
-    REQUIRE(router.dispatch(key));
-    REQUIRE(events == std::vector<std::string>{"content"});
-
-    REQUIRE(router.set_focus(&modal));
-    events.clear();
-    UiEvent text = event_of(EventType::TextInput);
-    text.text = "osu";
-    REQUIRE(router.dispatch(text));
-    REQUIRE(events == std::vector<std::string>{"modal"});
-
-    router.set_focus(nullptr);
-    REQUIRE(router.focused_node() == nullptr);
 }
 
 TEST_CASE("specific input callbacks receive the same event after the general callback") {

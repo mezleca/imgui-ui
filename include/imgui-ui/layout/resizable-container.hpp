@@ -11,7 +11,7 @@ namespace ui {
         ResizableContainer& set_resize(ResizeAxes resize);
 
         bool resizing() const {
-            return m_dragging;
+            return m_resizing != ResizeAxes::None;
         }
 
         bool resize_handle_contains(ImVec2 position) const {
@@ -21,6 +21,7 @@ namespace ui {
     protected:
         Rect hit_rect(Rect visual_rect) const override;
         void on_draw_end() override;
+        void event(UiEvent& event) override;
         void mouse_press_event(UiEvent& event) override;
         void mouse_release_event(UiEvent& event) override;
         void mouse_move_event(UiEvent& event) override;
@@ -33,7 +34,6 @@ namespace ui {
         ImVec2 m_drag_start = {0.0f, 0.0f};
         ImVec2 m_previous_size = {0.0f, 0.0f};
         ImVec2 m_parent_content_max;
-        bool m_dragging = false;
         ResizeAxes m_resize = ResizeAxes::None;
         ResizeAxes m_resizing = ResizeAxes::None;
     };

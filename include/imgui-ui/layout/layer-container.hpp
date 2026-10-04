@@ -17,6 +17,7 @@ namespace ui {
     public:
         /// defaults to inline mode and top-left placement. without an explicit size, inline mode fills the parent's
         /// content area and window mode uses the main viewport's work area.
+        /// defaults to InputMode::None so empty areas pass input through to underlying nodes.
         explicit LayerContainer(std::string id, LayerMode mode = LayerMode::Inline);
 
     protected:

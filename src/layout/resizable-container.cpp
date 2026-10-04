@@ -34,7 +34,7 @@ void ResizableContainer::on_draw_end() {
     draw_resize_indicator();
     Container::on_draw_end();
 
-    if (m_dragging) {
+    if (resizing()) {
         ImGui::SetMouseCursor(resize_cursor());
     }
 
@@ -60,10 +60,13 @@ Rect ResizableContainer::resize_handle() const {
     );
 }
 
-void ResizableContainer::mouse_release_event(UiEvent& event) {
-    if (event.button != PointerButton::Left || !m_dragging) return;
+void ResizableContainer::event(UiEvent& event) {
+    if (event.type == EventType::Cancel) m_resizing = ResizeAxes::None;
+}
 
-    m_dragging = false;
+void ResizableContainer::mouse_release_event(UiEvent& event) {
+    if (event.button != PointerButton::Left || !resizing()) return;
+
     m_resizing = ResizeAxes::None;
     release_pointer();
     event.block_native_input();
@@ -74,8 +77,7 @@ void ResizableContainer::mouse_press_event(UiEvent& event) {
     if (m_resize == ResizeAxes::None || event.button != PointerButton::Left || !resize_handle().contains(event.position)) return;
 
     // capture the drag before recording its origin. later motion uses this pointer position and size.
-    m_dragging = capture_pointer();
-    if (!m_dragging) return;
+    if (!capture_pointer()) return;
 
     m_drag_start = event.position;
     m_previous_size = layout().size();
@@ -86,7 +88,7 @@ void ResizableContainer::mouse_press_event(UiEvent& event) {
 }
 
 void ResizableContainer::mouse_move_event(UiEvent& event) {
-    if (!m_dragging) return;
+    if (!resizing()) return;
 
     // clamp the dragged size to the parent content bounds and the minimum widget size.
     const ImVec2 child_min = layout().visual_rect().min;
