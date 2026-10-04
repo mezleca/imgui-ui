@@ -33,13 +33,9 @@ namespace ui {
     };
 
     enum class LayoutSizeMode : uint8_t {
-        /// uses the configured size according to the node box sizing.
         Fixed,
-        /// uses a percentage of available parent content space according to the node box sizing.
         Percent,
-        /// uses the measured content size.
         Fit,
-        /// consumes the available parent space.
         Grow,
     };
 
@@ -91,27 +87,21 @@ namespace ui {
             return size == other.size && placement == other.placement && in_flow == other.in_flow;
         }
 
-        /// sizing mode and value requested for each axis.
         LayoutSize size{};
-        /// anchor, origin, and offset used to position the node.
         Placement placement{};
-        /// whether the parent includes this node in flow arrangement.
         bool in_flow = true;
     };
 
-    /// axis-aligned bounds in one coordinate space.
     struct Rect {
         /// returns false for empty or inverted bounds.
         bool valid() const {
             return max.x > min.x && max.y > min.y;
         }
 
-        /// returns the width and height represented by the bounds.
         ImVec2 size() const {
             return {max.x - min.x, max.y - min.y};
         }
 
-        /// returns bounds inset by the same amount on each side.
         Rect inset(ImVec2 padding) const {
             return {{min.x + padding.x, min.y + padding.y}, {max.x - padding.x, max.y - padding.y}};
         }
@@ -121,7 +111,6 @@ namespace ui {
             return point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y;
         }
 
-        /// constructs bounds from a top-left position and an extent.
         static Rect from_position_size(ImVec2 position, ImVec2 size) {
             return {position, {position.x + size.x, position.y + size.y}};
         }
@@ -155,28 +144,24 @@ namespace ui {
         float bottom = 0.0F;
     };
 
-    /// converts a named anchor or origin to normalized coordinates.
     ImVec2 alignment_factor(Anchor alignment);
     ImVec2 clamp_position(Rect bounds, ImVec2 size, ImVec2 position);
 
-    /// tests which resize axes are enabled in both masks.
     constexpr ResizeAxes operator&(ResizeAxes left, ResizeAxes right) {
         return static_cast<ResizeAxes>(static_cast<uint8_t>(left) & static_cast<uint8_t>(right));
     }
 
     class NodeLayout {
     public:
-        /// returns the final size assigned by the parent layout.
+        /// outer allocation, including padding and borders.
         const ImVec2& size() const {
             return m_size;
         }
 
-        /// returns the node's requested size and placement.
         const LayoutConfig& config() const {
             return m_config;
         }
 
-        /// returns the width and height sizing rules.
         const LayoutSize& size_spec() const {
             return m_config.size;
         }
@@ -186,45 +171,36 @@ namespace ui {
             return m_config.placement;
         }
 
-        /// returns whether the node participates in its parent's flow.
         bool in_flow() const {
             return m_config.in_flow;
         }
 
-        /// returns the measured size before grow allocation.
         ImVec2 measured_size() const {
             return m_measured_size;
         }
 
-        /// returns fixed and fit size without grow allocation.
         ImVec2 intrinsic_size() const;
 
-        /// returns the natural size used by a fit-sized parent.
         ImVec2 preferred_size() const;
 
-        /// resolves this node's size from its parent allocation.
         ImVec2 resolved_size() const {
             return resolve_size(m_available_size);
         }
 
-        /// resolves this node's size against a content allocation.
         ImVec2 resolve_size(ImVec2 available_size) const;
 
         const BoxInsets& box_insets() const {
             return m_box_insets;
         }
 
-        /// returns the arranged bounds passed to the imgui cursor.
         Rect local_rect() const {
             return m_local_rect;
         }
 
-        /// returns the arranged bounds in screen coordinates.
         Rect layout_rect() const {
             return m_layout_rect;
         }
 
-        /// returns the bounds emitted by the node's paint operation.
         Rect visual_rect() const {
             return m_visual_rect;
         }
@@ -234,7 +210,6 @@ namespace ui {
             return m_parent_content_rect;
         }
 
-        /// returns the remaining content space at the node's layout cursor.
         const ImVec2& available_size() const {
             return m_available_size;
         }

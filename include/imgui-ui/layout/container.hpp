@@ -9,10 +9,8 @@
 namespace ui {
     class Container : public Widget {
     public:
-        /// creates a container with vertical child flow, zero spacing and padding, and scrolling disabled.
         /// its background receives pointer events without blocking targets underneath. use input mode blocker to block them.
         explicit Container(std::string id, std::string_view type_name = "Container");
-        /// uses direction for visible children that remain in the layout flow.
         Container(std::string id, StackDirection direction, std::string_view type_name = "Container");
 
         /// enables the requested scrollbars. imgui may still show a vertical scrollbar when horizontal scrolling is enabled,
@@ -24,12 +22,9 @@ namespace ui {
         const Scroll& scroll() const {
             return m_scroll;
         }
-        /// orders visible in-flow children along one axis.
         Container& set_direction(StackDirection direction);
-        /// offsets the complete flow group within the available content box.
         Container& set_content_alignment(Anchor alignment);
         Container& set_content_alignment(ImVec2 alignment);
-        /// inserts a gap between adjacent visible in-flow children.
         virtual Container& set_spacing(float spacing);
 
     protected:
@@ -42,7 +37,6 @@ namespace ui {
 
         virtual ImVec2 child_window_padding() const;
         virtual ImVec2 child_window_size() const;
-        /// returns flags for the child window opened by paint. subclasses use it to change native hit testing.
         virtual ImGuiWindowFlags child_window_flags() const;
         virtual Rect shadow_rect(Rect child_rect) const;
         bool paint() override;

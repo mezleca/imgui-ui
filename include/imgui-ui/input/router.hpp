@@ -20,7 +20,6 @@ namespace ui {
         std::size_t entry_checks = 0;
     };
 
-    /// owns a surface's hit regions, focus, and pointer capture while routing events to retained nodes.
     class InputRouter {
     public:
         InputRouter() = default;
@@ -31,7 +30,7 @@ namespace ui {
         /// replaces the callback invoked before routing events to nodes. persists across frames.
         InputRouter& on_event(InputCallback callback);
 
-        /// starts a frame by clearing entries, callbacks, statistics, and stale input state.
+        /// clears frame-local hit regions and their callbacks, then removes input state from inactive nodes.
         void begin_frame();
 
         /// attaches node to this router and adds a screen-space target independently of its input mode.
@@ -46,8 +45,6 @@ namespace ui {
         /// routes pointer presses, moves, and releases exclusively to node until all buttons are released.
         /// transferring capture or intercepting its release sends Cancel to the previous owner.
         bool capture_pointer(Node& node);
-
-        /// releases the current pointer capture.
         void release_pointer();
 
         /// cancels capture and clears presses pointing into a subtree. the captured node receives Cancel.
@@ -60,12 +57,10 @@ namespace ui {
         /// moves focus from a subtree to its nearest active blocker ancestor.
         void restore_focus(Node& subtree);
 
-        /// returns the node currently receiving keyboard focus, if any.
         Node* focused_node() {
             return m_focused_node;
         }
 
-        /// returns the node currently receiving keyboard focus, if any.
         const Node* focused_node() const {
             return m_focused_node;
         }
@@ -92,7 +87,6 @@ namespace ui {
             Focused,
         };
 
-        /// preserves press state until the matching release decides click synthesis.
         struct PressedPointer {
             std::vector<Node*> targets;
             /// records the button even when delivery is stopped. capture ends after the last release.
@@ -103,10 +97,7 @@ namespace ui {
             bool native_input_blocked = false;
         };
 
-        /// blocks application dispatch while the debugger selects a node.
         void set_debug_inspect_mode(bool enabled);
-
-        /// blocks application hover while the debugger owns the pointer.
         void set_debug_pointer_blocked(bool blocked);
 
         /// removes subtree hit regions and clears its hover, active, focus, capture and presses.

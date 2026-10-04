@@ -64,6 +64,35 @@ static void draw_open_tree(Node& node, const char* name) {
     });
 }
 
+TEST_CASE("content alignment rearranges without remeasurement", "[layout][cleanup]") {
+    class MeasuredContainer final : public Container {
+    public:
+        MeasuredContainer() : Container("measured") {}
+
+        int measurements = 0;
+
+    private:
+        void on_measure() override {
+            ++measurements;
+            Container::on_measure();
+        }
+    };
+
+    ui_test::ImGuiContext context({320.0F, 180.0F});
+    MeasuredContainer root;
+    root.set_size({px(200.0F), px(100.0F)});
+    auto& child = root.add<LayoutProbeNode>(ImVec2{40.0F, 20.0F});
+    ui_test::draw_node(root, "alignment-measure-test");
+    const ImVec2 initial_position = child.layout().local_rect().min;
+    const int measurements = root.measurements;
+
+    root.set_content_alignment(Anchor::BottomRight);
+    ui_test::draw_node(root, "alignment-measure-test");
+    CHECK(root.measurements == measurements);
+    CHECK(child.layout().local_rect().min.x - initial_position.x == Catch::Approx(160.0F));
+    CHECK(child.layout().local_rect().min.y - initial_position.y == Catch::Approx(80.0F));
+}
+
 TEST_CASE("layout containers resolve themselves before arranging children", "[layout]") {
     class TestContainer final : public Container {
     public:

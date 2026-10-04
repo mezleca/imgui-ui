@@ -9,7 +9,6 @@ namespace ui {
     class ImageWidget;
     class TextWidget;
 
-    /// exposes a bound UTF-8 string as one stylable text field backed by ImGui's text editor.
     class TextInputWidget : public Container {
     public:
         explicit TextInputWidget(std::string& value, std::string id = {});

@@ -24,17 +24,13 @@ namespace ui {
     };
 
     struct StyleAnimationSlot {
-        /// holds a value while an animation overrides the configured style.
         std::optional<AnimationValue> override;
-        /// stores the value visible before the current animation frame.
         AnimationValue current = 0.0F;
-        /// stores the configured value restored by a release track.
         AnimationValue base = 0.0F;
         /// points to the owner's invalidation flag only for properties that change padding or margin.
         bool* layout_dirty = nullptr;
     };
 
-    /// tracks animated style property overrides layered on top of a StyledNode's active style.
     class VisualState {
     public:
         VisualState();

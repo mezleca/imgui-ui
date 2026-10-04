@@ -197,10 +197,6 @@ static bool initialize_box_shadow_effect(void*) {
     return GLAD_GL_VERSION_3_3 && select_gl_state() && ensure_gl_state();
 }
 
-static void begin_box_shadow_effect(void*) {
-    select_gl_state();
-}
-
 static void shutdown_box_shadow_effect(void*) {
     if (!select_gl_state()) {
         return;
@@ -213,7 +209,6 @@ static void shutdown_box_shadow_effect(void*) {
 
 void ui::register_opengl_box_shadow(EffectRegistry& effects) {
     effects.register_effect<BoxShadowRegion>(
-        EffectSlot::BoxShadow,
-        {render_box_shadow, initialize_box_shadow_effect, begin_box_shadow_effect, shutdown_box_shadow_effect, nullptr}
+        EffectSlot::BoxShadow, {render_box_shadow, initialize_box_shadow_effect, nullptr, shutdown_box_shadow_effect, nullptr}
     );
 }

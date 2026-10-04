@@ -3,7 +3,6 @@
 #include <cstdint>
 
 namespace ui {
-    /// controls whether fixed and percentage layout sizes include padding and selected borders.
     enum class BoxSizing : uint8_t {
         /// fixed and percentage sizes apply to the content before padding and borders.
         ContentBox,

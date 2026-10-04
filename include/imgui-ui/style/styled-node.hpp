@@ -12,13 +12,9 @@
 #include <utility>
 
 namespace ui {
-    /// extended Node with style slots, animated computed values, and custom paint hooks.
     class StyledNode : public Node {
     public:
         explicit StyledNode(std::string id = {}, std::string_view type_name = "StyledNode");
-        ~StyledNode() override;
-        StyledNode(const StyledNode&) = delete;
-        StyledNode& operator=(const StyledNode&) = delete;
 
         std::string_view type_name() const override {
             return m_type_name;
@@ -55,7 +51,6 @@ namespace ui {
             m_state.set_item_state(hovered, active, focused);
         }
 
-        /// animates this node's style properties, including scale and rotation.
         StyleAnimationSequence animate() {
             return m_state.animate();
         }
@@ -126,7 +121,6 @@ namespace ui {
     protected:
         void set_surface(Surface* surface) override;
         bool on_draw() final;
-        /// paints this node and returns whether its children should be drawn.
         virtual bool paint();
 
         void set_type_name(std::string_view type_name) {

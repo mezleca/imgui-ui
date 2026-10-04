@@ -54,7 +54,6 @@ namespace ui {
         void* user_data = nullptr;
     };
 
-    /// owns backend effect callbacks and stores submitted commands until imgui renders them.
     class EffectRegistry {
     public:
         EffectRegistry() = default;

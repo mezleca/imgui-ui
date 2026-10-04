@@ -11,21 +11,18 @@
 using namespace ui;
 
 int main() {
-    // window configuration belongs to the application before the backend attaches to it.
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(1120, 920, "imgui-ui raylib");
 
+    // destroy the surface before destroying the application-owned graphics context.
     {
-        // configure the demo before runtime construction because runtime owns the theme and asset registries.
         RuntimeConfig runtime_config;
         configure_demo_runtime(runtime_config);
         Runtime runtime(std::move(runtime_config));
 
-        // the backend only initializes imgui against the current raylib window.
-        auto backend = std::make_unique<RaylibBackend>();
         Surface surface(
             runtime, {
-                         .backend = std::move(backend),
+                         .backend = std::make_unique<RaylibBackend>(),
                          .enable_debugger = true,
                      }
         );

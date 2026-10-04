@@ -8,7 +8,7 @@ Font::Font(std::filesystem::path location, ImFontConfig config) : m_location(std
 
 ImFont* Font::get(int size) {
     ImGuiContext* context = ImGui::GetCurrentContext();
-    if (context == nullptr) {
+    if (context == nullptr || m_location.empty()) {
         return nullptr;
     }
 
@@ -16,10 +16,6 @@ ImFont* Font::get(int size) {
     const auto font_it = fonts.find(size);
     if (font_it != fonts.end()) {
         return font_it->second;
-    }
-
-    if (m_location.empty()) {
-        return nullptr;
     }
 
     ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(m_location.string().c_str(), static_cast<float>(size), &m_config);

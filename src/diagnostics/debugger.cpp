@@ -110,7 +110,6 @@ static constexpr double DEBUGGER_FOCUS_DELAY = 0.1;
 static constexpr int HIGHLIGHT_MIN_LINE_THICKNESS = 1;
 static constexpr int HIGHLIGHT_MAX_LINE_THICKNESS = 10;
 
-// preserves unrelated root popups across debugger focus changes.
 class ui::DebuggerPopupState {
 public:
     void save() {
@@ -715,7 +714,7 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
     if (overlay_contains(event.position)) {
         if (event.type == EventType::PointerDown) {
             m_overlay_pointer_capture = true;
-            // an outside press closes a debugger popup, while a press on the debugger must preserve an unrelated popup.
+            // allow a debugger popup to close normally. otherwise save unrelated popups before imgui processes this panel press.
             if (debugger_popup_open(m_overlay_window_id)) {
                 m_popup_state->clear();
             } else {

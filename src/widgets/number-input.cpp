@@ -116,7 +116,6 @@ void NumberInputWidget::on_measure() {
 
 template <typename T>
 constexpr ImGuiDataType number_data_type() {
-    // imgui requires the scalar type to match the bound value.
     if constexpr (std::same_as<T, float>) {
         return ImGuiDataType_Float;
     } else if constexpr (std::same_as<T, double>) {
@@ -189,7 +188,7 @@ bool NumberInputWidget::paint() {
 
     ImGui::SetNextItemWidth(input_width > 0.0F ? input_width : -1.0F);
 
-    // the bound scalar type selects the matching imgui control, then its native state drives the widget style.
+    // native item state drives presentation after the scalar control is drawn.
     if (std::visit([this](auto* value) { return draw_value(*value); }, m_number)) {
         notify_change();
     }

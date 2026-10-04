@@ -3,7 +3,6 @@
 #include "color.hpp"
 
 namespace ui {
-    /// groups runtime theming colors, control defaults, and ImGui metrics shared by all surfaces.
     struct Theme {
         struct Scrollbar {
             float size = 14.0F;

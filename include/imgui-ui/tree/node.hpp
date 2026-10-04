@@ -38,7 +38,6 @@ namespace ui {
         Blocker,
     };
 
-    /// owns a subtree and runs its update, layout, paint, and input registration lifecycle.
     class Node {
     public:
         /// creates a detached node. parent is assigned only after construction, when another node takes ownership with add.
@@ -47,7 +46,6 @@ namespace ui {
         virtual ~Node();
         Node& operator=(const Node&) = delete;
 
-        /// constructs and owns a child.
         template <typename T, typename... Args>
         T& add(Args&&... args) {
             return add(std::make_unique<T>(std::forward<Args>(args)...));
@@ -57,19 +55,15 @@ namespace ui {
         /// parent belongs to a surface.
         Node& add(std::unique_ptr<Node> child);
 
-        /// transfers ownership while preserving the child's concrete type in the returned reference.
         template <typename T>
         T& add(std::unique_ptr<T> child) {
             return static_cast<T&>(add(std::unique_ptr<Node>(std::move(child))));
         }
 
-        /// updates this node and its visible descendants.
         virtual void update(float dt);
 
-        /// reapplies theme defaults to this node and every descendant.
         void apply_theme(const Theme& theme);
 
-        /// resolves, paints, and registers this visible subtree.
         virtual void draw();
 
         /// draws this node at the current imgui cursor instead of its arranged flow position.
@@ -82,22 +76,17 @@ namespace ui {
         /// immediately transfers ownership of a direct child. use remove() from tree callbacks.
         std::unique_ptr<Node> detach(Node& child);
 
-        /// marks every child for removal.
         void clear();
 
-        /// connects this subtree to a router.
         void set_input_router(InputRouter* router);
 
-        /// records update and draw zones for this subtree.
         void set_profiler(Profiler* profiler);
 
         /// searches this node and its descendants by string id, skipping nodes pending removal. returns null when absent.
         Node* find(std::string_view id);
 
-        /// searches this node and its descendants by string id, skipping nodes pending removal. returns null when absent.
         const Node* find(std::string_view id) const;
 
-        /// returns true when node is this node or a descendant.
         bool contains(const Node* node) const;
 
         const std::string& id() const {
@@ -108,7 +97,6 @@ namespace ui {
             return "Node";
         }
 
-        /// returns the stable runtime identity.
         uint64_t identity() const {
             return m_identity;
         }
@@ -144,7 +132,6 @@ namespace ui {
             return m_enabled;
         }
 
-        /// enables or disables input.
         void set_enabled(bool enabled);
 
         virtual bool accepts_input() const {
@@ -173,10 +160,8 @@ namespace ui {
 
         virtual ImVec2 layout_margin() const;
 
-        /// replaces the width and height sizing modes interpreted by this node's box sizing style.
         Node& set_size(LayoutSize size);
 
-        /// replaces the complete layout request.
         Node& set_layout(LayoutConfig config);
 
         /// positions this node at the matching point in its parent and removes it from flow layout.
@@ -193,11 +178,9 @@ namespace ui {
     protected:
         /// reconnects surface context and remeasures the subtree after attachment or detachment.
         virtual void set_surface(Surface* surface);
-        /// returns the Surface that owns this attached node.
         Surface& surface() const;
         EffectRegistry* effect_registry() const;
 
-        /// dispatches an event to this node.
         virtual void dispatch_event(UiEvent& event);
 
         /// runs first for every event reaching this node. stopping propagation skips the specific handler and remaining routing.
@@ -211,7 +194,6 @@ namespace ui {
         virtual void mouse_move_event(UiEvent&) {}
         virtual void wheel_event(UiEvent&) {}
 
-        /// resolves placement and stores local and screen bounds.
         void resolve_position(bool at_cursor);
 
         /// returns the screen-space area used to select this node for pointer events. defaults to visual_rect.
@@ -222,7 +204,6 @@ namespace ui {
             return visual_rect;
         }
 
-        /// returns whether this node registers a framework input target.
         bool has_input_mode() const {
             return m_input_mode != InputMode::None;
         }
@@ -241,23 +222,18 @@ namespace ui {
 
         bool has_size() const;
 
-        /// stores the size assigned by a container.
         void assign_size(ImVec2 size);
 
-        /// stores intrinsic size and measured axes.
         void set_measured_size(ImVec2 size, bool measured_width, bool measured_height);
 
         ImVec2 content_size(ImVec2 size) const;
         ImVec2 outer_size(ImVec2 size) const;
         Rect content_rect(Rect rect) const;
 
-        /// overrides visual bounds.
         void set_visual_rect(Rect rect);
 
-        /// overrides arranged screen bounds.
         void set_layout_rect(Rect rect);
 
-        /// assigns size and placement to a child.
         static void arrange_child(Node& child, ImVec2 size, Placement placement = {});
 
         bool capture_pointer();
@@ -267,7 +243,6 @@ namespace ui {
         virtual void on_update(float dt);
         virtual void advance_frame_state(float dt);
 
-        /// resets built-in appearance values for the supplied theme.
         virtual void apply_theme_defaults(const Theme&) {}
 
         /// computes intrinsic size after children are measured. parent allocation is resolved separately before paint.
@@ -280,16 +255,12 @@ namespace ui {
         /// returns false to skip children and post-paint hooks.
         virtual bool on_draw();
 
-        /// paints an optional decoration before the node.
         virtual void draw_before();
 
-        /// paints children in the current scope.
         virtual void draw_children();
 
-        /// closes the node's paint scope.
         virtual void on_draw_end();
 
-        /// paints an optional decoration above the completed node subtree.
         virtual void draw_after();
 
         virtual BoxInsets box_insets() const;

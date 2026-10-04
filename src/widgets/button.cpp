@@ -42,7 +42,7 @@ void ButtonWidget::click_event(UiEvent&) {
     animate()
         .to(StyleAnimationProperty::BackgroundColor, style(StyleType::ACTIVE).background_color().value)
         .then(0.04F)
-        .release_all({0.12F, easing::out_quad});
+        .release(StyleAnimationProperty::BackgroundColor, {0.12F, easing::out_quad});
 
     if (m_on_click) {
         m_on_click();

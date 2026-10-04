@@ -24,7 +24,7 @@
 #include <imgui_internal.h>
 
 #include "imgui-context.hpp"
-#include "../vendor/imgui/backends/imgui_impl_opengl3.h"
+#include <imgui_impl_opengl3.h>
 
 #include <algorithm>
 #include <array>
@@ -89,6 +89,56 @@ static void draw_frame(ui::Surface& surface, std::optional<float> delta_time = s
     ImGui_ImplOpenGL3_RenderDrawData(draw_data);
     glFinish();
     surface.end_frame();
+}
+
+TEST_CASE("opengl effects retain per-surface state across alternation resize and shutdown", "[render][cleanup]") {
+    SdlVideoSession sdl({128.0F, 128.0F});
+    ui::Runtime runtime;
+    ui::Surface first(runtime, {.backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context())});
+    const auto configure = [](ui::Surface& surface, ui::Color color) {
+        auto& background = surface.root().add<ui::BoxWidget>("background", ui::LayoutSize{ui::grow(), ui::grow()});
+        background.configure_all_styles([color](ui::Style& style) { style.background_color(color); });
+        auto& panel = surface.root().add<ui::Container>("effects");
+        panel.set_layout({
+            .size = {ui::px(40.0F), ui::px(40.0F)},
+            .placement = {.offset = {44.0F, 44.0F}},
+            .in_flow = false,
+        });
+        panel.configure_all_styles([](ui::Style& style) {
+            style.blur(5).box_shadow({.blur = 10.0F, .spread = 8.0F, .color = ui::rgb(0.0F, 0.0F, 0.0F)});
+        });
+    };
+    const auto check_frame = [](ui::Surface& surface, int channel) {
+        const ui::ImGuiContextScope context(surface.imgui_context());
+        surface.begin_frame();
+        surface.update(1.0F);
+        surface.draw();
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glFinish();
+        GLint viewport[4]{};
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        unsigned char pixel[4]{};
+        glReadPixels(64, viewport[3] - 64, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+        CHECK(pixel[channel] > 200);
+        CHECK(pixel[1 - channel] < 32);
+        CHECK(glGetError() == GL_NO_ERROR);
+        surface.end_frame();
+    };
+
+    configure(first, ui::rgb(1.0F, 0.0F, 0.0F));
+    {
+        ui::Surface second(runtime, {.backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context())});
+        configure(second, ui::rgb(0.0F, 1.0F, 0.0F));
+        for (int frame = 0; frame < 3; ++frame) {
+            check_frame(first, 0);
+            check_frame(second, 1);
+        }
+        REQUIRE(SDL_SetWindowSize(sdl.window(), 160, 160));
+        check_frame(first, 0);
+        check_frame(second, 1);
+    }
+    check_frame(first, 0);
 }
 
 static void click_tree(ui::Surface& surface, const ui::TreeContainer& tree) {

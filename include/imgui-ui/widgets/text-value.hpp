@@ -11,10 +11,8 @@ namespace ui {
     template <typename T>
     concept GenericNumber = std::integral<T> || std::floating_point<T>;
 
-    /// stores a scalar display value and lazily caches its ImGui text size.
     class GenericValue {
     public:
-        /// stores every supported scalar type in one stable representation.
         using Value = std::variant<bool, std::int64_t, std::uint64_t, float, double, std::string>;
 
         explicit GenericValue(std::string text = {}, ImFont* font = nullptr) : m_value(std::move(text)), m_font(font) {}

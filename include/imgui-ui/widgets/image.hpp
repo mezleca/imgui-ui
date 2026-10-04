@@ -9,11 +9,8 @@ namespace ui {
     class Texture;
 
     enum class ImageFit : uint8_t {
-        /// stretches the texture to fill the widget rectangle.
         Fill,
-        /// fits the complete texture inside the widget rectangle.
         Contain,
-        /// fills the widget rectangle and crops overflow.
         Cover,
     };
 

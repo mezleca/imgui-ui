@@ -8,8 +8,7 @@ namespace ui {
     class Surface;
 }
 
-// fills the runtime config before runtime takes ownership of its assets.
 void configure_demo_runtime(ui::RuntimeConfig& config);
 
-// attaches the demo tree after ui creates its imgui context.
+// requires the surface's initialized imgui context. the demo uses one surface per process.
 void setup_demo(ui::Surface& surface, std::string backend);

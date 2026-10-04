@@ -11,7 +11,6 @@
 
 namespace ui {
     struct ProfileEvent {
-        // timestamps and node identity for one recorded scope.
         std::string_view name;
         uint64_t start = 0;
         uint64_t end = 0;
@@ -19,7 +18,7 @@ namespace ui {
     };
 
     struct ProfileFrameMetrics {
-        // counters and inclusive phase times from the latest completed frame.
+        // phase times are inclusive.
         std::size_t nodes_drawn = 0;
         std::size_t input_entries = 0;
         std::size_t input_entry_checks = 0;
@@ -40,7 +39,6 @@ namespace ui {
         double maximum_ms = 0.0;
     };
 
-    /// records bounded per-frame timing, draw, and input metrics for a Surface surface.
     class Profiler {
     public:
         static constexpr std::size_t EVENT_CAPACITY = 8192;
@@ -121,7 +119,6 @@ namespace ui {
         bool m_frame_open = false;
     };
 
-    /// closes one Profiler timing zone automatically when the surrounding scope exits.
     class ScopedProfileZone {
     public:
         ScopedProfileZone(Profiler* profiler, std::string_view name, uint64_t node_identity = 0);

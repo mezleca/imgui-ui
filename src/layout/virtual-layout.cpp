@@ -47,7 +47,6 @@ VirtualLayout& VirtualLayout::set_item_height(float height) {
     }
     if (m_item_height == height) return *this;
 
-    // changing the base row height changes every row position and the total scroll extent.
     m_item_height = height;
     invalidate_measure();
     return *this;
@@ -60,7 +59,6 @@ VirtualLayout& VirtualLayout::set_spacing(float spacing) {
 
     if (m_spacing == spacing) return *this;
 
-    // changing spacing changes every row position and the total scroll extent.
     m_spacing = spacing;
     invalidate_measure();
     return *this;
@@ -155,7 +153,6 @@ void VirtualLayout::draw_children() {
             const size_t first = item_boundary(top, false);
             const size_t last = item_boundary(bottom, true);
 
-            // extend both ends by the requested number of source rows without underflowing or exceeding the count.
             buffer.first = first > m_overscan ? first - m_overscan : 0;
             buffer.second = last + std::min(m_overscan, m_item_count - last);
         }

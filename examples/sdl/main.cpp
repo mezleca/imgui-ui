@@ -11,12 +11,11 @@
 using namespace ui;
 
 int main() {
-    // all my homies hate xwayland
 #ifdef __linux__
+    // try wayland before falling back to x11 on linux.
     SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "wayland,x11");
 #endif
 
-    // the framework does not initialize sdl, so the application must start its video subsystem first.
     if (!SDL_Init(SDL_INIT_VIDEO)) return 1;
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -24,7 +23,6 @@ int main() {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
-    // window configuration belongs to the application before the backend attaches to it.
     SDL_Window* window = SDL_CreateWindow("imgui-ui sdl", 1120, 920, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
     if (window == nullptr) {
@@ -42,17 +40,15 @@ int main() {
     SDL_GL_MakeCurrent(window, context);
     SDL_GL_SetSwapInterval(1);
 
+    // destroy the surface before destroying the application-owned graphics context.
     {
-        // configure the demo before runtime construction because runtime owns the theme and asset registries.
         RuntimeConfig runtime_config;
         configure_demo_runtime(runtime_config);
         Runtime runtime(std::move(runtime_config));
 
-        // the backend only initializes imgui against this user-owned window and context.
-        auto backend = std::make_unique<SdlBackend>(window, context);
         Surface surface(
             runtime, {
-                         .backend = std::move(backend),
+                         .backend = std::make_unique<SdlBackend>(window, context),
                          .enable_debugger = true,
                      }
         );

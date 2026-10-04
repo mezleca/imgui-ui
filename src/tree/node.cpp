@@ -66,7 +66,6 @@ Node& Node::set_size(LayoutSize size) {
 Node& Node::set_layout(LayoutConfig config) {
     if (m_layout.config() == config) return *this;
 
-    // remeasure this node and its ancestors when sizing or flow changes.
     const bool measure_changed = m_layout.size_spec() != config.size || m_layout.in_flow() != config.in_flow;
     m_layout.set_config(config);
     if (measure_changed) invalidate_measure();
@@ -214,7 +213,7 @@ void Node::resolve_position(bool at_cursor) {
         ImGui::SetCursorPos(local_position);
     }
 
-    // local bounds drive imgui. screen bounds drive painting and input hit testing.
+    // store cursor-relative bounds for placement and screen bounds for paint and hit testing.
     m_layout.set_arranged_rects(
         Rect::from_position_size(local_position, size), Rect::from_position_size(ImGui::GetCursorScreenPos(), size)
     );
@@ -228,13 +227,12 @@ void Node::capture_parent_content() {
         return;
     }
 
-    // cursor start is unscrolled. the logical cursor already includes the window scroll offset.
+    // add the window scroll to the cursor start so both content edges use the same local coordinates.
     const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
     const ImVec2 cursor = ImGui::GetCursorPos();
     const ImVec2 start = ImGui::GetCursorStartPos();
     const ImVec2 available = ImGui::GetContentRegionAvail();
 
-    // express both content edges in the same local space before a container arranges its children.
     m_layout.set_parent_content_rect(
         {{start.x + scroll.x, start.y + scroll.y}, {cursor.x + available.x, cursor.y + available.y}}, available
     );
@@ -558,7 +556,7 @@ void Node::prepare_layout(bool at_cursor) {
         measure_tree();
     }
 
-    // keep the size assigned by the parent while the node resolves its own placement.
+    // keep the parent's assigned size through on_layout, then clear it so the next draw resolves a fresh allocation.
     if (!m_layout.m_size_assigned_by_parent) {
         m_layout.clear_size_assignment();
     }

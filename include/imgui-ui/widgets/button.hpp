@@ -18,7 +18,7 @@ namespace ui {
         }
 
         ButtonWidget& set_text(std::string text);
-        /// runs after the click animation starts.
+        /// runs after the click feedback is scheduled and before that animation advances.
         ButtonWidget& on_click(std::function<void()> callback) {
             m_on_click = std::move(callback);
             return *this;

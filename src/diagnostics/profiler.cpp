@@ -248,7 +248,7 @@ Profiler::ZoneToken Profiler::begin_zone(std::string_view name, uint64_t node_id
     }
 
     FrameBuffer& frame = m_frames[m_write_index];
-    // keep the frame usable when instrumentation reaches the fixed event limit.
+    // count overflow without adding an event. existing zones keep their indices.
     if (frame.count >= frame.events.size()) {
         ++frame.dropped;
         return {};

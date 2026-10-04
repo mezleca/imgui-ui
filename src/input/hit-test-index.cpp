@@ -27,10 +27,10 @@ void HitTestIndex::register_node(Node& node, bool blocker, Rect input_rect, Rect
         return;
     }
 
+    // default hit_rect returns screen bounds. explicit input areas are translated from visual-local coordinates.
     if (!input_rect.valid()) {
         input_rect = node.hit_rect(visual_rect);
     } else {
-        // explicit hit rectangles are local to the node's visual rectangle.
         input_rect.min.x += visual_rect.min.x;
         input_rect.min.y += visual_rect.min.y;
         input_rect.max.x += visual_rect.min.x;

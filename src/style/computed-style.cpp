@@ -71,6 +71,7 @@ PushState ComputedStyle::push(float opacity, ImFont* effective_font) const {
 }
 
 void ComputedStyle::pop(PushState state) {
+    // unchanged values were never pushed. restore only the entries recorded by this style pass.
     ImGui::PopStyleColor(state.colors);
     ImGui::PopStyleVar(state.variables);
     if (state.font_pushed) ImGui::PopFont();

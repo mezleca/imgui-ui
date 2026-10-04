@@ -313,20 +313,20 @@ bool SdlBackend::process_event(Surface& surface, const SDL_Event& event) {
     const bool native_drag_active = ImGui::IsAnyItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
     const bool blocked_pointer_move = native_input_blocked && event.type == SDL_EVENT_MOUSE_MOTION;
 
-    // a blocked click keeps the last pointer position while a native drag retains its pointer capture.
+    // hide blocked motion from native hover unless a native left-button drag is already active.
     if (blocked_pointer_move && !native_drag_active) {
         ImGui::GetIO().AddMousePosEvent(-FLT_MAX, -FLT_MAX);
     }
 
-    // native controls receive consumed events unless routing explicitly blocks imgui input.
+    // scale the copied wheel event without modifying the caller's event.
     SDL_Event imgui_event = event;
     if (imgui_event.type == SDL_EVENT_MOUSE_WHEEL) {
         imgui_event.wheel.x *= constants::SCROLL_WHEEL_SCALE;
         imgui_event.wheel.y *= constants::SCROLL_WHEEL_SCALE;
     }
 
-    // forward the release to clear native controls.
-    // keep forwarding motion during an active drag after it crosses a blocking layer.
+    // forward consumed events unless native input is blocked. blocked releases still clear native controls,
+    // and motion still reaches an active drag after it crosses a blocking layer.
     if (!native_input_blocked || event.type == SDL_EVENT_MOUSE_BUTTON_UP || (blocked_pointer_move && native_drag_active)) {
         ImGui_ImplSDL3_ProcessEvent(&imgui_event);
     }

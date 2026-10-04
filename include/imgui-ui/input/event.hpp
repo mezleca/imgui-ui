@@ -93,16 +93,9 @@ namespace ui {
 
         std::string text;
 
-        /// the target or one of its ancestors consumed the event.
         bool handled = false;
-
-        /// remaining handlers, ancestors, and underlying targets no longer receive the event.
         bool propagation_stopped = false;
-
-        /// pointer release will not synthesize a click from this press.
         bool default_prevented = false;
-
-        /// platform backends must not forward this event to imgui.
         bool native_input_blocked = false;
 
         EventType type;
@@ -115,18 +108,19 @@ namespace ui {
             return event;
         }
 
-        /// consumes the event without stopping its parent traversal.
+        /// handled alone leaves routing and native forwarding unchanged. stopping propagation also consumes the event
+        /// and skips remaining handlers and routing branches. native blocking independently suppresses imgui forwarding.
         void mark_handled() {
             handled = true;
         }
 
-        /// consumes the event and stops the remaining handlers and routing branches.
         void stop_propagation() {
             handled = true;
             propagation_stopped = true;
         }
 
-        /// prevents the router's default action for this event.
+        /// suppresses click synthesis for the matching press or release.
+        /// for wheel events, suppresses the container's scroll request.
         void prevent_default() {
             default_prevented = true;
         }

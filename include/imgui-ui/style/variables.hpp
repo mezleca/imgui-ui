@@ -9,7 +9,6 @@
 #include <utility>
 
 namespace ui {
-    /// stores key-value while preserving their concrete type for debugger controls.
     class StyleVariableStore {
     public:
         void set(std::string_view key, StyleValue value);

@@ -22,11 +22,8 @@ namespace ui {
     };
 
     enum class BorderStyle : uint8_t {
-        /// draws one continuous stroke per selected side.
         Solid,
-        /// draws repeated rectangular dash segments.
         Dashed,
-        /// draws repeated round dot segments.
         Dotted,
     };
 
@@ -39,17 +36,12 @@ namespace ui {
         Clip,
     };
 
-    /// records the imgui state entries pushed by one style pass.
     struct PushState {
-        /// records whether push changed the active font.
         bool font_pushed = false;
-        /// counts style variables pushed by push.
         int variables = 0;
-        /// counts style colors pushed by push.
         int colors = 0;
     };
 
-    /// exposes the visual values read by layout and paint during one frame.
     class ComputedStyle {
     public:
         ComputedStyle();
@@ -167,10 +159,8 @@ namespace ui {
         }
 
     protected:
-        /// pushes resolved style values into imgui and records exactly what must be restored.
         PushState push(float opacity, ImFont* effective_font) const;
 
-        /// restores the imgui values recorded by push.
         static void pop(PushState state);
 
         friend class StyledNode;

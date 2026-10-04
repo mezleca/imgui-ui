@@ -5,7 +5,6 @@
 #include <string>
 
 namespace ui {
-    /// uses a native imgui tree header and reserves the remaining outer rect for its child body.
     class TreeContainer final : public Container {
     public:
         explicit TreeContainer(std::string label, std::string id = {});

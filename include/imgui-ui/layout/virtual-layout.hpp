@@ -8,23 +8,18 @@
 #include <utility>
 
 namespace ui {
-    /// requests and draws source rows in its scroll viewport, including configured overscan.
     class VirtualLayout : public Container {
     public:
         /// returns the direct child that represents index. the child must remain alive through the current draw.
         using ItemProvider = std::function<Node&(size_t)>;
 
-        /// enables vertical scrolling and uses item_height as the base height of every source row.
         explicit VirtualLayout(std::string id, float item_height);
 
         /// sets the source count. a supplied provider replaces the previous one, and a nonzero count requires a provider.
         VirtualLayout& set_items(size_t count, ItemProvider provider = {});
-        /// changes the base row height and recalculates the scroll extent.
         VirtualLayout& set_item_height(float height);
-        /// changes the gap between source rows and recalculates the scroll extent.
         VirtualLayout& set_spacing(float spacing) override;
 
-        /// asks the provider for this many additional indices before and after the visible range.
         VirtualLayout& set_overscan(size_t count) {
             m_overscan = count;
             return *this;

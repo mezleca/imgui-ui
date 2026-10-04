@@ -16,13 +16,12 @@ IS_CI = os.environ.get("GITHUB_ACTIONS") == "true"
 
 
 def run(
-    command: str | list[str], check: bool = True, env: Mapping[str, str] | None = None, capture: bool = False
+    command: list[str], check: bool = True, env: Mapping[str, str] | None = None, capture: bool = False
 ) -> tuple[int, str]:
-    display = command if isinstance(command, str) else subprocess.list2cmdline(list(command))
+    display = subprocess.list2cmdline(command)
     print(f"exec: {display}")
     result = subprocess.run(
         command,
-        shell=isinstance(command, str),
         env=env,
         capture_output=capture,
         text=capture,
@@ -68,6 +67,7 @@ def configure(name: str, build_type: str, backend: str, tests: bool) -> Path:
     command = [
         "cmake", "-S", str(ROOT), "-B", str(build_dir), "-G", "Ninja",
         f"-DCMAKE_BUILD_TYPE={build_type}",
+        f"-DIMGUI_UI_ENABLE_SANITIZERS={'ON' if build_type == 'Debug' else 'OFF'}",
         f"-DIMGUI_UI_BUILD_TESTS={'ON' if tests else 'OFF'}",
         f"-DIMGUI_UI_BUILD_EXAMPLES={'OFF' if tests or backend == 'core' else 'ON'}",
         f"-DIMGUI_UI_BUILD_SDL={'ON' if backend in ('sdl', 'all') else 'OFF'}",
@@ -81,7 +81,6 @@ def configure(name: str, build_type: str, backend: str, tests: bool) -> Path:
             "-DCMAKE_CXX_COMPILER_LAUNCHER=sccache",
         ])
     run(command)
-    copy_compile_commands(build_dir)
     return build_dir
 
 
@@ -94,7 +93,13 @@ def build(build_type: str, backend: str, tests: bool = False) -> Path:
 
 
 def format_code() -> None:
-    run("clang-format -i $(rg --files -g '*.{h,hpp,cpp,cc,cxx}' src include tests examples)")
+    source_files = sorted(
+        str(path.relative_to(ROOT))
+        for directory in ("src", "include", "tests", "examples")
+        for path in (ROOT / directory).rglob("*")
+        if path.is_file() and path.suffix in (".h", ".hpp", ".cpp", ".cc", ".cxx")
+    )
+    run(["clang-format", "-i", *source_files])
 
 
 def check(build_type: str, backend: str, fix: bool) -> None:
@@ -140,21 +145,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="ez")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    build_parser = subparsers.add_parser("build")
-    build_parser.add_argument("--backend", choices=("core", "sdl", "raylib", "all"), default="core")
-    build_parser.add_argument("--type", choices=("debug", "release"), default="debug")
-
-    tests_parser = subparsers.add_parser("tests")
-    tests_parser.add_argument("--backend", choices=("core", "sdl", "raylib", "all"), default="core")
-    tests_parser.add_argument("--type", choices=("debug", "release"), default="debug")
+    for command in ("build", "tests", "check"):
+        command_parser = subparsers.add_parser(command)
+        command_parser.add_argument("--backend", choices=("core", "sdl", "raylib", "all"), default="core")
+        command_parser.add_argument("--type", choices=("debug", "release"), default="debug")
+        if command == "check":
+            command_parser.add_argument("--fix", action="store_true")
 
     subparsers.add_parser("init")
     subparsers.add_parser("format")
-
-    check_parser = subparsers.add_parser("check")
-    check_parser.add_argument("--backend", choices=("core", "sdl", "raylib", "all"), default="core")
-    check_parser.add_argument("--type", choices=("debug", "release"), default="debug")
-    check_parser.add_argument("--fix", action="store_true")
 
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("backend", choices=("sdl", "raylib"))

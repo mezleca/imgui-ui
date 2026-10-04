@@ -400,7 +400,7 @@ void InputRouter::dispatch_targets(
         event.target = entry.node;
         if (entry.callback) (*entry.callback)(event);
 
-        // the entry callback may detach or disable its node before bubbling.
+        // recheck attachment and input eligibility after the entry callback before recording delivery or bubbling.
         if (!still_attached(entry.node)) continue;
 
         if (reached != nullptr) reached->push_back(entry.node);

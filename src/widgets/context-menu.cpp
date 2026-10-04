@@ -285,7 +285,7 @@ void ContextMenuWidget::on_draw_end() {
         return;
     }
 
-    // the root menu consumes pointer presses outside its open menu tree.
+    // block the viewport outside this menu's input descendants, leaving the open menu tree eligible for routing.
     surface().input_router().register_blocker(*this, work_area, [this](UiEvent& event) {
         if (event.type == EventType::PointerMove) {
             update_pointer_hover(event.position);

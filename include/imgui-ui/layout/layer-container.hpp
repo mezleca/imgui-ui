@@ -12,7 +12,6 @@ namespace ui {
         Window,
     };
 
-    /// provides a content plane that overlaps siblings without taking space in the parent's layout flow.
     class LayerContainer : public Container {
     public:
         /// defaults to inline mode and top-left placement. without an explicit size, inline mode fills the parent's

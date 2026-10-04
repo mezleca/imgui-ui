@@ -12,7 +12,6 @@
 namespace ui {
     class Node;
 
-    /// stores frame-local hit regions in paint order for InputRouter target and blocker queries.
     class HitTestIndex {
     public:
         enum class EntryKind : uint8_t {

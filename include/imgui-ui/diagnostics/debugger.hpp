@@ -38,10 +38,9 @@ namespace ui {
             return m_open;
         }
 
-        /// handles overlay and inspect events before the application router.
+        /// intercepts inspect and panel events before content routing. content resize drags still reach the root.
         bool handle_input(UiEvent& event);
         void handle_hotkey();
-        /// renders the diagnostic panel in the surface layout.
         void render();
 
         void set_style(const ImGuiStyle& style);

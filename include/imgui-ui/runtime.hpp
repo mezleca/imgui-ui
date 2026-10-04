@@ -14,7 +14,6 @@ namespace ui {
         std::unique_ptr<TextureLoader> texture_loader;
     };
 
-    /// owns font and texture registries and the theme used to initialize Surface surfaces.
     class Runtime {
     public:
         explicit Runtime(RuntimeConfig config = {});

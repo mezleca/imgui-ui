@@ -26,8 +26,6 @@ StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::m
     m_state.set_change_callback(this, &StyledNode::style_changed);
 }
 
-StyledNode::~StyledNode() = default;
-
 void StyledNode::set_surface(Surface* surface) {
     m_font_cache_valid = false;
     Node::set_surface(surface);
@@ -43,7 +41,8 @@ ImFont* StyledNode::font() const {
     if (current_style.font() != nullptr) return current_style.font();
     if (m_font_cache_valid) return m_cached_font;
 
-    // resolve inherited fonts from the nearest styled ancestor and cache that result until a style changes.
+    // cache the nearest ancestor's explicit font until attachment or font changes invalidate the subtree.
+    // the imgui fallback is not cached.
     for (const Node* ancestor = parent(); ancestor != nullptr; ancestor = ancestor->parent()) {
         const auto* styled_ancestor = dynamic_cast<const StyledNode*>(ancestor);
         if (styled_ancestor == nullptr) continue;
@@ -122,7 +121,7 @@ void StyledNode::remove_after() {
 }
 
 void StyledNode::draw() {
-    if (!m_state.is_visible()) {
+    if (!visible() || removal_pending() || !m_state.is_visible()) {
         return;
     }
 

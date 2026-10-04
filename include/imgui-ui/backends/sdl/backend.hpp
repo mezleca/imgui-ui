@@ -11,8 +11,7 @@ namespace ui {
 
     class SdlBackend final : public Backend {
     public:
-        /// uses the application's existing SDL OpenGL window and context.
-        /// both must outlive this backend and stay valid until after Surface destruction.
+        /// the application-owned window and context must outlive this backend and surface destruction.
         SdlBackend(SDL_Window* window, SDL_GLContext context);
         ~SdlBackend() override;
 
@@ -29,7 +28,7 @@ namespace ui {
         uint64_t window_id() const override;
         ImVec2 display_size() const override;
 
-        /// forwards one sdl event to the retained tree and imgui.
+        /// dispatches translated input before native forwarding. blocked releases still reach imgui.
         bool process_event(Surface& surface, const SDL_Event& event);
 
     private:

@@ -32,7 +32,6 @@ namespace ui {
         Widget& on_key_press(InputCallback callback);
         Widget& on_key_release(InputCallback callback);
 
-        /// runs after the widget reports a value change.
         Widget& on_change(std::function<void()> callback);
 
         bool accepts_input() const override;
@@ -52,7 +51,6 @@ namespace ui {
         std::unique_ptr<EventCallbacks> m_event_callbacks;
     };
 
-    /// paints a widget directly into ImGui's draw list instead of emitting a native ImGui control.
     class DrawListWidget : public Widget {
     public:
         explicit DrawListWidget(

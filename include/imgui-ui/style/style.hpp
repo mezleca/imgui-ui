@@ -12,21 +12,13 @@ namespace ui {
     class VisualState;
 
     enum class StyleType : uint8_t {
-        /// base appearance with no interaction state.
         DEFAULT = 0,
-        /// appearance while the pointer is over the node.
         HOVER,
-        /// appearance while the pointer button is held.
         ACTIVE,
-        /// appearance while the node owns keyboard focus.
         FOCUS,
-        /// number of visual styles stored by a node.
         COUNT,
     };
 
-    /// stores target visual values for one interaction state and optional transitions toward them.
-    ///
-    /// styled nodes resolve these values into a computed style each frame before measuring and painting.
     class Style : public ComputedStyle {
     public:
         using ChangeCallback = void (*)(void*, bool font_changed);
@@ -101,7 +93,6 @@ namespace ui {
         Style& scrollbar_grab_hovered_color(Color value, TransitionSpec transition = {});
         Style& scrollbar_grab_active_color(Color value, TransitionSpec transition = {});
 
-        /// advances the displayed values toward the target and invalidates changed geometry.
         static bool lerp(Style& style, const Style& target, float dt);
 
     private:
@@ -109,23 +100,25 @@ namespace ui {
         friend class PaintSlot;
 
         template <typename Field>
-        Style& set_property(Field ComputedStyle::* member, Field value) {
+        Style& set_property(Field ComputedStyle::* member, Field value, bool affects_measure = true) {
             Field& current = this->*member;
             if (transition_values_equal(current, value)) return *this;
 
             current = std::move(value);
-            notify_change();
+            if (affects_measure) notify_change();
             return *this;
         }
 
         template <typename ValueType, typename Field>
-        Style& set_animated_transition(ValueType ComputedStyle::* member, Field value, TransitionSpec transition) {
+        Style& set_animated_transition(
+            ValueType ComputedStyle::* member, Field value, TransitionSpec transition, bool affects_measure = true
+        ) {
             ValueType& current = this->*member;
             const bool changed = !transition_values_equal(current.value, value);
             if (changed) current.set(std::move(value));
 
             current.set_transition(transition);
-            if (changed) notify_change();
+            if (changed && affects_measure) notify_change();
 
             return *this;
         }

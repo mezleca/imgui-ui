@@ -41,7 +41,6 @@ private:
             *m_focus_requested = false;
         }
 
-        // imgui provides utf-8 editing, selection, clipboard, and ime handling.
         ImGui::PushID(this);
         const float padding_y = std::max(0.0F, (layout().size().y - m_line_height) * 0.5F);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {ImGui::GetStyle().FramePadding.x, padding_y});
@@ -65,6 +64,7 @@ TextInputWidget::TextInputWidget(std::string& value, std::string id)
     set_content_alignment(Anchor::CenterLeft);
     m_label_node = &add<TextWidget>("");
     m_label_node->set_id("label");
+    m_label_node->set_size({fit(), fit()});
     m_label_node->set_visible(false);
 
     m_input_node = &add<Container>("input", StackDirection::Horizontal, "TextInputField");
@@ -137,7 +137,6 @@ Rect TextInputWidget::hit_rect(Rect) const {
 TextInputWidget& TextInputWidget::set_label(std::string label) {
     m_label_node->set_text(std::move(label));
     m_label_node->set_visible(!m_label_node->empty());
-    update_label_layout();
     return *this;
 }
 
@@ -171,8 +170,6 @@ void TextInputWidget::update_label_layout() {
     const bool above = m_label_placement == LabelPlacement::Above;
     set_direction(above ? StackDirection::Vertical : StackDirection::Horizontal);
     set_spacing(above ? m_label_spacing.y : m_label_spacing.x);
-    m_label_node->set_size({fit(), fit()});
-    m_input_node->set_size({grow(), fit()});
 }
 
 void TextInputWidget::on_draw_end() {

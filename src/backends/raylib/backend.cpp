@@ -279,7 +279,7 @@ std::optional<double> RaylibBackend::render_profiled(ImDrawData* draw_data, bool
     ImGui_ImplOpenGL3_RenderDrawData(draw_data);
     m_gpu_timer.end();
     apply_mouse_cursor();
-    // EndDrawing swaps buffers and polls the next input state, so it must run once per application frame.
+    // enddrawing swaps buffers and polls input for the next frame. call it once per application frame.
     EndDrawing();
     return gpu_ms;
 }
@@ -313,9 +313,9 @@ void RaylibBackend::process_events(Surface& surface) {
 
     bool native_input_blocked = false;
     bool pointer_move_blocked = false;
+    // redispatch pointer motion when coordinates change or debugger inspection needs a new target.
     if (surface.debugger_blocks_pointer_input() || !m_has_pointer_position || mouse_position.x != m_pointer_position.x ||
         mouse_position.y != m_pointer_position.y) {
-        // update the pointer state when it moves or debugger ownership may have changed.
         dispatch_pointer(surface, EventType::PointerMove, input_position, PointerButton::None, pointer_move_blocked);
         native_input_blocked |= pointer_move_blocked;
         m_pointer_position = mouse_position;
@@ -353,13 +353,13 @@ void RaylibBackend::process_events(Surface& surface) {
 
     const Vector2 wheel = GetMouseWheelMoveV();
     if (wheel.x != 0.0F || wheel.y != 0.0F) {
+        const ImVec2 scroll = {wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE};
         UiEvent event = UiEvent::make(EventType::Scroll);
         event.position = mouse_position;
-        event.scroll = {wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE};
+        event.scroll = scroll;
         surface.dispatch(event);
         native_input_blocked |= event.native_input_blocked;
-        if (!native_input_blocked)
-            io.AddMouseWheelEvent(wheel.x * constants::SCROLL_WHEEL_SCALE, wheel.y * constants::SCROLL_WHEEL_SCALE);
+        if (!native_input_blocked) io.AddMouseWheelEvent(scroll.x, scroll.y);
     }
 
     io.AddKeyEvent(ImGuiMod_Ctrl, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));

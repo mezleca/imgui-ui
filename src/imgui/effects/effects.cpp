@@ -64,8 +64,8 @@ bool EffectRegistry::initialize() {
     }
 
     for (Entry& entry : m_entries) {
+        // release the effects that initialized before this failure in reverse registration order.
         if (entry.definition.initialize != nullptr && !entry.definition.initialize(entry.definition.user_data)) {
-            // release the effects that initialized before this failure in reverse registration order.
             shutdown();
             return false;
         }

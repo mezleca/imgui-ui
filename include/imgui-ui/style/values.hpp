@@ -38,13 +38,11 @@ namespace ui {
                transition_values_equal(left.color, right.color);
     }
 
-    /// captures eased progress and whether ticking advanced or retargeted the property.
     struct TransitionStep {
         float progress = 1.0F;
         bool changed = false;
     };
 
-    /// stores one style value together with an optional transition toward a target value.
     template <typename T>
     struct Value {
         Value() = default;
@@ -88,6 +86,8 @@ namespace ui {
 
     protected:
         TransitionStep transition_progress(const Value& target, float dt) {
+            // capture the displayed value when the target or transition changes. advance elapsed time before
+            // interpolating so retargeting continues from that captured value.
             const float target_duration = std::max(0.0F, target.duration);
             const EasingFunction target_easing = target.easing != nullptr ? target.easing : easing::linear;
             const bool target_changed = !m_has_target || !transition_values_equal(m_target, target.value) ||

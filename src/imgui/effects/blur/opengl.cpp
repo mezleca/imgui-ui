@@ -16,7 +16,6 @@ using namespace ui;
 struct BlurTextures {
     GLuint source = 0;
     GLuint ping = 0;
-    GLuint pong = 0;
     GLuint result = 0;
     GLuint framebuffer = 0;
     GLuint vertex_array = 0;
@@ -154,7 +153,6 @@ static bool ensure_textures(int width, int height) {
 
     create_texture(textures->source, width, height);
     create_texture(textures->ping, width, height);
-    create_texture(textures->pong, width, height);
 
     if (textures->framebuffer == 0) glGenFramebuffers(1, &textures->framebuffer);
     if (textures->vertex_array == 0) glGenVertexArrays(1, &textures->vertex_array);
@@ -355,10 +353,6 @@ static bool initialize_blur_effect(void*) {
     return GLAD_GL_VERSION_3_3 && select_textures();
 }
 
-static void begin_blur_effect(void*) {
-    select_textures();
-}
-
 static void shutdown_blur_effect(void*) {
     if (!select_textures()) {
         return;
@@ -369,7 +363,6 @@ static void shutdown_blur_effect(void*) {
     if (textures->framebuffer != 0) glDeleteFramebuffers(1, &textures->framebuffer);
     if (textures->source != 0) glDeleteTextures(1, &textures->source);
     if (textures->ping != 0) glDeleteTextures(1, &textures->ping);
-    if (textures->pong != 0) glDeleteTextures(1, &textures->pong);
 
     texture_sets.erase(ImGui::GetCurrentContext());
     textures = nullptr;
@@ -377,6 +370,6 @@ static void shutdown_blur_effect(void*) {
 
 void ui::register_opengl_blur(EffectRegistry& effects) {
     effects.register_effect<BlurRegion>(
-        EffectSlot::Blur, {render_blur, initialize_blur_effect, begin_blur_effect, shutdown_blur_effect, nullptr}
+        EffectSlot::Blur, {render_blur, initialize_blur_effect, nullptr, shutdown_blur_effect, nullptr}
     );
 }

@@ -35,13 +35,11 @@ namespace ui {
         Error,
     };
 
-    /// carries the selected paths or diagnostic text returned by a file dialog request.
     struct FileDialogResult {
         FileDialogStatus status = FileDialogStatus::Unavailable;
         std::vector<std::filesystem::path> paths;
         std::string error;
 
-        /// returns true when the backend reports that the dialog completed successfully.
         [[nodiscard]] bool accepted() const {
             return status == FileDialogStatus::Accepted;
         }

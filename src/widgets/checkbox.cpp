@@ -73,7 +73,7 @@ void CheckboxWidget::click_event(UiEvent& event) {
     m_frame_node->animate()
         .to(StyleAnimationProperty::BackgroundColor, m_frame_node->style(StyleType::ACTIVE).background_color().value)
         .then(0.04F)
-        .release_all({0.12F, easing::out_quad});
+        .release(StyleAnimationProperty::BackgroundColor, {0.12F, easing::out_quad});
 }
 
 CheckboxWidget& CheckboxWidget::set_type(CheckboxType type) {

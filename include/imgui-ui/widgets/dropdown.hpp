@@ -31,19 +31,16 @@ namespace ui {
         void open();
         void close();
 
-        /// returns true while the popup accepts option input.
         bool is_open() const {
-            return m_state.is_open();
+            return m_visibility == Visibility::Open;
         }
 
         TextWidget& label() {
             return *m_label_node;
         }
 
-        /// returns the custom-painted trigger node.
         Widget& trigger() const;
 
-        /// returns the popup body node used for layout and inspection.
         Widget& body() const;
 
     protected:
@@ -54,49 +51,26 @@ namespace ui {
         class Option;
         class Trigger;
 
-        struct State {
-            bool is_open() const {
-                return visibility == Visibility::Open;
-            }
-
-            bool is_closing() const {
-                return visibility == Visibility::Closing;
-            }
-
-            bool is_closed() const {
-                return visibility == Visibility::Closed;
-            }
-
-            const DropdownOption* find_option(std::string_view option_value) const;
-            const DropdownOption* selected_option() const;
-
-            void open();
-
-            void close();
-
-            void finish_close();
-
-            enum class Visibility : uint8_t {
-                Closed,
-                Open,
-                Closing,
-            };
-
-            std::string* value = nullptr;
-            std::vector<DropdownOption> options;
-            std::string placeholder = "select an option";
-            DropdownWidget* owner = nullptr;
-            Body* body = nullptr;
-            Trigger* trigger = nullptr;
-            Visibility visibility = Visibility::Closed;
-            ImVec2 arrow_size;
-            float popup_gap = 0.0F;
-            float transition_duration = 0.0F;
+        enum class Visibility : uint8_t {
+            Closed,
+            Open,
+            Closing,
         };
 
+        const DropdownOption* find_option(std::string_view option_value) const;
+        const DropdownOption* selected_option() const;
+        void finish_close();
         void event(UiEvent& event) override;
 
+        std::string& m_value;
+        std::vector<DropdownOption> m_options;
+        std::string m_placeholder = "select an option";
         TextWidget* m_label_node = nullptr;
-        State m_state;
+        Body* m_body = nullptr;
+        Trigger* m_trigger = nullptr;
+        Visibility m_visibility = Visibility::Closed;
+        ImVec2 m_arrow_size;
+        float m_popup_gap = 0.0F;
+        float m_transition_duration = 0.0F;
     };
 } // namespace ui

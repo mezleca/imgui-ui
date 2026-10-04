@@ -258,10 +258,10 @@ public:
             );
             texture.revision = m_revision;
         } else if (texture.revision != m_revision) {
+            // upload only the dirty area for consecutive revisions. skipped revisions require the complete decoded bitmap.
             if (texture.revision + 1 == m_revision && has_area(m_dirty)) {
                 update_gif_texture(texture.id, *m_bitmap, static_cast<int>(m_size.x), m_dirty);
             } else {
-                // a context that skipped frames cannot recover from only the latest changed area.
                 update_gif_texture(texture.id, *m_bitmap, static_cast<int>(m_size.x), full_gif_area(m_size));
             }
             texture.revision = m_revision;
@@ -358,8 +358,7 @@ static bool is_gif(std::string_view content) {
 }
 
 std::unique_ptr<Texture> OpenGLTextureLoader::load(const std::filesystem::path& location, std::string) {
-    // both loaders build cpu data. drawing requests gpu data lazily, then svg rasterizes per size while gif frames upload
-    // one context-owned object on first use.
+    // decode the source here without allocating gpu objects. get uploads per context and rasterizes svg at the requested size.
     if (location.extension() == ".gif") {
         return std::make_unique<OpenGLGifTexture>(load_binary_file(location));
     }

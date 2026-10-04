@@ -16,7 +16,6 @@ namespace ui {
         Instant,
     };
 
-    /// tracks one container's scroll position and pending seek across frames.
     class Scroll {
     public:
         /// sets the behavior used by wheel input and seeks that request Default. starts as Smooth, and passing Default
@@ -26,11 +25,10 @@ namespace ui {
         void seek_to(ImVec2 position, ScrollBehavior behavior = ScrollBehavior::Default);
         /// queues an offset from the pending destination, or from the last drawn position when no seek is pending.
         void seek_by(ImVec2 distance, ScrollBehavior behavior = ScrollBehavior::Default);
-        /// returns the offset observed during the most recent container draw.
+        /// position and limit reflect the last draw, not a newly queued seek.
         ImVec2 position() const {
             return m_position;
         }
-        /// returns the scroll limit observed during the most recent container draw.
         ImVec2 max() const {
             return m_max;
         }
@@ -39,9 +37,6 @@ namespace ui {
         friend class Container;
 
         void set_axes(bool vertical, bool horizontal);
-        bool vertical() const {
-            return m_vertical;
-        }
         bool horizontal() const {
             return m_horizontal;
         }

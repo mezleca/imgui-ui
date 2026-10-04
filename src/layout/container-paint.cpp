@@ -40,8 +40,8 @@ bool Container::paint() {
     ImGuiChildFlags child_flags = ImGuiChildFlags_AlwaysUseWindowPadding;
     ImGuiWindowFlags window_flags = child_window_flags() | ImGuiWindowFlags_NoBackground;
     const bool scrollable = m_scroll.enabled() && current_style.overflow() != Overflow::Clip;
+    // keep native scrollbar dragging enabled. routed wheel events enqueue the container's configured scroll behavior.
     if (scrollable) {
-        // keep native scrollbar dragging, but route wheel movement through the smooth scroll request.
         window_flags &= ~ImGuiWindowFlags_NoScrollbar;
     }
     if (scrollable && m_scroll.horizontal()) {
@@ -70,9 +70,9 @@ bool Container::paint() {
     const ImVec4 parent_clip = current_clip(*ImGui::GetWindowDrawList());
     const ImVec4 parent_effect_clip = current_effect_clip(parent_clip);
     ImGui::BeginChild(child_id, child_size, child_flags, window_flags);
+    // register the visible child area for wheel hit testing, then advance its pending scroll offset.
+    // nested children register later and take precedence over this area.
     if (scrollable) {
-        // register the visible child area for wheel hit testing, then queue its next scroll offset.
-        // nested children register later and take precedence over this area.
         const ImDrawList* draw_list = ImGui::GetWindowDrawList();
         register_scroll_target({draw_list->GetClipRectMin(), draw_list->GetClipRectMax()});
         m_scroll.advance(*ImGui::GetCurrentWindow());
@@ -85,7 +85,7 @@ bool Container::paint() {
     ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
     EffectRegistry* effects = effect_registry();
 
-    // effects are the only draws that need the ancestor effect clip.
+    // blur and shadow read the ancestor effect clip before the child content clip is narrowed.
     if (effects != nullptr && (current_style.blur() > 0 || current_style.box_shadow().color.max_alpha() > 0.0F)) {
         const ImRect blur_rect = ImGui::GetCurrentWindow()->InnerRect;
         ImGui::PushClipRect({parent_effect_clip.x, parent_effect_clip.y}, {parent_effect_clip.z, parent_effect_clip.w}, false);
@@ -101,7 +101,7 @@ bool Container::paint() {
         ImGui::PopClipRect();
     }
 
-    // draw the frame first so descendant surfaces cannot cover its border.
+    // paint the frame with the parent clip before narrowing the clip for descendants.
     ImGui::PushClipRect({parent_clip.x, parent_clip.y}, {parent_clip.z, parent_clip.w}, true);
     draw_frame_surface(*child_draw_list, resolved_child_rect, current_style, effects);
     ImGui::PopClipRect();
@@ -112,8 +112,8 @@ bool Container::paint() {
                                                       : intersect_clip(parent_effect_clip, resolved_child_rect)
     );
 
-    // child window clipping does not protect the border from descendant drawing.
     m_content_clip_pushed = !scrollable || current_style.border() != BORDER_NONE;
+    // clip descendants inside the border. borderless visible overflow reuses the parent clip.
     if (m_content_clip_pushed) {
         if (current_style.overflow() == Overflow::Visible && current_style.border() == BORDER_NONE) {
             ImGui::PushClipRect({parent_clip.x, parent_clip.y}, {parent_clip.z, parent_clip.w}, false);

@@ -90,7 +90,6 @@ void ResizableContainer::mouse_press_event(UiEvent& event) {
 void ResizableContainer::mouse_move_event(UiEvent& event) {
     if (!resizing()) return;
 
-    // clamp the dragged size to the parent content bounds and the minimum widget size.
     const ImVec2 child_min = layout().visual_rect().min;
     const ImVec2 max_size = {
         std::max(MIN_CHILD_SIZE, m_parent_content_max.x - child_min.x),

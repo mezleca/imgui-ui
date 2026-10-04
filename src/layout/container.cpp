@@ -57,11 +57,10 @@ Container& Container::set_scrollable(bool vertical, bool horizontal) {
 
 void Container::dispatch_event(UiEvent& event) {
     Widget::dispatch_event(event);
-    // widget callbacks run first so they can cancel the wheel.
+    // let widget callbacks prevent wheel scrolling first. block imgui's wheel path even at the limit so only
+    // framework ancestors can scroll.
     if (!removal_pending() && !event.propagation_stopped && event.type == EventType::Scroll && !event.default_prevented &&
         scrollable() && computed_style().overflow() != Overflow::Clip) {
-        // keep imgui's native wheel path from writing a second scroll target for this child.
-        // a wheel at this child's limit still bubbles to a scrollable parent.
         event.block_native_input();
         if (m_scroll.wheel(event.scroll)) event.stop_propagation();
     }
@@ -92,7 +91,6 @@ Container& Container::set_content_alignment(ImVec2 alignment) {
     }
 
     m_content_alignment = resolved;
-    invalidate_measure();
     return *this;
 }
 
@@ -123,7 +121,6 @@ void Container::on_measure() {
     ImVec2 content_size{};
     size_t flow_count = 0;
 
-    // accumulate the preferred size and margins of visible children along the flow axis.
     for (const auto& child : children()) {
         if (!is_flow_child(*child)) {
             continue;
@@ -166,7 +163,8 @@ void Container::arrange_children(ImVec2 content_size) {
     const bool aligns_content = alignment.x > 0.0F || alignment.y > 0.0F;
     float flow_cross_extent = 0.0F;
 
-    // total fixed main-axis extents and grow weights before dividing the remaining space.
+    // reserve fixed extents, margins and gaps before splitting the remainder by grow weight.
+    // the second pass assigns sizes and positions.
     for (const auto& child : children()) {
         if (!is_flow_child(*child)) {
             continue;
@@ -204,7 +202,6 @@ void Container::arrange_children(ImVec2 content_size) {
         cursor = {(content_size.x - flow_size.x) * alignment.x, (content_size.y - flow_size.y) * alignment.y};
     }
 
-    // assign each child's weighted size and aligned offset, then advance the flow cursor.
     for (const auto& child : children()) {
         if (!is_flow_child(*child)) {
             continue;

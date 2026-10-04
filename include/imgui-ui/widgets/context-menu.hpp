@@ -36,10 +36,9 @@ namespace ui {
 
         ContextMenuWidget& set_items(ContextMenuItems items);
         ContextMenuWidget& set_submenu_icon(Texture* icon);
-        /// sets how long an open menu waits after the pointer leaves before closing.
+        /// sets the delay counted from menu activation before an outside pointer position can close it.
         ContextMenuWidget& set_hover_close_delay(float seconds);
 
-        /// opens the root menu at the current imgui pointer position.
         void open();
         /// opens the root menu near screen_position, clamped to the viewport work area.
         void open_at(ImVec2 screen_position);

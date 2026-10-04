@@ -42,7 +42,6 @@ namespace ui {
     class Animator;
     struct AnimatorState;
 
-    /// defines when value changes and callbacks run on one Animator timeline.
     class AnimationSequence final {
     public:
         /// writes interpolated values to a float, ImVec2, or Color reference that must remain alive until this track ends.
@@ -76,7 +75,6 @@ namespace ui {
         float m_end = 0.0F;
     };
 
-    /// owns one timeline of value tracks and callbacks advanced by update(dt).
     class Animator final {
     public:
         Animator();
@@ -88,7 +86,6 @@ namespace ui {
 
         /// opens a sequence at the current timeline time. tracks added before then() can run in parallel.
         AnimationSequence animate();
-        /// advances tracks and invokes callbacks whose scheduled time has arrived.
         void update(float dt);
         void cancel();
 

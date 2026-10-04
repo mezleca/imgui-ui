@@ -106,6 +106,7 @@ static void render_demo_chromatic(void* data, const ImDrawList*, const ImDrawCmd
 
 static DemoChromaticState demo_chromatic_state;
 
+// demo subclasses read this variant when the single demo surface reapplies its theme.
 static DemoThemeVariant s_demo_theme_variant = DemoThemeVariant::Default;
 
 static DemoThemeVariant demo_theme_variant(std::string_view variant) {
@@ -662,7 +663,12 @@ void DemoScreen::setup(std::string backend) {
         .set_label_placement(LabelPlacement::Inline)
         .set_icon(ui.runtime().textures().find("demo-file-icon"));
     profile.add<DemoCheckbox>(m_enabled, "enabled").set_size({px(360.0F), px(32.0F)});
-    profile.add<DemoCheckbox>(m_radio_selected, "radio").set_type(CheckboxType::Radio).set_size({px(360.0F), px(32.0F)});
+
+    // select the shape before attachment so the demo theme overrides its rounding last.
+    auto radio = std::make_unique<DemoCheckbox>(m_radio_selected, "radio");
+    radio->set_type(CheckboxType::Radio);
+    profile.add(std::move(radio)).set_size({px(360.0F), px(32.0F)});
+
     profile.add<DemoColorPicker>(m_color, "color", "color-picker");
 
     m_test_images = &profile.add<Container>("demo-images", StackDirection::Horizontal);
@@ -827,7 +833,6 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
     m_dynamic_status = &dynamic_list.add<TextWidget>("dynamic nodes: 0");
     dynamic_list.add<TextWidget>("click a list item to remove it");
 
-    // keep scrolling and resizing on the container so row nodes only describe content.
     m_dynamic_nodes = &dynamic_list.add<DemoResizableNodes>("dynamic-nodes");
     m_dynamic_nodes->set_size({px(240.0F), grow()});
     m_dynamic_nodes->set_resize(ResizeAxes::Both).set_spacing(8.0F).set_scrollable(true);
@@ -838,9 +843,8 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
 
         const int item_id = ++m_next_dynamic_id;
         auto& item = m_dynamic_nodes->add<ButtonWidget>(std::format("list item {}", item_id), LayoutSize{grow(), px(36.0F)});
-        ButtonWidget* item_ptr = &item;
-        item.on_click([this, item_ptr] {
-            if (m_dynamic_nodes->remove(*item_ptr)) {
+        item.on_click([this, &item] {
+            if (m_dynamic_nodes->remove(item)) {
                 --m_dynamic_count;
                 m_dynamic_status->set_text(std::format("dynamic nodes: {}", m_dynamic_count));
             }
@@ -950,7 +954,6 @@ void DemoScreen::on_update(float dt) {
 }
 
 static void apply_border_style(Node& node, BorderStyle style) {
-    // walk descendants because each node stores its own style slots.
     if (auto* styled_node = dynamic_cast<StyledNode*>(&node)) {
         styled_node->configure_all_styles([style](Style& current_style) { current_style.border_style(style); });
     }
@@ -963,10 +966,9 @@ static void apply_border_style(Node& node, BorderStyle style) {
 void setup_demo(Surface& surface, std::string backend) {
     Runtime& runtime = surface.runtime();
 #ifdef IMGUI_UI_ASSETS_DIR
-    // register paths before widgets request fonts. sizes load lazily per imgui context.
+    // register fonts before widgets request them. sizes load lazily per imgui context.
     const std::filesystem::path assets = std::filesystem::path{IMGUI_UI_ASSETS_DIR};
     runtime.fonts().add("Inter Regular", assets / "fonts/Inter.ttf");
-    runtime.fonts().add("Inter Bold", assets / "fonts/Inter.ttf");
     surface.set_primary_font(runtime.fonts().find("Inter Regular"));
 
     runtime.textures().add("demo-file-icon", assets / "icons/demo.svg");
@@ -1002,7 +1004,7 @@ void setup_demo(Surface& surface, std::string backend) {
 
     context_button.on_click([&context_menu] { context_menu.open(); });
 
-    // block outside the panel so background controls cannot receive its input.
+    // the layer blocks underlying targets while keeping this panel's descendants eligible.
     auto& input_blocker = surface.root().add<LayerContainer>("##input-blocker");
     input_blocker.set_visible(false);
 
@@ -1012,19 +1014,16 @@ void setup_demo(Surface& surface, std::string backend) {
     auto& block_button = demo.add<ButtonWidget>("block pointer input", LayoutSize{px(220.0F), px(40.0F)});
     auto& unblock_button = blocker_panel.add<ButtonWidget>("disable pointer block", LayoutSize{px(284.0F), px(40.0F)});
 
-    LayerContainer* blocker_ptr = &input_blocker;
-    ButtonWidget* block_button_ptr = &block_button;
-    block_button.on_click([blocker_ptr, block_button_ptr] {
-        blocker_ptr->set_visible(true);
-        // scope the blocker to the layer so its panel still receives clicks.
-        blocker_ptr->set_input_mode(InputMode::Blocker);
-        block_button_ptr->set_text("pointer input blocked");
+    block_button.on_click([&input_blocker, &block_button] {
+        input_blocker.set_visible(true);
+        input_blocker.set_input_mode(InputMode::Blocker);
+        block_button.set_text("pointer input blocked");
     });
 
-    unblock_button.on_click([blocker_ptr, block_button_ptr] {
-        blocker_ptr->set_input_mode(InputMode::None);
-        blocker_ptr->set_visible(false);
-        block_button_ptr->set_text("block pointer input");
+    unblock_button.on_click([&input_blocker, &block_button] {
+        input_blocker.set_input_mode(InputMode::None);
+        input_blocker.set_visible(false);
+        block_button.set_text("block pointer input");
     });
 
     // sample the app behind this layer while routing modal input to the panel.
@@ -1041,7 +1040,7 @@ void setup_demo(Surface& surface, std::string backend) {
         .in_flow = false,
     });
     modal.set_spacing(10.0F);
-    // keep backdrop dismissal on the layer. the panel handles its own controls.
+    // close both the panel and backdrop on an outside left press or click, or escape. stop delivery to underlying targets.
     modal_layer.on_event([&modal_layer, &modal](UiEvent& event) {
         const bool clicked_outside = (event.type == EventType::Click || event.type == EventType::PointerDown) &&
                                      event.button == PointerButton::Left &&
@@ -1081,7 +1080,4 @@ void setup_demo(Surface& surface, std::string backend) {
         modal.set_visible(true);
         surface.input_router().set_focus(&modal_layer);
     });
-
-    // refresh defaults after attaching text nodes whose constructors do not receive runtime.
-    surface.set_theme(surface.theme());
 }

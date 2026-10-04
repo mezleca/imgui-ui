@@ -8,9 +8,8 @@ namespace ui {
 
     class RaylibBackend final : public Backend {
     public:
-        /// uses the application's initialized raylib window. Surface::begin_frame and Surface::end_frame own the raylib drawing
-        /// cycle, so the application must not wrap them in BeginDrawing and EndDrawing. close the window after Surface
-        /// destruction.
+        /// begin_frame starts raylib drawing and render ends it. do not wrap the surface frame in another drawing cycle.
+        /// close the window after surface destruction.
         RaylibBackend() = default;
 
         bool initialize() override;

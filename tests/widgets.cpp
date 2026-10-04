@@ -24,7 +24,9 @@
 #include <algorithm>
 #include <cfloat>
 #include <limits>
+#include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 using namespace ui;
@@ -565,6 +567,159 @@ TEST_CASE("paint-only animation overrides do not invalidate measurement", "[Visu
     state.update(0.1F);
     REQUIRE(invalidations == 1);
     REQUIRE(state.computed_style().padding().x == Catch::Approx(5.0F));
+}
+
+TEST_CASE("paint-only style setters do not invalidate measurement", "[VisualState][style][cleanup]") {
+    VisualState state;
+    int invalidations = 0;
+    state.set_change_callback(&invalidations, [](void* owner, bool) { ++*static_cast<int*>(owner); });
+    state.style().color(rgb(1.0F, 0.0F, 0.0F));
+    state.style().background_color(rgb(0.0F, 1.0F, 0.0F));
+    state.style().border_color(rgb(0.0F, 0.0F, 1.0F));
+    state.style().rotation(20.0F).scale(1.2F).alpha(0.5F).cursor(ImGuiMouseCursor_Hand);
+    CHECK(invalidations == 0);
+    state.update(0.0F);
+    CHECK(state.computed_style().rotation() == Catch::Approx(20.0F));
+    CHECK(state.computed_style().alpha() == Catch::Approx(0.5F));
+
+    state.style().padding({5.0F, 3.0F});
+    CHECK(invalidations == 1);
+    state.style().margin({2.0F, 1.0F});
+    CHECK(invalidations == 2);
+    state.style().line_height(2.0F);
+    CHECK(invalidations == 3);
+    state.style().border(BORDER_ALL).border_thickness(2.0F);
+    CHECK(invalidations > 3);
+}
+
+TEST_CASE("click feedback preserves unrelated overrides without remeasurement", "[animation][cleanup]") {
+    class MeasuredButton final : public ButtonWidget {
+    public:
+        MeasuredButton() : ButtonWidget("click") {}
+
+        using ButtonWidget::dispatch_event;
+
+        int measurements = 0;
+
+    private:
+        void on_measure() override {
+            ++measurements;
+            ButtonWidget::on_measure();
+        }
+    };
+
+    ui_test::ImGuiContext context({320.0F, 180.0F});
+    MeasuredButton button;
+    button.animate().to(StyleAnimationProperty::PaddingX, 20.0F);
+    button.update(0.0F);
+    ui_test::draw_node(button, "feedback-measure-test");
+    const int measurements = button.measurements;
+    int clicks = 0;
+    button.on_click([&] {
+        ++clicks;
+        CHECK(button.computed_style().padding().x == Catch::Approx(20.0F));
+    });
+    UiEvent click = UiEvent::make(EventType::Click);
+    click.button = PointerButton::Left;
+    button.dispatch_event(click);
+    CHECK(clicks == 1);
+    for (float dt : {0.0F, 0.05F, 0.06F, 0.1F}) {
+        button.update(dt);
+        ui_test::draw_node(button, "feedback-measure-test");
+    }
+    CHECK(button.computed_style().padding().x == Catch::Approx(20.0F));
+    CHECK(button.measurements == measurements);
+    CHECK(button.computed_style().background_color().value == button.style().background_color().value);
+}
+
+TEST_CASE("checkbox feedback releases only its background override", "[CheckboxWidget][cleanup]") {
+    class TestCheckbox final : public CheckboxWidget {
+    public:
+        explicit TestCheckbox(bool& value) : CheckboxWidget(value, "check") {}
+
+        using CheckboxWidget::dispatch_event;
+    };
+
+    bool value = false;
+    TestCheckbox checkbox(value);
+    checkbox.frame().animate().to(StyleAnimationProperty::PaddingX, 20.0F);
+    checkbox.update(0.0F);
+    UiEvent click = UiEvent::make(EventType::Click);
+    click.button = PointerButton::Left;
+    checkbox.dispatch_event(click);
+    CHECK(value);
+    for (float dt : {0.0F, 0.05F, 0.12F})
+        checkbox.update(dt);
+    CHECK(checkbox.frame().computed_style().padding().x == Catch::Approx(20.0F));
+    CHECK(checkbox.frame().computed_style().background_color().value == checkbox.frame().style().background_color().value);
+}
+
+TEST_CASE("styled nodes inherit ownership restrictions and destroy paint slots through the base", "[StyledNode][cleanup]") {
+    STATIC_REQUIRE_FALSE(std::is_copy_constructible_v<StyledNode>);
+    STATIC_REQUIRE_FALSE(std::is_copy_assignable_v<StyledNode>);
+    STATIC_REQUIRE_FALSE(std::is_move_constructible_v<StyledNode>);
+    STATIC_REQUIRE_FALSE(std::is_move_assignable_v<StyledNode>);
+    auto lifetime = std::make_shared<int>(0);
+    std::weak_ptr<int> observer = lifetime;
+    auto styled = std::make_unique<StyledNode>();
+    styled->before().set_draw_callback([lifetime](const PaintContext&) {});
+    styled->after().set_draw_callback([lifetime](const PaintContext&) {});
+    std::unique_ptr<Node> node = std::move(styled);
+    lifetime.reset();
+    CHECK_FALSE(observer.expired());
+    node.reset();
+    CHECK(observer.expired());
+}
+
+TEST_CASE("hidden and pending styled nodes skip imgui style work", "[StyledNode][cleanup]") {
+    Node root;
+    auto& hidden = root.add<StyledNode>();
+    hidden.set_visible(false);
+    auto& pending = root.add<StyledNode>();
+    root.remove(pending);
+    ::ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGui::SetCurrentContext(nullptr);
+    hidden.draw();
+    pending.draw();
+    ImGui::SetCurrentContext(previous);
+    CHECK_FALSE(hidden.visible());
+    CHECK(pending.removal_pending());
+}
+
+TEST_CASE("text input label changes preserve child sizing", "[TextInputWidget][cleanup]") {
+    std::string value;
+    TextInputWidget input(value);
+    Node* label = input.find("label");
+    Node* field = input.find("input");
+    REQUIRE(label != nullptr);
+    REQUIRE(field != nullptr);
+    CHECK(label->layout().size_spec().width.mode == LayoutSizeMode::Fit);
+    CHECK(field->layout().size_spec().width.mode == LayoutSizeMode::Grow);
+    label->set_size({px(70.0F), fit()});
+    input.set_label("label").set_label_placement(LabelPlacement::Above);
+    CHECK(label->layout().size_spec().width.mode == LayoutSizeMode::Fixed);
+    CHECK(label->layout().size_spec().width.value == Catch::Approx(70.0F));
+    input.set_label("");
+    CHECK_FALSE(label->visible());
+}
+
+TEST_CASE("variable transitions remain reported for absent and differently typed targets", "[Style][variables][cleanup]") {
+    Style style;
+    Style target;
+    style.variables().set("value", FloatValue{0.0F});
+    target.variables().set("value", FloatValue{10.0F, {1.0F, easing::linear}});
+    CHECK(Style::lerp(style, target, 0.25F));
+    CHECK(style.variables().get<FloatValue>("value")->value == Catch::Approx(2.5F));
+
+    Style absent;
+    CHECK(Style::lerp(style, absent, 0.25F));
+    target.variables().set("value", Vec2Value{{1.0F, 2.0F}});
+    CHECK(Style::lerp(style, target, 0.25F));
+    target.variables().set("value", FloatValue{20.0F, {1.0F, easing::linear}});
+    CHECK(Style::lerp(style, target, 0.5F));
+    CHECK(style.variables().get<FloatValue>("value")->value == Catch::Approx(11.25F));
+    CHECK_FALSE(Style::lerp(style, target, 0.5F));
+    CHECK(style.variables().get<FloatValue>("value")->value == Catch::Approx(20.0F));
 }
 
 TEST_CASE("style configuration stays separate from displayed transitions", "[VisualState][style]") {
@@ -1109,4 +1264,165 @@ TEST_CASE("virtual rows expand and collapse independently", "[layout][virtual-la
     InputRouter::dispatch(*first, click);
     REQUIRE(list.extra_offset(0) == 0.0F);
     REQUIRE(list.extra_offset(1) == 64.0F);
+}
+
+TEST_CASE("dropdown option replacements retain only the current live rows", "[DropdownWidget][options][regression]") {
+    Runtime runtime;
+    ui::Surface surface = ui_test::make_surface(runtime);
+    std::string value = "original";
+    int changes = 0;
+    auto& dropdown = surface.root().add<DropdownWidget>(
+        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "replacement"
+    );
+    dropdown.set_size({px(180.0F), px(32.0F)});
+    dropdown.on_change([&changes] { ++changes; });
+    const uint64_t first_identity = dropdown.body().children().front()->identity();
+    std::vector<DropdownOption> options{{"new first", "new-first"}, {"new second", "new-second"}};
+
+    SECTION("same count retains row identities") {
+        dropdown.set_options(options);
+        REQUIRE(dropdown.body().children().front()->identity() == first_identity);
+    }
+    SECTION("different count replaces rows without immediate destruction") {
+        options.push_back({"third", "third"});
+        dropdown.set_options(options);
+        REQUIRE(dropdown.body().children().front()->removal_pending());
+    }
+    SECTION("consecutive growth does not count pending rows") {
+        dropdown.set_options({{"a", "a"}, {"b", "b"}, {"c", "c"}});
+        options.insert(options.end(), {{"third", "third"}, {"fourth", "fourth"}, {"fifth", "fifth"}});
+        dropdown.set_options(options);
+    }
+    SECTION("consecutive shrink and growth does not reuse stale indices") {
+        dropdown.set_options({{"temporary", "temporary"}});
+        options.push_back({"third", "third"});
+        dropdown.set_options(options);
+    }
+    SECTION("same-count replacement after a rebuild retains live identities") {
+        options.push_back({"third", "third"});
+        dropdown.set_options(options);
+        const uint64_t live_identity = dropdown.body().children().back()->identity();
+        options.back() = {"changed third", "changed-third"};
+        dropdown.set_options(options);
+        REQUIRE(dropdown.body().children().back()->identity() == live_identity);
+    }
+    SECTION("empty replacement can be repopulated before the next frame") {
+        dropdown.set_options({});
+        dropdown.set_options(options);
+    }
+
+    std::vector<Node*> rows;
+    for (const auto& child : dropdown.body().children()) {
+        if (!child->removal_pending()) rows.push_back(child.get());
+    }
+    REQUIRE(rows.size() == options.size());
+    REQUIRE(value == "original");
+    REQUIRE(changes == 0);
+
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 300.0F});
+    ui_test::draw_surface(surface);
+    dropdown.open();
+    ui_test::draw_surface(surface, 0.2F);
+    REQUIRE(dropdown.is_open());
+    REQUIRE(dropdown.body().children().size() == options.size());
+    const ImVec2 position = ui_test::center(rows.back()->layout().visual_rect());
+    REQUIRE(surface.input_router().node_at(position) == rows.back());
+    auto down = ui_test::pointer_event(EventType::PointerDown, position);
+    auto up = ui_test::pointer_event(EventType::PointerUp, position);
+    surface.dispatch(down);
+    surface.dispatch(up);
+    REQUIRE(value == options.back().value);
+    REQUIRE(changes == 1);
+    REQUIRE_FALSE(dropdown.is_open());
+}
+
+TEST_CASE("dropdown closing body blocks underlying input without selecting rows", "[DropdownWidget][fade][regression]") {
+    Runtime runtime;
+    ui::Surface surface = ui_test::make_surface(runtime);
+    std::string value = "first";
+    int changes = 0;
+    int underlying_clicks = 0;
+    auto& underlying = surface.root().add<ButtonWidget>("underlying");
+    underlying.on_click([&underlying_clicks] { ++underlying_clicks; });
+    auto& dropdown = surface.root().add<DropdownWidget>(
+        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "fading"
+    );
+    dropdown.set_size({px(180.0F), px(32.0F)});
+    dropdown.on_change([&changes] { ++changes; });
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 300.0F});
+    ui_test::draw_surface(surface);
+    dropdown.open();
+    ui_test::draw_surface(surface, 0.2F);
+    REQUIRE(dropdown.is_open());
+    const ImVec2 position = ui_test::center(dropdown.body().children().back()->layout().visual_rect());
+
+    dropdown.close();
+    dropdown.open();
+    REQUIRE_FALSE(dropdown.is_open());
+    ui_test::draw_surface(surface, 0.01F);
+    REQUIRE(dropdown.body().visually_visible());
+    REQUIRE(dropdown.body().enabled());
+    REQUIRE_FALSE(dropdown.body().children().back()->accepts_input());
+    surface.input_router().register_target(underlying, dropdown.body().layout().visual_rect());
+    REQUIRE(surface.input_router().node_at(position) == &dropdown.body());
+    auto down = ui_test::pointer_event(EventType::PointerDown, position);
+    auto up = ui_test::pointer_event(EventType::PointerUp, position);
+    surface.dispatch(down);
+    surface.dispatch(up);
+    REQUIRE(value == "first");
+    REQUIRE(changes == 0);
+    REQUIRE(underlying_clicks == 0);
+
+    ui_test::draw_surface(surface, 0.2F);
+    ui_test::draw_surface(surface, 0.0F);
+    REQUIRE_FALSE(dropdown.body().enabled());
+    REQUIRE_FALSE(dropdown.body().visually_visible());
+    dropdown.open();
+    ui_test::draw_surface(surface, 0.2F);
+    REQUIRE(dropdown.is_open());
+    REQUIRE(dropdown.body().children().back()->accepts_input());
+}
+
+TEST_CASE("dropdown observes an externally closed native popup before reopening", "[DropdownWidget][popup][regression]") {
+    Runtime runtime;
+    ui::Surface surface = ui_test::make_surface(runtime);
+    std::string value = "first";
+    auto& dropdown = surface.root().add<DropdownWidget>(
+        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "external-close"
+    );
+    dropdown.set_size({px(180.0F), px(32.0F)});
+    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 300.0F});
+    ui_test::draw_surface(surface);
+    dropdown.open();
+    ui_test::draw_surface(surface, 0.2F);
+    REQUIRE(dropdown.is_open());
+
+    bool closed_native = false;
+    auto& row = static_cast<StyledNode&>(*dropdown.body().children().front());
+    row.before().set_draw_callback([&closed_native](const PaintContext&) {
+        if (!closed_native) {
+            ImGui::CloseCurrentPopup();
+            closed_native = true;
+        }
+    });
+    ui_test::draw_surface(surface, 0.0F);
+    REQUIRE(closed_native);
+    ui_test::draw_surface(surface, 0.0F);
+    REQUIRE_FALSE(dropdown.is_open());
+    REQUIRE(value == "first");
+    ui_test::draw_surface(surface, 0.2F);
+    ui_test::draw_surface(surface, 0.0F);
+    REQUIRE_FALSE(dropdown.body().enabled());
+
+    dropdown.open();
+    ui_test::draw_surface(surface, 0.2F);
+    REQUIRE(dropdown.is_open());
+    const auto& option = dropdown.body().children().back();
+    const ImVec2 position = ui_test::center(option->layout().visual_rect());
+    REQUIRE(surface.input_router().node_at(position) == option.get());
+    auto down = ui_test::pointer_event(EventType::PointerDown, position);
+    auto up = ui_test::pointer_event(EventType::PointerUp, position);
+    surface.dispatch(down);
+    surface.dispatch(up);
+    REQUIRE(value == "second");
 }

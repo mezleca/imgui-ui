@@ -18,15 +18,12 @@ namespace ui {
     class Font;
 
     struct SurfaceConfig {
-        /// required backend that drives the application's platform window and renders imgui draw data.
+        /// null is rejected during surface construction.
         std::unique_ptr<Backend> backend;
-        /// creates the debugger overlay when the surface initializes.
         bool enable_debugger = false;
-        /// replaces the default NFD file dialog backend for this surface.
         std::unique_ptr<FileDialogBackend> file_dialog_backend;
     };
 
-    /// owns one imgui surface, its backend, input router, retained tree, and optional debugger.
     class Surface {
     public:
         /// keeps a reference to runtime. destroy the surface before runtime and before its backend's platform window.
@@ -36,12 +33,10 @@ namespace ui {
         Surface(const Surface&) = delete;
         Surface& operator=(const Surface&) = delete;
 
-        /// requests termination of the application's frame loop.
         void exit() {
             m_done = true;
         }
 
-        /// forwards pending platform events through the active backend.
         void process_events();
 
         /// starts the backend draw cycle and an imgui frame. call after process_events and before update or draw.
@@ -53,17 +48,14 @@ namespace ui {
         /// calls begin_frame, update, draw, and end_frame in order.
         void frame();
 
-        /// updates the application tree for the current frame.
         void update(float dt);
 
-        /// draws the application tree for the current frame.
         void draw();
 
         /// routes one platform event through the debugger and application tree.
         /// returns true when the event was handled or blocked.
         bool dispatch(UiEvent& event);
 
-        /// returns whether exit() was requested.
         bool is_done() const {
             return m_done;
         }
@@ -79,17 +71,14 @@ namespace ui {
         /// resolves a size from the primary font, falling back to imgui's current font.
         ImFont* get_primary_font(int size) const;
 
-        /// returns the router used by the surface tree.
         InputRouter& input_router() {
             return m_input_router;
         }
 
-        /// returns this surface's NFD or configured custom file dialog backend.
         FileDialogBackend& file_dialog() {
             return *m_file_dialog;
         }
 
-        /// returns frame timing and node instrumentation for this surface.
         Profiler& profiler() {
             return *m_profiler;
         }
@@ -109,7 +98,6 @@ namespace ui {
 
         bool debugger_blocks_pointer_input() const;
 
-        /// returns the effect registry used during frame rendering.
         EffectRegistry& effects() {
             return m_effects;
         }
@@ -129,17 +117,14 @@ namespace ui {
             return m_runtime;
         }
 
-        /// returns the application content root.
         Node& root() {
             return *m_content_root;
         }
 
-        /// returns the backend owned by this surface.
         Backend& backend() {
             return *m_backend;
         }
 
-        /// returns this surface's imgui context.
         ImGuiContext* imgui_context() {
             return m_context;
         }

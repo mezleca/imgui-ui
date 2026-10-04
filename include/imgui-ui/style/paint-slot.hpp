@@ -8,7 +8,6 @@
 namespace ui {
     class EffectRegistry;
 
-    /// values available to a paint slot draw callback for the current node paint pass.
     struct PaintContext {
         Rect rect;
         Rect content_rect;
@@ -17,7 +16,6 @@ namespace ui {
         float opacity;
     };
 
-    /// a configurable layer rendered before a node or above its completed subtree.
     class PaintSlot final {
     public:
         using DrawCallback = std::function<void(const PaintContext&)>;

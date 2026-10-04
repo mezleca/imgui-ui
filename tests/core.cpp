@@ -12,6 +12,7 @@
 #include <imgui-ui/layout/geometry.hpp>
 #include <imgui-ui/layout/layer-container.hpp>
 #include <imgui-ui/layout/tree-container.hpp>
+#include <imgui-ui/resources/font-registry.hpp>
 #include <imgui-ui/tree/node.hpp>
 #include <imgui-ui/surface.hpp>
 #include <imgui-ui/widgets/dropdown.hpp>
@@ -27,6 +28,33 @@
 #include <vector>
 
 using namespace ui;
+
+TEST_CASE("fonts cache sizes per context and tolerate an empty origin", "[resources][cleanup]") {
+    Font empty({}, ImFontConfig{});
+    Font font(std::string(IMGUI_UI_ASSETS_DIR) + "/fonts/Inter.ttf", ImFontConfig{});
+    ::ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGui::SetCurrentContext(nullptr);
+    CHECK(empty.get(16) == nullptr);
+    CHECK(font.get(16) == nullptr);
+    ImGui::SetCurrentContext(previous);
+
+    ui_test::ImGuiContext first({320.0F, 180.0F});
+    CHECK(empty.get(16) == nullptr);
+    ImFont* first_font = font.get(16);
+    REQUIRE(first_font != nullptr);
+    CHECK(font.get(16) == first_font);
+    CHECK(font.get(20) != first_font);
+    {
+        ui_test::ImGuiContext second({320.0F, 180.0F});
+        ImFont* second_font = font.get(16);
+        REQUIRE(second_font != nullptr);
+        CHECK(second_font != first_font);
+        font.release_context(ImGui::GetCurrentContext());
+    }
+    CHECK(font.get(16) == first_font);
+    font.release_context(ImGui::GetCurrentContext());
+    CHECK(font.get(16) != first_font);
+}
 
 TEST_CASE("animator callbacks keep registration order and defer callbacks scheduled during dispatch", "[Animator]") {
     Animator animator;

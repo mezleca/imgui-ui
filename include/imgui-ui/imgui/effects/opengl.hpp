@@ -19,7 +19,7 @@ namespace ui {
         // shutdown must run before destroying the current opengl context.
         void shutdown();
 
-        // begin intersects bounds with command.ClipRect before enabling the scissor test.
+        // intersect effect bounds with the command clip before enabling scissor.
         bool begin(const ImDrawCmd& command, Rect bounds);
         GLint uniform(const char* name) const;
         GLuint program() const {

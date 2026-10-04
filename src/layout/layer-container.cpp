@@ -7,8 +7,6 @@
 
 using namespace ui;
 
-static constexpr ImGuiWindowFlags LAYER_WINDOW_FLAGS = constants::WINDOW_FLAGS;
-
 static bool needs_child_window(const ComputedStyle& style) {
     return style.background_color().value.max_alpha() > 0.0F || style.blur() > 0 || style.box_shadow().color.max_alpha() > 0.0F ||
            style.border() != BORDER_NONE || style.padding().x > 0.0F || style.padding().y > 0.0F ||
@@ -51,7 +49,8 @@ bool LayerContainer::paint_inline() {
     const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
     const bool scrolled = scroll.x != 0.0F || scroll.y != 0.0F;
     const bool parent_scrollable = parent() != nullptr && (ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_NoScrollbar) == 0;
-    // open the child before the parent scrolls so anchored descendants keep the same content coordinate space.
+    // once this layer needs a child window, keep it across frames. add the parent scroll back to the cursor so the
+    // layer stays anchored to the content origin.
     m_inline_child_window =
         m_inline_child_window || parent_scrollable || scrolled || scrollable() || needs_child_window(computed_style());
     if (m_inline_child_window) {
@@ -76,8 +75,8 @@ bool LayerContainer::paint_inline() {
 bool LayerContainer::paint_window() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const bool accepts_input = this->accepts_input();
-    ImGuiWindowFlags window_flags = LAYER_WINDOW_FLAGS;
-    // the first window creation may need to move this layer above its parent.
+    ImGuiWindowFlags window_flags = constants::WINDOW_FLAGS;
+    // allow the first begin call to raise the window. later frames keep its existing stacking order.
     if (!m_window_initialized) {
         window_flags &= ~ImGuiWindowFlags_NoBringToFrontOnFocus;
     }

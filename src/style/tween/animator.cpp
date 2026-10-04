@@ -96,7 +96,8 @@ void Animator::update(float dt) {
     AnimatorState& state = *m_state;
     state.time += std::max(0.0F, dt);
 
-    // start every due step before writing tracks so a later step can use the current output of the track it replaces.
+    // start due steps before writing tracks. replacing a target reads the displaced track at the current timeline
+    // time before erasing it.
     for (auto step_it = state.steps.begin(); step_it != state.steps.end();) {
         if (step_it->start > state.time) {
             ++step_it;
@@ -118,7 +119,6 @@ void Animator::update(float dt) {
             target = step_it->value;
         }
 
-        // each target has one track, so replacing it starts from the exact value it would draw in this frame.
         if (track_it != state.tracks.end()) {
             state.tracks.erase(track_it);
         }

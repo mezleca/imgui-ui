@@ -40,12 +40,12 @@ Style& Style::overflow(Overflow value) {
 }
 
 Style& Style::rotation(float value, TransitionSpec transition) {
-    return set_animated_transition(&Style::m_rotation, std::isfinite(value) ? value : 0.0F, transition);
+    return set_animated_transition(&Style::m_rotation, std::isfinite(value) ? value : 0.0F, transition, false);
 }
 
 Style& Style::scale(ImVec2 value, TransitionSpec transition) {
     value = {std::isfinite(value.x) ? value.x : 1.0F, std::isfinite(value.y) ? value.y : 1.0F};
-    return set_animated_transition(&Style::m_scale, value, transition);
+    return set_animated_transition(&Style::m_scale, value, transition, false);
 }
 
 Style& Style::scale(float value, TransitionSpec transition) {
@@ -53,11 +53,11 @@ Style& Style::scale(float value, TransitionSpec transition) {
 }
 
 Style& Style::alpha(float value) {
-    return set_property(&Style::m_alpha, std::clamp(value, 0.0F, 1.0F));
+    return set_property(&Style::m_alpha, std::clamp(value, 0.0F, 1.0F), false);
 }
 
 Style& Style::cursor(ImGuiMouseCursor value) {
-    return set_property(&Style::m_cursor, value);
+    return set_property(&Style::m_cursor, value, false);
 }
 
 Style& Style::control(const Theme& theme, ImVec2 padding, TransitionSpec transition) {
@@ -71,15 +71,15 @@ Style& Style::control(const Theme& theme, ImVec2 padding, TransitionSpec transit
 }
 
 Style& Style::color(Color value, TransitionSpec transition) {
-    return set_animated_transition(&Style::m_color, std::move(value), transition);
+    return set_animated_transition(&Style::m_color, std::move(value), transition, false);
 }
 
 Style& Style::background_color(Color value, TransitionSpec transition) {
-    return set_animated_transition(&Style::m_background_color, std::move(value), transition);
+    return set_animated_transition(&Style::m_background_color, std::move(value), transition, false);
 }
 
 Style& Style::border_color(Color value, TransitionSpec transition) {
-    return set_animated_transition(&Style::m_border_color, std::move(value), transition);
+    return set_animated_transition(&Style::m_border_color, std::move(value), transition, false);
 }
 
 Style& Style::border_radius(float value) {
@@ -184,7 +184,7 @@ bool Style::lerp(Style& style, const Style& target, float dt) {
         transitioning |= current.is_transitioning();
     };
 
-    // geometry changes invalidate measurement before the blended values are consumed by layout.
+    // record changes to margin, padding and line height. notify the owner after all properties have advanced.
     tick(style.m_margin, target.m_margin, true);
     tick(style.m_padding, target.m_padding, true);
     tick(style.m_line_height, target.m_line_height, true);
@@ -205,17 +205,14 @@ bool Style::lerp(Style& style, const Style& target, float dt) {
     for (auto& [key, value] : style.m_vars) {
         const StyleValue* target_value = target.m_vars.find(key);
 
-        if (target_value == nullptr) {
-            continue;
-        }
-
         std::visit(
             [&](auto& current_value) {
                 using T = std::decay_t<decltype(current_value)>;
-                const T* typed_target = std::get_if<T>(target_value);
+                const T* typed_target = target_value == nullptr ? nullptr : std::get_if<T>(target_value);
                 if (typed_target != nullptr) {
                     current_value.tick(*typed_target, dt);
                 }
+                transitioning |= current_value.is_transitioning();
             },
             value
         );
@@ -225,5 +222,5 @@ bool Style::lerp(Style& style, const Style& target, float dt) {
         style.notify_change(previous_font != style.m_font);
     }
 
-    return transitioning || style.m_vars.is_transitioning();
+    return transitioning;
 }

@@ -72,6 +72,8 @@ static ImVec2 point_at(const BorderPathSegment& segment, float distance) {
 static float arc_max_step(const BorderPathSegment& segment) {
     const float sweep = std::abs(segment.end_angle - segment.start_angle);
     const float radius = segment.length / sweep;
+    // for a chord angle theta, sagitta = radius * (1 - cos(theta / 2)).
+    // solving it for theta yields the largest step below the configured arc error.
     return radius <= ARC_MAX_ERROR ? sweep : 2.0F * std::acos(std::clamp(1.0F - (ARC_MAX_ERROR / radius), -1.0F, 1.0F));
 }
 
@@ -86,8 +88,6 @@ append_segment_range(ImDrawList& draw_list, const BorderPathSegment& segment, fl
         return;
     }
 
-    // for a chord angle theta, sagitta = radius * (1 - cos(theta / 2)).
-    // solving it for theta yields the largest step below the configured arc error.
     const float sweep = std::abs(segment.end_angle - segment.start_angle);
     if (max_step <= 0.0F) {
         max_step = arc_max_step(segment);
@@ -134,7 +134,7 @@ static void walk_selected_segments(const BorderPath& path, uint8_t border, OnSeg
 
 template <typename OnSegment>
 static bool walk_side_segments(const BorderPath& path, uint8_t side, OnSegment&& on_segment) {
-    // visits one side, including the two half-corner arcs assigned to it.
+    // include both half-corner arcs so patterns continue across the side.
     const std::size_t first = first_selected_run_segment(path, side);
     bool started = false;
 
