@@ -11,7 +11,7 @@ endif()
 function(imgui_ui_enable_sanitizers target)
     if(MSVC)
         target_compile_options(${target} PUBLIC "$<$<CONFIG:Debug>:/fsanitize=address>")
-        # vendored libraries are not built with asan. disable stl container annotations across their link boundary.
+        # dependencies are not built with asan. disable stl container annotations across their link boundary.
         target_compile_definitions(${target} PUBLIC
             "$<$<CONFIG:Debug>:_DISABLE_STRING_ANNOTATION>"
             "$<$<CONFIG:Debug>:_DISABLE_VECTOR_ANNOTATION>"

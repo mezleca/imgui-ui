@@ -20,8 +20,17 @@ include(cmake/dependencies.cmake)
 add_subdirectory(src)
 
 if(IMGUI_UI_BUILD_TESTS)
-    add_subdirectory(vendor/Catch2 EXCLUDE_FROM_ALL)
-    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/vendor/Catch2/extras")
+    if(NOT TARGET Catch2::Catch2WithMain)
+        find_package(Catch2 3 QUIET CONFIG)
+        if(NOT TARGET Catch2::Catch2WithMain)
+            FetchContent_Declare(Catch2
+                URL https://codeload.github.com/catchorg/Catch2/tar.gz/69e0473f6e98d47c93518424c08ee69ee632c0f0
+                URL_HASH SHA256=1f3d8a4cadff975bb7f33ce71fad2f4b308d1d4a72273d29ef0abb2e42c5456a
+            )
+            FetchContent_MakeAvailable(Catch2)
+        endif()
+    endif()
+
     include(CTest)
     add_subdirectory(tests)
 endif()
