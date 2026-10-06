@@ -10,6 +10,7 @@
 namespace ui {
     class Node;
     class Debugger;
+    struct InputState;
 
     inline constexpr std::size_t POINTER_BUTTON_COUNT = 3;
 
@@ -81,12 +82,6 @@ namespace ui {
         friend class Node;
         friend class Debugger;
 
-        enum class InputFlag : uint8_t {
-            Hovered,
-            Active,
-            Focused,
-        };
-
         struct PressedPointer {
             std::vector<Node*> targets;
             /// records the button even when delivery is stopped. capture ends after the last release.
@@ -110,8 +105,7 @@ namespace ui {
         void cancel_capture();
         /// updates hover from a position without dispatching an event.
         void refresh_pointer_state(ImVec2 position);
-        void set_input_flag(Node& node, InputFlag flag, bool enabled);
-        void set_input_flag(Node*& current, Node* next, InputFlag flag);
+        static void set_input_target(Node*& current, Node* next, bool InputState::* flag);
         void set_hovered(const HitTestIndex::Route& route);
 
         /// records presses, routes the event, and ends capture and active state on release before deciding a click.

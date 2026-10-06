@@ -6,20 +6,16 @@
 
 using namespace ui;
 
-void InputRouter::set_input_flag(Node& node, InputFlag flag, bool enabled) {
-    InputState state = node.input_state();
-    if (flag == InputFlag::Hovered) state.hovered = enabled;
-    if (flag == InputFlag::Active) state.active = enabled;
-    if (flag == InputFlag::Focused) state.focused = enabled;
-    node.set_input_state(state);
+static InputState set_input_flag(InputState state, bool InputState::* flag, bool enabled) {
+    state.*flag = enabled;
+    return state;
 }
 
-void InputRouter::set_input_flag(Node*& current, Node* next, InputFlag flag) {
+void InputRouter::set_input_target(Node*& current, Node* next, bool InputState::* flag) {
     if (current == next) return;
-
-    if (current != nullptr) set_input_flag(*current, flag, false);
+    if (current != nullptr) current->set_input_state(set_input_flag(current->input_state(), flag, false));
     current = next;
-    if (current != nullptr) set_input_flag(*current, flag, true);
+    if (current != nullptr) current->set_input_state(set_input_flag(current->input_state(), flag, true));
 }
 
 static int pointer_button_index(PointerButton button) {
@@ -57,7 +53,7 @@ void InputRouter::set_debug_inspect_mode(bool enabled) {
         cancel_capture();
         m_pressed = {};
         set_hovered({});
-        set_input_flag(m_active_node, nullptr, InputFlag::Active);
+        set_input_target(m_active_node, nullptr, &InputState::active);
         set_focus(nullptr);
     }
 }
@@ -79,19 +75,19 @@ void InputRouter::clear_input_state(Node& subtree) {
     std::erase_if(m_hovered_nodes, [this, &subtree](Node* node) {
         if (!subtree.contains(node)) return false;
 
-        set_input_flag(*node, InputFlag::Hovered, false);
+        node->set_input_state(set_input_flag(node->input_state(), &InputState::hovered, false));
         return true;
     });
     if (m_hovered_nodes.empty()) set_hovered({});
 
-    if (subtree.contains(m_active_node)) set_input_flag(m_active_node, nullptr, InputFlag::Active);
+    if (subtree.contains(m_active_node)) set_input_target(m_active_node, nullptr, &InputState::active);
     if (subtree.contains(m_focused_node)) set_focus(nullptr);
     release_pointer(subtree);
 }
 
 void InputRouter::detach(Node& subtree) {
     // clear focus without dispatch before discarding references to nodes being destroyed or detached.
-    if (subtree.contains(m_focused_node)) set_input_flag(m_focused_node, nullptr, InputFlag::Focused);
+    if (subtree.contains(m_focused_node)) set_input_target(m_focused_node, nullptr, &InputState::focused);
     clear_input_state(subtree);
 
     std::erase_if(m_attached_nodes, [&subtree](Node* node) { return subtree.contains(node); });
@@ -117,7 +113,7 @@ void InputRouter::set_hovered(const HitTestIndex::Route& route) {
     for (Node* node : m_hovered_nodes) {
         const bool hit =
             std::any_of(route.targets.begin(), route.targets.end(), [node](const auto& entry) { return entry.node == node; });
-        if (!hit && node != owner) set_input_flag(*node, InputFlag::Hovered, false);
+        if (!hit && node != owner) node->set_input_state(set_input_flag(node->input_state(), &InputState::hovered, false));
     }
 
     m_hovered_nodes.clear();
@@ -125,7 +121,7 @@ void InputRouter::set_hovered(const HitTestIndex::Route& route) {
         m_hovered_nodes.push_back(entry.node);
     if (owner != nullptr) m_hovered_nodes.push_back(owner);
     for (Node* node : m_hovered_nodes)
-        set_input_flag(*node, InputFlag::Hovered, true);
+        node->set_input_state(set_input_flag(node->input_state(), &InputState::hovered, true));
 
     if (m_hovered_nodes.empty() && ImGui::GetCurrentContext() != nullptr) ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
 }
@@ -189,7 +185,7 @@ bool InputRouter::set_focus(Node* node) {
         dispatch(*m_focused_node, event);
     }
 
-    set_input_flag(m_focused_node, node, InputFlag::Focused);
+    set_input_target(m_focused_node, node, &InputState::focused);
 
     if (node != nullptr) {
         UiEvent event = UiEvent::make(EventType::FocusGained);
@@ -270,7 +266,7 @@ bool InputRouter::dispatch_pointer(UiEvent& event) {
         }
     }
 
-    if (released_all || !route_release) set_input_flag(m_active_node, nullptr, InputFlag::Active);
+    if (released_all || !route_release) set_input_target(m_active_node, nullptr, &InputState::active);
 
     return route_release ? dispatch_click(event, pressed, released) : event.handled;
 }
@@ -359,7 +355,7 @@ bool InputRouter::route_pointer(UiEvent& event, std::vector<Node*>* reached, con
     }
 
     if (event.type == EventType::PointerDown) {
-        set_input_flag(m_active_node, m_pointer_capture != nullptr ? m_pointer_capture : front, InputFlag::Active);
+        set_input_target(m_active_node, m_pointer_capture != nullptr ? m_pointer_capture : front, &InputState::active);
     }
 
     if (m_pointer_capture != nullptr && (event.type == EventType::PointerDown || event.type == EventType::PointerUp)) {
@@ -438,7 +434,7 @@ InputRouterStats InputRouter::stats() const {
 
 void InputRouter::clear_inactive_targets() {
     if (!is_input_target(m_focused_node)) {
-        set_input_flag(m_focused_node, nullptr, InputFlag::Focused);
+        set_input_target(m_focused_node, nullptr, &InputState::focused);
     }
 
     if (!is_input_target(m_pointer_capture)) {
@@ -448,11 +444,11 @@ void InputRouter::clear_inactive_targets() {
     std::erase_if(m_hovered_nodes, [this](Node* node) {
         if (is_input_target(node)) return false;
 
-        set_input_flag(*node, InputFlag::Hovered, false);
+        node->set_input_state(set_input_flag(node->input_state(), &InputState::hovered, false));
         return true;
     });
     if (m_hovered_nodes.empty()) set_hovered({});
-    if (!is_input_target(m_active_node)) set_input_flag(m_active_node, nullptr, InputFlag::Active);
+    if (!is_input_target(m_active_node)) set_input_target(m_active_node, nullptr, &InputState::active);
 
     for (PressedPointer& pressed : m_pressed) {
         std::erase_if(pressed.targets, [](Node* node) { return !is_input_target(node); });

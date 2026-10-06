@@ -305,20 +305,22 @@ BorderPath ui::rounded_rect_border_path(Rect rect, float rounding) {
     const ImVec2 bottom_left = {rect.min.x + radius, rect.max.y - radius};
 
     // each corner is split between adjacent sides so partial borders stop at the corner midpoint.
-    return {{
-        line({top_left.x, rect.min.y}, {top_right.x, rect.min.y}, BORDER_TOP),
-        arc(top_right, radius, -HALF_PI, -QUARTER_PI, BORDER_TOP),
-        arc(top_right, radius, -QUARTER_PI, 0.0F, BORDER_RIGHT),
-        line({rect.max.x, top_right.y}, {rect.max.x, bottom_right.y}, BORDER_RIGHT),
-        arc(bottom_right, radius, 0.0F, QUARTER_PI, BORDER_RIGHT),
-        arc(bottom_right, radius, QUARTER_PI, HALF_PI, BORDER_BOTTOM),
-        line({bottom_right.x, rect.max.y}, {bottom_left.x, rect.max.y}, BORDER_BOTTOM),
-        arc(bottom_left, radius, HALF_PI, QUARTER_PI * 3.0F, BORDER_BOTTOM),
-        arc(bottom_left, radius, QUARTER_PI * 3.0F, PI, BORDER_LEFT),
-        line({rect.min.x, bottom_left.y}, {rect.min.x, top_left.y}, BORDER_LEFT),
-        arc(top_left, radius, PI, QUARTER_PI * 5.0F, BORDER_LEFT),
-        arc(top_left, radius, QUARTER_PI * 5.0F, PI + HALF_PI, BORDER_TOP),
-    }};
+    return {
+        {
+            line({top_left.x, rect.min.y}, {top_right.x, rect.min.y}, BORDER_TOP),
+            arc(top_right, radius, -HALF_PI, -QUARTER_PI, BORDER_TOP),
+            arc(top_right, radius, -QUARTER_PI, 0.0F, BORDER_RIGHT),
+            line({rect.max.x, top_right.y}, {rect.max.x, bottom_right.y}, BORDER_RIGHT),
+            arc(bottom_right, radius, 0.0F, QUARTER_PI, BORDER_RIGHT),
+            arc(bottom_right, radius, QUARTER_PI, HALF_PI, BORDER_BOTTOM),
+            line({bottom_right.x, rect.max.y}, {bottom_left.x, rect.max.y}, BORDER_BOTTOM),
+            arc(bottom_left, radius, HALF_PI, QUARTER_PI * 3.0F, BORDER_BOTTOM),
+            arc(bottom_left, radius, QUARTER_PI * 3.0F, PI, BORDER_LEFT),
+            line({rect.min.x, bottom_left.y}, {rect.min.x, top_left.y}, BORDER_LEFT),
+            arc(top_left, radius, PI, QUARTER_PI * 5.0F, BORDER_LEFT),
+            arc(top_left, radius, QUARTER_PI * 5.0F, PI + HALF_PI, BORDER_TOP),
+        },
+    };
 }
 
 void ui::draw_border_path(
