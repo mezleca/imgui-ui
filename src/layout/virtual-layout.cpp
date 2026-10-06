@@ -153,6 +153,7 @@ void VirtualLayout::draw_children() {
             const size_t first = item_boundary(top, false);
             const size_t last = item_boundary(bottom, true);
 
+            // clamp overscan to the source range before requesting rows from the provider.
             buffer.first = first > m_overscan ? first - m_overscan : 0;
             buffer.second = last + std::min(m_overscan, m_item_count - last);
         }

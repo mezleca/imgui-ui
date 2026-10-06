@@ -76,6 +76,7 @@ namespace ui {
         /// immediately transfers ownership of a direct child. use remove() from tree callbacks.
         std::unique_ptr<Node> detach(Node& child);
 
+        /// defers child destruction until update, as remove() does for one child.
         void clear();
 
         void set_input_router(InputRouter* router);
@@ -255,12 +256,15 @@ namespace ui {
         /// returns false to skip children and post-paint hooks.
         virtual bool on_draw();
 
+        /// runs after layout and before on_draw, even when on_draw skips the subtree.
         virtual void draw_before();
 
         virtual void draw_children();
 
+        /// closes the paint scope after children, before draw_after runs.
         virtual void on_draw_end();
 
+        /// runs above the completed subtree after on_draw_end closes its paint scope.
         virtual void draw_after();
 
         virtual BoxInsets box_insets() const;

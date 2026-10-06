@@ -66,9 +66,11 @@ Node& Node::set_size(LayoutSize size) {
 Node& Node::set_layout(LayoutConfig config) {
     if (m_layout.config() == config) return *this;
 
+    // size and flow changes remeasure ancestors. placement alone keeps the existing measurements.
     const bool measure_changed = m_layout.size_spec() != config.size || m_layout.in_flow() != config.in_flow;
     m_layout.set_config(config);
     if (measure_changed) invalidate_measure();
+
     return *this;
 }
 

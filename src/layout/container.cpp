@@ -121,6 +121,7 @@ void Container::on_measure() {
     ImVec2 content_size{};
     size_t flow_count = 0;
 
+    // sum preferred extents and margins along the flow axis. the cross axis takes the largest child extent.
     for (const auto& child : children()) {
         if (!is_flow_child(*child)) {
             continue;

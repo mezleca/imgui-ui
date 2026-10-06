@@ -179,8 +179,10 @@ namespace ui {
             return m_measured_size;
         }
 
+        /// grow contributes its measured extent. percent contributes zero until parent space is available.
         ImVec2 intrinsic_size() const;
 
+        /// percent contributes zero so a fit parent does not depend on its own unresolved allocation.
         ImVec2 preferred_size() const;
 
         ImVec2 resolved_size() const {
@@ -193,14 +195,17 @@ namespace ui {
             return m_box_insets;
         }
 
+        /// cursor-relative bounds in the current imgui window.
         Rect local_rect() const {
             return m_local_rect;
         }
 
+        /// arranged screen bounds before paint replaces the visual bounds.
         Rect layout_rect() const {
             return m_layout_rect;
         }
 
+        /// screen bounds emitted by paint and read by pointer hit testing.
         Rect visual_rect() const {
             return m_visual_rect;
         }
