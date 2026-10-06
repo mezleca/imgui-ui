@@ -110,20 +110,20 @@ private:
         }
     }
 
-    void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& current_style) override {
+    void paint_content(const PaintContext& context) override {
+        const ComputedStyle& current_style = context.style;
         const DropdownOption* selected = m_owner.selected_option();
         const std::string_view preview = selected == nullptr ? m_owner.m_placeholder : selected->label;
         const ImVec2 text_size = ImGui::CalcTextSize(preview.data(), preview.data() + preview.size());
-        const Rect content = content_rect(rect);
+        const Rect content = context.content_rect;
 
-        draw_text(
-            draw_list, {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)}, current_style.color().value,
-            preview
+        context.painter.text(
+            {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)}, current_style.color().value, preview
         );
 
-        draw_triangle(
-            draw_list, {content.max.x - (m_owner.m_arrow_size.x * 0.5F), content.min.y + (content.size().y * 0.5F)},
-            m_owner.m_arrow_size, current_style.color().value, m_owner.is_open() ? TriangleDirection::Up : TriangleDirection::Down
+        context.painter.triangle(
+            {content.max.x - (m_owner.m_arrow_size.x * 0.5F), content.min.y + (content.size().y * 0.5F)}, m_owner.m_arrow_size,
+            current_style.color().value, m_owner.is_open() ? TriangleDirection::Up : TriangleDirection::Down
         );
     }
 
@@ -208,7 +208,7 @@ bool DropdownWidget::Body::paint() {
     if (ImGui::BeginPopup("body", ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
         const Rect body_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
         set_visual_rect(body_rect);
-        draw_surface(*ImGui::GetWindowDrawList(), body_rect);
+        draw_surface(body_rect);
 
         // block the body while keeping its option rows targetable.
         surface().input_router().register_blocker(*this, body_rect);
@@ -251,9 +251,7 @@ void DropdownWidget::Body::draw_children() {
 
 void DropdownWidget::Body::on_draw_end() {
     const ComputedStyle& style = computed_style();
-    ImColor border = style.border_color().value.rgba();
-    border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
-    draw_border(*ImGui::GetWindowDrawList(), layout().visual_rect(), style, border);
+    painter().border(layout().visual_rect(), style, style.border_color().value);
 
     ImGui::EndPopup();
     ImGui::PopStyleColor();

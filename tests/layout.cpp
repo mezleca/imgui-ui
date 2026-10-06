@@ -1046,7 +1046,7 @@ TEST_CASE("container after decorations use final bounds above nested child windo
     ImDrawList* after_draw_list = nullptr;
     resizable.after().set_draw_callback([&](const PaintContext& context) {
         after_rect = context.rect;
-        after_draw_list = &context.draw_list;
+        after_draw_list = &context.painter.draw_list();
     });
 
     ui_test::draw_window("decorated-resizable-root", {320.0F, 220.0F}, [&] { resizable.draw(); });

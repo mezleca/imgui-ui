@@ -91,9 +91,13 @@ void Widget::dispatch_event(UiEvent& event) {
 bool DrawListWidget::paint() {
     const Rect rect = Rect::from_position_size(ImGui::GetCursorScreenPos(), layout().size());
     ImGui::Dummy(rect.size());
-    ImDrawList& draw_list = *ImGui::GetWindowDrawList();
     const ComputedStyle& style = computed_style();
-    draw_surface(draw_list, rect, style);
-    paint_draw_list(draw_list, rect, style);
+    const PaintContext context{rect, content_rect(rect), painter(), style};
+    paint_surface(context);
+    paint_content(context);
     return true;
+}
+
+void DrawListWidget::paint_surface(const PaintContext& context) const {
+    context.painter.frame(context.rect, context.style);
 }

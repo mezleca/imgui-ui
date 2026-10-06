@@ -506,21 +506,18 @@ protected:
     }
 
 private:
-    void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override {
+    void paint_content(const PaintContext& context) override {
+        const Rect rect = context.rect;
+        const ComputedStyle& style = context.style;
         const Rect box =
             Rect::from_position_size({rect.min.x + 6.0F, rect.min.y + 6.0F}, {std::max(0.0F, rect.size().x - 12.0F), 32.0F});
         const float fill_right = std::min(box.max.x, box.min.x + m_fill_width);
 
-        draw_list.AddRectFilled(box.min, box.max, style.background_color().get_col(), style.border_radius());
+        context.painter.rect_filled(box, style.background_color().value, style.border_radius());
         if (fill_right > box.min.x) {
-            draw_list.AddRectFilled(
-                box.min, {fill_right, box.max.y}, ImGui::GetColorU32(m_fill_color.rgba()), style.border_radius()
-            );
+            context.painter.rect_filled({box.min, {fill_right, box.max.y}}, m_fill_color, style.border_radius());
         }
-        draw_list.AddRect(
-            box.min, box.max, style.border_color().get_col(), style.border_radius(), ImDrawFlags_RoundCornersAll,
-            style.border_thickness()
-        );
+        context.painter.rect_outline(box, style.border_color().value, style.border_thickness(), style.border_radius());
 
         if (!m_completed) {
             return;
@@ -529,9 +526,8 @@ private:
         ImColor message_color = style.color().value.rgba();
         message_color.Value.w *= m_message_opacity;
         const ImVec2 message_size = ImGui::CalcTextSize("finished");
-        draw_list.AddText(
-            {box.min.x + ((box.size().x - message_size.x) * 0.5F), box.min.y + 8.0F + m_message_offset},
-            ImGui::GetColorU32(message_color.Value), "finished"
+        context.painter.text(
+            {box.min.x + ((box.size().x - message_size.x) * 0.5F), box.min.y + 8.0F + m_message_offset}, message_color, "finished"
         );
     }
 

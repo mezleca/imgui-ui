@@ -145,6 +145,63 @@ TEST_CASE("ui does not write to imgui's fallback window") {
     REQUIRE_FALSE(fallback->Active);
 }
 
+TEST_CASE("paint callbacks apply owner and decoration alpha once", "[Painter][paint]") {
+    ui_test::ImGuiContext imgui_context({160.0F, 120.0F});
+    ui_test::draw_window("painter-alpha-test", [&] {
+        StyledNode node;
+        node.set_size({px(60.0F), px(30.0F)});
+        node.style().alpha(0.5F);
+        node.before().style().alpha(0.4F);
+        node.before().set_opacity(0.5F);
+
+        int first_vertex = -1;
+        node.before().set_draw_callback([&](const PaintContext& context) {
+            first_vertex = context.painter.draw_list().VtxBuffer.Size;
+            context.painter.rect_filled(context.rect, rgb(255, 0, 0));
+        });
+        node.update(1.0F);
+        node.draw();
+
+        REQUIRE(first_vertex >= 0);
+        const ImU32 expected = ImGui::ColorConvertFloat4ToU32({1.0F, 0.0F, 0.0F, 0.1F});
+        REQUIRE(ImGui::GetWindowDrawList()->VtxBuffer[first_vertex].col == expected);
+    });
+}
+
+TEST_CASE("surface effect clips remain isolated while another surface paints", "[Painter][paint]") {
+    Runtime runtime;
+    Surface first = ui_test::make_surface(runtime);
+    Surface second = ui_test::make_surface(runtime);
+    first.paint_state().push_effect_clip({10.0F, 20.0F, 30.0F, 40.0F});
+
+    const auto second_context = ui_test::prepare_surface(second, {160.0F, 120.0F});
+    ui_test::draw_window("painter-surface-test", [&] {
+        EffectRegistry effects;
+        initialize_effect<BoxShadowRegion>(effects, EffectSlot::BoxShadow, collect_shadow_callback);
+        Style style;
+        style.box_shadow({.blur = 4.0F, .color = rgb(0, 0, 0)});
+        ImDrawList& list = *ImGui::GetWindowDrawList();
+        const ImVec2 minimum = list.GetClipRectMin();
+        const ImVec2 maximum = list.GetClipRectMax();
+
+        const Painter paint(list, &second.paint_state(), &effects);
+        paint.frame({{50.0F, 50.0F}, {80.0F, 80.0F}}, style);
+        bool found_effect = false;
+        for (const ImDrawCmd& command : list.CmdBuffer) {
+            if (command.UserCallback == nullptr || command.UserCallback == ImDrawCallback_ResetRenderState) continue;
+
+            found_effect = true;
+            REQUIRE(command.ClipRect.x == Catch::Approx(minimum.x));
+            REQUIRE(command.ClipRect.y == Catch::Approx(minimum.y));
+            REQUIRE(command.ClipRect.z == Catch::Approx(maximum.x));
+            REQUIRE(command.ClipRect.w == Catch::Approx(maximum.y));
+        }
+        REQUIRE(found_effect);
+    });
+
+    first.paint_state().pop_effect_clip();
+}
+
 TEST_CASE("rounded border paths split corners between adjacent sides") {
     const BorderPath path = rounded_rect_border_path({{10.0F, 20.0F}, {110.0F, 80.0F}}, 12.0F);
 
@@ -476,7 +533,11 @@ TEST_CASE("styled paint slots pass owner bounds and their target draw list to ca
     ui_test::draw_window("decoration-callback-test", [&] {
         StyledNode node("node");
         node.set_size({px(80.0F), px(40.0F)});
-        node.configure_all_styles([](Style& style) { style.padding({8.0F, 6.0F}); });
+        node.configure_all_styles([](Style& style) {
+            style.padding({8.0F, 6.0F});
+            style.border(BORDER_ALL);
+            style.border_thickness(2.0F);
+        });
         Rect before_rect{};
         Rect after_rect{};
         Rect before_content_rect{};
@@ -485,11 +546,11 @@ TEST_CASE("styled paint slots pass owner bounds and their target draw list to ca
         node.before().set_draw_callback([&](const PaintContext& context) {
             before_rect = context.rect;
             before_content_rect = context.content_rect;
-            before_draw_list = &context.draw_list;
+            before_draw_list = &context.painter.draw_list();
         });
         node.after().set_draw_callback([&](const PaintContext& context) {
             after_rect = context.rect;
-            after_draw_list = &context.draw_list;
+            after_draw_list = &context.painter.draw_list();
         });
 
         node.update(1.0F);
@@ -501,10 +562,10 @@ TEST_CASE("styled paint slots pass owner bounds and their target draw list to ca
         REQUIRE(before_rect.min.y == Catch::Approx(after_rect.min.y));
         REQUIRE(before_rect.max.x == Catch::Approx(after_rect.max.x));
         REQUIRE(before_rect.max.y == Catch::Approx(after_rect.max.y));
-        REQUIRE(before_content_rect.min.x == Catch::Approx(before_rect.min.x + 8.0F));
-        REQUIRE(before_content_rect.min.y == Catch::Approx(before_rect.min.y + 6.0F));
-        REQUIRE(before_content_rect.max.x == Catch::Approx(before_rect.max.x - 8.0F));
-        REQUIRE(before_content_rect.max.y == Catch::Approx(before_rect.max.y - 6.0F));
+        REQUIRE(before_content_rect.min.x == Catch::Approx(before_rect.min.x + 10.0F));
+        REQUIRE(before_content_rect.min.y == Catch::Approx(before_rect.min.y + 8.0F));
+        REQUIRE(before_content_rect.max.x == Catch::Approx(before_rect.max.x - 10.0F));
+        REQUIRE(before_content_rect.max.y == Catch::Approx(before_rect.max.y - 8.0F));
         REQUIRE(before_draw_list == ImGui::GetWindowDrawList());
         REQUIRE(after_draw_list == ImGui::GetForegroundDrawList());
     });

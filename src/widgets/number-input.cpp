@@ -195,9 +195,7 @@ bool NumberInputWidget::paint() {
 
     set_interaction_style(ImGui::IsItemHovered(), ImGui::IsItemActive(), input_state().focused);
 
-    ImColor border = current_style.border_color().value.rgba();
-    border.Value.w *= std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
-    draw_border(*ImGui::GetWindowDrawList(), {ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style, border);
+    painter().border({ImGui::GetItemRectMin(), ImGui::GetItemRectMax()}, current_style, current_style.border_color().value);
 
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);

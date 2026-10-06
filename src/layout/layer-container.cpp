@@ -68,7 +68,7 @@ bool LayerContainer::paint_inline() {
     }
     set_layout_rect(inline_rect);
     set_visual_rect(inline_rect);
-    draw_surface(*ImGui::GetWindowDrawList(), inline_rect);
+    draw_surface(inline_rect);
     return true;
 }
 
@@ -97,7 +97,7 @@ bool LayerContainer::paint_window() {
     set_layout_rect(window_rect);
     set_visual_rect(window_rect);
 
-    draw_surface(*ImGui::GetWindowDrawList(), window_rect);
+    draw_surface(window_rect);
     return true;
 }
 

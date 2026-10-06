@@ -48,16 +48,16 @@ bool TextWidget::paint() {
     const Rect outer = Rect::from_position_size(minimum, layout().size());
     const Rect content = content_rect(outer);
 
-    ImDrawList& draw_list = *ImGui::GetWindowDrawList();
-    draw_surface(draw_list, outer);
+    const Painter paint = painter();
+    paint.frame(outer, current_style);
 
     ImGui::Dummy(layout().size());
     const ImVec4 clip_rect = {content.min.x, content.min.y, content.max.x, content.max.y};
 
     if (m_text.wrap_width() < 0.0F && m_overflow == TextOverflow::Ellipsis) {
-        draw_text_ellipsis(draw_list, content.min, current_style.color().value, m_text, clip_rect);
+        paint.text_ellipsis(content.min, current_style.color().value, m_text, clip_rect);
     } else {
-        draw_text(draw_list, content.min, current_style.color().value, m_text, m_text.wrap_width() < 0.0F ? &clip_rect : nullptr);
+        paint.text(content.min, current_style.color().value, m_text, m_text.wrap_width() < 0.0F ? &clip_rect : nullptr);
     }
 
     return true;

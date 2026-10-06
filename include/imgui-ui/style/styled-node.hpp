@@ -141,7 +141,8 @@ namespace ui {
         /// adds padding and borders to the content measurement, keeping at least one configured text line in height.
         void set_measured_content_size(ImVec2 size, bool measured_width, bool measured_height);
 
-        void draw_surface(ImDrawList& draw_list, Rect rect, const std::optional<Color>& background = {}) const;
+        Painter painter() const;
+        void draw_surface(Rect rect, const std::optional<Color>& background = {}) const;
 
     private:
         static void style_changed(void* owner, bool font_changed);

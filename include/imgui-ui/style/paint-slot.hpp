@@ -2,18 +2,20 @@
 
 #include "style.hpp"
 #include "../layout/geometry.hpp"
+#include "../imgui/painter.hpp"
 
 #include <functional>
 
 namespace ui {
-    class EffectRegistry;
-
+    // valid during the paint callback. vertex transforms run after the callback returns.
     struct PaintContext {
+        // outer bounds in screen coordinates before the node's vertex transform.
         Rect rect;
+        // rect inset by the owning node's padding and borders, including for before/after slots.
         Rect content_rect;
-        ImDrawList& draw_list;
+        Painter painter;
+        // widget style in widget hooks, decoration style in before/after callbacks.
         const ComputedStyle& style;
-        float opacity;
     };
 
     class PaintSlot final {
@@ -36,7 +38,7 @@ namespace ui {
     private:
         friend class StyledNode;
 
-        void paint(EffectRegistry* effects, ImDrawList& draw_list, Rect rect, Rect content_rect);
+        void paint(Painter painter, Rect rect, Rect content_rect);
 
         Style m_style;
         DrawCallback m_draw_callback;

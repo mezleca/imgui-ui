@@ -65,7 +65,7 @@ static bool parse_hex(const std::string& text, ImColor& color) {
     return true;
 }
 
-static void draw_checkerboard(ImDrawList& draw_list, Rect rect, float cell_size, const Color& light, const Color& dark) {
+static void draw_checkerboard(const Painter& paint, Rect rect, float cell_size, const Color& light, const Color& dark) {
     cell_size = std::max(1.0F, cell_size);
     const int rows = std::max(0, static_cast<int>(std::ceil((rect.max.y - rect.min.y) / cell_size)));
     const int columns = std::max(0, static_cast<int>(std::ceil((rect.max.x - rect.min.x) / cell_size)));
@@ -76,7 +76,7 @@ static void draw_checkerboard(ImDrawList& draw_list, Rect rect, float cell_size,
             const float x = rect.min.x + (static_cast<float>(column) * cell_size);
             const Rect cell =
                 Rect::from_position_size({x, y}, {std::min(cell_size, rect.max.x - x), std::min(cell_size, rect.max.y - y)});
-            draw_rect_filled(draw_list, cell, (row + column) % 2 == 0 ? light : dark);
+            paint.rect_filled(cell, (row + column) % 2 == 0 ? light : dark);
         }
     }
 }
@@ -103,8 +103,8 @@ public:
     }
 
 private:
-    void draw_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle&) const override {
-        StyledNode::draw_surface(draw_list, rect, *m_color);
+    void paint_surface(const PaintContext& context) const override {
+        context.painter.frame(context.rect, context.style, *m_color);
     }
 
     void click_event(UiEvent& event) override {
@@ -205,7 +205,7 @@ private:
             const Rect popup_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
 
             set_visual_rect(popup_rect);
-            draw_surface(*ImGui::GetWindowDrawList(), popup_rect);
+            draw_surface(popup_rect);
 
             surface().input_router().register_target(*this, popup_rect);
 
@@ -271,11 +271,12 @@ private:
             m_hex = format_hex(color);
         }
 
-        ImDrawList& draw_list = ui::draw_list();
+        const Painter paint = painter();
+        ImDrawList& draw_list = paint.draw_list();
         const ImColor hue_color = hsv_color(hue, 1.0F, 1.0F);
         draw_picker_gradient(draw_list, selector, rgb(255, 255, 255), hue_color, hue_color, rgb(255, 255, 255));
         draw_picker_gradient(draw_list, selector, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0), rgb(0, 0, 0), rgb(0, 0, 0));
-        draw_rect_outline(draw_list, selector, theme.controls.border_color);
+        paint.rect_outline(selector, theme.controls.border_color);
 
         for (int index = 0; index < 6; ++index) {
             const float top = hue_bar.min.y + (hue_bar.size().y * static_cast<float>(index) / 6.0F);
@@ -284,42 +285,37 @@ private:
             const ImColor second = hsv_color(static_cast<float>(index + 1) / 6.0F, 1.0F, 1.0F);
             draw_picker_gradient(draw_list, {{hue_bar.min.x, top}, {hue_bar.max.x, bottom}}, first, first, second, second);
         }
-        draw_rect_outline(draw_list, hue_bar, theme.controls.border_color);
+        paint.rect_outline(hue_bar, theme.controls.border_color);
 
-        draw_checkerboard(
-            draw_list, alpha_bar, bar_size * 0.5F, theme.background_secondary_color, theme.background_tertiary_color
-        );
+        draw_checkerboard(paint, alpha_bar, bar_size * 0.5F, theme.background_secondary_color, theme.background_tertiary_color);
 
         const ImColor opaque = ImColor(color.Value.x, color.Value.y, color.Value.z, 1.0F);
         const ImColor transparent = ImColor(color.Value.x, color.Value.y, color.Value.z, 0.0F);
 
         draw_picker_gradient(draw_list, alpha_bar, transparent, opaque, opaque, transparent);
-        draw_rect_outline(draw_list, alpha_bar, theme.controls.border_color);
+        paint.rect_outline(alpha_bar, theme.controls.border_color);
 
         const ImVec2 selector_cursor = {
             selector.min.x + (saturation * selector.size().x),
             selector.min.y + ((1.0F - value) * selector.size().y),
         };
 
-        draw_circle(draw_list, selector_cursor, 5.0F, theme.background_color);
-        draw_circle_outline(draw_list, selector_cursor, 5.0F, theme.text_color, 1.5F);
+        paint.circle(selector_cursor, 5.0F, theme.background_color);
+        paint.circle_outline(selector_cursor, 5.0F, theme.text_color, 1.5F);
 
         const float hue_cursor_y = hue_bar.min.y + (hue * hue_bar.size().y);
 
-        draw_line(draw_list, {hue_bar.min.x - 2.0F, hue_cursor_y}, {hue_bar.max.x + 2.0F, hue_cursor_y}, theme.text_color, 2.0F);
-        draw_line(
-            draw_list, {hue_bar.min.x - 2.0F, hue_cursor_y + 1.0F}, {hue_bar.max.x + 2.0F, hue_cursor_y + 1.0F},
-            theme.background_color, 1.0F
+        paint.line({hue_bar.min.x - 2.0F, hue_cursor_y}, {hue_bar.max.x + 2.0F, hue_cursor_y}, theme.text_color, 2.0F);
+        paint.line(
+            {hue_bar.min.x - 2.0F, hue_cursor_y + 1.0F}, {hue_bar.max.x + 2.0F, hue_cursor_y + 1.0F}, theme.background_color, 1.0F
         );
 
         const float alpha_cursor_x = alpha_bar.min.x + (color.Value.w * alpha_bar.size().x);
 
-        draw_line(
-            draw_list, {alpha_cursor_x, alpha_bar.min.y - 2.0F}, {alpha_cursor_x, alpha_bar.max.y + 2.0F}, theme.text_color, 2.0F
-        );
+        paint.line({alpha_cursor_x, alpha_bar.min.y - 2.0F}, {alpha_cursor_x, alpha_bar.max.y + 2.0F}, theme.text_color, 2.0F);
 
-        draw_line(
-            draw_list, {alpha_cursor_x + 1.0F, alpha_bar.min.y - 2.0F}, {alpha_cursor_x + 1.0F, alpha_bar.max.y + 2.0F},
+        paint.line(
+            {alpha_cursor_x + 1.0F, alpha_bar.min.y - 2.0F}, {alpha_cursor_x + 1.0F, alpha_bar.max.y + 2.0F},
             theme.background_color, 1.0F
         );
 

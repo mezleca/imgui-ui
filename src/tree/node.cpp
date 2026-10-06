@@ -125,6 +125,16 @@ EffectRegistry* Node::effect_registry() const {
     return m_surface == nullptr ? nullptr : &m_surface->effects();
 }
 
+PaintState& Node::paint_state() const {
+    if (m_surface != nullptr) return m_surface->paint_state();
+    if (m_parent != nullptr) return m_parent->paint_state();
+
+    // detached trees share state at their root until attachment supplies the surface state.
+    if (m_detached_paint_state == nullptr) m_detached_paint_state = std::make_unique<PaintState>();
+
+    return *m_detached_paint_state;
+}
+
 void Node::set_surface(Surface* surface) {
     m_surface = surface;
     invalidate_measure();

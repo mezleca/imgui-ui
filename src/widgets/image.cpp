@@ -13,8 +13,8 @@ void ImageWidget::on_measure() {
     }
 }
 
-void ImageWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) {
-    const Rect content = content_rect(rect);
+void ImageWidget::paint_content(const PaintContext& context) {
+    const Rect content = context.content_rect;
     if (m_texture == nullptr || !content.valid()) return;
 
     const ImVec2 content_size = content.size();
@@ -34,15 +34,13 @@ void ImageWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const Comput
     }
 
     const ImTextureID texture_id = m_texture->get(image.size());
+    ImDrawList& draw_list = context.painter.draw_list();
     const bool clip_image = m_fit == ImageFit::Cover;
     if (clip_image) {
         draw_list.PushClipRect(content.min, content.max, true);
     }
 
-    draw_list.AddImageRounded(
-        texture_id, image.min, image.max, {0, 0}, {1, 1}, style.color().get_col(), style.border_radius(),
-        ImDrawFlags_RoundCornersAll
-    );
+    context.painter.image(texture_id, image, {0, 0}, {1, 1}, context.style.color().value, context.style.border_radius());
 
     if (clip_image) {
         draw_list.PopClipRect();

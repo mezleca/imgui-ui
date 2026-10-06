@@ -35,7 +35,7 @@ namespace ui {
 
     private:
         void on_measure() override;
-        void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override;
+        void paint_content(const PaintContext& context) override;
         Texture* m_texture = nullptr;
         ImageFit m_fit = ImageFit::Fill;
     };

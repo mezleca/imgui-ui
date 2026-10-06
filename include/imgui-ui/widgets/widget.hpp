@@ -59,13 +59,11 @@ namespace ui {
             : Widget(std::move(id), type_name, input_mode) {}
 
     protected:
-        virtual void draw_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle&) const {
-            StyledNode::draw_surface(draw_list, rect);
-        }
+        virtual void paint_surface(const PaintContext& context) const;
 
     private:
         bool paint() override;
 
-        virtual void paint_draw_list(ImDrawList&, Rect, const ComputedStyle&) {}
+        virtual void paint_content(const PaintContext&) {}
     };
 } // namespace ui

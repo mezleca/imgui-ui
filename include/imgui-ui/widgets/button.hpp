@@ -30,7 +30,7 @@ namespace ui {
         void on_measure() override;
 
     private:
-        void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override;
+        void paint_content(const PaintContext& context) override;
 
         GenericValue m_text;
         std::function<void()> m_on_click;

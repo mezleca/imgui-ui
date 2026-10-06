@@ -92,8 +92,12 @@ void StyledNode::invalidate_font_cache_subtree(Node& node) {
     }
 }
 
-void StyledNode::draw_surface(ImDrawList& draw_list, Rect rect, const std::optional<Color>& background) const {
-    ui::draw_frame(draw_list, rect, computed_style(), effect_registry(), 1.0F, background);
+Painter StyledNode::painter() const {
+    return Painter(*ImGui::GetWindowDrawList(), &paint_state(), effect_registry());
+}
+
+void StyledNode::draw_surface(Rect rect, const std::optional<Color>& background) const {
+    painter().frame(rect, computed_style(), background);
 }
 
 PaintSlot& StyledNode::before() {
@@ -221,13 +225,19 @@ void StyledNode::update_cursor() {
 void StyledNode::draw_before() {
     if (m_before != nullptr) {
         const Rect rect = layout().visual_rect();
-        m_before->paint(effect_registry(), *ImGui::GetWindowDrawList(), rect, rect.inset(computed_style().padding()));
+        const Painter painter(
+            *ImGui::GetWindowDrawList(), &paint_state(), effect_registry(), m_before->m_opacity * m_before->m_style.alpha()
+        );
+        m_before->paint(painter, rect, content_rect(rect));
     }
 }
 
 void StyledNode::draw_after() {
     if (m_after != nullptr) {
         const Rect rect = layout().visual_rect();
-        m_after->paint(effect_registry(), *ImGui::GetForegroundDrawList(), rect, rect.inset(computed_style().padding()));
+        const Painter painter(
+            *ImGui::GetForegroundDrawList(), &paint_state(), effect_registry(), m_after->m_opacity * m_after->m_style.alpha()
+        );
+        m_after->paint(painter, rect, content_rect(rect));
     }
 }

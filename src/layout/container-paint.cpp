@@ -2,8 +2,7 @@
 
 #include <imgui-ui/constants.hpp>
 #include <imgui-ui/imgui/draw.hpp>
-#include <imgui-ui/imgui/effects/blur/blur.hpp>
-#include <imgui-ui/imgui/effects/shadow/shadow.hpp>
+#include <imgui-ui/imgui/paint-state.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -68,7 +67,8 @@ bool Container::paint() {
     const ImGuiID child_id = id().empty() ? ImGui::GetID(this) : ImGui::GetID(id().c_str());
     // beginchild replaces the incoming clip before border and overflow drawing.
     const ImVec4 parent_clip = current_clip(*ImGui::GetWindowDrawList());
-    const ImVec4 parent_effect_clip = current_effect_clip(parent_clip);
+    PaintState& state = paint_state();
+    const ImVec4 parent_effect_clip = state.effect_clip(parent_clip);
     ImGui::BeginChild(child_id, child_size, child_flags, window_flags);
     // register the visible child area for wheel hit testing, then advance its pending scroll offset.
     // nested children register later and take precedence over this area.
@@ -82,32 +82,25 @@ bool Container::paint() {
     set_layout_rect(resolved_child_rect);
     set_visual_rect(resolved_child_rect);
 
-    ImDrawList* child_draw_list = ImGui::GetWindowDrawList();
+    const Painter paint = painter();
     EffectRegistry* effects = effect_registry();
 
     // blur and shadow read the ancestor effect clip before the child content clip is narrowed.
     if (effects != nullptr && (current_style.blur() > 0 || current_style.box_shadow().color.max_alpha() > 0.0F)) {
         const ImRect blur_rect = ImGui::GetCurrentWindow()->InnerRect;
         ImGui::PushClipRect({parent_effect_clip.x, parent_effect_clip.y}, {parent_effect_clip.z, parent_effect_clip.w}, false);
-        const float paint_opacity = std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
-        draw_blur(
-            *effects, *child_draw_list, {blur_rect.Min, blur_rect.Max}, current_style.blur(), current_style.border_radius(),
-            paint_opacity
-        );
-        draw_box_shadow(
-            *effects, *child_draw_list, shadow_rect(resolved_child_rect), current_style.box_shadow(),
-            current_style.border_radius(), paint_opacity
-        );
+        paint.blur({blur_rect.Min, blur_rect.Max}, current_style);
+        paint.shadow(shadow_rect(resolved_child_rect), current_style);
         ImGui::PopClipRect();
     }
 
     // paint the frame with the parent clip before narrowing the clip for descendants.
     ImGui::PushClipRect({parent_clip.x, parent_clip.y}, {parent_clip.z, parent_clip.w}, true);
-    draw_frame_surface(*child_draw_list, resolved_child_rect, current_style, effects);
+    paint.frame_surface(resolved_child_rect, current_style);
     ImGui::PopClipRect();
 
     // visible overflow escapes this box but stays inside ancestor effect clips.
-    push_effect_clip(
+    state.push_effect_clip(
         current_style.overflow() == Overflow::Visible ? parent_effect_clip
                                                       : intersect_clip(parent_effect_clip, resolved_child_rect)
     );
@@ -138,5 +131,5 @@ void Container::on_draw_end() {
         m_content_clip_pushed = false;
     }
     ImGui::EndChild();
-    pop_effect_clip();
+    paint_state().pop_effect_clip();
 }

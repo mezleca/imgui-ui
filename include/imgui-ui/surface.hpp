@@ -4,6 +4,7 @@
 #include "file-dialog/file-dialog.hpp"
 #include "style/theme.hpp"
 #include "imgui/effects/effects.hpp"
+#include "imgui/paint-state.hpp"
 #include "input/router.hpp"
 
 #include <imgui.h>
@@ -106,6 +107,10 @@ namespace ui {
             return m_effects;
         }
 
+        PaintState& paint_state() {
+            return m_paint_state;
+        }
+
         const Theme& theme() const {
             return m_theme;
         }
@@ -147,6 +152,7 @@ namespace ui {
         Node* m_content_root = nullptr;
         InputRouter m_input_router;
         EffectRegistry m_effects;
+        PaintState m_paint_state;
         std::unique_ptr<Profiler> m_profiler;
         Debugger* m_debugger = nullptr;
         Font* m_primary_font = nullptr;

@@ -1,54 +1,15 @@
-#include <imgui-ui/imgui/draw.hpp>
-
-#include <imgui-ui/imgui/effects/blur/blur.hpp>
-#include <imgui-ui/imgui/effects/gradient/gradient.hpp>
-#include <imgui-ui/imgui/effects/effects.hpp>
-#include <imgui-ui/imgui/effects/shadow/shadow.hpp>
-#include <imgui-ui/widgets/text-value.hpp>
+#include <imgui-ui/imgui/border.hpp>
 
 #include <algorithm>
-#include <bit>
 #include <cmath>
 #include <numbers>
-#include <vector>
 
 using namespace ui;
-
-static std::vector<ImVec4> effect_clip_stack;
-
-ImVec4 ui::current_effect_clip(ImVec4 fallback) {
-    return effect_clip_stack.empty() ? fallback : effect_clip_stack.back();
-}
-
-void ui::push_effect_clip(ImVec4 clip) {
-    effect_clip_stack.push_back(clip);
-}
-
-void ui::pop_effect_clip() {
-    effect_clip_stack.pop_back();
-}
 
 static constexpr float PI = std::numbers::pi_v<float>;
 static constexpr float QUARTER_PI = PI * 0.25F;
 static constexpr float HALF_PI = PI * 0.5F;
 static constexpr float ARC_MAX_ERROR = 0.25F; // maximum sagitta error, matching imgui adaptive circle tessellation model.
-
-static float current_draw_alpha() {
-    return std::clamp(ImGui::GetStyle().Alpha, 0.0F, 1.0F);
-}
-
-static ImColor apply_draw_alpha(const Color& color) {
-    ImVec4 solid = color.rgba();
-    solid.w *= current_draw_alpha();
-    return ImColor{solid};
-}
-
-struct BorderEntry {
-    Rect rect;
-    float rounding = 0.0F;
-    BorderPath path;
-    bool valid = false;
-};
 
 static bool is_selected(const BorderPathSegment& segment, uint8_t border) {
     return (segment.sides & border) != 0;
@@ -312,253 +273,6 @@ static void stroke_dotted_path(ImDrawList& draw_list, const BorderPath& path, ui
     }
 }
 
-ImDrawList& ui::draw_list(DrawListTarget target) {
-    switch (target) {
-        case DrawListTarget::Background:
-            return *ImGui::GetBackgroundDrawList();
-        case DrawListTarget::Foreground:
-            return *ImGui::GetForegroundDrawList();
-        case DrawListTarget::Window:
-            return *ImGui::GetWindowDrawList();
-    }
-
-    return *ImGui::GetWindowDrawList();
-}
-
-Rect ui::viewport_work_area() {
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    if (viewport == nullptr) {
-        return {};
-    }
-
-    const ImVec2 size =
-        viewport->WorkSize.x > 0.0F && viewport->WorkSize.y > 0.0F ? viewport->WorkSize : ImGui::GetIO().DisplaySize;
-    return Rect::from_position_size(viewport->WorkPos, size);
-}
-
-void ui::draw_line(ImDrawList& draw_list, ImVec2 start, ImVec2 end, const Color& color, float thickness) {
-    draw_list.AddLine(start, end, apply_draw_alpha(color), thickness);
-}
-
-void ui::draw_circle(ImDrawList& draw_list, ImVec2 center, float radius, const Color& color) {
-    draw_list.AddCircleFilled(center, radius, apply_draw_alpha(color));
-}
-
-void ui::draw_circle_outline(ImDrawList& draw_list, ImVec2 center, float radius, const Color& color, float thickness) {
-    draw_list.AddCircle(center, radius, apply_draw_alpha(color), 0, thickness);
-}
-
-void ui::draw_rect_filled(ImDrawList& draw_list, Rect rect, const Color& color, float rounding, ImDrawFlags flags) {
-    draw_list.AddRectFilled(rect.min, rect.max, apply_draw_alpha(color), rounding, flags);
-}
-
-void ui::draw_rect_outline(ImDrawList& draw_list, Rect rect, const Color& color, float thickness, float rounding) {
-    if (thickness <= 0.0F) {
-        return;
-    }
-
-    draw_list.AddRect(
-        rect.min, rect.max, apply_draw_alpha(color), rounding, ImDrawFlags_RoundCornersAll, std::max(1.0F, thickness)
-    );
-}
-
-void ui::draw_text(ImDrawList& draw_list, ImVec2 position, const Color& color, std::string_view text) {
-    draw_list.AddText(position, apply_draw_alpha(color), text.data(), text.data() + text.size());
-}
-
-void ui::draw_text(
-    ImDrawList& draw_list, ImVec2 position, const Color& source, const GenericValue& text, const ImVec4* clip_rect
-) {
-    ImColor color = apply_draw_alpha(source);
-    ImFont* font = text.font() != nullptr ? text.font() : ImGui::GetFont();
-    const float font_size = ImGui::GetFontSize();
-    const float wrap_width = std::max(0.0F, text.wrap_width());
-    if (text.line_height_multiplier() == 1.0F) {
-        draw_list.AddText(font, font_size, position, color, text.c_str(), nullptr, wrap_width, clip_rect);
-        return;
-    }
-
-    const char* const value = text.c_str();
-    const char* const value_end = value + std::char_traits<char>::length(value);
-    const float line_height = font_size * text.line_height_multiplier();
-    float y = position.y;
-
-    for (const char* paragraph = value;;) {
-        const char* const paragraph_end = std::find(paragraph, value_end, '\n');
-        const char* line = paragraph;
-
-        do {
-            const char* line_end = paragraph_end;
-            if (wrap_width > 0.0F && line < paragraph_end) {
-                line_end = font->CalcWordWrapPosition(font_size, line, paragraph_end, wrap_width);
-                if (line_end == line) {
-                    line_end = paragraph_end;
-                }
-            }
-
-            draw_list.AddText(font, font_size, {position.x, y}, color, line, line_end, 0.0F, clip_rect);
-            y += line_height;
-
-            if (line_end == paragraph_end) {
-                break;
-            }
-
-            line = line_end;
-            while (line < paragraph_end && (*line == ' ' || *line == '\t')) {
-                ++line;
-            }
-        } while (line < paragraph_end);
-
-        if (paragraph_end == value_end) {
-            break;
-        }
-
-        paragraph = paragraph_end + 1;
-    }
-}
-
-void ui::draw_text_ellipsis(
-    ImDrawList& draw_list, ImVec2 position, const Color& source, const GenericValue& text, ImVec4 clip_rect
-) {
-    ImColor color = apply_draw_alpha(source);
-    ImFont* font = text.font() != nullptr ? text.font() : ImGui::GetFont();
-    const float font_size = ImGui::GetFontSize();
-    const char* const value = text.c_str();
-    const char* const value_end = value + std::char_traits<char>::length(value);
-    const float line_height = font_size * text.line_height_multiplier();
-    float y = position.y;
-
-    for (const char* line = value;;) {
-        const char* const line_end = std::find(line, value_end, '\n');
-        const float available_width = std::max(0.0F, clip_rect.z - position.x);
-        const ImVec2 text_size = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, line, line_end);
-        if (text_size.x <= available_width) {
-            draw_list.AddText(font, font_size, {position.x, y}, color, line, line_end, 0.0F, &clip_rect);
-        } else {
-            constexpr char ellipsis[] = "...";
-            const float ellipsis_width = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, ellipsis).x;
-            const char* visible_end = line;
-            const float text_width = std::max(0.0F, available_width - ellipsis_width);
-            const ImVec2 visible_size = font->CalcTextSizeA(font_size, text_width, 0.0F, line, line_end, &visible_end);
-
-            if (visible_end != line) {
-                draw_list.AddText(font, font_size, {position.x, y}, color, line, visible_end, 0.0F, &clip_rect);
-            }
-
-            draw_list.AddText(font, font_size, {position.x + visible_size.x, y}, color, ellipsis, nullptr, 0.0F, &clip_rect);
-        }
-
-        if (line_end == value_end) {
-            break;
-        }
-
-        line = line_end + 1;
-        y += line_height;
-    }
-}
-
-void ui::draw_triangle(ImDrawList& draw_list, ImVec2 center, ImVec2 size, const Color& color, TriangleDirection direction) {
-    static constexpr std::array<std::array<ImVec2, 3>, 4> DIRECTION_OFFSETS = {
-        {
-            {{{-1.0F, 1.0F}, {0.0F, -1.0F}, {1.0F, 1.0F}}},  // up
-            {{{-1.0F, -1.0F}, {1.0F, -1.0F}, {0.0F, 1.0F}}}, // down
-            {{{1.0F, -1.0F}, {1.0F, 1.0F}, {-1.0F, 0.0F}}},  // left
-            {{{-1.0F, -1.0F}, {-1.0F, 1.0F}, {1.0F, 0.0F}}}, // right
-        },
-    };
-
-    const ImVec2 half_size = {size.x * 0.5F, size.y * 0.5F};
-    const auto& offsets = DIRECTION_OFFSETS[static_cast<std::size_t>(direction)];
-    const auto vertex = [&](std::size_t index) {
-        return ImVec2{center.x + (offsets[index].x * half_size.x), center.y + (offsets[index].y * half_size.y)};
-    };
-
-    draw_list.AddTriangleFilled(vertex(0), vertex(1), vertex(2), apply_draw_alpha(color));
-}
-
-static void draw_full_frame(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, ImColor background, ImColor border) {
-    const float border_thickness = style.border_thickness();
-
-    if (border_thickness <= 0.0F) {
-        draw_list.AddRectFilled(rect.min, rect.max, background, style.border_radius());
-        return;
-    }
-
-    const float inset = border_thickness * 0.5F;
-
-    draw_list.AddRectFilled(
-        {rect.min.x + border_thickness, rect.min.y + border_thickness},
-        {rect.max.x - border_thickness, rect.max.y - border_thickness}, background,
-        std::max(0.0F, style.border_radius() - border_thickness)
-    );
-
-    draw_list.AddRect(
-        {rect.min.x + inset, rect.min.y + inset}, {rect.max.x - inset, rect.max.y - inset}, border, style.border_radius(),
-        ImDrawFlags_RoundCornersAll, border_thickness
-    );
-}
-
-static void draw_frame_surface_impl(
-    EffectRegistry* effects, ImDrawList& draw_list, Rect rect, const ComputedStyle& style, const Color& background_color,
-    float alpha
-) {
-    ImColor background = background_color.rgba();
-    background.Value.w *= alpha;
-
-    const Color border_color = style.border_color().value;
-    ImColor border = border_color.rgba();
-    border.Value.w *= alpha;
-    if (effects != nullptr && background_color.gradient() != nullptr &&
-        draw_gradient_rect(*effects, draw_list, rect, background_color, style.border_radius(), alpha)) {
-        background.Value.w = 0.0F;
-    }
-    const bool gradient_border = effects != nullptr && border_color.gradient() != nullptr && style.border() == BORDER_ALL &&
-                                 style.border_style() == BorderStyle::Solid && style.border_thickness() > 0.0F;
-    if (style.border() == BORDER_ALL && style.border_style() == BorderStyle::Solid) {
-        ImColor frame_border = border;
-        if (gradient_border) frame_border.Value.w = 0.0F;
-        draw_full_frame(draw_list, rect, style, background, frame_border);
-        if (gradient_border && !draw_gradient_rect(
-                                   *effects, draw_list, rect, border_color, style.border_radius(), alpha, style.border_thickness()
-                               )) {
-            draw_border(draw_list, rect, style, border);
-        }
-        return;
-    }
-
-    draw_list.AddRectFilled(rect.min, rect.max, background, style.border_radius());
-    draw_border(draw_list, rect, style, border);
-}
-
-void ui::draw_frame(
-    ImDrawList& draw_list, Rect rect, const ComputedStyle& style, EffectRegistry* effects, float opacity,
-    const std::optional<Color>& background
-) {
-    const float alpha = std::clamp(opacity, 0.0F, 1.0F) * current_draw_alpha();
-    const bool has_effects = effects != nullptr && (style.box_shadow().color.max_alpha() > 0.0F || style.blur() > 0);
-    const bool clip_effects = has_effects && !effect_clip_stack.empty();
-    if (has_effects) {
-        if (clip_effects) {
-            const ImVec4 clip = effect_clip_stack.back();
-            draw_list.PushClipRect({clip.x, clip.y}, {clip.z, clip.w}, false);
-        }
-        if (style.box_shadow().color.max_alpha() > 0.0F) {
-            draw_box_shadow(*effects, draw_list, rect, style.box_shadow(), style.border_radius(), alpha);
-        }
-        if (style.blur() > 0) {
-            draw_blur(*effects, draw_list, rect, style.blur(), style.border_radius(), alpha);
-        }
-        if (clip_effects) {
-            draw_list.PopClipRect();
-        }
-    }
-    draw_frame_surface_impl(effects, draw_list, rect, style, background ? *background : style.background_color().value, alpha);
-}
-
-void ui::draw_frame_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, EffectRegistry* effects) {
-    draw_frame_surface_impl(effects, draw_list, rect, style, style.background_color().value, current_draw_alpha());
-}
-
 static BorderPathSegment line(ImVec2 start, ImVec2 end, uint8_t sides) {
     return {BorderPathSegmentType::Line, start, end, {}, 0.0F, 0.0F, std::hypot(end.x - start.x, end.y - start.y), sides};
 }
@@ -610,31 +324,6 @@ BorderPath ui::rounded_rect_border_path(Rect rect, float rounding) {
     };
 }
 
-static const BorderPath& border_path(Rect rect, float rounding) {
-    static std::array<BorderEntry, 64> paths;
-
-    const uint32_t min_x = std::bit_cast<uint32_t>(rect.min.x);
-    const uint32_t min_y = std::bit_cast<uint32_t>(rect.min.y);
-    const uint32_t max_x = std::bit_cast<uint32_t>(rect.max.x);
-    const uint32_t max_y = std::bit_cast<uint32_t>(rect.max.y);
-    const uint32_t rounded = std::bit_cast<uint32_t>(rounding);
-    const std::size_t index = (min_x ^ (min_y << 3U) ^ (max_x << 7U) ^ (max_y << 11U) ^ (rounded << 13U)) % paths.size();
-
-    BorderEntry& entry = paths[index];
-
-    if (entry.valid && entry.rect.min.x == rect.min.x && entry.rect.min.y == rect.min.y && entry.rect.max.x == rect.max.x &&
-        entry.rect.max.y == rect.max.y && entry.rounding == rounding) {
-        return entry.path;
-    }
-
-    entry.rect = rect;
-    entry.rounding = rounding;
-    entry.path = rounded_rect_border_path(rect, rounding);
-    entry.valid = true;
-
-    return entry.path;
-}
-
 void ui::draw_border_path(
     ImDrawList& draw_list, const BorderPath& path, uint8_t border, const Color& color, float thickness, BorderStyle style
 ) {
@@ -669,6 +358,7 @@ void ui::draw_border(ImDrawList& draw_list, Rect rect, const ComputedStyle& styl
     }
 
     draw_border_path(
-        draw_list, border_path(rect, style.border_radius()), style.border(), color, style.border_thickness(), style.border_style()
+        draw_list, rounded_rect_border_path(rect, style.border_radius()), style.border(), color, style.border_thickness(),
+        style.border_style()
     );
 }

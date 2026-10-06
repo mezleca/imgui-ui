@@ -55,16 +55,15 @@ void ButtonWidget::on_measure() {
     set_measured_content_size(m_text.text_size(), true, true);
 }
 
-void ButtonWidget::paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) {
-    const Rect content = content_rect(rect);
+void ButtonWidget::paint_content(const PaintContext& context) {
+    const Rect content = context.content_rect;
     const ImVec2 text_size = m_text.text_size();
 
-    draw_text(
-        draw_list,
+    context.painter.text(
         {
             content.min.x + ((content.size().x - text_size.x) * m_text_alignment.x),
             content.min.y + ((content.size().y - text_size.y) * m_text_alignment.y),
         },
-        style.color().value, m_text
+        context.style.color().value, m_text
     );
 }

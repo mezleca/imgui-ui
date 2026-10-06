@@ -58,36 +58,37 @@ private:
         event.stop_propagation();
     }
 
-    void paint_draw_list(ImDrawList& draw_list, Rect rect, const ComputedStyle& style) override {
-        const Rect content = content_rect(rect);
+    void paint_content(const PaintContext& context) override {
+        const Rect content = context.content_rect;
         const ImVec2 text_size = ImGui::CalcTextSize(m_label.c_str());
-        draw_text(
-            draw_list, {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)}, style.color().value, m_label
+        context.painter.text(
+            {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)}, context.style.color().value, m_label
         );
 
         if (m_submenu != nullptr) {
-            draw_submenu_icon(draw_list, content, style);
+            draw_submenu_icon(context);
         }
     }
 
-    void draw_submenu_icon(ImDrawList& draw_list, Rect content, const ComputedStyle& style) const {
+    void draw_submenu_icon(const PaintContext& context) const {
+        const Rect content = context.content_rect;
         const float icon_size = std::min(13.0F, std::min(content.size().x, content.size().y));
         const Rect icon = Rect::from_position_size(
             {content.max.x - icon_size, content.min.y + ((content.size().y - icon_size) * 0.5F)}, {icon_size, icon_size}
         );
 
         if (m_submenu_icon == nullptr) {
-            draw_triangle(
-                draw_list, {icon.min.x + (icon_size * 0.5F), icon.min.y + (icon_size * 0.5F)},
-                {icon_size * 0.5F, icon_size * 0.3F}, style.color().value, TriangleDirection::Right
+            context.painter.triangle(
+                {icon.min.x + (icon_size * 0.5F), icon.min.y + (icon_size * 0.5F)}, {icon_size * 0.5F, icon_size * 0.3F},
+                context.style.color().value, TriangleDirection::Right
             );
             return;
         }
 
         const ImTextureID texture = m_submenu_icon->get(icon.size());
-        draw_list.AddImageQuad(
+        context.painter.draw_list().AddImageQuad(
             texture, icon.min, {icon.max.x, icon.min.y}, icon.max, {icon.min.x, icon.max.y}, {0, 1}, {0, 0}, {1, 0}, {1, 1},
-            style.color().get_col()
+            context.style.color().get_col()
         );
     }
 

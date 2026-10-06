@@ -15,6 +15,7 @@ namespace ui {
     class HitTestIndex;
     class Profiler;
     class EffectRegistry;
+    class PaintState;
     class Surface;
     struct Theme;
 
@@ -181,6 +182,7 @@ namespace ui {
         virtual void set_surface(Surface* surface);
         Surface& surface() const;
         EffectRegistry* effect_registry() const;
+        PaintState& paint_state() const;
 
         virtual void dispatch_event(UiEvent& event);
 
@@ -296,6 +298,7 @@ namespace ui {
         bool m_measure_dirty = true;
         NodeLayout m_layout;
         Surface* m_surface = nullptr;
+        mutable std::unique_ptr<PaintState> m_detached_paint_state;
         InputRouter* m_input_router = nullptr;
         Profiler* m_profiler = nullptr;
         Rect m_input_area{};

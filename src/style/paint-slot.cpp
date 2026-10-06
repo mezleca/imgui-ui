@@ -1,7 +1,5 @@
 #include <imgui-ui/style/paint-slot.hpp>
 
-#include <imgui-ui/imgui/draw.hpp>
-
 #include <algorithm>
 #include <utility>
 
@@ -21,16 +19,16 @@ PaintSlot& PaintSlot::set_opacity(float opacity) {
     return *this;
 }
 
-void PaintSlot::paint(EffectRegistry* effects, ImDrawList& draw_list, Rect rect, Rect content_rect) {
+void PaintSlot::paint(Painter painter, Rect rect, Rect content_rect) {
     if (m_opacity <= 0.0F || !rect.valid()) {
         return;
     }
 
-    const PaintContext context{rect, content_rect, draw_list, m_style, m_opacity};
+    const PaintContext context{rect, content_rect, painter, m_style};
     if (m_draw_callback) {
         m_draw_callback(context);
         return;
     }
 
-    draw_frame(draw_list, rect, m_style, effects, m_opacity * m_style.alpha());
+    painter.frame(rect, m_style);
 }
