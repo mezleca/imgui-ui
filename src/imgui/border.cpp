@@ -62,10 +62,10 @@ append_segment_range(ImDrawList& draw_list, const BorderPathSegment& segment, fl
 }
 
 static std::size_t first_selected_run_segment(const BorderPath& path, uint8_t border) {
-    for (std::size_t index = 0; index < path.segments.size(); ++index) {
-        const BorderPathSegment& segment = path.segments[index];
+    for (std::size_t index = 0; index < path.size(); ++index) {
+        const BorderPathSegment& segment = path[index];
         if (segment.length > 0.0F && !is_selected(segment, border)) {
-            return (index + 1) % path.segments.size();
+            return (index + 1) % path.size();
         }
     }
     return 0;
@@ -76,8 +76,8 @@ static void walk_selected_segments(const BorderPath& path, uint8_t border, OnSeg
     // start after an unselected segment so a selected run is never split by the path seam.
     const std::size_t first = first_selected_run_segment(path, border);
 
-    for (std::size_t offset = 0; offset < path.segments.size(); ++offset) {
-        const BorderPathSegment& segment = path.segments[(first + offset) % path.segments.size()];
+    for (std::size_t offset = 0; offset < path.size(); ++offset) {
+        const BorderPathSegment& segment = path[(first + offset) % path.size()];
         if (segment.length <= 0.0F) {
             continue;
         }
@@ -99,8 +99,8 @@ static bool walk_side_segments(const BorderPath& path, uint8_t side, OnSegment&&
     const std::size_t first = first_selected_run_segment(path, side);
     bool started = false;
 
-    for (std::size_t offset = 0; offset < path.segments.size(); ++offset) {
-        const BorderPathSegment& segment = path.segments[(first + offset) % path.segments.size()];
+    for (std::size_t offset = 0; offset < path.size(); ++offset) {
+        const BorderPathSegment& segment = path[(first + offset) % path.size()];
         if (segment.length <= 0.0F) {
             continue;
         }
@@ -304,24 +304,21 @@ BorderPath ui::rounded_rect_border_path(Rect rect, float rounding) {
     const ImVec2 bottom_right = {rect.max.x - radius, rect.max.y - radius};
     const ImVec2 bottom_left = {rect.min.x + radius, rect.max.y - radius};
 
-    return {
-        .segments = {
-            {
-                line({top_left.x, rect.min.y}, {top_right.x, rect.min.y}, BORDER_TOP),
-                arc(top_right, radius, -HALF_PI, -QUARTER_PI, BORDER_TOP),
-                arc(top_right, radius, -QUARTER_PI, 0.0F, BORDER_RIGHT),
-                line({rect.max.x, top_right.y}, {rect.max.x, bottom_right.y}, BORDER_RIGHT),
-                arc(bottom_right, radius, 0.0F, QUARTER_PI, BORDER_RIGHT),
-                arc(bottom_right, radius, QUARTER_PI, HALF_PI, BORDER_BOTTOM),
-                line({bottom_right.x, rect.max.y}, {bottom_left.x, rect.max.y}, BORDER_BOTTOM),
-                arc(bottom_left, radius, HALF_PI, QUARTER_PI * 3.0F, BORDER_BOTTOM),
-                arc(bottom_left, radius, QUARTER_PI * 3.0F, PI, BORDER_LEFT),
-                line({rect.min.x, bottom_left.y}, {rect.min.x, top_left.y}, BORDER_LEFT),
-                arc(top_left, radius, PI, QUARTER_PI * 5.0F, BORDER_LEFT),
-                arc(top_left, radius, QUARTER_PI * 5.0F, PI + HALF_PI, BORDER_TOP),
-            },
-        },
-    };
+    // each corner is split between adjacent sides so partial borders stop at the corner midpoint.
+    return {{
+        line({top_left.x, rect.min.y}, {top_right.x, rect.min.y}, BORDER_TOP),
+        arc(top_right, radius, -HALF_PI, -QUARTER_PI, BORDER_TOP),
+        arc(top_right, radius, -QUARTER_PI, 0.0F, BORDER_RIGHT),
+        line({rect.max.x, top_right.y}, {rect.max.x, bottom_right.y}, BORDER_RIGHT),
+        arc(bottom_right, radius, 0.0F, QUARTER_PI, BORDER_RIGHT),
+        arc(bottom_right, radius, QUARTER_PI, HALF_PI, BORDER_BOTTOM),
+        line({bottom_right.x, rect.max.y}, {bottom_left.x, rect.max.y}, BORDER_BOTTOM),
+        arc(bottom_left, radius, HALF_PI, QUARTER_PI * 3.0F, BORDER_BOTTOM),
+        arc(bottom_left, radius, QUARTER_PI * 3.0F, PI, BORDER_LEFT),
+        line({rect.min.x, bottom_left.y}, {rect.min.x, top_left.y}, BORDER_LEFT),
+        arc(top_left, radius, PI, QUARTER_PI * 5.0F, BORDER_LEFT),
+        arc(top_left, radius, QUARTER_PI * 5.0F, PI + HALF_PI, BORDER_TOP),
+    }};
 }
 
 void ui::draw_border_path(
@@ -349,16 +346,4 @@ void ui::draw_border_path(
             stroke_dotted_path(draw_list, path, border, draw_color, thickness);
             return;
     }
-}
-
-void ui::draw_border(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, const Color& color) {
-    if (style.border() == BORDER_ALL && style.border_style() == BorderStyle::Solid) {
-        draw_list.AddRect(rect.min, rect.max, ImColor{color.rgba()}, style.border_radius(), style.border_thickness());
-        return;
-    }
-
-    draw_border_path(
-        draw_list, rounded_rect_border_path(rect, style.border_radius()), style.border(), color, style.border_thickness(),
-        style.border_style()
-    );
 }

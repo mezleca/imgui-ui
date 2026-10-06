@@ -1,4 +1,4 @@
-#include <imgui-ui/imgui/draw.hpp>
+#include <imgui-ui/imgui/painter.hpp>
 #include <imgui-ui/widgets/text-value.hpp>
 
 #include <algorithm>
@@ -88,20 +88,4 @@ void Painter::text_ellipsis(ImVec2 position, const Color& source, const GenericV
         line = line_end + 1;
         y += line_height;
     }
-}
-
-void ui::draw_text(ImDrawList& draw_list, ImVec2 position, const Color& color, std::string_view text) {
-    Painter(draw_list).text(position, color, text);
-}
-
-void ui::draw_text(
-    ImDrawList& draw_list, ImVec2 position, const Color& color, const GenericValue& text, const ImVec4* clip_rect
-) {
-    Painter(draw_list).text(position, color, text, clip_rect);
-}
-
-void ui::draw_text_ellipsis(
-    ImDrawList& draw_list, ImVec2 position, const Color& color, const GenericValue& text, ImVec4 clip_rect
-) {
-    Painter(draw_list).text_ellipsis(position, color, text, clip_rect);
 }

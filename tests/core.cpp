@@ -2,7 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "imgui-context.hpp"
-#include <imgui-ui/imgui/draw.hpp>
+#include <imgui-ui/imgui/border.hpp>
 #include <imgui-ui/imgui/effects/blur/blur.hpp>
 #include <imgui-ui/imgui/effects/effects.hpp>
 #include <imgui-ui/imgui/effects/shadow/shadow.hpp>
@@ -205,20 +205,20 @@ TEST_CASE("surface effect clips remain isolated while another surface paints", "
 TEST_CASE("rounded border paths split corners between adjacent sides") {
     const BorderPath path = rounded_rect_border_path({{10.0F, 20.0F}, {110.0F, 80.0F}}, 12.0F);
 
-    REQUIRE(path.segments[0].type == BorderPathSegmentType::Line);
-    REQUIRE(path.segments[0].length == Catch::Approx(76.0F));
-    REQUIRE(path.segments[1].type == BorderPathSegmentType::Arc);
-    REQUIRE(path.segments[1].sides == BORDER_TOP);
-    REQUIRE(path.segments[2].sides == BORDER_RIGHT);
-    REQUIRE(path.segments[5].sides == BORDER_BOTTOM);
-    REQUIRE(path.segments[8].sides == BORDER_LEFT);
-    REQUIRE(path.segments[1].end.x == Catch::Approx(106.49F).margin(0.01F));
-    REQUIRE(path.segments[8].start.y == Catch::Approx(76.49F).margin(0.01F));
+    REQUIRE(path[0].type == BorderPathSegmentType::Line);
+    REQUIRE(path[0].length == Catch::Approx(76.0F));
+    REQUIRE(path[1].type == BorderPathSegmentType::Arc);
+    REQUIRE(path[1].sides == BORDER_TOP);
+    REQUIRE(path[2].sides == BORDER_RIGHT);
+    REQUIRE(path[5].sides == BORDER_BOTTOM);
+    REQUIRE(path[8].sides == BORDER_LEFT);
+    REQUIRE(path[1].end.x == Catch::Approx(106.49F).margin(0.01F));
+    REQUIRE(path[8].start.y == Catch::Approx(76.49F).margin(0.01F));
 
     const BorderPath clamped = rounded_rect_border_path({{0.0F, 0.0F}, {40.0F, 20.0F}}, 30.0F);
-    REQUIRE(clamped.segments[0].length == Catch::Approx(20.0F));
-    REQUIRE(clamped.segments[3].length == Catch::Approx(0.0F));
-    REQUIRE(clamped.segments[1].length == Catch::Approx(std::numbers::pi_v<float> * 2.5F));
+    REQUIRE(clamped[0].length == Catch::Approx(20.0F));
+    REQUIRE(clamped[3].length == Catch::Approx(0.0F));
+    REQUIRE(clamped[1].length == Catch::Approx(std::numbers::pi_v<float> * 2.5F));
 }
 
 TEST_CASE("partial borders keep every draw style inside its selected side") {
@@ -230,7 +230,7 @@ TEST_CASE("partial borders keep every draw style inside its selected side") {
 
         const auto require_left_bounds = [&](BorderStyle style) {
             const int first_vertex = draw_list->VtxBuffer.Size;
-            draw_border_path(ui::draw_list(), path, BORDER_LEFT, rgb(255, 255, 255), 2.0F, style);
+            draw_border_path(*ImGui::GetWindowDrawList(), path, BORDER_LEFT, rgb(255, 255, 255), 2.0F, style);
             REQUIRE(draw_list->VtxBuffer.Size > first_vertex);
 
             float min_y = std::numeric_limits<float>::max();
@@ -245,7 +245,7 @@ TEST_CASE("partial borders keep every draw style inside its selected side") {
             REQUIRE(max_y < 79.0F);
         };
 
-        draw_border_path(ui::draw_list(), path, BORDER_NONE, rgb(255, 255, 255), 2.0F, BorderStyle::Solid);
+        draw_border_path(*ImGui::GetWindowDrawList(), path, BORDER_NONE, rgb(255, 255, 255), 2.0F, BorderStyle::Solid);
         REQUIRE(draw_list->VtxBuffer.Size == vertices_before);
 
         require_left_bounds(BorderStyle::Solid);
@@ -261,7 +261,7 @@ TEST_CASE("patterned borders keep every side visible") {
     ui_test::draw_window("patterned-border-test", [&] {
         const auto require_sides = [&](BorderStyle style) {
             const int first_vertex = ImGui::GetWindowDrawList()->VtxBuffer.Size;
-            draw_border_path(ui::draw_list(), path, BORDER_ALL, rgb(255, 255, 255), 2.0F, style);
+            draw_border_path(*ImGui::GetWindowDrawList(), path, BORDER_ALL, rgb(255, 255, 255), 2.0F, style);
             const auto& vertices = ImGui::GetWindowDrawList()->VtxBuffer;
             const auto has_side = [&](auto&& predicate) {
                 for (int index = first_vertex; index < vertices.Size; ++index) {

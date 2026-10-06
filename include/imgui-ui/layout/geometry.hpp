@@ -146,6 +146,7 @@ namespace ui {
 
     ImVec2 alignment_factor(Anchor alignment);
     ImVec2 clamp_position(Rect bounds, ImVec2 size, ImVec2 position);
+    Rect viewport_work_area();
 
     constexpr ResizeAxes operator&(ResizeAxes left, ResizeAxes right) {
         return static_cast<ResizeAxes>(static_cast<uint8_t>(left) & static_cast<uint8_t>(right));

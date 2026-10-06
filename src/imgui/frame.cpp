@@ -1,4 +1,4 @@
-#include <imgui-ui/imgui/draw.hpp>
+#include <imgui-ui/imgui/painter.hpp>
 #include <imgui-ui/imgui/paint-state.hpp>
 #include <imgui-ui/imgui/effects/blur/blur.hpp>
 #include <imgui-ui/imgui/effects/gradient/gradient.hpp>
@@ -90,15 +90,4 @@ void Painter::shadow(Rect rect, const ComputedStyle& style) const {
 void Painter::frame(Rect rect, const ComputedStyle& style, const std::optional<Color>& background) const {
     frame_effects(rect, style);
     frame_surface(rect, style, background);
-}
-
-void ui::draw_frame(
-    ImDrawList& draw_list, Rect rect, const ComputedStyle& style, EffectRegistry* effects, float opacity,
-    const std::optional<Color>& background
-) {
-    Painter(draw_list, nullptr, effects, opacity).frame(rect, style, background);
-}
-
-void ui::draw_frame_surface(ImDrawList& draw_list, Rect rect, const ComputedStyle& style, EffectRegistry* effects) {
-    Painter(draw_list, nullptr, effects).frame_surface(rect, style);
 }
