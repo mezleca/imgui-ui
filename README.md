@@ -12,19 +12,16 @@ imgui-ui provides:
 
 while keeping full compatibility with imgui internals.
 
-You can use your own Dear ImGui sources with `IMGUI_UI_EXTERNAL_IMGUI=ON` and `IMGUI_UI_IMGUI_DIR` pointing to their directory.
-The minimum supported version is **1.92.8**.
-
 # usage
-
-For SDL, enable `IMGUI_UI_BUILD_SDL` and link `imgui-ui::sdl` as below.
-For raylib instead, enable `IMGUI_UI_BUILD_RAYLIB` and link `imgui-ui::raylib`.
 
 ```cmake
 set(IMGUI_UI_BUILD_SDL ON)
 
-add_subdirectory(vendor/imgui-ui)
+# use custom imgui (needs to be set BEFORE including imgui-ui)
+# the minimum supported version is: 1.92.8
+set(IMGUI_UI_IMGUI_DIR "...")
 
+add_subdirectory(vendor/imgui-ui)
 target_link_libraries(my-app PRIVATE imgui-ui::sdl)
 ```
 

@@ -1,9 +1,9 @@
 include(FetchContent)
 
-if(IMGUI_UI_EXTERNAL_IMGUI)
+if(IMGUI_UI_IMGUI_DIR)
     get_filename_component(IMGUI_UI_IMGUI_DIR "${IMGUI_UI_IMGUI_DIR}" ABSOLUTE)
     if(NOT EXISTS "${IMGUI_UI_IMGUI_DIR}/imgui.h")
-        message(FATAL_ERROR "IMGUI_UI_EXTERNAL_IMGUI requires IMGUI_UI_IMGUI_DIR to point to an imgui source directory")
+        message(FATAL_ERROR "IMGUI_UI_IMGUI_DIR must point to an imgui source directory containing imgui.h")
     endif()
 else()
     set(IMGUI_UI_IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui")

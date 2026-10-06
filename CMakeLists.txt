@@ -10,10 +10,9 @@ option(IMGUI_UI_BUILD_SDL "build the SDL3/OpenGL backend" OFF)
 option(IMGUI_UI_BUILD_RAYLIB "build the raylib backend" OFF)
 option(IMGUI_UI_BUILD_TESTS "build the framework tests" ${PROJECT_IS_TOP_LEVEL})
 option(IMGUI_UI_BUILD_EXAMPLES "build the selected backend examples" OFF)
-option(IMGUI_UI_EXTERNAL_IMGUI "build imgui from user-provided sources" OFF)
 option(IMGUI_UI_ENABLE_SANITIZERS "enable sanitizers in debug builds" OFF)
 
-set(IMGUI_UI_IMGUI_DIR "" CACHE PATH "external imgui source directory")
+set(IMGUI_UI_IMGUI_DIR "" CACHE PATH "imgui source directory, empty uses vendor/imgui")
 
 include(cmake/sanitizers.cmake)
 include(cmake/dependencies.cmake)
