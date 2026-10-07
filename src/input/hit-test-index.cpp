@@ -71,9 +71,8 @@ HitTestIndex::Route HitTestIndex::route_at(ImVec2 position, EventType type) cons
     for (auto it = m_entries.rbegin(); it != m_entries.rend(); ++it) {
         ++m_checks;
         if (it->kind != EntryKind::Blocker || !it->rect.contains(position) || !contains(it->events, mask)) continue;
-        if (it->node != nullptr && (!it->node->visible() || !it->node->enabled() || it->node->removal_pending() ||
-                                    (it->node->parent() != nullptr && !it->node->parent()->accepts_input())))
-            continue;
+        // blockers ignore the owner's visual input state, but still require an enabled, visible branch.
+        if (it->node != nullptr && !it->node->Node::accepts_input()) continue;
 
         route.blocker = *it;
         break;

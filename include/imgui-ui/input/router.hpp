@@ -43,7 +43,7 @@ namespace ui {
         /// attaches owner and consumes selected events outside its input descendants within rect.
         void register_blocker(Node& owner, Rect rect, InputCallback callback = {}, EventMask events = EventMask::Pointer);
 
-        /// routes pointer presses, moves, and releases exclusively to node until all buttons are released.
+        /// routes presses and moves to node until all buttons are released. releases reach hit descendants and bubble to node.
         /// transferring capture or intercepting its release sends Cancel to the previous owner.
         bool capture_pointer(Node& node);
         void release_pointer();
@@ -86,8 +86,6 @@ namespace ui {
             std::vector<Node*> targets;
             /// records the button even when delivery is stopped. capture ends after the last release.
             bool down = false;
-            /// suppresses a synthesized click after the press prevents its default action.
-            bool prevent_click = false;
             /// repeats native input blocking on the matching pointer release.
             bool native_input_blocked = false;
         };
@@ -108,8 +106,10 @@ namespace ui {
         static void set_input_target(Node*& current, Node* next, bool InputState::* flag);
         void set_hovered(const HitTestIndex::Route& route);
 
-        /// records presses, routes the event, and ends capture and active state on release before deciding a click.
+        /// records press targets and native blocking. preventing the press clears its click candidates.
         bool dispatch_pointer(UiEvent& event);
+        /// delivers release, ends capture and active state, then emits a click for matching press targets.
+        bool dispatch_release(UiEvent& event);
         /// emits Click or ContextClick only for targets reached by both press and release and not prevented.
         bool dispatch_click(UiEvent& release, PressedPointer& pressed, const std::vector<Node*>& released);
 

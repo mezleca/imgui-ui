@@ -334,6 +334,51 @@ TEST_CASE("pointer capture stays exclusive across frames until the final button 
     );
 }
 
+TEST_CASE("ancestor capture preserves child release and click unless dragging prevents the click") {
+    InputRouter router;
+    Widget owner("carousel");
+    auto& card = owner.add<Widget>("card");
+    Widget background("background");
+    std::vector<EventType> events;
+    int releases = 0;
+    int background_releases = 0;
+    bool dragging = false;
+
+    owner.on_mouse_press([&](UiEvent&) { REQUIRE(router.capture_pointer(owner)); });
+    owner.on_mouse_release([&](UiEvent& event) {
+        ++releases;
+        router.release_pointer();
+        if (dragging) event.prevent_default();
+    });
+    card.on_event([&](UiEvent& event) { events.push_back(event.type); });
+    background.on_mouse_release([&](UiEvent&) { ++background_releases; });
+
+    SECTION("click without dragging") {
+        dragging = false;
+    }
+    SECTION("drag suppresses the click") {
+        dragging = true;
+    }
+
+    const Rect bounds = {{0.0F, 0.0F}, {40.0F, 40.0F}};
+    router.register_target(background, bounds);
+    router.register_target(card, bounds);
+    auto down = event_of(EventType::PointerDown, {5.0F, 5.0F});
+    router.dispatch(down);
+
+    router.begin_frame();
+    router.register_target(background, bounds);
+    router.register_target(card, bounds);
+    auto up = event_of(EventType::PointerUp, {5.0F, 5.0F});
+    router.dispatch(up);
+
+    std::vector<EventType> expected = {EventType::PointerDown, EventType::PointerUp};
+    if (!dragging) expected.push_back(EventType::Click);
+    REQUIRE(events == expected);
+    REQUIRE(releases == 1);
+    REQUIRE(background_releases == 0);
+}
+
 TEST_CASE("capture transferred by a release handler remains active") {
     InputRouter router;
     std::vector<EventType> events;

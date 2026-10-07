@@ -226,6 +226,8 @@ bool InputRouter::dispatch(UiEvent& event) {
 }
 
 bool InputRouter::dispatch_pointer(UiEvent& event) {
+    if (event.type == EventType::PointerUp) return dispatch_release(event);
+
     const int button_index = pointer_button_index(event.button);
 
     // keep the targets reached by this press and carry its native blocking and click prevention into release.
@@ -236,16 +238,18 @@ bool InputRouter::dispatch_pointer(UiEvent& event) {
 
         route_pointer(event, &pressed.targets);
 
-        pressed.prevent_click = event.default_prevented;
+        if (event.default_prevented) pressed.targets.clear();
         pressed.native_input_blocked = event.native_input_blocked;
-        return event.handled;
+    } else {
+        route_pointer(event);
     }
 
-    if (event.type != EventType::PointerUp) {
-        return route_pointer(event);
-    }
+    return event.handled;
+}
 
+bool InputRouter::dispatch_release(UiEvent& event) {
     // take the press before callbacks can hide, detach, or release its targets.
+    const int button_index = pointer_button_index(event.button);
     PressedPointer pressed;
     if (button_index >= 0) pressed = std::exchange(m_pressed[button_index], {});
     event.native_input_blocked |= pressed.native_input_blocked;
@@ -272,7 +276,7 @@ bool InputRouter::dispatch_pointer(UiEvent& event) {
 }
 
 bool InputRouter::dispatch_click(UiEvent& release, PressedPointer& pressed, const std::vector<Node*>& released) {
-    if (pressed.prevent_click || release.default_prevented ||
+    if (pressed.targets.empty() || release.default_prevented ||
         (release.button != PointerButton::Left && release.button != PointerButton::Right)) {
         return release.handled;
     }
@@ -328,7 +332,7 @@ bool InputRouter::dispatch_keyboard(UiEvent& event) {
     }
 
     for (auto it = nodes.rbegin(); it != nodes.rend() && !event.propagation_stopped; ++it) {
-        if ((*it)->m_input_router != this || !is_input_target(*it) || (scope != nullptr && !scope->contains(*it))) continue;
+        if ((*it)->m_input_router != this) continue;
         dispatch_branch(**it, event, visited, scope);
     }
 
@@ -346,7 +350,7 @@ bool InputRouter::route_pointer(UiEvent& event, std::vector<Node*>* reached, con
     if (event.type == EventType::PointerMove && m_pointer_capture != nullptr) return dispatch(*m_pointer_capture, event);
 
     // snapshot before callbacks can open another layer. newly registered targets wait for the next event.
-    const auto route = m_hit_test.route_at(event.position, event.type);
+    auto route = m_hit_test.route_at(event.position, event.type);
     Node* scope = route.blocker ? route.blocker->node : nullptr;
     Node* front = route.targets.empty() ? scope : route.targets.front().node;
 
@@ -360,8 +364,13 @@ bool InputRouter::route_pointer(UiEvent& event, std::vector<Node*>* reached, con
 
     if (m_pointer_capture != nullptr && (event.type == EventType::PointerDown || event.type == EventType::PointerUp)) {
         Node* captured = m_pointer_capture;
-        if (reached != nullptr && (event.type == EventType::PointerDown || front == captured)) reached->push_back(captured);
-        return dispatch(*captured, event);
+        if (event.type == EventType::PointerDown || !captured->contains(front)) {
+            if (reached != nullptr && (event.type == EventType::PointerDown || front == captured)) reached->push_back(captured);
+            return dispatch(*captured, event);
+        }
+
+        // release reaches hit descendants before bubbling to capture. unrelated overlapping branches stay excluded.
+        std::erase_if(route.targets, [captured](const auto& entry) { return !captured->contains(entry.node); });
     }
 
     dispatch_targets(event, route, reached, eligible);
@@ -379,7 +388,7 @@ void InputRouter::dispatch_targets(
         event.block_native_input();
         event.target = scope;
         if (route.blocker->callback) (*route.blocker->callback)(event);
-        if (is_input_target(scope)) dispatch_branch(*scope, event, visited, scope);
+        if (scope != nullptr) dispatch_branch(*scope, event, visited, scope);
         event.stop_propagation();
         return;
     }
@@ -394,10 +403,12 @@ void InputRouter::dispatch_targets(
         if (!eligible.empty() && std::find(eligible.begin(), eligible.end(), entry.node) == eligible.end()) continue;
 
         event.target = entry.node;
-        if (entry.callback) (*entry.callback)(event);
+        if (entry.callback) {
+            (*entry.callback)(event);
 
-        // recheck attachment and input eligibility after the entry callback before recording delivery or bubbling.
-        if (!still_attached(entry.node)) continue;
+            // callbacks can detach or disable the target before bubbling.
+            if (!still_attached(entry.node)) continue;
+        }
 
         if (reached != nullptr) reached->push_back(entry.node);
         dispatch_branch(*entry.node, event, visited, scope);
