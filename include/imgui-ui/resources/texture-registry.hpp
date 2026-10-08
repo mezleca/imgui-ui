@@ -2,6 +2,7 @@
 
 #include "asset-registry.hpp"
 
+#include <cstdio>
 #include <filesystem>
 #include <imgui.h>
 #include <memory>
@@ -47,6 +48,7 @@ namespace ui {
             }
 
             if (m_loader == nullptr) {
+                std::fprintf(stderr, "imgui-ui: cannot load texture '%s' without a TextureLoader\n", id.c_str());
                 return nullptr;
             }
 

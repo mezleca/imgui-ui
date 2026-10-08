@@ -30,9 +30,10 @@ const std::string& GenericValue::str() const {
     return m_string;
 }
 
-void GenericValue::set_font(ImFont* font) {
-    if (font == m_font) return;
+void GenericValue::set_font(ImFont* font, float size) {
+    if (font == m_font && size == m_font_size) return;
     m_font = font;
+    m_font_size = size;
     m_dirty = true;
 }
 
@@ -76,7 +77,7 @@ void GenericValue::recompute() const {
     }
 
     ImFont* font = m_font != nullptr ? m_font : ImGui::GetFont();
-    ImGui::PushFont(font);
+    ImGui::PushFont(font, m_font_size > 0.0F ? m_font_size : font->LegacySize);
     m_line_height = ImGui::GetTextLineHeight();
     m_text_size = ImGui::CalcTextSize(c_str(), nullptr, false, m_wrap_width);
 

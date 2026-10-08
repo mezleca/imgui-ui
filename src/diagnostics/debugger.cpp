@@ -620,7 +620,8 @@ void Debugger::set_font(std::string_view id, int size) {
         return;
     }
 
-    m_font = m_target.get_font(id, size);
+    m_font = m_target.get_font(id);
+    m_font_size = static_cast<float>(size);
 }
 
 bool Debugger::overlay_contains(ImVec2 position) const {
@@ -1676,7 +1677,7 @@ void Debugger::render() {
 
     const bool has_font = m_font != nullptr;
     if (has_font) {
-        ImGui::PushFont(m_font);
+        ImGui::PushFont(m_font, m_font_size);
     }
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {ITEM_SPACING, 4.0F});

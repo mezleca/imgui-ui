@@ -27,7 +27,7 @@ public:
 
 private:
     void on_measure() override {
-        ImGui::PushFont(font());
+        ImGui::PushFont(font(), font_size());
         const float line_height = ImGui::GetTextLineHeight();
         ImGui::PopFont();
         set_measured_size({0.0F, line_height}, false, true);
@@ -98,7 +98,7 @@ void TextInputWidget::event(UiEvent& event) {
 
 void TextInputWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
-    set_font(surface().get_primary_font(18));
+    set_font(surface().get_primary_font(), 18.0F);
     const TransitionSpec transition{0.25F, easing::out_quad};
     m_label_spacing = {theme.metrics.item_inner_spacing.x, theme.metrics.item_spacing.y};
     update_label_layout();

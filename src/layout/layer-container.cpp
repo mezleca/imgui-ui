@@ -25,6 +25,10 @@ ImGuiWindowFlags LayerContainer::child_window_flags() const {
     return Container::child_window_flags() | ImGuiWindowFlags_NoMouseInputs;
 }
 
+ImGuiWindowFlags LayerContainer::window_flags() const {
+    return constants::WINDOW_FLAGS;
+}
+
 void LayerContainer::on_layout() {
     if (has_size()) {
         return;
@@ -33,12 +37,12 @@ void LayerContainer::on_layout() {
     if (m_mode == LayerMode::Inline && parent() != nullptr) {
         const Rect parent_content = layout().parent_content_rect();
         if (parent_content.valid()) {
-            assign_size(parent_content.size());
+            assign_size(layout().resolve_size(parent_content.size()));
             return;
         }
     }
 
-    assign_size(ImGui::GetMainViewport()->WorkSize);
+    assign_size(layout().resolve_size(ImGui::GetMainViewport()->WorkSize));
 }
 
 bool LayerContainer::paint() {
@@ -73,27 +77,34 @@ bool LayerContainer::paint_inline() {
 }
 
 bool LayerContainer::paint_window() {
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const bool accepts_input = this->accepts_input();
-    ImGuiWindowFlags window_flags = constants::WINDOW_FLAGS;
+    ImGuiWindowFlags flags = window_flags();
     // allow the first begin call to raise the window. later frames keep its existing stacking order.
     if (!m_window_initialized) {
-        window_flags &= ~ImGuiWindowFlags_NoBringToFrontOnFocus;
+        flags &= ~ImGuiWindowFlags_NoBringToFrontOnFocus;
     }
     if (!accepts_input) {
-        window_flags |= ImGuiWindowFlags_NoInputs;
+        flags |= ImGuiWindowFlags_NoInputs;
     }
 
-    ImGui::SetNextWindowPos(viewport->WorkPos);
-    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImVec2 position = layout().layout_rect().min;
+    if (parent() == nullptr) {
+        const ImVec2 viewport_position = ImGui::GetMainViewport()->WorkPos;
+        position = {position.x + viewport_position.x, position.y + viewport_position.y};
+    }
+
+    // set movable windows' position and resizable windows' size only on first use.
+    ImGui::SetNextWindowPos(position, (flags & ImGuiWindowFlags_NoMove) ? ImGuiCond_Always : ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(layout().size(), (flags & ImGuiWindowFlags_NoResize) ? ImGuiCond_Always : ImGuiCond_FirstUseEver);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, box_insets().window_padding());
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{});
-    ImGui::Begin(id().c_str(), nullptr, window_flags);
+    ImGui::Begin(id().c_str(), nullptr, flags);
     m_window_initialized = true;
 
     const Rect window_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
+    assign_size(window_rect.size());
     set_layout_rect(window_rect);
     set_visual_rect(window_rect);
 

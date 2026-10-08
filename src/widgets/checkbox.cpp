@@ -26,7 +26,7 @@ CheckboxWidget::CheckboxWidget(bool& value, std::string label, std::string id)
 
 void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
-    set_font(surface().get_primary_font(16));
+    set_font(surface().get_primary_font(), 16.0F);
     set_spacing(theme.metrics.item_inner_spacing.x);
     m_label_node->configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({0.0F, 2.0F}); });
 

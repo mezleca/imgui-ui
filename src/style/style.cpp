@@ -19,6 +19,15 @@ Style& Style::font(ImFont* value) {
     return *this;
 }
 
+Style& Style::font_size(float value) {
+    value = std::max(0.0F, value);
+    if (m_font_size == value) return *this;
+
+    m_font_size = value;
+    notify_change(true);
+    return *this;
+}
+
 Style& Style::padding(ImVec2 value, TransitionSpec transition) {
     return set_animated_transition(&Style::m_padding, nonnegative_insets(value), transition);
 }
@@ -159,10 +168,12 @@ Style& Style::scrollbar_grab_active_color(Color value, TransitionSpec transition
 
 bool Style::lerp(Style& style, const Style& target, float dt) {
     const ImFont* previous_font = style.m_font;
+    const float previous_font_size = style.m_font_size;
     const BoxSizing previous_box_sizing = style.m_box_sizing;
     bool measure_changed = false;
 
     style.m_font = target.m_font;
+    style.m_font_size = target.m_font_size;
     style.m_box_sizing = target.m_box_sizing;
     style.m_overflow = target.m_overflow;
     style.m_alpha = target.m_alpha;
@@ -218,8 +229,9 @@ bool Style::lerp(Style& style, const Style& target, float dt) {
         );
     }
 
-    if (previous_font != style.m_font || previous_box_sizing != style.m_box_sizing || measure_changed) {
-        style.notify_change(previous_font != style.m_font);
+    const bool font_changed = previous_font != style.m_font || previous_font_size != style.m_font_size;
+    if (font_changed || previous_box_sizing != style.m_box_sizing || measure_changed) {
+        style.notify_change(font_changed);
     }
 
     return transitioning;

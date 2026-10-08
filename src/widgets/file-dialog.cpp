@@ -15,7 +15,7 @@ FileDialogWidget::FileDialogWidget(std::string label, std::string id)
 
 void FileDialogWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
-    set_font(surface().get_primary_font(18));
+    set_font(surface().get_primary_font(), 18.0F);
 
     configure_all_styles([&theme](Style& style) {
         style.border_color(theme.border_color, 0.15F)

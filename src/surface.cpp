@@ -68,9 +68,9 @@ void Surface::set_theme(Theme theme) {
     m_root->apply_theme(m_theme);
 }
 
-ImFont* Surface::resolve_font(Font* font, int size) {
+ImFont* Surface::resolve_font(Font* font) {
     if (font != nullptr) {
-        ImFont* result = font->get(size);
+        ImFont* result = font->get();
         if (result != nullptr) {
             return result;
         }
@@ -79,14 +79,21 @@ ImFont* Surface::resolve_font(Font* font, int size) {
     return ImGui::GetFont();
 }
 
-ImFont* Surface::get_font(std::string_view id, int size) const {
+ImFont* Surface::get_font(std::string_view id) const {
     const ImGuiContextScope scope(m_context);
-    return resolve_font(m_runtime.fonts().find(id), size);
+    return resolve_font(m_runtime.fonts().find(id));
 }
 
-ImFont* Surface::get_primary_font(int size) const {
+ImFont* Surface::get_primary_font() const {
     const ImGuiContextScope scope(m_context);
-    return resolve_font(m_primary_font, size);
+    return resolve_font(m_primary_font);
+}
+
+void Surface::set_primary_font(Font* font) {
+    const ImGuiContextScope scope(m_context);
+    m_primary_font = font;
+    ImFont* resolved = font != nullptr ? font->get() : nullptr;
+    ImGui::GetIO().FontDefault = resolved;
 }
 
 void Surface::initialize(bool enable_debugger) {
@@ -104,6 +111,7 @@ void Surface::initialize(bool enable_debugger) {
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
     io.LogFilename = nullptr;
+    io.Fonts->AddFontDefaultVector();
 
     configure_style(m_backend->content_scale());
     m_backend->register_effects(m_effects);

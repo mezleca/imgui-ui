@@ -12,7 +12,7 @@ ButtonWidget::ButtonWidget(std::string text, LayoutSize size) : DrawListWidget({
 }
 
 void ButtonWidget::apply_theme_defaults(const Theme& theme) {
-    set_font(surface().get_primary_font(16));
+    set_font(surface().get_primary_font(), 16.0F);
     configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color)
             .background_color(theme.background_secondary_color)
@@ -50,7 +50,7 @@ void ButtonWidget::click_event(UiEvent&) {
 }
 
 void ButtonWidget::on_measure() {
-    m_text.set_font(font());
+    m_text.set_font(font(), font_size());
     m_text.set_line_height(computed_style().line_height());
     set_measured_content_size(m_text.text_size(), true, true);
 }

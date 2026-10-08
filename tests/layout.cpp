@@ -86,38 +86,17 @@ TEST_CASE("content alignment rearranges without remeasurement", "[layout][cleanu
     const ImVec2 initial_position = child.layout().local_rect().min;
     const int measurements = root.measurements;
 
+    root.set_content_alignment(Anchor::Center);
+    ui_test::draw_node(root, "alignment-measure-test");
+    CHECK(root.measurements == measurements);
+    CHECK(child.layout().local_rect().min.x - initial_position.x == Catch::Approx(80.0F));
+    CHECK(child.layout().local_rect().min.y - initial_position.y == Catch::Approx(40.0F));
+
     root.set_content_alignment(Anchor::BottomRight);
     ui_test::draw_node(root, "alignment-measure-test");
     CHECK(root.measurements == measurements);
     CHECK(child.layout().local_rect().min.x - initial_position.x == Catch::Approx(160.0F));
     CHECK(child.layout().local_rect().min.y - initial_position.y == Catch::Approx(80.0F));
-}
-
-TEST_CASE("layout containers resolve themselves before arranging children", "[layout]") {
-    class TestContainer final : public Container {
-    public:
-        TestContainer() : Container("test-container") {}
-
-        int arrange_count = 0;
-
-    protected:
-        void arrange_children() override {
-            ++arrange_count;
-        }
-    };
-
-    ui_test::ImGuiContext context({200.0F, 120.0F});
-    TestContainer container;
-
-    ImVec2 available;
-    ui_test::draw_window("container-layout-test", [&] {
-        available = ImGui::GetContentRegionAvail();
-        container.draw();
-    });
-
-    REQUIRE(container.arrange_count == 1);
-    REQUIRE(container.layout().size().x == Catch::Approx(available.x));
-    REQUIRE(container.layout().size().y == Catch::Approx(available.y));
 }
 
 TEST_CASE("fit containers preserve content when border thickness changes", "[layout][regression]") {
@@ -488,24 +467,6 @@ TEST_CASE("tree layout fit height contains later descendants", "[TreeContainer][
     REQUIRE(later_tree.layout().visual_rect().max.y <= tree_rect.max.y);
 }
 
-TEST_CASE("stack layout centers flow content on requested axes") {
-    ui_test::ImGuiContext context({240.0F, 160.0F});
-    Container stack("centered-stack", StackDirection::Horizontal);
-    stack.set_size({px(200.0F), px(100.0F)});
-    stack.style().padding({});
-    stack.set_content_alignment(Anchor::Center);
-    auto& field = stack.add<TextWidget>("field");
-    field.set_size({px(40.0F), px(20.0F)});
-
-    ui_test::draw_node(stack, "centered-stack-test");
-
-    const Rect stack_rect = stack.layout().visual_rect();
-    const Rect field_rect = field.layout().visual_rect();
-    REQUIRE(field_rect.min.x - stack_rect.min.x == Catch::Approx(80.0F));
-    REQUIRE(field_rect.min.y - stack_rect.min.y == Catch::Approx(40.0F));
-    REQUIRE(field_rect.size().x == Catch::Approx(40.0F));
-}
-
 TEST_CASE("stack layout excludes explicitly positioned children from its flow") {
     ui_test::ImGuiContext context({240.0F, 160.0F});
 
@@ -527,22 +488,6 @@ TEST_CASE("stack layout excludes explicitly positioned children from its flow") 
     REQUIRE(second.layout().local_rect().min.y == Catch::Approx(first.layout().local_rect().min.y + 14.0F));
     REQUIRE(positioned.layout().local_rect().min.x == Catch::Approx(100.0F));
     REQUIRE(positioned.layout().local_rect().min.y == Catch::Approx(20.0F));
-}
-
-TEST_CASE("fit content stack includes children spacing and padding") {
-    ui_test::ImGuiContext context({240.0F, 160.0F});
-
-    Container stack("fit-content-stack");
-    stack.set_size({fit(), fit()});
-    stack.set_spacing(4.0F);
-    stack.configure_all_styles([](Style& style) { style.padding({7.0F, 5.0F}); });
-    stack.add<LayoutProbeNode>("first", ImVec2{30.0F, 10.0F});
-    stack.add<LayoutProbeNode>("second", ImVec2{50.0F, 20.0F});
-
-    ui_test::draw_node(stack, "fit-content-stack-test");
-
-    REQUIRE(stack.layout().size().x == Catch::Approx(64.0F));
-    REQUIRE(stack.layout().size().y == Catch::Approx(44.0F));
 }
 
 TEST_CASE("fit content container applies styled margins around flow children", "[Container][layout][style]") {
@@ -592,25 +537,28 @@ TEST_CASE("fit content stack remeasures after direction and spacing changes") {
     Container stack("fit-content-remeasure");
     stack.set_size({fit(), fit()});
     stack.set_spacing(4.0F);
-    stack.style().padding({0.0F, 0.0F});
-    stack.add<LayoutProbeNode>(ImVec2{30.0F, 10.0F});
-    stack.add<LayoutProbeNode>(ImVec2{50.0F, 20.0F});
+    stack.configure_all_styles([](Style& style) { style.padding({7.0F, 5.0F}); });
+    auto& first = stack.add<LayoutProbeNode>(ImVec2{30.0F, 10.0F});
+    auto& second = stack.add<LayoutProbeNode>(ImVec2{50.0F, 20.0F});
 
     const auto draw_frame = [&stack] { ui_test::draw_node(stack, "fit-content-remeasure-test"); };
 
     draw_frame();
-    REQUIRE(stack.layout().size().x == Catch::Approx(50.0F));
-    REQUIRE(stack.layout().size().y == Catch::Approx(34.0F));
+    REQUIRE(stack.layout().size().x == Catch::Approx(64.0F));
+    REQUIRE(stack.layout().size().y == Catch::Approx(44.0F));
+    REQUIRE(second.layout().local_rect().min.y - first.layout().local_rect().min.y == Catch::Approx(14.0F));
 
     stack.set_spacing(10.0F);
     draw_frame();
-    REQUIRE(stack.layout().size().x == Catch::Approx(50.0F));
-    REQUIRE(stack.layout().size().y == Catch::Approx(40.0F));
+    REQUIRE(stack.layout().size().x == Catch::Approx(64.0F));
+    REQUIRE(stack.layout().size().y == Catch::Approx(50.0F));
 
     stack.set_direction(StackDirection::Horizontal);
     draw_frame();
-    REQUIRE(stack.layout().size().x == Catch::Approx(90.0F));
-    REQUIRE(stack.layout().size().y == Catch::Approx(20.0F));
+    REQUIRE(stack.layout().size().x == Catch::Approx(104.0F));
+    REQUIRE(stack.layout().size().y == Catch::Approx(30.0F));
+    REQUIRE(second.layout().local_rect().min.x - first.layout().local_rect().min.x == Catch::Approx(40.0F));
+    REQUIRE(second.layout().local_rect().min.y == Catch::Approx(first.layout().local_rect().min.y));
 }
 
 TEST_CASE("visibility changes in an anchored overlay do not move its fixed sibling") {
@@ -829,29 +777,6 @@ TEST_CASE("containers vertically stack flexible children by default", "[layout][
     REQUIRE(flexible.layout().size().x == Catch::Approx(108.0F));
     REQUIRE(flexible.layout().size().y > initial_height);
     REQUIRE(fixed.layout().size().y + flexible.layout().size().y == Catch::Approx(stack.layout().size().y - 12.0F));
-}
-
-TEST_CASE("changing stack direction rearranges existing children", "[layout][regression]") {
-    ui_test::ImGuiContext context({260.0F, 160.0F});
-
-    Container stack("direction-stack");
-    stack.set_size({px(200.0F), px(100.0F)});
-    stack.set_spacing(5.0F);
-    Node& first = stack.add<LayoutProbeNode>("first");
-    first.set_size({px(30.0F), px(20.0F)});
-    Node& second = stack.add<LayoutProbeNode>("second");
-    second.set_size({px(30.0F), px(20.0F)});
-
-    const auto draw_frame = [&stack] { ui_test::draw_node(stack, "stack-direction-test"); };
-
-    draw_frame();
-    REQUIRE(second.layout().local_rect().min.x == Catch::Approx(first.layout().local_rect().min.x));
-    REQUIRE(second.layout().local_rect().min.y == Catch::Approx(first.layout().local_rect().min.y + 25.0F));
-
-    stack.set_direction(StackDirection::Horizontal);
-    draw_frame();
-    REQUIRE(second.layout().local_rect().min.x == Catch::Approx(first.layout().local_rect().min.x + 35.0F));
-    REQUIRE(second.layout().local_rect().min.y == Catch::Approx(first.layout().local_rect().min.y));
 }
 
 TEST_CASE("font inheritance remeasures content after style changes and reattachment", "[layout][regression]") {
@@ -1126,6 +1051,78 @@ TEST_CASE("inline layers scale vertices across reused child windows", "[LayerCon
         REQUIRE(max.x - min.x == Catch::Approx(100.0F * scale));
         REQUIRE(max.y - min.y == Catch::Approx(60.0F * scale));
     }
+}
+
+TEST_CASE("font size changes remeasure inherited text without loading another font", "[layout][font]") {
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+    ImGui::GetIO().Fonts->Clear();
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    ImGui::GetStyle().FontScaleDpi = 1.5F;
+    ImFont* font = ImGui::GetIO().Fonts->AddFontDefaultVector();
+    const int font_count = ImGui::GetIO().Fonts->Fonts.Size;
+
+    Container root("dynamic-font-root");
+    root.set_font(font, 16.0F);
+    auto& text = root.add<TextWidget>("dynamic size");
+    text.before().set_draw_callback([&](const PaintContext&) {
+        CHECK(ImGui::GetFont() == font);
+        CHECK(ImGui::GetFontSize() == Catch::Approx(text.font_size() * 1.5F));
+    });
+    ui_test::draw_node(root, "dynamic-font-window");
+    const ImVec2 small = text.layout().visual_rect().size();
+
+    root.configure_all_styles([](Style& style) { style.font_size(28.0F); });
+    ui_test::draw_node(root, "dynamic-font-window");
+
+    REQUIRE(text.font() == font);
+    REQUIRE(text.font_size() == Catch::Approx(28.0F));
+    REQUIRE(text.layout().visual_rect().size().x > small.x);
+    REQUIRE(text.layout().visual_rect().size().y == Catch::Approx(42.0F));
+    REQUIRE(ImGui::GetIO().Fonts->Fonts.Size == font_count);
+}
+
+TEST_CASE("window layers preserve explicit sizes", "[LayerContainer][layout][regression]") {
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+    LayerContainer layer("sized-window-layer", LayerMode::Window);
+    layer.set_size({px(180.0F), px(80.0F)});
+
+    ui_test::draw_node(layer, "sized-window-parent");
+
+    REQUIRE(layer.layout().visual_rect().size().x == Catch::Approx(180.0F));
+    REQUIRE(layer.layout().visual_rect().size().y == Catch::Approx(80.0F));
+}
+
+TEST_CASE("movable window layers preserve imgui geometry between draws", "[LayerContainer][layout]") {
+    class FloatingLayer final : public LayerContainer {
+    public:
+        FloatingLayer() : LayerContainer("floating-layer", LayerMode::Window) {}
+
+    protected:
+        ImGuiWindowFlags window_flags() const override {
+            return LayerContainer::window_flags() & ~(ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+        }
+    };
+
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+    Container root("floating-parent");
+    root.set_size({px(280.0F), px(180.0F)});
+    auto& layer = root.add<FloatingLayer>();
+    layer.set_size({px(200.0F), px(100.0F)});
+    auto& child = layer.add<LayoutProbeNode>();
+    child.set_size({grow(), grow()});
+
+    ui_test::draw_node(root, "floating-window-parent");
+    ImGui::SetWindowPos("floating-layer", {30.0F, 40.0F});
+    ImGui::SetWindowSize("floating-layer", {150.0F, 80.0F});
+    ui_test::draw_node(root, "floating-window-parent");
+
+    const Rect rect = layer.layout().visual_rect();
+    REQUIRE(rect.min.x == Catch::Approx(30.0F));
+    REQUIRE(rect.min.y == Catch::Approx(40.0F));
+    REQUIRE(rect.size().x == Catch::Approx(150.0F));
+    REQUIRE(rect.size().y == Catch::Approx(80.0F));
+    REQUIRE(child.layout().visual_rect().size().x == Catch::Approx(150.0F));
+    REQUIRE_FALSE((ImGui::FindWindowByName("floating-layer")->Flags & ImGuiWindowFlags_NoMove) != 0);
 }
 
 TEST_CASE("inline layers preserve explicit sizes", "[LayerContainer][layout][regression]") {

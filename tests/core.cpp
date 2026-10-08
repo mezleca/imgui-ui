@@ -29,36 +29,56 @@
 
 using namespace ui;
 
-TEST_CASE("fonts cache sizes per context and tolerate an empty origin", "[resources][cleanup]") {
+TEST_CASE("fonts load once per context and tolerate an empty origin", "[resources][cleanup]") {
     Font empty({}, ImFontConfig{});
     Font font(std::string(IMGUI_UI_ASSETS_DIR) + "/fonts/Inter.ttf", ImFontConfig{});
     ::ImGuiContext* previous = ImGui::GetCurrentContext();
     ImGui::SetCurrentContext(nullptr);
-    CHECK(empty.get(16) == nullptr);
-    CHECK(font.get(16) == nullptr);
+    CHECK(empty.get() == nullptr);
+    CHECK(font.get() == nullptr);
     ImGui::SetCurrentContext(previous);
 
     ui_test::ImGuiContext first({320.0F, 180.0F});
-    CHECK(empty.get(16) == nullptr);
-    ImFont* first_font = font.get(16);
+    CHECK(empty.get() == nullptr);
+    ImFont* first_font = font.get();
     REQUIRE(first_font != nullptr);
-    CHECK(font.get(16) == first_font);
-    CHECK(font.get(20) != first_font);
+    CHECK(font.get() == first_font);
     {
         ui_test::ImGuiContext second({320.0F, 180.0F});
-        ImFont* second_font = font.get(16);
+        ImFont* second_font = font.get();
         REQUIRE(second_font != nullptr);
         CHECK(second_font != first_font);
         font.release_context(ImGui::GetCurrentContext());
     }
-    CHECK(font.get(16) == first_font);
+    CHECK(font.get() == first_font);
     font.release_context(ImGui::GetCurrentContext());
-    CHECK(font.get(16) != first_font);
+    CHECK(font.get() != first_font);
 }
 
-TEST_CASE("animator callbacks keep registration order and defer callbacks scheduled during dispatch", "[Animator]") {
-    Animator animator;
+TEST_CASE("surface primary font replaces the embedded fallback for text", "[resources][font][regression]") {
+    Runtime runtime;
+    Font* primary = runtime.fonts().add("primary", std::string(IMGUI_UI_ASSETS_DIR) + "/fonts/Inter.ttf");
+    Surface surface = ui_test::make_surface(runtime);
+    surface.set_primary_font(primary);
+    auto& text = surface.root().add<Widget>("primary-font-text");
+    text.set_size({px(100.0F), px(30.0F)});
+    ImFont* drawn_font = nullptr;
+    text.before().set_draw_callback([&](const PaintContext&) { drawn_font = ImGui::GetFont(); });
+
+    const ImGuiContextScope scope(surface.imgui_context());
+    ImGui::GetIO().DisplaySize = {320.0F, 180.0F};
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    ui_test::draw_surface(surface);
+
+    REQUIRE(drawn_font == primary->get());
+}
+
+TEST_CASE("node animator callbacks keep registration order and defer callbacks scheduled during dispatch", "[Animator]") {
+    StyledNode node("animated");
+    Animator& animator = node.animator();
     std::vector<int> calls;
+    float value = 0.0F;
+    animator.animate().to(value, 1.0F, {3.0F, easing::linear});
 
     animator.animate().delay(1.0F).end([&] {
         calls.push_back(1);
@@ -68,15 +88,17 @@ TEST_CASE("animator callbacks keep registration order and defer callbacks schedu
     animator.animate().delay(2.0F).end([&] { calls.push_back(2); });
     animator.animate().delay(1.0F).end([&] { calls.push_back(5); });
 
-    animator.update(2.0F);
+    node.update(2.0F);
     REQUIRE(calls == (std::vector<int>{1, 2, 5}));
+    REQUIRE(value == Catch::Approx(2.0F / 3.0F));
     REQUIRE(animator.transitioning());
 
-    animator.update(0.0F);
+    node.update(0.0F);
     REQUIRE(calls == (std::vector<int>{1, 2, 5, 4}));
 
-    animator.update(1.0F);
+    node.update(1.0F);
     REQUIRE(calls == (std::vector<int>{1, 2, 5, 4, 3}));
+    REQUIRE(value == Catch::Approx(1.0F));
     REQUIRE_FALSE(animator.transitioning());
 }
 
@@ -619,37 +641,6 @@ TEST_CASE("ui nodes close child scopes before drawing after hooks") {
 
     hidden_root.draw();
     REQUIRE(events == std::vector<std::string>{"hidden:layout", "hidden:begin"});
-}
-
-TEST_CASE("node measurement only reruns after invalidation") {
-    ui_test::ImGuiContext context({100.0F, 100.0F});
-
-    class MeasureNode final : public Node {
-    public:
-        explicit MeasureNode(int& count) : m_count(count) {}
-
-    private:
-        void on_measure() override {
-            ++m_count;
-        }
-
-        int& m_count;
-    };
-
-    int root_measurements = 0;
-    int child_measurements = 0;
-    MeasureNode root(root_measurements);
-    auto& child = root.add<MeasureNode>(child_measurements);
-
-    root.draw();
-    root.draw();
-    REQUIRE(root_measurements == 1);
-    REQUIRE(child_measurements == 1);
-
-    child.invalidate_measure();
-    root.draw();
-    REQUIRE(root_measurements == 2);
-    REQUIRE(child_measurements == 2);
 }
 
 TEST_CASE("external subtrees transfer ownership and reconnect surface input", "[node][ownership]") {

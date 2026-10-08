@@ -388,6 +388,42 @@ private:
     GradientType m_type;
 };
 
+class DemoFloatingWindow final : public LayerContainer {
+public:
+    DemoFloatingWindow() : LayerContainer("demo-floating-window", LayerMode::Window) {
+        set_layout({
+            .size = {px(320.0F), px(180.0F)},
+            .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-24.0F, 24.0F}},
+            .in_flow = false,
+        });
+        set_spacing(12.0F);
+        on_event([](UiEvent& event) {
+            if (ui::contains(EventMask::Pointer, event_mask(event.type))) event.stop_propagation();
+        });
+
+        add<TextWidget>("floating window");
+        add<TextWidget>("drag the empty area to move\ndrag a corner to resize");
+    }
+
+protected:
+    ImGuiWindowFlags window_flags() const override {
+        return LayerContainer::window_flags() &
+               ~(ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus);
+    }
+
+    void apply_theme_defaults(const Theme& theme) override {
+        LayerContainer::apply_theme_defaults(theme);
+        set_font(surface().get_primary_font(), 16.0F);
+        configure_all_styles([&theme](Style& style) {
+            style.background_color(theme.background_secondary_color)
+                .padding({14.0F, 14.0F})
+                .border(BORDER_ALL)
+                .border_color(theme.accent_color)
+                .border_radius(8.0F);
+        });
+    }
+};
+
 class InputBlocker final : public DemoPanel {
 public:
     InputBlocker() : DemoPanel("InputBlocker") {
@@ -474,7 +510,7 @@ public:
 
 protected:
     void apply_theme_defaults(const Theme& theme) override {
-        set_font(surface().get_primary_font(14));
+        set_font(surface().get_primary_font(), 14.0F);
         m_fill_color = theme.accent_color;
         configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
@@ -962,7 +998,7 @@ static void apply_border_style(Node& node, BorderStyle style) {
 void setup_demo(Surface& surface, std::string backend) {
     Runtime& runtime = surface.runtime();
 #ifdef IMGUI_UI_ASSETS_DIR
-    // register fonts before widgets request them. sizes load lazily per imgui context.
+    // register fonts before widgets request them. each font loads once per imgui context.
     const std::filesystem::path assets = std::filesystem::path{IMGUI_UI_ASSETS_DIR};
     runtime.fonts().add("Inter Regular", assets / "fonts/Inter.ttf");
     surface.set_primary_font(runtime.fonts().find("Inter Regular"));
@@ -976,6 +1012,8 @@ void setup_demo(Surface& surface, std::string backend) {
 
     auto& demo = surface.root().add<DemoScreen>();
     demo.setup(std::move(backend));
+
+    surface.root().add<DemoFloatingWindow>();
 
     auto& overlay = demo.add<LayerContainer>("##demo-overlay");
     demo.setup_dynamic_nodes(overlay);

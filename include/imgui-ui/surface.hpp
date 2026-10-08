@@ -61,16 +61,14 @@ namespace ui {
             return m_done;
         }
 
-        /// returns a registered font variation, or imgui's current font when it is unavailable.
-        ImFont* get_font(std::string_view id, int size) const;
+        /// returns the registered font, or imgui's current font when it is unavailable.
+        ImFont* get_font(std::string_view id) const;
 
         /// sets the font inherited by widgets that use the primary font.
-        void set_primary_font(Font* font) {
-            m_primary_font = font;
-        }
+        void set_primary_font(Font* font);
 
-        /// resolves a size from the primary font, falling back to imgui's current font.
-        ImFont* get_primary_font(int size) const;
+        /// returns the primary font, falling back to imgui's current font.
+        ImFont* get_primary_font() const;
 
         InputRouter& input_router() {
             return m_input_router;
@@ -135,7 +133,7 @@ namespace ui {
         }
 
     private:
-        static ImFont* resolve_font(Font* font, int size);
+        static ImFont* resolve_font(Font* font);
         void initialize(bool enable_debugger);
         void configure_style(float main_scale);
         void apply_theme_metrics();

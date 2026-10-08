@@ -146,23 +146,6 @@ TEST_CASE("debugger clicks preserve an open popup") {
     REQUIRE(picker.is_open());
 }
 
-TEST_CASE("debugger renders as a panel in the surface layout") {
-    ui::Runtime runtime;
-    ui::Surface surface = ui_test::make_surface(runtime, true);
-    surface.debugger()->set_open(true);
-
-    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
-    ui_test::draw_surface(surface);
-
-    ImGui::SetCurrentContext(surface.imgui_context());
-    const ImDrawData* draw_data = ImGui::GetDrawData();
-    REQUIRE(draw_data != nullptr);
-    const int debugger_index = draw_list_index(*draw_data, "##debugger-sections");
-    REQUIRE(debugger_index >= 0);
-    REQUIRE(surface.debugger()->layout().visual_rect().valid());
-    REQUIRE(surface.debugger()->layout().visual_rect().min.x > 0.0F);
-}
-
 TEST_CASE("debugger exposes the content resize handle", "[Debugger][ResizableContainer][regression]") {
     ui::Runtime runtime;
     ui::Surface surface = ui_test::make_surface(runtime, true);

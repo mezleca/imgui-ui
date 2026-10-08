@@ -10,7 +10,7 @@ using namespace ui;
 
 void NumberInputWidget::apply_theme_defaults(const Theme& theme) {
     const TransitionSpec transition{0.25F, easing::out_quad};
-    set_font(surface().get_primary_font(18));
+    set_font(surface().get_primary_font(), 18.0F);
     m_thumb_color = theme.controls.mark_color;
     m_thumb_size = theme.controls.thumb_size;
     m_label_spacing = theme.metrics.item_spacing.y;
@@ -98,11 +98,11 @@ NumberInputWidget& NumberInputWidget::set_thumb_color(Color color) {
 
 void NumberInputWidget::on_measure() {
     ImVec2 size{};
-    m_label.set_font(font());
+    m_label.set_font(font(), font_size());
 
     if (layout().size_spec().height.mode != LayoutSizeMode::Fixed) {
         if (ImGui::GetCurrentContext() != nullptr) {
-            ImGui::PushFont(font() != nullptr ? font() : ImGui::GetFont());
+            ImGui::PushFont(font(), font_size());
             size.y = ImGui::GetTextLineHeight();
             ImGui::PopFont();
         }
@@ -152,7 +152,7 @@ bool NumberInputWidget::draw_value(T& value) {
 bool NumberInputWidget::paint() {
     const ComputedStyle& current_style = computed_style();
     ImVec2 frame_padding = current_style.padding();
-    m_label.set_font(font());
+    m_label.set_font(font(), font_size());
     const ImVec2 label_size = m_label.text_size();
     float input_height = layout().size().y;
     if (label_size.x > 0.0F && m_label_placement == LabelPlacement::Above) {

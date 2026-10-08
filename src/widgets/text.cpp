@@ -36,7 +36,7 @@ TextWidget& TextWidget::set_text(std::string text) {
 }
 
 void TextWidget::on_measure() {
-    m_text.set_font(font());
+    m_text.set_font(font(), font_size());
     m_text.set_line_height(computed_style().line_height());
     const ImVec2 text_size = m_text.text_size();
     set_measured_content_size(text_size, true, true);

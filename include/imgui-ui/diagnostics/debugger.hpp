@@ -90,6 +90,7 @@ namespace ui {
 
         Surface& m_target;
         ImFont* m_font = nullptr;
+        float m_font_size = 0.0F;
         Texture* m_inspect_icon = nullptr;
         Texture* m_close_icon = nullptr;
         Rect m_highlight{};

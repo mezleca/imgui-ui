@@ -111,10 +111,12 @@ namespace ui {
         void remove_after();
 
         /// remeasures descendants because they may inherit this font.
-        StyledNode& set_font(ImFont* font);
+        StyledNode& set_font(ImFont* font, float size = 0.0F);
 
         /// resolves the local font, then the closest styled ancestor, then imgui's font.
         ImFont* font() const;
+        /// resolves the nearest explicit size, then the selected font's default size.
+        float font_size() const;
 
         void draw() override;
 

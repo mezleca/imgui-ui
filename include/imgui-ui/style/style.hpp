@@ -36,6 +36,7 @@ namespace ui {
         using ComputedStyle::color;
         using ComputedStyle::cursor;
         using ComputedStyle::font;
+        using ComputedStyle::font_size;
         using ComputedStyle::line_height;
         using ComputedStyle::margin;
         using ComputedStyle::overflow;
@@ -55,6 +56,8 @@ namespace ui {
         Style() = default;
 
         Style& font(ImFont* value);
+        /// zero inherits the nearest explicit size, or the font's default size.
+        Style& font_size(float value);
         StyleVariableStore& variables() {
             return m_vars;
         }

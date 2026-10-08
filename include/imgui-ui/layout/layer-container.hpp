@@ -8,7 +8,7 @@ namespace ui {
     enum class LayerMode : uint8_t {
         /// draws in the parent's imgui window. opens a child inside scrollable parents or when its styling needs one.
         Inline,
-        /// draws in a separate imgui window covering the main viewport's work area.
+        /// draws in a separate imgui window. defaults to the main viewport's work area.
         Window,
     };
 
@@ -25,13 +25,14 @@ namespace ui {
         bool paint() override;
         void on_draw_end() override;
         ImGuiWindowFlags child_window_flags() const override;
+        virtual ImGuiWindowFlags window_flags() const;
 
     private:
+        bool paint_inline();
+        bool paint_window();
+
         LayerMode m_mode;
         bool m_window_initialized = false;
         bool m_inline_child_window = false;
-
-        bool paint_inline();
-        bool paint_window();
     };
 } // namespace ui

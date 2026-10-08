@@ -20,12 +20,12 @@ ComputedStyle::ComputedStyle() {
     m_scrollbar_grab_active_color.set(theme.scrollbar.grab_active_color);
 }
 
-PushState ComputedStyle::push(float opacity, ImFont* effective_font) const {
+PushState ComputedStyle::push(float opacity, ImFont* effective_font, float effective_font_size) const {
     ImGuiStyle& current = ImGui::GetStyle();
     PushState state;
 
-    state.font_pushed = effective_font != nullptr && effective_font != ImGui::GetFont();
-    if (state.font_pushed) ImGui::PushFont(effective_font);
+    state.font_pushed = effective_font != ImGui::GetFont() || effective_font_size != current.FontSizeBase;
+    if (state.font_pushed) ImGui::PushFont(effective_font, effective_font_size);
 
     const auto push_var = [&state](ImGuiStyleVar variable, auto value) {
         ImGui::PushStyleVar(variable, value);

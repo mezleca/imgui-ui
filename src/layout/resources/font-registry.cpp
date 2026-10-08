@@ -6,21 +6,20 @@ using namespace ui;
 
 Font::Font(std::filesystem::path location, ImFontConfig config) : m_location(std::move(location)), m_config(config) {}
 
-ImFont* Font::get(int size) {
+ImFont* Font::get() {
     ImGuiContext* context = ImGui::GetCurrentContext();
     if (context == nullptr || m_location.empty()) {
         return nullptr;
     }
 
-    auto& fonts = m_contexts[context];
-    const auto font_it = fonts.find(size);
-    if (font_it != fonts.end()) {
+    const auto font_it = m_contexts.find(context);
+    if (font_it != m_contexts.end()) {
         return font_it->second;
     }
 
-    ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(m_location.string().c_str(), static_cast<float>(size), &m_config);
+    ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(m_location.string().c_str(), 0.0F, &m_config);
     if (font != nullptr) {
-        fonts[size] = font;
+        m_contexts[context] = font;
     }
     return font;
 }

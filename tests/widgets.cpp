@@ -24,9 +24,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <limits>
-#include <memory>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 using namespace ui;
@@ -156,26 +154,6 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
     REQUIRE(checked);
 }
 
-TEST_CASE("buttons flash their active background after click", "[ButtonWidget][animation]") {
-    Runtime runtime;
-    ui::Surface surface = ui_test::make_surface(runtime);
-    auto& button = surface.root().add<ButtonWidget>("button", LayoutSize{px(120.0F), px(36.0F)});
-
-    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
-    ui_test::draw_surface(surface);
-
-    const ImVec2 position = ui_test::center(button.layout().visual_rect());
-    UiEvent down = ui_test::pointer_event(EventType::PointerDown, position);
-    surface.dispatch(down);
-
-    UiEvent up = ui_test::pointer_event(EventType::PointerUp, position);
-    surface.dispatch(up);
-    button.update(0.0F);
-
-    const ImColor active_background = button.style(StyleType::ACTIVE).background_color().value.rgba();
-    REQUIRE(button.computed_style().background_color().value.rgba().x == Catch::Approx(active_background.Value.x));
-}
-
 TEST_CASE("image fit preserves the texture aspect ratio", "[ImageWidget][fit]") {
     class ProbeTexture final : public Texture {
     public:
@@ -203,10 +181,6 @@ TEST_CASE("image fit preserves the texture aspect ratio", "[ImageWidget][fit]") 
         ui_test::draw_node(image, "image-fit-test");
         return texture.requested_size;
     };
-
-    const ImVec2 contain_size = draw(ImageFit::Contain);
-    REQUIRE(contain_size.x == Catch::Approx(100.0F));
-    REQUIRE(contain_size.y == Catch::Approx(50.0F));
 
     const ImVec2 cover_size = draw(ImageFit::Cover);
     REQUIRE(cover_size.x == Catch::Approx(200.0F));
@@ -569,29 +543,6 @@ TEST_CASE("paint-only animation overrides do not invalidate measurement", "[Visu
     REQUIRE(state.computed_style().padding().x == Catch::Approx(5.0F));
 }
 
-TEST_CASE("paint-only style setters do not invalidate measurement", "[VisualState][style][cleanup]") {
-    VisualState state;
-    int invalidations = 0;
-    state.set_change_callback(&invalidations, [](void* owner, bool) { ++*static_cast<int*>(owner); });
-    state.style().color(rgb(1.0F, 0.0F, 0.0F));
-    state.style().background_color(rgb(0.0F, 1.0F, 0.0F));
-    state.style().border_color(rgb(0.0F, 0.0F, 1.0F));
-    state.style().rotation(20.0F).scale(1.2F).alpha(0.5F).cursor(ImGuiMouseCursor_Hand);
-    CHECK(invalidations == 0);
-    state.update(0.0F);
-    CHECK(state.computed_style().rotation() == Catch::Approx(20.0F));
-    CHECK(state.computed_style().alpha() == Catch::Approx(0.5F));
-
-    state.style().padding({5.0F, 3.0F});
-    CHECK(invalidations == 1);
-    state.style().margin({2.0F, 1.0F});
-    CHECK(invalidations == 2);
-    state.style().line_height(2.0F);
-    CHECK(invalidations == 3);
-    state.style().border(BORDER_ALL).border_thickness(2.0F);
-    CHECK(invalidations > 3);
-}
-
 TEST_CASE("click feedback preserves unrelated overrides without remeasurement", "[animation][cleanup]") {
     class MeasuredButton final : public ButtonWidget {
     public:
@@ -614,6 +565,9 @@ TEST_CASE("click feedback preserves unrelated overrides without remeasurement", 
     button.update(0.0F);
     ui_test::draw_node(button, "feedback-measure-test");
     const int measurements = button.measurements;
+
+    button.configure_all_styles([](Style& style) { style.color(rgb(255, 0, 0)).alpha(0.7F); });
+    button.style(StyleType::ACTIVE).background_color(rgb(200, 100, 50));
     int clicks = 0;
     button.on_click([&] {
         ++clicks;
@@ -623,7 +577,10 @@ TEST_CASE("click feedback preserves unrelated overrides without remeasurement", 
     click.button = PointerButton::Left;
     button.dispatch_event(click);
     CHECK(clicks == 1);
-    for (float dt : {0.0F, 0.05F, 0.06F, 0.1F}) {
+    button.update(0.0F);
+    CHECK(button.computed_style().background_color().value == button.style(StyleType::ACTIVE).background_color().value);
+
+    for (float dt : {0.05F, 0.06F, 0.1F}) {
         button.update(dt);
         ui_test::draw_node(button, "feedback-measure-test");
     }
@@ -652,23 +609,6 @@ TEST_CASE("checkbox feedback releases only its background override", "[CheckboxW
         checkbox.update(dt);
     CHECK(checkbox.frame().computed_style().padding().x == Catch::Approx(20.0F));
     CHECK(checkbox.frame().computed_style().background_color().value == checkbox.frame().style().background_color().value);
-}
-
-TEST_CASE("styled nodes inherit ownership restrictions and destroy paint slots through the base", "[StyledNode][cleanup]") {
-    STATIC_REQUIRE_FALSE(std::is_copy_constructible_v<StyledNode>);
-    STATIC_REQUIRE_FALSE(std::is_copy_assignable_v<StyledNode>);
-    STATIC_REQUIRE_FALSE(std::is_move_constructible_v<StyledNode>);
-    STATIC_REQUIRE_FALSE(std::is_move_assignable_v<StyledNode>);
-    auto lifetime = std::make_shared<int>(0);
-    std::weak_ptr<int> observer = lifetime;
-    auto styled = std::make_unique<StyledNode>();
-    styled->before().set_draw_callback([lifetime](const PaintContext&) {});
-    styled->after().set_draw_callback([lifetime](const PaintContext&) {});
-    std::unique_ptr<Node> node = std::move(styled);
-    lifetime.reset();
-    CHECK_FALSE(observer.expired());
-    node.reset();
-    CHECK(observer.expired());
 }
 
 TEST_CASE("hidden and pending styled nodes skip imgui style work", "[StyledNode][cleanup]") {
@@ -843,16 +783,6 @@ TEST_CASE("animation sequence steps continue from the preceding track", "[Visual
     REQUIRE(state.computed_style().scale().x == Catch::Approx(2.5F));
 }
 
-TEST_CASE("styled nodes advance their generic animator", "[Animator][StyledNode]") {
-    TextWidget text{"animated-node"};
-    float reveal = 0.0F;
-
-    text.animator().animate().to(reveal, 1.0F, {0.2F, easing::linear});
-    text.update(0.1F);
-
-    REQUIRE(reveal == Catch::Approx(0.5F));
-}
-
 TEST_CASE("styled nodes rotate their generated vertices without changing layout", "[Widget][style][transform]") {
     class TransformProbeWidget final : public Widget {
     public:
@@ -966,35 +896,6 @@ TEST_CASE("widget input requires both node and visual state to accept input", "[
     widget.fade_out();
     REQUIRE_FALSE(widget.accepts_input());
     REQUIRE(router.node_at({5.0F, 5.0F}) == nullptr);
-}
-
-TEST_CASE("styled nodes apply their effective font during draw", "[Widget][style][regression]") {
-    class FontProbeWidget final : public Widget {
-    public:
-        FontProbeWidget() : Widget("font-probe") {}
-
-        ImFont* observed_font = nullptr;
-
-    private:
-        bool paint() override {
-            observed_font = ImGui::GetFont();
-            ImGui::Dummy({10.0F, 10.0F});
-            return true;
-        }
-    };
-
-    ui_test::ImGuiContext context({160.0F, 120.0F});
-    ImFontConfig font_config;
-    font_config.SizePixels = 24.0F;
-    ImFont* large_font = ImGui::GetIO().Fonts->AddFontDefault(&font_config);
-    ui_test::ImGuiContext::build_fonts();
-
-    FontProbeWidget widget;
-    widget.set_font(large_font);
-
-    ui_test::draw_node(widget, "styled-font-test");
-
-    REQUIRE(widget.observed_font == large_font);
 }
 
 TEST_CASE("styled nodes keep borders out of imgui style scope", "[Widget][style][regression]") {

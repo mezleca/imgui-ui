@@ -50,6 +50,10 @@ namespace ui {
             return m_font;
         }
 
+        float font_size() const {
+            return m_font_size;
+        }
+
         const ImVec2& padding() const {
             return m_padding.value;
         }
@@ -159,13 +163,14 @@ namespace ui {
         }
 
     protected:
-        PushState push(float opacity, ImFont* effective_font) const;
+        PushState push(float opacity, ImFont* effective_font, float effective_font_size) const;
 
         static void pop(PushState state);
 
         friend class StyledNode;
 
         ImFont* m_font = nullptr;
+        float m_font_size = 0.0F;
         Vec2Value m_margin;
         Vec2Value m_padding;
         FloatValue m_line_height{1.0F};

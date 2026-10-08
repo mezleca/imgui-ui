@@ -31,8 +31,8 @@ void StyledNode::set_surface(Surface* surface) {
     Node::set_surface(surface);
 }
 
-StyledNode& StyledNode::set_font(ImFont* font) {
-    configure_all_styles([font](Style& style) { style.font(font); });
+StyledNode& StyledNode::set_font(ImFont* font, float size) {
+    configure_all_styles([font, size](Style& style) { style.font(font).font_size(size); });
     return *this;
 }
 
@@ -58,6 +58,17 @@ ImFont* StyledNode::font() const {
     return ImGui::GetFont();
 }
 
+float StyledNode::font_size() const {
+    if (computed_style().font_size() > 0.0F) return computed_style().font_size();
+
+    for (const Node* ancestor = parent(); ancestor != nullptr; ancestor = ancestor->parent()) {
+        const auto* styled = dynamic_cast<const StyledNode*>(ancestor);
+        if (styled != nullptr && styled->computed_style().font_size() > 0.0F) return styled->computed_style().font_size();
+    }
+
+    return font()->LegacySize;
+}
+
 BoxInsets StyledNode::box_insets() const {
     const ComputedStyle& style = computed_style();
     const ImVec2 padding = style.padding();
@@ -72,7 +83,7 @@ BoxInsets StyledNode::box_insets() const {
 }
 
 void StyledNode::set_measured_content_size(ImVec2 size, bool measured_width, bool measured_height) {
-    ImGui::PushFont(font());
+    ImGui::PushFont(font(), font_size());
     const float line_height = ImGui::GetTextLineHeight();
     ImGui::PopFont();
 
@@ -131,7 +142,7 @@ void StyledNode::draw() {
 
     update_cursor();
     const ComputedStyle& current_style = computed_style();
-    const PushState push_state = current_style.push(opacity(), font());
+    const PushState push_state = current_style.push(opacity(), font(), font_size());
 
     const ImVec2 scale = current_style.scale();
     const float rotation_deg = current_style.rotation();

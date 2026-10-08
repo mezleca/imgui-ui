@@ -14,13 +14,13 @@ namespace ui {
     public:
         Font(std::filesystem::path location, ImFontConfig config);
 
-        // each imgui context owns its atlas fonts. cache pointers by context and requested size.
-        ImFont* get(int size);
+        /// loads once per imgui context. sizes are selected when pushing the font.
+        ImFont* get();
         void release_context(ImGuiContext* context);
 
     private:
         std::filesystem::path m_location;
-        std::unordered_map<ImGuiContext*, std::unordered_map<int, ImFont*>> m_contexts;
+        std::unordered_map<ImGuiContext*, ImFont*> m_contexts;
         ImFontConfig m_config;
     };
 

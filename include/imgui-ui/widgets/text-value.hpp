@@ -29,7 +29,7 @@ namespace ui {
         /// converts the value only when a consumer actually requests its string representation.
         const std::string& str() const;
 
-        void set_font(ImFont* font);
+        void set_font(ImFont* font, float size = 0.0F);
 
         void set_wrap(float wrap_width);
 
@@ -82,6 +82,7 @@ namespace ui {
         Value m_value;
         mutable std::string m_string;
         ImFont* m_font = nullptr;
+        float m_font_size = 0.0F;
         mutable ImVec2 m_text_size;
         mutable float m_line_height = 0.0F;
         float m_line_height_multiplier = 1.0F;
