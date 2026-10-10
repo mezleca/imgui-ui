@@ -56,7 +56,8 @@ bool LayerContainer::paint_inline() {
     // once this layer needs a child window, keep it across frames. add the parent scroll back to the cursor so the
     // layer stays anchored to the content origin.
     m_inline_child_window =
-        m_inline_child_window || parent_scrollable || scrolled || scrollable() || needs_child_window(computed_style());
+        m_inline_child_window || parent_scrollable || scrolled || scrollable() || layout().placement() != Placement{} ||
+        needs_child_window(computed_style());
     if (m_inline_child_window) {
         if (scrolled) {
             const ImVec2 cursor = ImGui::GetCursorPos();

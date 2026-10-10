@@ -984,6 +984,39 @@ TEST_CASE("container after decorations use final bounds above nested child windo
     REQUIRE(after_draw_list == ImGui::GetForegroundDrawList());
 }
 
+TEST_CASE("transparent anchored layers keep children at the layer origin", "[LayerContainer][layout][regression]") {
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+    Container root("anchored-layer-root");
+    root.set_size({px(180.0F), px(120.0F)});
+    root.configure_all_styles([](Style& style) { style.border(BORDER_NONE).padding({}); });
+    auto& layer = root.add<LayerContainer>("anchored-layer");
+    layer.set_size({fit(), fit()});
+    layer.set_anchor(Anchor::BottomRight);
+    layer.configure_all_styles([](Style& style) {
+        style.background_color(rgba(0, 0, 0, 0));
+        style.border(BORDER_NONE);
+        style.padding({});
+    });
+    auto& child = layer.add<MeasuredLayoutNode>(ImVec2{24.0F, 24.0F});
+
+    const auto check_position = [&] {
+        ui_test::draw_window("anchored-layer-window", {320.0F, 220.0F}, [&] { root.draw(); });
+        const Rect layer_rect = layer.layout().visual_rect();
+        const Rect child_rect = child.layout().visual_rect();
+        REQUIRE(child_rect.min.x == Catch::Approx(layer_rect.min.x));
+        REQUIRE(child_rect.min.y == Catch::Approx(layer_rect.min.y));
+        const Rect root_content = root.layout().visual_rect();
+        REQUIRE(layer_rect.max.x == Catch::Approx(root_content.max.x));
+        REQUIRE(layer_rect.max.y == Catch::Approx(root_content.max.y));
+    };
+
+    check_position();
+    layer.configure_all_styles([](Style& style) { style.background_color(rgba(20, 24, 32, 240)); });
+    check_position();
+    layer.configure_all_styles([](Style& style) { style.background_color(rgba(0, 0, 0, 0)); });
+    check_position();
+}
+
 TEST_CASE("inline layer padding scopes descendant layout") {
     class ProbeNode final : public Node {
     public:
