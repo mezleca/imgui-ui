@@ -7,12 +7,6 @@
 
 using namespace ui;
 
-static bool needs_child_window(const ComputedStyle& style) {
-    return style.background_color().value.max_alpha() > 0.0F || style.blur() > 0 || style.box_shadow().color.max_alpha() > 0.0F ||
-           style.border() != BORDER_NONE || style.padding().x > 0.0F || style.padding().y > 0.0F ||
-           style.overflow() != Overflow::Visible;
-}
-
 LayerContainer::LayerContainer(std::string id, LayerMode mode) : LayerContainer(std::move(id), mode, "LayerContainer") {}
 
 LayerContainer::LayerContainer(std::string id, LayerMode mode, std::string_view type_name)
@@ -51,30 +45,11 @@ bool LayerContainer::paint() {
 
 bool LayerContainer::paint_inline() {
     const ImVec2 scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
-    const bool scrolled = scroll.x != 0.0F || scroll.y != 0.0F;
-    const bool parent_scrollable = parent() != nullptr && (ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_NoScrollbar) == 0;
-    // once this layer needs a child window, keep it across frames. add the parent scroll back to the cursor so the
-    // layer stays anchored to the content origin.
-    m_inline_child_window =
-        m_inline_child_window || parent_scrollable || scrolled || scrollable() || layout().placement() != Placement{} ||
-        needs_child_window(computed_style());
-    if (m_inline_child_window) {
-        if (scrolled) {
-            const ImVec2 cursor = ImGui::GetCursorPos();
-            ImGui::SetCursorPos({cursor.x + scroll.x, cursor.y + scroll.y});
-        }
-        return Container::paint();
+    if (scroll.x != 0.0F || scroll.y != 0.0F) {
+        const ImVec2 cursor = ImGui::GetCursorPos();
+        ImGui::SetCursorPos({cursor.x + scroll.x, cursor.y + scroll.y});
     }
-
-    Rect inline_rect = Rect::from_position_size(ImGui::GetCursorScreenPos(), layout().size());
-    if (parent() == nullptr) {
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        inline_rect = Rect::from_position_size(viewport->WorkPos, viewport->WorkSize);
-    }
-    set_layout_rect(inline_rect);
-    set_visual_rect(inline_rect);
-    draw_surface(inline_rect);
-    return true;
+    return Container::paint();
 }
 
 bool LayerContainer::paint_window() {
@@ -115,9 +90,7 @@ bool LayerContainer::paint_window() {
 
 void LayerContainer::on_draw_end() {
     if (m_mode == LayerMode::Inline) {
-        if (m_inline_child_window) {
-            Container::on_draw_end();
-        }
+        Container::on_draw_end();
         return;
     }
 

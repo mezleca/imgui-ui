@@ -6,7 +6,7 @@
 
 namespace ui {
     enum class LayerMode : uint8_t {
-        /// draws in the parent's imgui window. opens a child inside scrollable parents or when its styling needs one.
+        /// draws in a child window inside the parent's imgui window.
         Inline,
         /// draws in a separate imgui window. defaults to the main viewport's work area.
         Window,
@@ -33,6 +33,5 @@ namespace ui {
 
         LayerMode m_mode;
         bool m_window_initialized = false;
-        bool m_inline_child_window = false;
     };
 } // namespace ui

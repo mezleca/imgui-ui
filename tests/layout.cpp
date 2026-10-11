@@ -64,6 +64,50 @@ static void draw_open_tree(Node& node, const char* name) {
     });
 }
 
+TEST_CASE("growing containers remeasure intrinsic content independently of sizing history", "[Container][layout][regression]") {
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+    Container root("intrinsic-root");
+    root.set_size({fit(), fit()});
+    auto& content = root.add<Container>("growing-content");
+    content.set_size({grow(), grow()});
+    auto& item = content.add<MeasuredLayoutNode>(ImVec2{80.0F, 24.0F});
+
+    const auto draw_frame = [&] { ui_test::draw_node(root, "intrinsic-container-window"); };
+    draw_frame();
+    REQUIRE(root.layout().size().x == Catch::Approx(80.0F));
+    REQUIRE(root.layout().size().y == Catch::Approx(24.0F));
+
+    content.set_size({fit(), fit()});
+    draw_frame();
+    content.set_size({grow(), grow()});
+    draw_frame();
+    REQUIRE(root.layout().size().x == Catch::Approx(80.0F));
+    REQUIRE(root.layout().size().y == Catch::Approx(24.0F));
+
+    item.set_intrinsic_size({120.0F, 32.0F});
+    draw_frame();
+    REQUIRE(root.layout().size().x == Catch::Approx(120.0F));
+    REQUIRE(root.layout().size().y == Catch::Approx(32.0F));
+}
+
+TEST_CASE("flexible content keeps footer at the bottom while footer determines fit width", "[Container][layout][regression]") {
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+    Container root("footer-root");
+    root.set_size({fit(), px(180.0F)});
+    root.configure_all_styles([](Style& style) { style.border(BORDER_NONE).padding({}); });
+    root.add<MeasuredLayoutNode>(ImVec2{24.0F, 24.0F});
+    root.add<Container>("body").set_size({grow(), grow()});
+    auto& footer = root.add<Container>("footer", StackDirection::Horizontal);
+    footer.set_size({fit(), fit()});
+    footer.configure_all_styles([](Style& style) { style.border(BORDER_NONE).padding({}); });
+    for (int index = 0; index < 3; ++index) footer.add<MeasuredLayoutNode>(ImVec2{40.0F, 24.0F});
+
+    ui_test::draw_node(root, "footer-window");
+    REQUIRE(root.layout().size().x == Catch::Approx(120.0F));
+    REQUIRE(footer.layout().size().x == Catch::Approx(120.0F));
+    REQUIRE(footer.layout().visual_rect().max.y == Catch::Approx(root.layout().visual_rect().max.y));
+}
+
 TEST_CASE("content alignment rearranges without remeasurement", "[layout][cleanup]") {
     class MeasuredContainer final : public Container {
     public:

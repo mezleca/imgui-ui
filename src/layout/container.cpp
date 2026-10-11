@@ -113,10 +113,6 @@ void Container::on_measure() {
     const LayoutSize size = layout().size_spec();
     const bool fit_width = size.width.mode == LayoutSizeMode::Fit;
     const bool fit_height = size.height.mode == LayoutSizeMode::Fit;
-    if (!fit_width && !fit_height) {
-        return;
-    }
-
     const bool horizontal = m_direction == StackDirection::Horizontal;
     ImVec2 content_size{};
     size_t flow_count = 0;
