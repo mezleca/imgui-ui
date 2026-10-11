@@ -321,7 +321,11 @@ private:
 
         ImGui::SetCursorScreenPos({alpha_bar.min.x, alpha_bar.max.y + spacing.y});
 
-        arrange_child(*m_hex_input, {alpha_bar.size().x, m_hex_input->layout().intrinsic_size().y});
+        arrange_child(
+            *m_hex_input, m_hex_input->layout().constrain_size(
+                {alpha_bar.size().x, m_hex_input->layout().intrinsic_size().y}, content_size(layout().visual_rect().size())
+            )
+        );
         m_hex_input->draw_at_cursor();
     }
 

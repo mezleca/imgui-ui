@@ -9,6 +9,7 @@
 
 #include <external/glad.h>
 #include <imgui_impl_opengl3.h>
+#include <imgui_internal.h>
 #include <raylib.h>
 #include <rlgl.h>
 
@@ -175,27 +176,6 @@ static Key core_key(int key) {
         default:
             return Key::Unknown;
     }
-}
-
-static std::string utf8_from_codepoint(int codepoint) {
-    const auto scalar = static_cast<unsigned int>(codepoint);
-    std::string result;
-    if (scalar <= 0x7fU) {
-        result.push_back(static_cast<char>(scalar));
-    } else if (scalar <= 0x7ffU) {
-        result.push_back(static_cast<char>(0xc0U | (scalar >> 6U)));
-        result.push_back(static_cast<char>(0x80U | (scalar & 0x3fU)));
-    } else if (scalar <= 0xffffU) {
-        result.push_back(static_cast<char>(0xe0U | (scalar >> 12U)));
-        result.push_back(static_cast<char>(0x80U | ((scalar >> 6U) & 0x3fU)));
-        result.push_back(static_cast<char>(0x80U | (scalar & 0x3fU)));
-    } else {
-        result.push_back(static_cast<char>(0xf0U | (scalar >> 18U)));
-        result.push_back(static_cast<char>(0x80U | ((scalar >> 12U) & 0x3fU)));
-        result.push_back(static_cast<char>(0x80U | ((scalar >> 6U) & 0x3fU)));
-        result.push_back(static_cast<char>(0x80U | (scalar & 0x3fU)));
-    }
-    return result;
 }
 
 static ::Color raylib_color(ImVec4 color) {
@@ -381,7 +361,9 @@ void RaylibBackend::process_events(Surface& surface) {
     for (int codepoint = GetCharPressed(); codepoint > 0; codepoint = GetCharPressed()) {
         io.AddInputCharacter(static_cast<unsigned int>(codepoint));
         UiEvent event = UiEvent::make(EventType::TextInput);
-        event.text = utf8_from_codepoint(codepoint);
+        char utf8[5];
+        ImTextCharToUtf8(utf8, static_cast<unsigned int>(codepoint));
+        event.text = utf8;
         surface.dispatch(event);
     }
 }

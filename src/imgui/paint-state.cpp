@@ -14,7 +14,7 @@ void PaintState::push_effect_clip(ImVec4 clip) {
 }
 
 void PaintState::pop_effect_clip() {
-    assert(!m_effect_clips.empty());
+    assert(!m_effect_clips.empty()); // NOLINT(cert-dcl03-c,misc-static-assert): the clip stack changes at runtime.
     m_effect_clips.pop_back();
 }
 

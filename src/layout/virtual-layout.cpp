@@ -229,7 +229,11 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
             const float y = offset + (static_cast<float>(row) * stride);
 
             arrange_child(
-                child, {std::max(0.0F, width - (margin.x * 2.0F)), std::max(0.0F, height - (margin.y * 2.0F))},
+                child, child.layout().constrain_size(
+                    {std::max(0.0F, width - (margin.x * 2.0F)), std::max(0.0F, height - (margin.y * 2.0F))},
+                    {std::max(0.0F, width - (margin.x * 2.0F)),
+                     std::max(0.0F, content_size(layout().size()).y - (margin.y * 2.0F))}
+                ),
                 {.offset = {margin.x, y + margin.y}}
             );
 

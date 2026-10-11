@@ -47,7 +47,8 @@ namespace ui {
     struct Value {
         Value() = default;
 
-        Value(T initial_value, float transition_duration = 0.0F)
+        // a plain style value converts to an immediate value with zero transition duration.
+        Value(T initial_value, float transition_duration = 0.0F) // NOLINT(misc-explicit-constructor)
             : value(std::move(initial_value)), duration(std::max(0.0F, transition_duration)) {}
 
         Value(T initial_value, TransitionSpec transition)

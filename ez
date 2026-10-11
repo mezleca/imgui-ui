@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 import os
 import platform
 import shutil
@@ -107,10 +108,14 @@ def check(build_type: str, backend: str, fix: bool) -> None:
 
     build_dir = build(build_type, backend, tests=True)
     source_files = sorted(
-        str(path.relative_to(ROOT))
-        for root in (ROOT / "src", ROOT / "tests")
-        for path in root.rglob("*.cpp")
+        {
+            str(path.relative_to(ROOT))
+            for entry in json.loads((build_dir / "compile_commands.json").read_text())
+            if (path := Path(entry["file"])).suffix == ".cpp"
+            and (path.is_relative_to(ROOT / "src") or path.is_relative_to(ROOT / "tests"))
+        }
     )
+
     if not source_files:
         print("[ez] no c++ source files found")
         sys.exit(1)

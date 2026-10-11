@@ -126,19 +126,18 @@ void Surface::initialize(bool enable_debugger) {
 
     // attach the surface root before adding content so descendants inherit its router and profiler.
     m_root = std::make_unique<LayerContainer>("ui-surface", LayerMode::Window);
-    m_root->set_surface(this);
-    m_root->set_input_router(&m_input_router);
-    m_root->set_profiler(m_profiler.get());
+    m_root->set_direction(StackDirection::Horizontal);
+    Node& root = *m_root;
+    root.set_surface(this);
+    root.set_input_router(&m_input_router);
+    root.set_profiler(m_profiler.get());
 
-    auto& surface_layout = m_root->add<Container>("ui-root", StackDirection::Horizontal);
-    surface_layout.set_size({grow(), grow()});
-
-    auto& content = surface_layout.add<SurfaceContent>();
+    auto& content = m_root->add<SurfaceContent>();
     m_content_root = &content;
     m_profiler->set_root_node(content.identity());
 
     if (enable_debugger) {
-        m_debugger = &surface_layout.add<Debugger>(*this);
+        m_debugger = &m_root->add<Debugger>(*this);
     }
 }
 

@@ -115,6 +115,7 @@ namespace ui {
 
         /// resolves the local font, then the closest styled ancestor, then imgui's font.
         ImFont* font() const;
+
         /// resolves the nearest explicit size, then the selected font's default size.
         float font_size() const;
 

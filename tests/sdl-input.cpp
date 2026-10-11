@@ -91,11 +91,31 @@ static void draw_frame(ui::Surface& surface, std::optional<float> delta_time = s
     surface.end_frame();
 }
 
+TEST_CASE("sdl cursor changes replace the native cursor and repeated requests reuse it", "[cursor][regression]") {
+    SdlVideoSession sdl({128.0F, 128.0F});
+    ui::SdlBackend backend(sdl.window(), sdl.context());
+    backend.set_mouse_cursor(ImGuiMouseCursor_Arrow);
+    SDL_Cursor* arrow = SDL_GetCursor();
+    REQUIRE(arrow != nullptr);
+
+    backend.set_mouse_cursor(ImGuiMouseCursor_Hand);
+    SDL_Cursor* hand = SDL_GetCursor();
+    REQUIRE(hand != nullptr);
+    REQUIRE(hand != arrow);
+    backend.set_mouse_cursor(ImGuiMouseCursor_Hand);
+    CHECK(SDL_GetCursor() == hand);
+
+    backend.set_mouse_cursor(ImGuiMouseCursor_None);
+    CHECK_FALSE(SDL_CursorVisible());
+    backend.set_mouse_cursor(ImGuiMouseCursor_Arrow);
+    CHECK(SDL_CursorVisible());
+}
+
 TEST_CASE("opengl effects retain per-surface state across alternation resize and shutdown", "[render][cleanup]") {
     SdlVideoSession sdl({128.0F, 128.0F});
     ui::Runtime runtime;
     ui::Surface first(runtime, {.backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context())});
-    const auto configure = [](ui::Surface& surface, ui::Color color) {
+    const auto configure = [](ui::Surface& surface, const ui::Color& color) {
         auto& background = surface.root().add<ui::BoxWidget>("background", ui::LayoutSize{ui::grow(), ui::grow()});
         background.configure_all_styles([color](ui::Style& style) { style.background_color(color); });
         auto& panel = surface.root().add<ui::Container>("effects");
@@ -188,7 +208,7 @@ TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regre
     const ImVec2 sample = {panel_center.x, panel.layout().visual_rect().min.y - 8.0F};
     const ImVec2 framebuffer_sample = {
         (sample.x - draw_data->DisplayPos.x) * draw_data->FramebufferScale.x,
-        static_cast<float>(viewport[3]) - (sample.y - draw_data->DisplayPos.y) * draw_data->FramebufferScale.y,
+        static_cast<float>(viewport[3]) - ((sample.y - draw_data->DisplayPos.y) * draw_data->FramebufferScale.y),
     };
     unsigned char pixel[4]{};
     const int pixel_x = std::clamp(static_cast<int>(framebuffer_sample.x), 0, viewport[2] - 1);
@@ -521,7 +541,7 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
     }
     CHECK(dropdown.body().opacity() > 0.99F);
     const ui::Rect file_rect = file.layout().visual_rect();
-    const ImVec2 overlap = {file_rect.min.x + file_rect.size().x * 0.5F, file_rect.min.y + 10.0F};
+    const ImVec2 overlap = {file_rect.min.x + (file_rect.size().x * 0.5F), file_rect.min.y + 10.0F};
     REQUIRE(dropdown.body().layout().visual_rect().contains(overlap));
 
     GLint viewport[4]{};
@@ -946,7 +966,7 @@ TEST_CASE("svg textures cache uploads by size and release their context", "[text
     REQUIRE(large != small);
 
     glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(small));
-    std::array<uint8_t, 4 * 4 * 4> pixels{};
+    std::array<uint8_t, 64> pixels{};
     glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
     REQUIRE(pixels[0] == 255);
     REQUIRE(pixels[1] == 0);
@@ -1073,7 +1093,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
 
     ui_test::draw_surface(surface);
     const ui::Rect rect = input.layout().visual_rect();
-    const ImVec2 press = {rect.min.x + rect.size().x * 0.70F, ui_test::center(rect).y};
+    const ImVec2 press = {rect.min.x + (rect.size().x * 0.70F), ui_test::center(rect).y};
 
     send_pointer(SDL_EVENT_MOUSE_MOTION, press);
     ui_test::draw_surface(surface);
@@ -1084,7 +1104,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
     int previous_value = value;
 
     for (float ratio : {0.75F, 0.80F, 0.85F, 0.90F, 0.95F}) {
-        const ImVec2 position = {rect.min.x + rect.size().x * ratio, press.y};
+        const ImVec2 position = {rect.min.x + (rect.size().x * ratio), press.y};
         send_pointer(SDL_EVENT_MOUSE_MOTION, position);
         ui_test::draw_surface(surface);
         REQUIRE(GImGui->ActiveId == slider_id);
@@ -1094,7 +1114,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
 
     // blur reaching zero removes the visual effect while the active slider keeps the same imgui parent.
     for (float ratio : {0.20F, 0.05F}) {
-        const ImVec2 position = {rect.min.x + rect.size().x * ratio, press.y};
+        const ImVec2 position = {rect.min.x + (rect.size().x * ratio), press.y};
         send_pointer(SDL_EVENT_MOUSE_MOTION, position);
         ui_test::draw_surface(surface);
         REQUIRE(GImGui->ActiveId == slider_id);
@@ -1103,7 +1123,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
     }
 
     REQUIRE(value == 0);
-    const ImVec2 restore = {rect.min.x + rect.size().x * 0.80F, press.y};
+    const ImVec2 restore = {rect.min.x + (rect.size().x * 0.80F), press.y};
     send_pointer(SDL_EVENT_MOUSE_MOTION, restore);
     ui_test::draw_surface(surface);
     REQUIRE(GImGui->ActiveId == slider_id);
@@ -1117,7 +1137,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
     send_pointer(SDL_EVENT_MOUSE_BUTTON_UP, {850.0F, press.y});
     ui_test::draw_surface(surface);
     REQUIRE(GImGui->ActiveId == 0);
-    send_pointer(SDL_EVENT_MOUSE_MOTION, {rect.min.x + rect.size().x * 0.80F, press.y});
+    send_pointer(SDL_EVENT_MOUSE_MOTION, {rect.min.x + (rect.size().x * 0.80F), press.y});
     ui_test::draw_surface(surface);
     REQUIRE(value == outside_value);
 }
@@ -1296,7 +1316,7 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
     for (int index = 0; index < 2; ++index) {
         const ImVec2 option_position = {
             body_center_x,
-            body_rect.min.y + item_height * (static_cast<float>(index) + 0.5F),
+            body_rect.min.y + (item_height * (static_cast<float>(index) + 0.5F)),
         };
 
         send_pointer(SDL_EVENT_MOUSE_MOTION, option_position);
@@ -1308,7 +1328,7 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
         REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
     }
 
-    const ImVec2 option_position = {body_center_x, body_rect.min.y + item_height * 1.5F};
+    const ImVec2 option_position = {body_center_x, body_rect.min.y + (item_height * 1.5F)};
     send_pointer(SDL_EVENT_MOUSE_MOTION, option_position);
 
     const float visible_opacity = dropdown.body().opacity();

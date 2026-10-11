@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 
 namespace ui {
     enum class Anchor : uint8_t {
@@ -39,35 +40,68 @@ namespace ui {
         Grow,
     };
 
+    struct LayoutLimit {
+        float resolve(float available) const;
+        constexpr bool operator==(const LayoutLimit&) const = default;
+
+        float value = 0.0F;
+        bool percentage = false;
+    };
+
     struct LayoutAxis {
-        float intrinsic(float measured) const;
-        float resolve(float measured, float available) const;
+        constexpr LayoutAxis() = default;
+        constexpr LayoutAxis(LayoutSizeMode mode, float value) : mode(mode), value(value) {}
+
+        /// grows between minimum and maximum, which must be px() or percent(). a resolved minimum above the
+        /// maximum takes priority. {px(150), percent(50)} therefore never shrinks below 150 pixels.
+        LayoutAxis(LayoutAxis minimum, LayoutAxis maximum);
+
+        /// applies limits to an explicit rule, for example {fit(), px(10), px(100)} measures content within 10–100 pixels.
+        LayoutAxis(LayoutAxis preferred, LayoutAxis minimum, LayoutAxis maximum);
+
+        /// measures with pixel limits. percentage limits wait until parent space is available during resolve().
+        float intrinsic(float measured, float insets = 0.0F, BoxSizing box_sizing = BoxSizing::BorderBox) const;
+
+        /// resolves the rule and limits into an outer extent using available parent space in pixels.
+        float resolve(float measured, float available, float insets = 0.0F, BoxSizing box_sizing = BoxSizing::BorderBox) const;
+        float constrain(float size, float available, float insets = 0.0F, BoxSizing box_sizing = BoxSizing::BorderBox) const;
         constexpr bool operator==(const LayoutAxis&) const = default;
 
         LayoutSizeMode mode = LayoutSizeMode::Grow;
         float value = 1.0F;
+        LayoutLimit minimum{};
+        LayoutLimit maximum{std::numeric_limits<float>::infinity()};
     };
 
     struct LayoutSize {
         constexpr bool operator==(const LayoutSize&) const = default;
 
-        LayoutAxis width{};
-        LayoutAxis height{};
+        LayoutAxis width;
+        LayoutAxis height;
     };
 
+    /// requests a fixed pixel extent, clamped to zero. ContentBox adds padding and borders outside this extent,
+    /// while BorderBox includes them, with padding and borders as the minimum outer size.
     constexpr LayoutAxis px(float value) {
         return {LayoutSizeMode::Fixed, std::max(0.0F, value)};
     }
 
-    /// returns an axis sized to a percentage in the inclusive 0–100 range of its available parent space.
+    /// percent(50) requests half the available parent space on this axis, not half the remainder after siblings.
+    /// the percentage is clamped to [0, 100]. padding and borders follow the same box-sizing rule as px().
     constexpr LayoutAxis percent(float value) {
         return {LayoutSizeMode::Percent, std::clamp(value, 0.0F, 100.0F)};
     }
 
+    /// fills available space across a stack. along its direction, growing children reserve their minimum, then
+    /// share the remainder after other extents, margins and gaps. grow(2) receives twice the flexible share of grow(1).
+    /// space left by children reaching their maximum is redistributed to those still below their maximum.
+    /// nonpositive weights become 1. the weight does not affect allocation outside a stack's flow direction.
     constexpr LayoutAxis grow(float weight = 1.0F) {
         return {LayoutSizeMode::Grow, weight > 0.0F ? weight : 1.0F};
     }
 
+    /// requests the node's measured outer extent. containers measure flowing children, margins and gaps,
+    /// plus their own padding and borders. out-of-flow children do not enlarge a fit-sized container.
     constexpr LayoutAxis fit() {
         return {LayoutSizeMode::Fit, 0.0F};
     }
@@ -75,6 +109,8 @@ namespace ui {
     struct Placement {
         bool operator==(const Placement& other) const;
 
+        // aligns origin on the node with anchor in the parent's content box, then adds offset in pixels.
+        // Custom reads anchor_position or origin_position as normalized factors instead of a named anchor.
         Anchor anchor = Anchor::TopLeft;
         Anchor origin = Anchor::TopLeft;
         ImVec2 offset;
@@ -89,6 +125,9 @@ namespace ui {
 
         LayoutSize size{};
         Placement placement{};
+
+        // true reserves stack space and contributes to parent fit measurements. false positions by placement
+        // without reserving space. this does not change visibility, input eligibility or the node's own child layout.
         bool in_flow = true;
     };
 
@@ -180,11 +219,9 @@ namespace ui {
             return m_measured_size;
         }
 
-        /// grow contributes its measured extent. percent contributes zero until parent space is available.
+        /// measures content with pixel limits applied. percentage rules and limits wait for parent allocation,
+        /// avoiding a dependency on a fit-sized parent's own unresolved size.
         ImVec2 intrinsic_size() const;
-
-        /// percent contributes zero so a fit parent does not depend on its own unresolved allocation.
-        ImVec2 preferred_size() const;
 
         ImVec2 resolved_size() const {
             return resolve_size(m_available_size);
@@ -192,8 +229,16 @@ namespace ui {
 
         ImVec2 resolve_size(ImVec2 available_size) const;
 
+        /// clamps an outer allocation against px/percent limits resolved from available parent space.
+        /// padding and borders remain the minimum possible outer allocation. minimum wins over a smaller maximum.
+        ImVec2 constrain_size(ImVec2 size, ImVec2 available_size) const;
+
         const BoxInsets& box_insets() const {
             return m_box_insets;
+        }
+
+        BoxSizing box_sizing() const {
+            return m_box_sizing;
         }
 
         /// cursor-relative bounds in the current imgui window.
@@ -259,10 +304,6 @@ namespace ui {
             m_parent_content_rect = rect;
             m_available_size = available_size;
         }
-
-        static float intrinsic_axis(LayoutAxis axis, float measured, float insets, BoxSizing box_sizing);
-        static float resolved_axis(LayoutAxis axis, float measured, float available, float insets, BoxSizing box_sizing);
-        static float preferred_axis(LayoutAxis axis, float measured, float insets, BoxSizing box_sizing);
 
         LayoutConfig m_config{};
         ImVec2 m_measured_size;

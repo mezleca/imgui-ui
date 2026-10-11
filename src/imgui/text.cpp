@@ -20,8 +20,9 @@ void Painter::text(ImVec2 position, const Color& source, const GenericValue& tex
         return;
     }
 
-    const char* const value = text.c_str();
-    const char* const value_end = value + std::char_traits<char>::length(value);
+    const std::string& string = text.str();
+    const char* const value = string.c_str();
+    const char* const value_end = value + string.size();
     const float line_height = font_size * text.line_height_multiplier();
     float y = position.y;
 
@@ -56,8 +57,9 @@ void Painter::text_ellipsis(ImVec2 position, const Color& source, const GenericV
     const ImColor draw_color = color(source);
     ImFont* font = text.font() != nullptr ? text.font() : ImGui::GetFont();
     const float font_size = ImGui::GetFontSize();
-    const char* const value = text.c_str();
-    const char* const value_end = value + std::char_traits<char>::length(value);
+    const std::string& string = text.str();
+    const char* const value = string.c_str();
+    const char* const value_end = value + string.size();
     const float line_height = font_size * text.line_height_multiplier();
     float y = position.y;
 

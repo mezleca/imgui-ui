@@ -226,8 +226,8 @@ bool DropdownWidget::Body::paint() {
 }
 
 void DropdownWidget::Body::draw_children() {
-    const float item_width = content_size(layout().visual_rect().size()).x;
-    const ImVec2 item_size = {item_width, m_item_height};
+    const ImVec2 available = content_size(layout().visual_rect().size());
+    const ImVec2 item_size = {available.x, m_item_height};
 
     std::size_t index = 0;
     for (const auto& child : children()) {
@@ -236,7 +236,10 @@ void DropdownWidget::Body::draw_children() {
         }
 
         auto& option_node = static_cast<Option&>(*child);
-        arrange_child(option_node, item_size, {.offset = {0.0F, m_item_height * static_cast<float>(index)}});
+        arrange_child(
+            option_node, option_node.layout().constrain_size(item_size, available),
+            {.offset = {0.0F, m_item_height * static_cast<float>(index)}}
+        );
         const InputState& input = option_node.input_state();
 
         if (!input.hovered && !input.active && !input.focused) {

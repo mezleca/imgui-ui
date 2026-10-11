@@ -350,6 +350,9 @@ protected:
 
     void on_draw_end() override {
         const Rect rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
+
+        // on_draw_end runs after this panel's children draw. submitting the effect here captures their pixels too,
+        // rather than capturing only the panel background before the children have been rendered.
         m_effect.submit(*ImGui::GetWindowDrawList(), DemoChromaticCommand{rect});
         DemoPanel::on_draw_end();
     }
@@ -391,6 +394,11 @@ private:
 class DemoFloatingWindow final : public LayerContainer {
 public:
     DemoFloatingWindow() : LayerContainer("demo-floating-window", LayerMode::Window) {
+        // set_layout replaces size, placement and in_flow together. omitted fields receive LayoutConfig defaults,
+        // including grow/grow sizing. calling set_size before set_layout would therefore lose that size request.
+        // anchor selects a point in the parent's content box. origin selects the point on this window to align with it.
+        // matching TopRight points puts the window to the left of that corner. offset {-24, 24} moves it left and down.
+        // in_flow=false positions it independently of siblings, without reserving any space in the parent's stack.
         set_layout({
             .size = {px(320.0F), px(180.0F)},
             .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-24.0F, 24.0F}},
@@ -407,6 +415,9 @@ public:
 
 protected:
     ImGuiWindowFlags window_flags() const override {
+        // LayerMode::Window creates a separate imgui window. the default flags prevent moving, resizing and raising it.
+        // clearing these flags enables those interactions. the layer then submits layout position and size with
+        // ImGuiCond_FirstUseEver, so the layout initializes the window without overwriting the user's later changes.
         return LayerContainer::window_flags() &
                ~(ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus);
     }
@@ -428,6 +439,10 @@ class InputBlocker final : public DemoPanel {
 public:
     InputBlocker() : DemoPanel("InputBlocker") {
         set_spacing(10.0F);
+
+        // fit/fit sizes this panel from its children, spacing, padding and borders, rather than filling the backdrop.
+        // Center/Center aligns the panel's center with the backdrop's content center, regardless of the measured size.
+        // in_flow=false excludes the panel from the parent's stack and fit measurement. it remains visible and interactive.
         set_layout({
             .size = {fit(), fit()},
             .placement = {.anchor = Anchor::Center, .origin = Anchor::Center},
@@ -486,6 +501,9 @@ private:
 
         m_hovered = hovered;
         if (hovered) {
+            // to animates a property toward an absolute value. calls before the next then run in parallel.
+            // then(0.1F) starts the next phase after the longest animation in this phase finishes, plus a 0.1 second pause.
+            // padding-x and background color therefore change together, followed by rotation in the final phase.
             animate()
                 .to(StyleAnimationProperty::PaddingY, 10.0F, {0.2F, easing::out_quad})
                 .then(0.1F)
@@ -667,6 +685,18 @@ DemoTextListWidget& DemoTextListWidget::set_items(std::vector<std::string> items
 }
 
 DemoScreen::DemoScreen() : Container("demo", StackDirection::Vertical) {
+    // set_size takes {width, height}. each axis can choose its own sizing rule:
+    // - px(120) requests 120 pixels, independent of the available space.
+    // - percent(50) requests half the available parent space, not half the remaining space after siblings.
+    // - fit() measures the node's content. containers include flowing children, gaps, margins, padding and borders.
+    // - grow() fills the available space. along a stack's direction, growing siblings share what remains after
+    //   other children and gaps. grow(2) receives twice the share of grow(1). across the stack, grow fills that axis.
+    // set_size changes only these two rules, preserving placement and in_flow. set_layout replaces all three.
+    // containers default to BorderBox, so px/percent sizes include padding and borders. ContentBox adds them outside
+    // the requested size. fit always includes them in its measured outer extent. margins belong to the parent layout.
+    // here grow/grow keeps the demo sized to its parent as the window resizes, rather than expanding to fit all panels.
+    // set_scrollable(vertical, horizontal) enables scrolling on the selected axes. this call enables vertical scrolling
+    // only, so panels beyond the available height are reached by scrolling instead of enlarging the demo container.
     set_size({grow(), grow()});
     set_scrollable(true);
     set_spacing(16.0F);
@@ -675,6 +705,10 @@ DemoScreen::DemoScreen() : Container("demo", StackDirection::Vertical) {
 void DemoScreen::setup(std::string backend) {
     Surface& ui = surface();
     auto& overview = add<DemoPanel>("overview");
+
+    // ordinary nodes default to in_flow=true. a vertical container places them one below another and adds spacing
+    // between them. a horizontal container places them side by side. only flowing children contribute to a parent's fit().
+    // this panel fills the demo's width, but measures its height from its children. the next panel starts below that height.
     overview.set_size({grow(), fit()});
     overview.set_spacing(4.0F);
     overview.add<TextWidget>("imgui-ui example");
@@ -685,6 +719,38 @@ void DemoScreen::setup(std::string backend) {
     auto& random_slider = overview.add<DemoNumberInput>(m_random_value);
     random_slider.set_label("random value");
     random_slider.set_maximum(10);
+
+    auto& size_limits = add<DemoPanel>("size-limits");
+    size_limits.set_size({grow(), fit()});
+    size_limits.set_spacing(8.0F);
+    size_limits.add<TextWidget>("size limits - resize the window to change the available width");
+    auto& bounded_row = size_limits.add<Container>("bounded-row", StackDirection::Horizontal);
+    bounded_row.set_size({grow(), px(100.0F)});
+    bounded_row.set_spacing(8.0F);
+
+    // set_size(minimum, maximum) requests grow on both axes within those limits. each limit accepts px() or percent().
+    // this panel reserves at least 150 pixels of width and 60 of height, and grows to at most half the row's width
+    // and 100 pixels of height. percentages refer to parent space, not the remainder left after the other panels.
+    // if half the row becomes less than 150 pixels, the minimum wins. minima may overflow a parent that is too small.
+    auto& bounded_grow = bounded_row.add<DemoPanel>("bounded-grow");
+    bounded_grow.set_size({px(150.0F), px(60.0F)}, {percent(50.0F), px(100.0F)});
+    bounded_grow.add<TextWidget>("150px - 50%");
+
+    // ranges also work directly in LayoutSize, including widget constructors and set_layout's size field.
+    // two values on an axis mean {minimum, maximum}, with grow as the rule. three mean {rule, minimum, maximum}.
+    // this panel measures its text with fit(), then clamps the outer width to 40–100 pixels instead of growing.
+    // limits follow box sizing. these panels use BorderBox, so their padding and borders are inside the limits.
+    auto& bounded_fit = bounded_row.add<DemoPanel>("bounded-fit");
+    bounded_fit.set_size({{fit(), px(40.0F), px(100.0F)}, grow()});
+    bounded_fit.add<TextWidget>("fit");
+
+    // along the row, grow reserves each child's minimum first, then divides remaining space by grow weight.
+    // once bounded-grow reaches its percentage maximum, its unused share goes to this uncapped sibling.
+    // pixel limits apply during intrinsic measurement too. percentage limits wait for parent allocation, so a fit
+    // parent is not measured from a percentage of its own as-yet unknown size.
+    auto& remainder = bounded_row.add<DemoPanel>("bounded-remainder");
+    remainder.set_size({grow(), grow()});
+    remainder.add<TextWidget>("remaining space");
 
     auto& profile = add<DemoPanel>("profile");
     profile.set_size({grow(), fit()});
@@ -753,6 +819,8 @@ void DemoScreen::setup(std::string backend) {
 
     theme.set_label("theme").set_size({px(360.0F), fit()});
     theme.on_change([this] {
+        // changing m_theme alone does not recolor existing widgets. set_theme applies the new defaults to the attached tree.
+        // these demo panel subclasses also choose colors from s_demo_theme_variant, so set it before applying the theme.
         s_demo_theme_variant = demo_theme_variant(m_theme);
         surface().set_theme(make_demo_theme(m_theme));
     });
@@ -812,6 +880,10 @@ void DemoScreen::setup(std::string backend) {
     virtual_list.set_size({grow(), px(260.0F)});
     virtual_list.set_spacing(4.0F);
     virtual_list.set_overscan(5);
+
+    // set_items supplies a row count and a callback that returns the node for an index. it does not create all rows upfront.
+    // the callback is requested for visible rows and up to five rows on each side, as configured by set_overscan(5).
+    // retain each created button in cache so revisiting an index returns the same node and preserves its state.
     virtual_list.set_items(
         100000, [&virtual_list, cache = std::unordered_map<size_t, ButtonWidget*>{}](size_t index) mutable -> Node& {
             const auto found = cache.find(index);
@@ -824,6 +896,9 @@ void DemoScreen::setup(std::string backend) {
             row.set_id(std::format("virtual-row-{}", index));
             row.on_click([&virtual_list, &row, index] {
                 const bool expanded = virtual_list.extra_offset(index) == 0.0F;
+
+                // set_extra_offset adds to the row's normal extent. expanding adds 64 pixels and collapsing removes them.
+                // the list shifts later rows and adjusts its scroll extent, so the extra text does not cover the next row.
                 virtual_list.set_extra_offset(index, expanded ? 64.0F : 0.0F);
                 row.set_text(
                     expanded ? std::format("item {} - collapse\nthis row reserves 64 extra pixels", index + 1)
@@ -849,6 +924,11 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
 
     dynamic_section.set_direction(StackDirection::Horizontal);
     dynamic_section.set_spacing(8.0F);
+
+    // anchor and origin both select TopRight. the panel's top-right sits 20 pixels left and 72 pixels below the overlay's.
+    // in_flow=false affects this panel's relationship with its parent, not the layout of its own children.
+    // it neither advances the parent's stack cursor nor enlarges a fit-sized parent. its children still stack horizontally.
+    // fit/fit measures those children, so adding a wider child grows the panel leftward while its top-right stays anchored.
     dynamic_section.set_layout({
         .size = {fit(), fit()},
         .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-20.0F, 72.0F}},
@@ -876,6 +956,8 @@ void DemoScreen::setup_dynamic_nodes(Node& parent) {
         const int item_id = ++m_next_dynamic_id;
         auto& item = m_dynamic_nodes->add<ButtonWidget>(std::format("list item {}", item_id), LayoutSize{grow(), px(36.0F)});
         item.on_click([this, &item] {
+            // remove marks the node for deletion and excludes it from input and layout. destruction is deferred until
+            // a tree update, allowing this callback to finish without destroying its own button midway through dispatch.
             if (m_dynamic_nodes->remove(item)) {
                 --m_dynamic_count;
                 m_dynamic_status->set_text(std::format("dynamic nodes: {}", m_dynamic_count));
@@ -916,6 +998,9 @@ ImageWidget& DemoScreen::add_test_image(Texture* texture) {
     auto& image = m_test_images->add<ImageWidget>(texture);
     image.set_size({grow(), grow()});
     image.set_fit(image_fit());
+
+    // InputMode::None leaves an image out of pointer hit testing by default. Target lets it receive hover and click events.
+    // Target does not exclude other overlapping branches. use Blocker when a layer must prevent input reaching content behind it.
     image.set_input_mode(InputMode::Target);
 
     ImageWidget* image_ptr = &image;
@@ -925,6 +1010,11 @@ ImageWidget& DemoScreen::add_test_image(Texture* texture) {
         }
 
         image_ptr->set_enabled(false);
+
+        // set_enabled(false) leaves the image drawn but stops it receiving another click while this sequence runs.
+        // by adds to the property's starting value, while to chooses an absolute target. calls in a phase run together.
+        // release_all animates properties back to their style values. end runs after that final phase completes.
+        // the callback marks the image for deferred removal, so it is not destroyed while its animation callback is executing.
         image_ptr->animate()
             .by(StyleAnimationProperty::PaddingY, 12.0F, {0.30F, easing::in_out_sine})
             .to(StyleAnimationProperty::Scale, ImVec2{1.12F, 0.78F}, {0.30F, easing::in_out_sine})
@@ -998,6 +1088,7 @@ static void apply_border_style(Node& node, BorderStyle style) {
 void setup_demo(Surface& surface, std::string backend) {
     Runtime& runtime = surface.runtime();
 #ifdef IMGUI_UI_ASSETS_DIR
+
     // register fonts before widgets request them. each font loads once per imgui context.
     const std::filesystem::path assets = std::filesystem::path{IMGUI_UI_ASSETS_DIR};
     runtime.fonts().add("Inter Regular", assets / "fonts/Inter.ttf");
@@ -1016,6 +1107,11 @@ void setup_demo(Surface& surface, std::string backend) {
     surface.root().add<DemoFloatingWindow>();
 
     auto& overlay = demo.add<LayerContainer>("##demo-overlay");
+
+    // LayerMode::Inline draws inside a child window over the parent's content box, rather than in a separate movable window.
+    // layers default to in_flow=false. without an explicit size, this one fills the parent's content box and reserves no stack
+    // space. the layer compensates for its parent's scroll position, keeping these controls in the demo viewport as the panels
+    // scroll.
     demo.setup_dynamic_nodes(overlay);
 
     auto& context_status = demo.add<TextWidget>("context menu: no selection");
@@ -1038,7 +1134,10 @@ void setup_demo(Surface& surface, std::string backend) {
 
     context_button.on_click([&context_menu] { context_menu.open(); });
 
-    // the layer blocks underlying targets while keeping this panel's descendants eligible.
+    // the full-size layer is the input barrier, while its child is only the visible centered panel.
+    // InputMode::Blocker excludes unrelated branches behind the layer from pointer events, including native scrollbar
+    // interaction. descendants remain eligible, so the panel's close button works. clicking outside the panel still hits the
+    // backdrop instead of the demo underneath. hiding the layer removes that barrier and restores input to the demo.
     auto& input_blocker = surface.root().add<LayerContainer>("##input-blocker");
     input_blocker.set_visible(false);
 
@@ -1060,7 +1159,9 @@ void setup_demo(Surface& surface, std::string backend) {
         block_button.set_text("block pointer input");
     });
 
-    // sample the app behind this layer while routing modal input to the panel.
+    // apply blur to the full-size backdrop rather than to the modal panel. it samples content drawn earlier behind the layer.
+    // the panel is drawn as a descendant over that blurred background. Blocker makes the entire backdrop reject input to the
+    // demo, including the transparent area outside the panel, so transparency does not make the modal pass input through.
     auto& modal_layer = surface.root().add<LayerContainer>("##modal-layer", LayerMode::Inline);
     modal_layer.set_visible(false);
     modal_layer.set_input_mode(InputMode::Blocker);
@@ -1068,12 +1169,16 @@ void setup_demo(Surface& surface, std::string backend) {
 
     auto& modal = modal_layer.add<DemoPanel>("demo-modal", DemoPanelTone::Secondary, ImVec2{24.0F, 24.0F}, BORDER_ALL);
     modal.set_visible(false);
+
+    // a fixed 480x220 panel is centered in the full-size backdrop by aligning Center with Center.
+    // in_flow=false positions it independently of the backdrop's stack. it does not reserve a 220-pixel slot for later siblings.
     modal.set_layout({
         .size = {px(480.0F), px(220.0F)},
         .placement = {.anchor = Anchor::Center, .origin = Anchor::Center},
         .in_flow = false,
     });
     modal.set_spacing(10.0F);
+
     // close both the panel and backdrop on an outside left press or click, or escape. stop delivery to underlying targets.
     modal_layer.on_event([&modal_layer, &modal](UiEvent& event) {
         const bool clicked_outside = (event.type == EventType::Click || event.type == EventType::PointerDown) &&
@@ -1098,6 +1203,11 @@ void setup_demo(Surface& surface, std::string backend) {
     });
 
     auto& close_button = modal.add<ButtonWidget>("close modal", LayoutSize{px(180.0F), px(40.0F)});
+
+    // set_anchor(anchor, origin) changes placement and sets in_flow=false, preserving size and the existing placement offset.
+    // the one-argument overload uses the same anchor and origin. BottomCenter aligns the button's bottom-center with
+    // the panel's content bottom-center, inside its padding. unlike a flowing footer, it reserves no space below the text.
+    // adding enough flowing content can therefore overlap it. use an in-flow footer with a growing spacer to reserve that space.
     close_button.set_anchor(Anchor::BottomCenter, Anchor::BottomCenter);
     close_button.on_click([&modal_layer, &modal] {
         modal.set_visible(false);
@@ -1112,6 +1222,9 @@ void setup_demo(Surface& surface, std::string backend) {
 
         modal_layer.set_visible(true);
         modal.set_visible(true);
+
+        // showing a layer does not give it keyboard focus. assign focus explicitly so escape reaches the backdrop's handler
+        // immediately. once a descendant receives focus, its unhandled events can still bubble to that handler.
         surface.input_router().set_focus(&modal_layer);
     });
 }

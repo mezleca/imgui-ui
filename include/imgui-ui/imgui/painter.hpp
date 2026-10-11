@@ -48,6 +48,7 @@ namespace ui {
         void text_ellipsis(ImVec2 position, const Color& source, const GenericValue& text, ImVec4 clip_rect) const;
 
         void frame(Rect rect, const ComputedStyle& style, const std::optional<Color>& background = {}) const;
+
         /// paints background and border after a container has emitted effects with its ancestor clip.
         void frame_surface(Rect rect, const ComputedStyle& style, const std::optional<Color>& background = {}) const;
         void blur(Rect rect, const ComputedStyle& style) const;

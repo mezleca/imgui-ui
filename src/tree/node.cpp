@@ -43,6 +43,7 @@ Node& Node::add(std::unique_ptr<Node> child) {
     }
 
     Node& result = *child;
+
     // connect the parent and inherited services before applying the surface theme to the subtree.
     result.m_parent = this;
     result.set_surface(m_surface);
@@ -61,6 +62,10 @@ Node& Node::set_size(LayoutSize size) {
     m_layout.set_size(size);
     invalidate_measure();
     return *this;
+}
+
+Node& Node::set_size(LayoutSize minimum, LayoutSize maximum) {
+    return set_size({{minimum.width, maximum.width}, {minimum.height, maximum.height}});
 }
 
 Node& Node::set_layout(LayoutConfig config) {

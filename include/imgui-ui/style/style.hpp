@@ -56,6 +56,7 @@ namespace ui {
         Style() = default;
 
         Style& font(ImFont* value);
+
         /// zero inherits the nearest explicit size, or the font's default size.
         Style& font_size(float value);
         StyleVariableStore& variables() {

@@ -1,5 +1,6 @@
 ---
 
+# signed bitwise operations are required by dear imgui's int flag types.
 Checks: >
   -*,
   bugprone-*,
@@ -13,6 +14,7 @@ Checks: >
   -bugprone-macro-parentheses,
   -bugprone-easily-swappable-parameters,
   -bugprone-reserved-identifier,
+  -bugprone-signed-bitwise,
   -bugprone-exception-escape,
   -bugprone-throwing-static-initialization,
   -bugprone-unchecked-optional-access,

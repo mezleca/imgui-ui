@@ -10,6 +10,7 @@
 #include <imgui-ui/layout/virtual-layout.hpp>
 #include <imgui-ui/input/router.hpp>
 #include <imgui-ui/widgets/text.hpp>
+#include <imgui-ui/widgets/button.hpp>
 #include "imgui-context.hpp"
 
 #include <cfloat>
@@ -62,6 +63,88 @@ static void draw_open_tree(Node& node, const char* name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_Always);
         node.draw();
     });
+}
+
+TEST_CASE("size ranges clamp both axes and resolve mixed units after parent resizing", "[layout][size-limits]") {
+    ui_test::ImGuiContext context({800.0F, 300.0F});
+    Container root("range-root");
+    root.set_size({px(400.0F), px(120.0F)});
+    auto& child = root.add<ButtonWidget>("range-child", LayoutSize{{px(10.0F), px(100.0F)}, {px(20.0F), px(60.0F)}});
+    ui_test::draw_node(root, "size-range-window");
+    CHECK(child.layout().size().x == Catch::Approx(100.0F));
+    CHECK(child.layout().size().y == Catch::Approx(60.0F));
+
+    child.set_size({px(150.0F), px(20.0F)}, {percent(50.0F), px(20.0F)});
+    child.set_anchor(Anchor::BottomRight);
+    ui_test::draw_node(root, "size-range-window");
+    CHECK(child.layout().size().x == Catch::Approx(200.0F));
+    CHECK(child.layout().visual_rect().max.x == Catch::Approx(root.layout().visual_rect().max.x));
+
+    for (const auto& [width, expected] : {std::pair{200.0F, 150.0F}, std::pair{600.0F, 300.0F}}) {
+        root.set_size({px(width), px(120.0F)});
+        ui_test::draw_node(root, "size-range-window");
+        CHECK(child.layout().size().x == Catch::Approx(expected));
+    }
+}
+
+TEST_CASE("bounded fit measurements propagate to parents without percentage feedback", "[layout][size-limits]") {
+    ui_test::ImGuiContext context({400.0F, 220.0F});
+    Container root("bounded-fit-root");
+    root.set_size({fit(), fit()});
+    auto& child = root.add<MeasuredLayoutNode>(ImVec2{200.0F, 24.0F});
+    child.set_size({{fit(), px(10.0F), px(100.0F)}, fit()});
+    for (const auto& [width, expected] : {std::pair{200.0F, 100.0F}, std::pair{5.0F, 10.0F}}) {
+        child.set_intrinsic_size({width, 24.0F});
+        ui_test::draw_node(root, "bounded-fit-window");
+        CHECK(root.layout().size().x == Catch::Approx(expected));
+        CHECK(child.layout().size().x == Catch::Approx(expected));
+    }
+
+    child.set_intrinsic_size({200.0F, 24.0F});
+    child.set_size({{fit(), px(10.0F), percent(50.0F)}, fit()});
+    ui_test::draw_node(root, "bounded-fit-window");
+    CHECK(root.layout().size().x == Catch::Approx(200.0F));
+    CHECK(child.layout().size().x == Catch::Approx(100.0F));
+}
+
+TEST_CASE("stacks redistribute capped grow shares in either direction", "[layout][size-limits]") {
+    for (bool horizontal : {false, true}) {
+        DYNAMIC_SECTION((horizontal ? "horizontal" : "vertical")) {
+            const int main = horizontal ? 0 : 1;
+            const auto size = [horizontal](LayoutAxis axis) {
+                return horizontal ? LayoutSize{axis, grow()} : LayoutSize{grow(), axis};
+            };
+
+            ui_test::ImGuiContext context({500.0F, 500.0F});
+            Container root("bounded-stack", horizontal ? StackDirection::Horizontal : StackDirection::Vertical);
+            root.set_size(horizontal ? LayoutSize{px(316.0F), px(100.0F)} : LayoutSize{px(100.0F), px(316.0F)});
+            root.set_spacing(8.0F);
+            auto& first = root.add<LayoutProbeNode>("first");
+            auto& second = root.add<LayoutProbeNode>("second");
+            auto& third = root.add<LayoutProbeNode>("third");
+            first.set_size(size({px(20.0F), px(40.0F)}));
+            second.set_size(size({px(20.0F), px(80.0F)}));
+            third.set_size(size(grow(2.0F)));
+            ui_test::draw_node(root, "bounded-stack-window");
+            CHECK(first.layout().size()[main] == Catch::Approx(40.0F));
+            CHECK(second.layout().size()[main] == Catch::Approx(80.0F));
+            CHECK(third.layout().size()[main] == Catch::Approx(180.0F));
+
+            third.set_visible(false);
+            root.set_content_alignment(Anchor::BottomRight);
+            ui_test::draw_node(root, "bounded-stack-window");
+            CHECK(second.layout().visual_rect().max.x == Catch::Approx(root.layout().visual_rect().max.x));
+            CHECK(second.layout().visual_rect().max.y == Catch::Approx(root.layout().visual_rect().max.y));
+
+            root.set_size({px(100.0F), px(100.0F)});
+            root.set_spacing(0.0F);
+            first.set_size(size({px(80.0F), px(200.0F)}));
+            second.set_size(size({px(60.0F), px(200.0F)}));
+            ui_test::draw_node(root, "bounded-stack-window");
+            CHECK(first.layout().size()[main] == Catch::Approx(80.0F));
+            CHECK(second.layout().size()[main] == Catch::Approx(60.0F));
+        }
+    }
 }
 
 TEST_CASE("growing containers remeasure intrinsic content independently of sizing history", "[Container][layout][regression]") {
@@ -193,19 +276,19 @@ TEST_CASE("nested fit containers preserve content through padding resize and ins
     };
     draw_frame();
     REQUIRE(inner.layout().size().x == Catch::Approx(260.0F));
-    REQUIRE(content.layout().size().y >= content.layout().preferred_size().y);
+    REQUIRE(content.layout().size().y >= content.layout().intrinsic_size().y);
     const float initial_height = wrapper.layout().size().y;
 
     draw_frame();
     REQUIRE(wrapper.layout().size().y == Catch::Approx(initial_height));
-    REQUIRE(content.layout().size().y >= content.layout().preferred_size().y);
+    REQUIRE(content.layout().size().y >= content.layout().intrinsic_size().y);
 
     wrapper.configure_all_styles([](Style& style) { style.padding({20.0F, 16.0F}); });
     root.set_size({px(180.0F), px(180.0F)});
     draw_frame();
     REQUIRE(inner.layout().size().x == Catch::Approx(140.0F));
     REQUIRE(wrapper.layout().size().y == Catch::Approx(initial_height + 16.0F));
-    REQUIRE(content.layout().size().y >= content.layout().preferred_size().y);
+    REQUIRE(content.layout().size().y >= content.layout().intrinsic_size().y);
 
     root.set_size({px(380.0F), px(180.0F)});
     draw_frame();
@@ -222,7 +305,7 @@ TEST_CASE("nested fit containers preserve content through padding resize and ins
     );
 }
 
-TEST_CASE("box sizing includes borders and preserves insets", "[layout]") {
+TEST_CASE("box sizing includes borders and preserves insets and size limits", "[layout][size-limits]") {
     ui_test::ImGuiContext context({240.0F, 180.0F});
     Container root("box-inset-root");
     root.set_size({px(200.0F), px(150.0F)});
@@ -269,6 +352,13 @@ TEST_CASE("box sizing includes borders and preserves insets", "[layout]") {
     REQUIRE(percentage.layout().size().y == Catch::Approx(16.0F));
     REQUIRE(percentage_content.layout().size().x == Catch::Approx(6.0F));
     REQUIRE(percentage_content.layout().size().y == Catch::Approx(0.0F));
+
+    fixed.set_size({{px(10.0F), px(24.0F)}, px(20.0F)});
+    for (BoxSizing sizing : {BoxSizing::ContentBox, BoxSizing::BorderBox}) {
+        fixed.style().box_sizing(sizing);
+        draw_frame();
+        CHECK(fixed.layout().size().x == Catch::Approx(sizing == BoxSizing::ContentBox ? 38.0F : 24.0F));
+    }
 }
 
 TEST_CASE("grow distributes content space after box insets", "[layout]") {
@@ -1169,7 +1259,7 @@ TEST_CASE("window layers preserve explicit sizes", "[LayerContainer][layout][reg
     REQUIRE(layer.layout().visual_rect().size().y == Catch::Approx(80.0F));
 }
 
-TEST_CASE("movable window layers preserve imgui geometry between draws", "[LayerContainer][layout]") {
+TEST_CASE("movable window layers preserve imgui geometry within size limits", "[LayerContainer][layout][size-limits]") {
     class FloatingLayer final : public LayerContainer {
     public:
         FloatingLayer() : LayerContainer("floating-layer", LayerMode::Window) {}
@@ -1200,6 +1290,23 @@ TEST_CASE("movable window layers preserve imgui geometry between draws", "[Layer
     REQUIRE(rect.size().y == Catch::Approx(80.0F));
     REQUIRE(child.layout().visual_rect().size().x == Catch::Approx(150.0F));
     REQUIRE_FALSE((ImGui::FindWindowByName("floating-layer")->Flags & ImGuiWindowFlags_NoMove) != 0);
+
+    layer.set_size({{px(200.0F), px(100.0F), percent(50.0F)}, {px(100.0F), px(40.0F), px(90.0F)}});
+    ImGui::SetWindowSize("floating-layer", {500.0F, 200.0F});
+    ui_test::draw_node(root, "floating-window-parent");
+    CHECK(layer.layout().size().x == Catch::Approx(140.0F));
+    CHECK(layer.layout().size().y == Catch::Approx(90.0F));
+
+    root.set_size({px(180.0F), px(180.0F)});
+    ImGui::SetWindowSize("floating-layer", {10.0F, 10.0F});
+    ui_test::draw_node(root, "floating-window-parent");
+    CHECK(layer.layout().size().x == Catch::Approx(100.0F));
+    CHECK(layer.layout().size().y == Catch::Approx(40.0F));
+
+    layer.set_size({{px(100.0F), px(10.0F), px(20.0F)}, px(40.0F)});
+    ImGui::SetWindowSize("floating-layer", {100.0F, 40.0F});
+    ui_test::draw_node(root, "floating-window-parent");
+    CHECK(layer.layout().size().x == Catch::Approx(20.0F));
 }
 
 TEST_CASE("inline layers preserve explicit sizes", "[LayerContainer][layout][regression]") {

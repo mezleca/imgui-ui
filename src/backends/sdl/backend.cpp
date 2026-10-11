@@ -179,7 +179,7 @@ void SdlBackend::apply_mouse_cursor(ImGuiMouseCursor cursor) {
 }
 
 void SdlBackend::set_mouse_cursor(ImGuiMouseCursor cursor) {
-    m_mouse_cursor_type = cursor;
+    apply_mouse_cursor(cursor);
 }
 
 bool SdlBackend::initialize() {
@@ -254,7 +254,6 @@ std::optional<double> SdlBackend::render_profiled(ImDrawData* draw_data, bool pr
     const std::optional<double> gpu_ms = m_gpu_timer.begin(profile_gpu);
     ImGui_ImplOpenGL3_RenderDrawData(draw_data);
     m_gpu_timer.end();
-    apply_mouse_cursor(m_mouse_cursor_type);
     SDL_GL_SwapWindow(m_window);
     return gpu_ms;
 }

@@ -24,8 +24,10 @@ namespace ui {
 
         DropdownWidget& set_label(std::string label);
         DropdownWidget& set_placeholder(std::string placeholder);
+
         /// returns false if value is absent or already selected. a change closes the popup and notifies listeners.
         bool select_value(std::string_view value);
+
         /// replaces visible options without changing the bound value.
         DropdownWidget& set_options(std::vector<DropdownOption> options);
         void open();

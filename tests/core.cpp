@@ -994,29 +994,31 @@ TEST_CASE("positioned nodes preserve their cursor placement when drawing is skip
     REQUIRE(skipped.layout().local_rect().min.x == container.style().padding().x + 120.0F);
 }
 
-TEST_CASE("overlay children stay in the surface window") {
-    class WindowNameNode final : public Node {
+TEST_CASE("inline layers draw children in a native child window") {
+    class WindowNode final : public Node {
     public:
-        std::string window_name;
+        ImGuiWindow* window = nullptr;
 
     private:
         bool on_draw() override {
-            window_name = ImGui::GetCurrentWindowRead()->Name;
+            window = ImGui::GetCurrentWindowRead();
             return true;
         }
     };
 
     ui_test::ImGuiContext context({200.0F, 120.0F});
     LayerContainer overlay("overlay");
-    auto& child = overlay.add<WindowNameNode>();
+    auto& child = overlay.add<WindowNode>();
 
     REQUIRE_FALSE(overlay.layout().in_flow());
 
     ui_test::draw_node(overlay, "surface");
 
-    REQUIRE(child.window_name == "surface");
-    REQUIRE(overlay.layout().layout_rect().min.x == Catch::Approx(0.0F));
-    REQUIRE(overlay.layout().layout_rect().min.y == Catch::Approx(0.0F));
+    REQUIRE(child.window != nullptr);
+    REQUIRE((child.window->Flags & ImGuiWindowFlags_ChildWindow) != 0);
+    REQUIRE(child.window->ParentWindow == ImGui::FindWindowByName("surface"));
+    REQUIRE(overlay.layout().layout_rect().min.x == Catch::Approx(child.window->Pos.x));
+    REQUIRE(overlay.layout().layout_rect().min.y == Catch::Approx(child.window->Pos.y));
     REQUIRE(overlay.layout().layout_rect().size().x == Catch::Approx(200.0F));
     REQUIRE(overlay.layout().layout_rect().size().y == Catch::Approx(120.0F));
 }

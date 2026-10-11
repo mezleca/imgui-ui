@@ -8,15 +8,18 @@ namespace ui {
     enum class LayerMode : uint8_t {
         /// draws in a child window inside the parent's imgui window.
         Inline,
+
         /// draws in a separate imgui window. defaults to the main viewport's work area.
         Window,
     };
 
     class LayerContainer : public Container {
     public:
-        /// defaults to inline mode and top-left placement. without an explicit size, inline mode fills the parent's
-        /// content area and window mode uses the main viewport's work area.
-        /// defaults to InputMode::None so empty areas pass input through to underlying nodes.
+        /// starts out of flow with top-left placement and grow/grow sizing. inline mode fills the parent's content area
+        /// and compensates for parent scrolling, keeping anchored children stationary in the parent's viewport.
+        /// window mode creates a separate imgui window and resolves unassigned size against the viewport work area.
+        /// defaults to InputMode::None, allowing input through empty areas. Blocker also occludes native controls behind
+        /// an active inline layer, while its descendants remain interactive. hiding or disabling the layer removes that barrier.
         explicit LayerContainer(std::string id, LayerMode mode = LayerMode::Inline);
 
     protected:

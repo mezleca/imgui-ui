@@ -3,7 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <memory_resource>
 #include <type_traits>
 #include <vector>
@@ -45,10 +44,13 @@ namespace ui {
     struct EffectDefinition {
         /// renders one copied command at its original draw-list position.
         EffectRender render = nullptr;
+
         /// creates backend resources after the imgui context is ready.
         EffectInitialize initialize = nullptr;
+
         /// selects or resets per-frame backend state before node drawing.
         EffectFrame begin_frame = nullptr;
+
         /// releases backend resources before the imgui context is destroyed.
         EffectShutdown shutdown = nullptr;
         void* user_data = nullptr;
@@ -108,7 +110,6 @@ namespace ui {
 
         std::vector<Entry> m_entries;
         mutable std::pmr::monotonic_buffer_resource m_command_memory;
-        mutable std::deque<QueuedCommand> m_commands;
         std::array<EffectPass, 3> m_slots;
         uint32_t m_next_id = 1;
         bool m_initialized = false;

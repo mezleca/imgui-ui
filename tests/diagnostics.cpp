@@ -198,18 +198,20 @@ TEST_CASE("effect registry invokes lifecycle callbacks and queues draw callbacks
         REQUIRE(pass.submit(*draw_list, command_value));
         command_value = 0;
         REQUIRE(draw_list->CmdBuffer.Size >= 2);
-        bool found_callback = false;
-        for (const ImDrawCmd& command : draw_list->CmdBuffer) {
-            if (command.UserCallback == nullptr || command.UserCallback == ImDrawCallback_ResetRenderState) {
-                continue;
-            }
-
-            command.UserCallback(draw_list, &command);
-            found_callback = true;
-        }
-        REQUIRE(found_callback);
-        REQUIRE(probe.command == 42);
     });
+    ImGui::Render();
+
+    bool found_callback = false;
+    for (const ImDrawCmd& command : draw_list->CmdBuffer) {
+        if (command.UserCallback == nullptr || command.UserCallback == ImDrawCallback_ResetRenderState) {
+            continue;
+        }
+
+        command.UserCallback(draw_list, &command);
+        found_callback = true;
+    }
+    REQUIRE(found_callback);
+    REQUIRE(probe.command == 42);
 
     REQUIRE(effects.unregister_effect(pass));
     REQUIRE(probe.shutdown == 1);

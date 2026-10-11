@@ -48,7 +48,7 @@ namespace ui {
             }
 
             if (m_loader == nullptr) {
-                std::fprintf(stderr, "imgui-ui: cannot load texture '%s' without a TextureLoader\n", id.c_str());
+                (void)std::fprintf(stderr, "imgui-ui: cannot load texture '%s' without a TextureLoader\n", id.c_str());
                 return nullptr;
             }
 

@@ -59,7 +59,9 @@ void Profiler::set_enabled(bool enabled) {
     }
 
     m_enabled = enabled;
-    if (!enabled) {
+    if (enabled) {
+        for (FrameBuffer& frame : m_frames) frame.events.reserve(EVENT_CAPACITY);
+    } else {
         m_frame_open = false;
         m_gpu_sample_count = 0;
         m_gpu_sample_next = 0;
@@ -81,7 +83,7 @@ void Profiler::begin_frame() {
 
     // reuse the inactive buffer and discard the previous frame's events and aggregates.
     FrameBuffer& frame = m_frames[m_write_index];
-    frame.count = 0;
+    frame.events.clear();
     frame.dropped = 0;
     frame.metrics = {};
     frame.node_durations.clear();
@@ -109,7 +111,7 @@ void Profiler::end_frame() {
 
 std::span<const ProfileEvent> Profiler::latest_events() const {
     const FrameBuffer& frame = m_frames[m_read_index];
-    return {frame.events.data(), frame.count};
+    return frame.events;
 }
 
 const ProfileFrameMetrics& Profiler::latest_metrics() const {
@@ -138,8 +140,7 @@ double Profiler::node_duration_ms(uint64_t node_identity) const {
     // build the node index once. each node total is the sum of its update and draw zones.
     const FrameBuffer& frame = m_frames[m_read_index];
     if (!frame.node_durations_ready) {
-        for (std::size_t index = 0; index < frame.count; ++index) {
-            const ProfileEvent& event = frame.events[index];
+        for (const ProfileEvent& event : frame.events) {
             if (event.node_identity != 0 && (event.name == "Node::update" || event.name == "Node::draw")) {
                 frame.node_durations[event.node_identity] += profile_milliseconds(event.start, event.end);
             }
@@ -249,17 +250,17 @@ Profiler::ZoneToken Profiler::begin_zone(std::string_view name, uint64_t node_id
 
     FrameBuffer& frame = m_frames[m_write_index];
     // count overflow without adding an event. existing zones keep their indices.
-    if (frame.count >= frame.events.size()) {
+    if (frame.events.size() >= EVENT_CAPACITY) {
         ++frame.dropped;
         return {};
     }
 
-    const std::size_t index = frame.count++;
-    frame.events[index] = {
+    const std::size_t index = frame.events.size();
+    frame.events.push_back({
         .name = name,
         .start = profile_timestamp(),
         .node_identity = node_identity,
-    };
+    });
     return {.event_index = index, .recorded = true};
 }
 
@@ -283,8 +284,7 @@ void Profiler::record_node_draw() {
 
 void Profiler::record_root_phase_times(FrameBuffer& frame) const {
     // root phase times are inclusive. layout and input sum all node zones.
-    for (std::size_t index = 0; index < frame.count; ++index) {
-        const ProfileEvent& event = frame.events[index];
+    for (const ProfileEvent& event : frame.events) {
         const double duration = profile_milliseconds(event.start, event.end);
         if (event.name == "Node::layout") {
             frame.metrics.layout_ms += duration;

@@ -36,12 +36,15 @@ namespace ui {
 
         ContextMenuWidget& set_items(ContextMenuItems items);
         ContextMenuWidget& set_submenu_icon(Texture* icon);
+
         /// sets the delay counted from menu activation before an outside pointer position can close it.
         ContextMenuWidget& set_hover_close_delay(float seconds);
 
         void open();
+
         /// opens the root menu near screen_position, clamped to the viewport work area.
         void open_at(ImVec2 screen_position);
+
         /// starts a fade out. the menu remains visible until its opacity reaches the visibility threshold.
         void close();
         void cancel_close();

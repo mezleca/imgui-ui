@@ -31,9 +31,11 @@ namespace ui {
         /// default for plain nodes. the node's background is not a pointer target.
         /// descendants can register their own targets independently.
         None,
+
         /// default for widgets and containers. the hit rectangle receives pointer events, including empty space between children.
         /// events continue to underlying targets unless propagation is stopped.
         Target,
+
         /// restricts pointer routing to this subtree within the hit rectangle. underlying targets do not receive events.
         /// the last attached active blocker also restricts keyboard routing to its subtree.
         Blocker,
@@ -134,6 +136,7 @@ namespace ui {
             return m_enabled;
         }
 
+        /// disables input for this subtree without hiding it or stopping its updates and drawing.
         void set_enabled(bool enabled);
 
         virtual bool accepts_input() const {
@@ -152,8 +155,13 @@ namespace ui {
         /// configures this node's persistent input behavior. a valid area is local to the node's visual rectangle
         /// and replaces hit_rect(). an empty area uses hit_rect().
         /// target receives pointer events without blocking underlying nodes. none leaves only descendant hit regions.
+        /// blocker excludes unrelated branches behind this node within its hit area. descendants remain eligible.
         /// registering a target does not give it keyboard focus. use input_router().set_focus() for that.
         Node& set_input_mode(InputMode mode, Rect area = {});
+
+        InputMode input_mode() const {
+            return m_input_mode;
+        }
 
         /// returns geometry from the last draw pass.
         const NodeLayout& layout() const {
@@ -162,16 +170,28 @@ namespace ui {
 
         virtual ImVec2 layout_margin() const;
 
+        /// sets {width, height} using independent px(), percent(), fit() or grow() rules. preserves placement and in_flow.
+        /// invalidates measurements so the next layout pass resolves the new request. layout().size() is the outer allocation,
+        /// while layout().size_spec() retains these rules. padding and borders follow the node's box-sizing style.
         Node& set_size(LayoutSize size);
 
+        /// grows between {minimum width, minimum height} and {maximum width, maximum height}, using px() or percent().
+        /// equivalent to set_size({{min.width, max.width}, {min.height, max.height}}). existing placement is preserved.
+        Node& set_size(LayoutSize minimum, LayoutSize maximum);
+
+        /// replaces the entire config, including fields omitted by the caller. an omitted size becomes grow/grow,
+        /// and omitted in_flow becomes true, even if an earlier set_size or set_anchor requested something else.
+        /// size or flow changes invalidate measurements. placement-only changes retain the measured size.
         Node& set_layout(LayoutConfig config);
 
-        /// positions this node at the matching point in its parent and removes it from flow layout.
+        /// equivalent to set_anchor(anchor, anchor). preserves the requested size and existing placement offset.
         Node& set_anchor(Anchor anchor) {
             return set_anchor(anchor, anchor);
         }
 
-        /// positions this node using explicit parent and node anchor points and removes it from flow layout.
+        /// aligns origin on this node with anchor in its parent's content box, then applies the existing offset.
+        /// sets in_flow=false without replacing the size request. the node reserves no stack space and cannot enlarge
+        /// a fit-sized parent, so it may overlap flowing siblings. its own children keep their existing flow rules.
         Node& set_anchor(Anchor anchor, Anchor origin);
 
         /// invalidates this node and its size-dependent ancestors.
@@ -237,6 +257,7 @@ namespace ui {
 
         void set_layout_rect(Rect rect);
 
+        /// assigns an already resolved outer size and placement. custom allocations must apply constrain_size() first.
         static void arrange_child(Node& child, ImVec2 size, Placement placement = {});
 
         bool capture_pointer();

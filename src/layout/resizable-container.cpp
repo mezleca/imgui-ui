@@ -98,11 +98,13 @@ void ResizableContainer::mouse_move_event(UiEvent& event) {
 
     LayoutSize updated = layout().size_spec();
     if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) {
-        updated.width = px(std::clamp(m_previous_size.x + event.position.x - m_drag_start.x, MIN_CHILD_SIZE, max_size.x));
+        updated.width.mode = LayoutSizeMode::Fixed;
+        updated.width.value = std::clamp(m_previous_size.x + event.position.x - m_drag_start.x, MIN_CHILD_SIZE, max_size.x);
     }
 
     if ((m_resizing & ResizeAxes::Y) != ResizeAxes::None) {
-        updated.height = px(std::clamp(m_previous_size.y + event.position.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y));
+        updated.height.mode = LayoutSizeMode::Fixed;
+        updated.height.value = std::clamp(m_previous_size.y + event.position.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y);
     }
 
     set_size(updated);

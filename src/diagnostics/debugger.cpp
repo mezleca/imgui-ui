@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <format>
 #include <string>
 #include <type_traits>
@@ -56,7 +57,8 @@ static bool is_effectively_visible(const Node& node) {
 }
 
 static Node* pick_node(Node& root, ImVec2 position) {
-    if (!is_effectively_visible(root)) {
+    const auto* styled = dynamic_cast<const StyledNode*>(&root);
+    if (!root.visible() || root.removal_pending() || (styled != nullptr && !styled->visually_visible())) {
         return nullptr;
     }
 
@@ -76,7 +78,7 @@ static Node* pick_node(Node& root, ImVec2 position) {
         return nullptr;
     }
 
-    if (dynamic_cast<const StyledNode*>(&root) == nullptr) {
+    if (styled == nullptr) {
         return nullptr;
     }
 
@@ -743,7 +745,7 @@ bool Debugger::handle_inspect_event(UiEvent& event) {
     // popup blockers receive their final screen bounds after native popup windows draw, so resolve them before retained tree
     // order.
     Node* inspect_node = m_target.input_router().node_at(event.position, event.type);
-    if (inspect_node == nullptr) {
+    if (inspect_node == nullptr && is_effectively_visible(m_target.root())) {
         inspect_node = pick_node(m_target.root(), event.position);
     }
     if (inspect_node == nullptr) {
@@ -1137,19 +1139,20 @@ void Debugger::render_layout_properties() {
         LayoutSize size = size_spec;
         LayoutAxis& axis = width ? size.width : size.height;
         const float resolved = width ? layout.size().x : layout.size().y;
+        axis.mode = mode;
 
         switch (mode) {
             case LayoutSizeMode::Fixed:
-                axis = px(resolved);
+                axis.value = resolved;
                 break;
             case LayoutSizeMode::Percent:
-                axis = percent(100.0F);
+                axis.value = 100.0F;
                 break;
             case LayoutSizeMode::Fit:
-                axis = fit();
+                axis.value = 0.0F;
                 break;
             case LayoutSizeMode::Grow:
-                axis = grow();
+                axis.value = 1.0F;
                 break;
         }
         m_node_target->set_size(size);
@@ -1175,7 +1178,7 @@ void Debugger::render_layout_properties() {
 
         LayoutSize updated = size_spec;
         LayoutAxis& updated_axis = width ? updated.width : updated.height;
-        updated_axis = mode == LayoutSizeMode::Fixed ? px(value) : percent(value);
+        updated_axis.value = value;
         m_node_target->set_size(updated);
     };
 
@@ -1183,6 +1186,17 @@ void Debugger::render_layout_properties() {
     if (size_spec.height.mode == LayoutSizeMode::Fixed) draw_size_value(false, LayoutSizeMode::Fixed);
     if (size_spec.width.mode == LayoutSizeMode::Percent) draw_size_value(true, LayoutSizeMode::Percent);
     if (size_spec.height.mode == LayoutSizeMode::Percent) draw_size_value(false, LayoutSizeMode::Percent);
+
+    const auto draw_limits = [this](const char* minimum_label, const char* maximum_label, const LayoutAxis& axis) {
+        draw_property_value(minimum_label, "{:.1f}{}", axis.minimum.value, axis.minimum.percentage ? "%" : "px");
+        if (std::isfinite(axis.maximum.value)) {
+            draw_property_value(maximum_label, "{:.1f}{}", axis.maximum.value, axis.maximum.percentage ? "%" : "px");
+        } else {
+            draw_property_value(maximum_label, "{}", "unbounded");
+        }
+    };
+    draw_limits("minimum width", "maximum width", size_spec.width);
+    draw_limits("minimum height", "maximum height", size_spec.height);
 
     draw_property_value("measured", "{:.1f} x {:.1f}", measured.x, measured.y);
     draw_property_value("intrinsic", "{:.1f} x {:.1f}", intrinsic.x, intrinsic.y);

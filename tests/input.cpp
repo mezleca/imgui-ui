@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <imgui_internal.h>
 
 #include <imgui-ui/input/router.hpp>
 #include <imgui-ui/layout/layer-container.hpp>
@@ -7,6 +8,7 @@
 #include <imgui-ui/widgets/button.hpp>
 #include "imgui-context.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -887,6 +889,97 @@ TEST_CASE("dispatch snapshots tolerate registration removal and mutable callback
             auto move = event_of(EventType::PointerMove, {50.0F, 50.0F});
             router.dispatch(move);
             REQUIRE(observed == expected);
+        }
+    }
+}
+
+TEST_CASE("blockers suppress native scrollbar hover with a stationary pointer", "[Scrollbar][input][regression]") {
+    class ScrollbarProbe : public Container {
+    public:
+        ScrollbarProbe() : Container("scrollbar-content") {}
+
+        ImGuiWindow* window = nullptr;
+        bool hover_color_drawn = false;
+
+    protected:
+        bool paint() override {
+            const ImU32 hover_color = ImGui::GetColorU32(ImGuiCol_ScrollbarGrabHovered);
+            const bool result = Container::paint();
+            window = ImGui::GetCurrentWindow();
+            const ImRect scrollbar = ImGui::GetWindowScrollbarRect(window, ImGuiAxis_Y);
+
+            hover_color_drawn = false;
+
+            // imgui can emit child-window decorations into the parent's draw list.
+            for (const ImDrawList* draw_list : {window->DrawList, window->ParentWindow->DrawList}) {
+                hover_color_drawn |= std::any_of(
+                    draw_list->VtxBuffer.begin(), draw_list->VtxBuffer.end(), [&](const ImDrawVert& vertex) {
+                        return vertex.col == hover_color && scrollbar.Contains(vertex.pos);
+                    }
+                );
+            }
+
+            return result;
+        }
+    };
+
+    for (bool modal : {false, true}) {
+        DYNAMIC_SECTION((modal ? "modal backdrop" : "input blocker")) {
+            Runtime runtime;
+            Surface surface = ui_test::make_surface(runtime);
+            Theme theme = surface.theme();
+            theme.scrollbar.grab_color = rgb(0, 255, 0);
+            theme.scrollbar.grab_hovered_color = rgb(255, 0, 255);
+            surface.set_theme(theme);
+
+            auto& content = surface.root().add<ScrollbarProbe>();
+            content.set_size({px(180.0F), px(120.0F)});
+            content.set_scrollable(true);
+            content.add<Container>("long-content").set_size({grow(), px(480.0F)});
+
+            auto& blocker = surface.root().add<LayerContainer>("scrollbar-blocker");
+            blocker.set_input_mode(InputMode::Blocker);
+            blocker.set_visible(false);
+            if (modal) {
+                auto& panel = blocker.add<Container>("modal-panel");
+                panel.set_size({px(80.0F), px(50.0F)});
+                panel.set_anchor(Anchor::Center);
+            }
+
+            const auto context = ui_test::prepare_surface(surface, {320.0F, 220.0F});
+
+            // repeat draws without new motion events to exercise hover with an idle pointer.
+            const auto draw_frames = [&] {
+                for (int frame = 0; frame < 3; ++frame) ui_test::draw_surface(surface);
+            };
+            draw_frames();
+            REQUIRE(content.window != nullptr);
+            REQUIRE(content.window->ScrollbarY);
+            const ImRect scrollbar = ImGui::GetWindowScrollbarRect(content.window, ImGuiAxis_Y);
+            const ImVec2 pointer = {scrollbar.GetCenter().x, scrollbar.Min.y + 8.0F};
+            ImGui::GetIO().AddMousePosEvent(pointer.x, pointer.y);
+            draw_frames();
+
+            REQUIRE(content.hover_color_drawn);
+
+            blocker.set_visible(true);
+            draw_frames();
+            CHECK_FALSE(content.input_state().hovered);
+            CHECK(blocker.subtree_input_state().hovered);
+            CHECK_FALSE(content.hover_color_drawn);
+
+            blocker.set_visible(false);
+            draw_frames();
+            CHECK(content.hover_color_drawn);
+
+            ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+            draw_frames();
+            REQUIRE(GImGui->ActiveId == ImGui::GetWindowScrollbarID(content.window, ImGuiAxis_Y));
+            ImGui::GetIO().AddMousePosEvent(pointer.x, pointer.y + 40.0F);
+            draw_frames();
+            CHECK(content.window->Scroll.y > 0.0F);
+            ImGui::GetIO().AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+            draw_frames();
         }
     }
 }

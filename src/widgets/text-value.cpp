@@ -8,6 +8,7 @@
 using namespace ui;
 
 const std::string& GenericValue::str() const {
+    if (const auto* text = std::get_if<std::string>(&m_value)) return *text;
     if (!m_string_dirty) return m_string;
 
     // convert the variant only after a text consumer asks for it, then reuse that string until the value changes.

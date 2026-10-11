@@ -102,6 +102,7 @@ namespace ui {
         ImGuiID m_overlay_window_id = 0;
         Node* m_node_target = nullptr;
         Node* m_hover_target = nullptr;
+
         // removed nodes stay alive because application widgets may retain raw child pointers.
         std::vector<std::unique_ptr<Node>> m_detached_nodes;
         std::vector<std::string> m_variable_names;

@@ -5,8 +5,16 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace ui {
+    struct LayoutItem {
+        Node* node;
+        ImVec2 size;
+        float maximum;
+        float weight;
+    };
+
     class Container : public Widget {
     public:
         /// its background receives pointer events without blocking targets underneath. use input mode blocker to block them.
@@ -22,9 +30,16 @@ namespace ui {
         const Scroll& scroll() const {
             return m_scroll;
         }
+
+        /// changes which axis stacks flowing children. hidden, removed and out-of-flow children reserve no space.
         Container& set_direction(StackDirection direction);
+
+        /// aligns the flowing group within available content space. named anchors map to normalized {x, y} factors,
+        /// and explicit factors are clamped to [0, 1]. this does not change placement of out-of-flow children.
         Container& set_content_alignment(Anchor alignment);
         Container& set_content_alignment(ImVec2 alignment);
+
+        /// pixel gap between consecutive flowing children, clamped to zero. there is no gap before or after the group.
         virtual Container& set_spacing(float spacing);
 
     protected:
@@ -50,6 +65,7 @@ namespace ui {
 
     private:
         Scroll m_scroll;
+        std::vector<LayoutItem> m_layout_items;
         StackDirection m_direction = StackDirection::Vertical;
         float m_spacing = 0.0F;
         ImVec2 m_content_alignment;

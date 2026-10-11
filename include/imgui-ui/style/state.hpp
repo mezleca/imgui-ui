@@ -27,6 +27,7 @@ namespace ui {
         std::optional<AnimationValue> override;
         AnimationValue current = 0.0F;
         AnimationValue base = 0.0F;
+
         /// points to the owner's invalidation flag only for properties that change padding or margin.
         bool* layout_dirty = nullptr;
     };

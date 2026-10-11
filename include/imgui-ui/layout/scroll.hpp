@@ -21,10 +21,13 @@ namespace ui {
         /// sets the behavior used by wheel input and seeks that request Default. starts as Smooth, and passing Default
         /// restores Smooth.
         Scroll& set_behaviour(ScrollBehavior behavior);
+
         /// queues an absolute offset, clamped to content bounds when the container is next drawn.
         void seek_to(ImVec2 position, ScrollBehavior behavior = ScrollBehavior::Default);
+
         /// queues an offset from the pending destination, or from the last drawn position when no seek is pending.
         void seek_by(ImVec2 distance, ScrollBehavior behavior = ScrollBehavior::Default);
+
         /// position and limit reflect the last draw, not a newly queued seek.
         ImVec2 position() const {
             return m_position;

@@ -12,34 +12,9 @@ static bool is_flow_child(const Node& child) {
     return !child.removal_pending() && child.visible() && child.layout().in_flow();
 }
 
-static float axis_extent(ImVec2 size, bool horizontal) {
-    return horizontal ? size.x : size.y;
-}
-
-static void set_axis_extent(ImVec2& size, bool horizontal, float value) {
-    if (horizontal) {
-        size.x = value;
-    } else {
-        size.y = value;
-    }
-}
-
-static ImVec2 resolve_stack_child_size(const Node& child, ImVec2 content_size, float flexible_main, bool horizontal) {
-    const LayoutSize& layout_size = child.layout().size_spec();
-    const LayoutAxis& main_axis = horizontal ? layout_size.width : layout_size.height;
+static ImVec2 stack_available_size(const Node& child, ImVec2 content_size) {
     const ImVec2 margin = child.layout_margin();
-
-    const float main_available = std::max(0.0F, axis_extent(content_size, horizontal) - (axis_extent(margin, horizontal) * 2.0F));
-    const float cross_available =
-        std::max(0.0F, axis_extent(content_size, !horizontal) - (axis_extent(margin, !horizontal) * 2.0F));
-    const ImVec2 available = horizontal ? ImVec2{main_available, cross_available} : ImVec2{cross_available, main_available};
-    ImVec2 size = child.layout().resolve_size(available);
-
-    if (main_axis.mode == LayoutSizeMode::Grow) {
-        set_axis_extent(size, horizontal, child.layout().box_insets().axis(horizontal) + (flexible_main * main_axis.value));
-    }
-
-    return size;
+    return {std::max(0.0F, content_size.x - (margin.x * 2.0F)), std::max(0.0F, content_size.y - (margin.y * 2.0F))};
 }
 
 Container::Container(std::string id, std::string_view type_name)
@@ -57,6 +32,7 @@ Container& Container::set_scrollable(bool vertical, bool horizontal) {
 
 void Container::dispatch_event(UiEvent& event) {
     Widget::dispatch_event(event);
+
     // let widget callbacks prevent wheel scrolling first. block imgui's wheel path even at the limit so only
     // framework ancestors can scroll.
     if (!removal_pending() && !event.propagation_stopped && event.type == EventType::Scroll && !event.default_prevented &&
@@ -110,10 +86,11 @@ void Container::apply_theme_defaults(const Theme& theme) {
 }
 
 void Container::on_measure() {
-    const LayoutSize size = layout().size_spec();
+    const LayoutSize& size = layout().size_spec();
     const bool fit_width = size.width.mode == LayoutSizeMode::Fit;
     const bool fit_height = size.height.mode == LayoutSizeMode::Fit;
-    const bool horizontal = m_direction == StackDirection::Horizontal;
+    const int main = m_direction == StackDirection::Horizontal ? 0 : 1;
+    const int cross = 1 - main;
     ImVec2 content_size{};
     size_t flow_count = 0;
 
@@ -123,23 +100,18 @@ void Container::on_measure() {
             continue;
         }
 
-        const ImVec2 child_size = child->layout().preferred_size();
+        const ImVec2 child_size = child->layout().intrinsic_size();
         const ImVec2 margin = child->layout_margin();
         const ImVec2 outer_size = {child_size.x + (margin.x * 2.0F), child_size.y + (margin.y * 2.0F)};
 
-        if (horizontal) {
-            content_size.x += outer_size.x;
-            content_size.y = std::max(content_size.y, outer_size.y);
-        } else {
-            content_size.x = std::max(content_size.x, outer_size.x);
-            content_size.y += outer_size.y;
-        }
+        content_size[main] += outer_size[main];
+        content_size[cross] = std::max(content_size[cross], outer_size[cross]);
 
         ++flow_count;
     }
 
     const float spacing = flow_count > 0 ? m_spacing * static_cast<float>(flow_count - 1) : 0.0F;
-    set_axis_extent(content_size, horizontal, axis_extent(content_size, horizontal) + spacing);
+    content_size[main] += spacing;
 
     // fit includes padding and borders so arranging children can recover the measured content space.
     set_measured_size(outer_size(content_size), fit_width, fit_height);
@@ -150,76 +122,82 @@ void Container::arrange_children() {
 }
 
 void Container::arrange_children(ImVec2 content_size) {
-    const bool horizontal = m_direction == StackDirection::Horizontal;
-    const float available_main = axis_extent(content_size, horizontal);
-
-    float fixed_main_extent = 0.0F;
-    size_t flow_count = 0;
+    const int main = m_direction == StackDirection::Horizontal ? 0 : 1;
+    const int cross = 1 - main;
+    float flow_size = 0.0F;
     float grow_weight = 0.0F;
-    const ImVec2 alignment = m_content_alignment;
-    const bool aligns_content = alignment.x > 0.0F || alignment.y > 0.0F;
-    float flow_cross_extent = 0.0F;
+    m_layout_items.clear();
 
-    // reserve fixed extents, margins and gaps before splitting the remainder by grow weight.
-    // the second pass assigns sizes and positions.
+    // resolve each child's cross size, main minimum and main maximum once. retain vector capacity between frames
+    // so redistribution and positioning reuse these results without allocating a new work list on every draw.
     for (const auto& child : children()) {
-        if (!is_flow_child(*child)) {
-            continue;
-        }
-
-        const LayoutSize& child_layout_size = child->layout().size_spec();
-        const LayoutAxis& main_axis = horizontal ? child_layout_size.width : child_layout_size.height;
+        if (!is_flow_child(*child)) continue;
+        const LayoutSize& request = child->layout().size_spec();
+        const LayoutAxis& axis = main == 0 ? request.width : request.height;
         const ImVec2 margin = child->layout_margin();
-        const ImVec2 child_size = resolve_stack_child_size(*child, content_size, 0.0F, horizontal);
+        const ImVec2 available = stack_available_size(*child, content_size);
 
-        fixed_main_extent += axis_extent(margin, horizontal) * 2.0F;
-        if (main_axis.mode != LayoutSizeMode::Grow) {
-            fixed_main_extent += axis_extent(child_size, horizontal);
-        } else {
-            fixed_main_extent += child->layout().box_insets().axis(horizontal);
-            grow_weight += main_axis.value;
+        LayoutItem item{child.get(), child->layout().resolve_size(available), std::numeric_limits<float>::infinity(), 0.0F};
+
+        if (axis.mode == LayoutSizeMode::Grow) {
+            const float insets = child->layout().box_insets().axis(main == 0);
+            item.size[main] = axis.constrain(0.0F, available[main], insets, child->layout().box_sizing());
+            item.maximum = axis.constrain(
+                std::numeric_limits<float>::infinity(), available[main], insets, child->layout().box_sizing()
+            );
+
+            item.weight = axis.value;
+            grow_weight += item.weight;
         }
 
-        if (aligns_content) {
-            flow_cross_extent =
-                std::max(flow_cross_extent, axis_extent(child_size, !horizontal) + (axis_extent(margin, !horizontal) * 2.0F));
-        }
-
-        ++flow_count;
+        flow_size += item.size[main] + (margin[main] * 2.0F);
+        m_layout_items.push_back(item);
     }
 
-    const float spacing = flow_count > 0 ? m_spacing * static_cast<float>(flow_count - 1) : 0.0F;
-    const float grow_unit =
-        grow_weight > 0.0F ? std::max(0.0F, available_main - fixed_main_extent - spacing) / grow_weight : 0.0F;
+    const float spacing = m_layout_items.empty() ? 0.0F : m_spacing * static_cast<float>(m_layout_items.size() - 1);
+    flow_size += spacing;
+    float remaining = std::max(0.0F, content_size[main] - flow_size);
 
-    ImVec2 cursor{};
-    if (aligns_content) {
-        const float flow_main = fixed_main_extent + (grow_unit * grow_weight) + spacing;
-        const ImVec2 flow_size = horizontal ? ImVec2{flow_main, flow_cross_extent} : ImVec2{flow_cross_extent, flow_main};
-        cursor = {(content_size.x - flow_size.x) * alignment.x, (content_size.y - flow_size.y) * alignment.y};
+    // start at the minima and distribute the remaining extent by weight. reaching a maximum removes that child
+    // from later shares. stop after an uncapped pass, which consumes the remainder apart from float rounding.
+    while (remaining > 0.0F && grow_weight > 0.0F) {
+        const float previous_weight = grow_weight;
+        const float share = remaining / grow_weight;
+
+        for (auto& item : m_layout_items) {
+            if (item.weight == 0.0F) {
+                continue;
+            }
+
+            const float old_extent = item.size[main];
+            const float extent = std::min(item.maximum, old_extent + (share * item.weight));
+
+            remaining -= extent - old_extent;
+            flow_size += extent - old_extent;
+            item.size[main] = extent;
+
+            if (extent == item.maximum) {
+                grow_weight -= item.weight;
+                item.weight = 0.0F;
+            }
+        }
+
+        if (grow_weight == previous_weight) {
+            break;
+        }
     }
 
-    for (const auto& child : children()) {
-        if (!is_flow_child(*child)) {
-            continue;
-        }
+    float cursor = (content_size[main] - flow_size) * m_content_alignment[main];
+    for (const auto& item : m_layout_items) {
+        const ImVec2 margin = item.node->layout_margin();
+        ImVec2 child_offset = margin;
+        child_offset[main] += cursor;
+        child_offset[cross] +=
+            (content_size[cross] - item.size[cross] - (margin[cross] * 2.0F)) * m_content_alignment[cross];
 
-        const ImVec2 child_size = resolve_stack_child_size(*child, content_size, grow_unit, horizontal);
-        const ImVec2 margin = child->layout_margin();
-        ImVec2 child_offset = {cursor.x + margin.x, cursor.y + margin.y};
-        if (aligns_content) {
-            const float child_cross = axis_extent(child_size, !horizontal) + (axis_extent(margin, !horizontal) * 2.0F);
-            const float cross_offset = std::max(0.0F, flow_cross_extent - child_cross) * (horizontal ? alignment.y : alignment.x);
-            set_axis_extent(child_offset, !horizontal, axis_extent(child_offset, !horizontal) + cross_offset);
-        }
+        arrange_child(*item.node, item.size, {.offset = child_offset});
 
-        arrange_child(*child, child_size, {.offset = child_offset});
-
-        set_axis_extent(
-            cursor, horizontal,
-            axis_extent(cursor, horizontal) + axis_extent(child_size, horizontal) + (axis_extent(margin, horizontal) * 2.0F) +
-                m_spacing
-        );
+        cursor += item.size[main] + (margin[main] * 2.0F) + m_spacing;
     }
 }
 
@@ -233,6 +211,7 @@ ImVec2 Container::child_window_size() const {
 
 ImGuiWindowFlags Container::child_window_flags() const {
     ImGuiWindowFlags flags = constants::WIDGET_WINDOW_FLAGS;
+
     // keep the parent pass-through until this container owns input or scrolling.
     if (!has_input_mode() && !has_direct_input_child() && !m_scroll.enabled() &&
         (ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_NoMouseInputs) != 0) {
@@ -268,7 +247,8 @@ void Container::draw_children() {
         const ImVec2 origin = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
         placement.offset.x += margin.x * (1.0F - (2.0F * origin.x));
         placement.offset.y += margin.y * (1.0F - (2.0F * origin.y));
-        const ImVec2 size = child->layout().resolve_size(available);
+        const ImVec2 child_available = stack_available_size(*child, available);
+        const ImVec2 size = child->layout().resolve_size(child_available);
         arrange_child(*child, size, placement);
         child->draw();
     }

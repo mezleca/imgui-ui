@@ -16,7 +16,13 @@ LayerContainer::LayerContainer(std::string id, LayerMode mode, std::string_view 
 }
 
 ImGuiWindowFlags LayerContainer::child_window_flags() const {
-    return Container::child_window_flags() | ImGuiWindowFlags_NoMouseInputs;
+    const ImGuiWindowFlags flags = Container::child_window_flags();
+
+    // imgui performs native scrollbar hit testing separately from our input router. an active blocker must accept
+    // native mouse hit testing so imgui selects its window instead of hovering the scrollbar underneath.
+    // other layers keep NoMouseInputs so their child window does not intercept native input intended for the parent.
+    // native hover is resolved after BeginChild, so test tree eligibility without Widget's visual hit test here.
+    return input_mode() == InputMode::Blocker && Node::accepts_input() ? flags : flags | ImGuiWindowFlags_NoMouseInputs; // NOLINT(bugprone-parent-virtual-call)
 }
 
 ImGuiWindowFlags LayerContainer::window_flags() const {
@@ -55,6 +61,7 @@ bool LayerContainer::paint_inline() {
 bool LayerContainer::paint_window() {
     const bool accepts_input = this->accepts_input();
     ImGuiWindowFlags flags = window_flags();
+
     // allow the first begin call to raise the window. later frames keep its existing stacking order.
     if (!m_window_initialized) {
         flags &= ~ImGuiWindowFlags_NoBringToFrontOnFocus;
@@ -72,9 +79,23 @@ bool LayerContainer::paint_window() {
     // set movable windows' position and resizable windows' size only on first use.
     ImGui::SetNextWindowPos(position, (flags & ImGuiWindowFlags_NoMove) ? ImGuiCond_Always : ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(layout().size(), (flags & ImGuiWindowFlags_NoResize) ? ImGuiCond_Always : ImGuiCond_FirstUseEver);
+
+    // native window resizing bypasses container allocation. give imgui the same resolved limits before Begin
+    // so user dragging and saved window sizes cannot escape the node's configured range.
+    const ImVec2 content =
+        layout().parent_content_rect().valid() ? layout().parent_content_rect().size() : ImGui::GetMainViewport()->WorkSize;
+    const ImVec2 margin = layout_margin();
+    const ImVec2 available = {std::max(0.0F, content.x - (margin.x * 2.0F)), std::max(0.0F, content.y - (margin.y * 2.0F))};
+    ImGui::SetNextWindowSizeConstraints(
+        layout().constrain_size({}, available),
+        layout().constrain_size({std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity()}, available)
+    );
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, box_insets().window_padding());
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
+
+    // imgui applies its style minimum after size constraints. use the node's configured minimum instead.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2{});
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{});
     ImGui::Begin(id().c_str(), nullptr, flags);
     m_window_initialized = true;
@@ -96,5 +117,5 @@ void LayerContainer::on_draw_end() {
 
     ImGui::End();
     ImGui::PopStyleColor();
-    ImGui::PopStyleVar(3);
+    ImGui::PopStyleVar(4);
 }

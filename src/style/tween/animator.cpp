@@ -98,25 +98,22 @@ void Animator::update(float dt) {
 
     // start due steps before writing tracks. replacing a target reads the displaced track at the current timeline
     // time before erasing it.
-    for (auto step_it = state.steps.begin(); step_it != state.steps.end();) {
-        if (step_it->start > state.time) {
-            ++step_it;
-            continue;
-        }
+    std::erase_if(state.steps, [&](const AnimationStep& step) {
+        if (step.start > state.time) return false;
 
-        const auto track_it = std::find_if(state.tracks.begin(), state.tracks.end(), [step_it](const AnimationTrack& track) {
-            return track.target.identity == step_it->target.identity;
+        const auto track_it = std::find_if(state.tracks.begin(), state.tracks.end(), [&step](const AnimationTrack& track) {
+            return track.target.identity == step.target.identity;
         });
-        AnimationValue start = track_it == state.tracks.end() ? step_it->target.read(step_it->target.context)
+        AnimationValue start = track_it == state.tracks.end() ? step.target.read(step.target.context)
                                                               : animation_track_value(*track_it, state.time);
         AnimationValue target;
 
-        if (step_it->release) {
-            target = step_it->target.base(step_it->target.context);
-        } else if (step_it->relative) {
-            target = add_animation_value(start, step_it->value);
+        if (step.release) {
+            target = step.target.base(step.target.context);
+        } else if (step.relative) {
+            target = add_animation_value(start, step.value);
         } else {
-            target = step_it->value;
+            target = step.value;
         }
 
         if (track_it != state.tracks.end()) {
@@ -124,25 +121,22 @@ void Animator::update(float dt) {
         }
 
         state.tracks.push_back(
-            {step_it->target, std::move(start), std::move(target), step_it->transition, step_it->start, step_it->release}
+            {step.target, std::move(start), std::move(target), step.transition, step.start, step.release}
         );
-        step_it = state.steps.erase(step_it);
-    }
+        return true;
+    });
 
-    for (auto track_it = state.tracks.begin(); track_it != state.tracks.end();) {
-        const AnimationValue value = animation_track_value(*track_it, state.time);
-        track_it->target.write(track_it->target.context, value);
+    std::erase_if(state.tracks, [&](const AnimationTrack& track) {
+        const AnimationValue value = animation_track_value(track, state.time);
+        track.target.write(track.target.context, value);
 
-        if (!animation_track_complete(*track_it, state.time)) {
-            ++track_it;
-            continue;
+        if (!animation_track_complete(track, state.time)) return false;
+
+        if (track.release) {
+            track.target.release(track.target.context);
         }
-
-        if (track_it->release) {
-            track_it->target.release(track_it->target.context);
-        }
-        track_it = state.tracks.erase(track_it);
-    }
+        return true;
+    });
 
     // remove due callbacks before invoking user code because a callback may schedule more work on this animator.
     std::vector<std::function<void()>> callbacks;

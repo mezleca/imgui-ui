@@ -19,8 +19,10 @@ namespace ui {
         Scroll,
         KeyDown,
         KeyUp,
+
         /// a matching pointer press and release occurred on one target.
         Click,
+
         /// a matching secondary pointer press and release occurred on one target.
         ContextClick,
         TextInput,

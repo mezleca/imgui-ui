@@ -16,10 +16,13 @@ namespace ui {
     struct AnimationTarget {
         // reads the value displayed when a track starts.
         AnimationValue (*read)(void*) = nullptr;
+
         // reads the value restored after a release track completes.
         AnimationValue (*base)(void*) = nullptr;
+
         // writes the value interpolated for the current frame.
         void (*write)(void*, const AnimationValue&) = nullptr;
+
         // restores the target after a release track completes.
         void (*release)(void*) = nullptr;
         void* context = nullptr;
@@ -58,10 +61,13 @@ namespace ui {
         AnimationSequence& to(AnimationTarget target, AnimationValue value, TransitionSpec transition = {});
         AnimationSequence& by(AnimationTarget target, AnimationValue value, TransitionSpec transition = {});
         AnimationSequence& release(AnimationTarget target, TransitionSpec transition = {});
+
         /// starts the next group after the longest track scheduled so far, plus an optional delay.
         AnimationSequence& then(float delay = 0.0F);
+
         /// moves the cursor forward without waiting for tracks already scheduled in parallel.
         AnimationSequence& delay(float duration);
+
         /// runs callback after the sequence's latest track or cursor delay. captured objects must remain alive until it runs.
         AnimationSequence& end(std::function<void()> callback);
 

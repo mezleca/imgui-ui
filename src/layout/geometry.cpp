@@ -1,8 +1,15 @@
 #include <imgui-ui/layout/geometry.hpp>
 
 #include <algorithm>
+#include <stdexcept>
 
 using namespace ui;
+
+static float constrain_extent(float size, float minimum, float maximum, float insets, BoxSizing box_sizing) {
+    const float padding = box_sizing == BoxSizing::ContentBox ? insets : 0.0F;
+    const float lower = std::max(insets, minimum + padding);
+    return std::clamp(size, lower, std::max(lower, maximum + padding));
+}
 
 Rect ui::viewport_work_area() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -13,24 +20,47 @@ Rect ui::viewport_work_area() {
     return Rect::from_position_size(viewport->WorkPos, size);
 }
 
-float LayoutAxis::intrinsic(float measured) const {
-    if (mode == LayoutSizeMode::Fixed) {
-        return value;
-    }
-
-    return mode == LayoutSizeMode::Fit ? std::max(0.0F, measured) : 0.0F;
+float LayoutLimit::resolve(float available) const {
+    return percentage ? std::max(0.0F, available) * value / 100.0F : value;
 }
 
-float LayoutAxis::resolve(float measured, float available) const {
-    if (mode == LayoutSizeMode::Grow) {
-        return std::max(0.0F, available);
+LayoutAxis::LayoutAxis(LayoutAxis minimum, LayoutAxis maximum) : LayoutAxis(grow(), minimum, maximum) {}
+
+LayoutAxis::LayoutAxis(LayoutAxis preferred, LayoutAxis minimum, LayoutAxis maximum) : LayoutAxis(preferred) {
+    if ((minimum.mode != LayoutSizeMode::Fixed && minimum.mode != LayoutSizeMode::Percent) ||
+        (maximum.mode != LayoutSizeMode::Fixed && maximum.mode != LayoutSizeMode::Percent)) {
+        throw std::invalid_argument("size limits must be px or percent");
     }
 
-    if (mode == LayoutSizeMode::Percent) {
-        return std::max(0.0F, available) * value / 100.0F;
+    this->minimum = {minimum.value, minimum.mode == LayoutSizeMode::Percent};
+    this->maximum = {maximum.value, maximum.mode == LayoutSizeMode::Percent};
+}
+
+float LayoutAxis::intrinsic(float measured, float insets, BoxSizing box_sizing) const {
+    float size = mode == LayoutSizeMode::Percent ? 0.0F : measured;
+    if (mode == LayoutSizeMode::Fixed) {
+        size = value + (box_sizing == BoxSizing::ContentBox ? insets : 0.0F);
     }
 
-    return intrinsic(measured);
+    // percentage limits cannot participate in measurement of an unresolved parent. pixels still limit its fit size.
+    return constrain_extent(
+        size, minimum.percentage ? 0.0F : minimum.value,
+        maximum.percentage ? std::numeric_limits<float>::infinity() : maximum.value, insets, box_sizing
+    );
+}
+
+float LayoutAxis::resolve(float measured, float available, float insets, BoxSizing box_sizing) const {
+    float size = std::max(0.0F, available);
+    if (mode == LayoutSizeMode::Fixed) size = value;
+    else if (mode == LayoutSizeMode::Fit) size = measured;
+    else if (mode == LayoutSizeMode::Percent) size *= value / 100.0F;
+
+    if ((mode == LayoutSizeMode::Fixed || mode == LayoutSizeMode::Percent) && box_sizing == BoxSizing::ContentBox) size += insets;
+    return constrain(size, available, insets, box_sizing);
+}
+
+float LayoutAxis::constrain(float size, float available, float insets, BoxSizing box_sizing) const {
+    return constrain_extent(size, minimum.resolve(available), maximum.resolve(available), insets, box_sizing);
 }
 
 bool Placement::operator==(const Placement& other) const {
@@ -74,22 +104,22 @@ ImVec2 ui::clamp_position(Rect bounds, ImVec2 size, ImVec2 position) {
 
 ImVec2 NodeLayout::intrinsic_size() const {
     return {
-        intrinsic_axis(m_config.size.width, m_measured_size.x, m_box_insets.horizontal(), m_box_sizing),
-        intrinsic_axis(m_config.size.height, m_measured_size.y, m_box_insets.vertical(), m_box_sizing),
-    };
-}
-
-ImVec2 NodeLayout::preferred_size() const {
-    return {
-        preferred_axis(m_config.size.width, m_measured_size.x, m_box_insets.horizontal(), m_box_sizing),
-        preferred_axis(m_config.size.height, m_measured_size.y, m_box_insets.vertical(), m_box_sizing),
+        m_config.size.width.intrinsic(m_measured_size.x, m_box_insets.horizontal(), m_box_sizing),
+        m_config.size.height.intrinsic(m_measured_size.y, m_box_insets.vertical(), m_box_sizing),
     };
 }
 
 ImVec2 NodeLayout::resolve_size(ImVec2 available_size) const {
     return {
-        resolved_axis(m_config.size.width, m_measured_size.x, available_size.x, m_box_insets.horizontal(), m_box_sizing),
-        resolved_axis(m_config.size.height, m_measured_size.y, available_size.y, m_box_insets.vertical(), m_box_sizing),
+        m_config.size.width.resolve(m_measured_size.x, available_size.x, m_box_insets.horizontal(), m_box_sizing),
+        m_config.size.height.resolve(m_measured_size.y, available_size.y, m_box_insets.vertical(), m_box_sizing),
+    };
+}
+
+ImVec2 NodeLayout::constrain_size(ImVec2 size, ImVec2 available_size) const {
+    return {
+        m_config.size.width.constrain(size.x, available_size.x, m_box_insets.horizontal(), m_box_sizing),
+        m_config.size.height.constrain(size.y, available_size.y, m_box_insets.vertical(), m_box_sizing),
     };
 }
 
@@ -163,29 +193,4 @@ void NodeLayout::set_arranged_rects(Rect local_rect, Rect layout_rect) {
     m_local_rect = local_rect;
     m_layout_rect = layout_rect;
     m_visual_rect = layout_rect;
-}
-
-float NodeLayout::intrinsic_axis(LayoutAxis axis, float measured, float insets, BoxSizing box_sizing) {
-    if (axis.mode == LayoutSizeMode::Fixed) {
-        return box_sizing == BoxSizing::ContentBox ? axis.value + insets : std::max(axis.value, insets);
-    }
-
-    if (axis.mode == LayoutSizeMode::Grow) return std::max(measured, insets);
-
-    return axis.intrinsic(measured);
-}
-
-float NodeLayout::resolved_axis(LayoutAxis axis, float measured, float available, float insets, BoxSizing box_sizing) {
-    const float resolved = axis.resolve(measured, available);
-    if (axis.mode == LayoutSizeMode::Fixed || axis.mode == LayoutSizeMode::Percent) {
-        return box_sizing == BoxSizing::ContentBox ? resolved + insets : std::max(resolved, insets);
-    }
-
-    if (axis.mode == LayoutSizeMode::Grow) return std::max(resolved, insets);
-
-    return resolved;
-}
-
-float NodeLayout::preferred_axis(LayoutAxis axis, float measured, float insets, BoxSizing box_sizing) {
-    return axis.mode == LayoutSizeMode::Percent ? 0.0F : intrinsic_axis(axis, measured, insets, box_sizing);
 }

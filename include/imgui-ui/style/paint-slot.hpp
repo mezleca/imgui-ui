@@ -11,9 +11,11 @@ namespace ui {
     struct PaintContext {
         // outer bounds in screen coordinates before the node's vertex transform.
         Rect rect;
+
         // rect inset by the owning node's padding and borders, including for before/after slots.
         Rect content_rect;
         Painter painter;
+
         // widget style in widget hooks, decoration style in before/after callbacks.
         const ComputedStyle& style;
     };

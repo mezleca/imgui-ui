@@ -8,8 +8,10 @@
 using namespace ui;
 
 void EffectRegistry::render_command(const ImDrawList* draw_list, const ImDrawCmd* draw_command) {
-    const auto* command = static_cast<const QueuedCommand*>(draw_command->UserCallbackData);
-    command->render(command->user_data, draw_list, draw_command, command->command);
+    // imgui copies callback bytes without alignment padding. read the header into an aligned local before dispatch.
+    QueuedCommand command;
+    std::memcpy(&command, draw_command->UserCallbackData, sizeof(command));
+    command.render(command.user_data, draw_list, draw_command, command.command);
 }
 
 const EffectRegistry::Entry* EffectRegistry::find(uint32_t id) const {
@@ -82,7 +84,6 @@ void EffectRegistry::begin_frame() {
         return;
     }
 
-    m_commands.clear();
     m_command_memory.release();
 
     for (Entry& entry : m_entries) {
@@ -119,8 +120,8 @@ bool EffectRegistry::submit(ImDrawList& draw_list, uint32_t id, const void* comm
 
     void* copied_command = m_command_memory.allocate(size, entry->command_alignment);
     std::memcpy(copied_command, command, size);
-    QueuedCommand& queued = m_commands.emplace_back(entry->definition.render, entry->definition.user_data, copied_command);
-    draw_list.AddCallback(render_command, &queued);
+    QueuedCommand queued{entry->definition.render, entry->definition.user_data, copied_command};
+    draw_list.AddCallback(render_command, &queued, sizeof(queued));
     draw_list.AddCallback(ImDrawCallback_ResetRenderState, nullptr);
     return true;
 }

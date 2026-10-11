@@ -1,5 +1,6 @@
 #include <imgui-ui/resources/font-registry.hpp>
 
+#include <misc/freetype/imgui_freetype.h>
 #include <utility>
 
 using namespace ui;
@@ -19,7 +20,7 @@ ImFont* Font::get() {
 
     ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(m_location.string().c_str(), 0.0F, &m_config);
     if (font != nullptr) {
-        m_contexts[context] = font;
+        m_contexts.emplace(context, font);
     }
     return font;
 }
@@ -35,5 +36,7 @@ Font* FontRegistry::add(std::string id, std::filesystem::path location) {
 }
 
 Font* FontRegistry::add(std::string id, std::filesystem::path location, ImFontConfig config) {
+    if (Font* existing = find(id)) return existing;
+
     return add_asset(std::move(id), std::make_unique<Font>(std::move(location), config));
 }

@@ -4,7 +4,6 @@
 
 #include <filesystem>
 #include <imgui.h>
-#include <misc/freetype/imgui_freetype.h>
 #include <string>
 #include <string_view>
 #include <unordered_map>

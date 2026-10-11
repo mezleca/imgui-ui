@@ -359,11 +359,12 @@ static bool is_gif(std::string_view content) {
 
 std::unique_ptr<Texture> OpenGLTextureLoader::load(const std::filesystem::path& location, std::string) {
     // decode the source here without allocating gpu objects. get uploads per context and rasterizes svg at the requested size.
-    if (location.extension() == ".gif") {
+    const std::filesystem::path extension = location.extension();
+    if (extension == ".gif") {
         return std::make_unique<OpenGLGifTexture>(load_binary_file(location));
     }
 
-    if (location.extension() != ".svg") {
+    if (extension != ".svg") {
         plutovg_surface_t* surface = plutovg_surface_load_from_image_file(location.string().c_str());
 
         if (surface == nullptr) {

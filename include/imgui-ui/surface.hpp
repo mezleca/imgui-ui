@@ -17,6 +17,7 @@ namespace ui {
     class Profiler;
     class Runtime;
     class Font;
+    class LayerContainer;
 
     struct SurfaceConfig {
         /// null is rejected during surface construction.
@@ -146,7 +147,7 @@ namespace ui {
         ImGuiContext* m_previous_context = nullptr;
         std::unique_ptr<Backend> m_backend;
         std::unique_ptr<FileDialogBackend> m_file_dialog;
-        std::unique_ptr<Node> m_root;
+        std::unique_ptr<LayerContainer> m_root;
         Node* m_content_root = nullptr;
         InputRouter m_input_router;
         EffectRegistry m_effects;

@@ -10,7 +10,8 @@
 namespace ui {
     class VirtualLayout : public Container {
     public:
-        /// returns the direct child that represents index. the child must remain alive through the current draw.
+        /// returns the direct child representing a source index. the provider may be called again for the same index,
+        /// so retain and return the same node when its state should persist. the node must remain alive through the draw.
         using ItemProvider = std::function<Node&(size_t)>;
 
         explicit VirtualLayout(std::string id, float item_height);
@@ -20,12 +21,16 @@ namespace ui {
         VirtualLayout& set_item_height(float height);
         VirtualLayout& set_spacing(float spacing) override;
 
+        /// requests up to count extra rows on each side of the visible range, clipped to the source bounds.
+        /// these rows are requested from the provider before they enter the viewport.
         VirtualLayout& set_overscan(size_t count) {
             m_overscan = count;
             return *this;
         }
 
-        /// adds manual pixels to a source index, and zero removes the offset.
+        /// adds nonnegative pixels to this row's normal height. zero removes the extra extent.
+        /// later row positions and the total scroll extent include this offset.
+        /// throws for an index outside the source range, or a negative or nonfinite offset.
         VirtualLayout& set_extra_offset(size_t index, float offset);
         float extra_offset(size_t index) const;
         VirtualLayout& clear_extra_offsets();

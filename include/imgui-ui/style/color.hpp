@@ -19,11 +19,12 @@ namespace ui {
         Color() = default;
         Color(float red, float green, float blue, float alpha = 1.0F) : m_rgba(red, green, blue, alpha) {}
 
-        Color(ImVec4 color) : m_rgba(color) {}
+        // native imgui colors convert directly to style colors and back for imgui drawing calls.
+        Color(ImVec4 color) : m_rgba(color) {} // NOLINT(misc-explicit-constructor)
 
-        Color(ImColor color) : m_rgba(color.Value) {}
+        Color(ImColor color) : m_rgba(color.Value) {} // NOLINT(misc-explicit-constructor)
 
-        operator ImVec4() const {
+        operator ImVec4() const { // NOLINT(misc-explicit-constructor)
             return m_rgba;
         }
 
@@ -57,10 +58,13 @@ namespace ui {
 
     /// accepts normalized channels in [0, 1], clamping values outside that range.
     Color rgb(float red, float green, float blue);
+
     /// accepts normalized channels and alpha in [0, 1], clamping values outside that range.
     Color rgba(float red, float green, float blue, float alpha);
+
     /// accepts integer channels in [0, 255] and clamps values outside that range.
     Color rgb(int red, int green, int blue);
+
     /// accepts integer channels and alpha in [0, 255] and clamps values outside that range.
     Color rgba(int red, int green, int blue, int alpha);
     Color gradient(GradientType type, std::initializer_list<GradientStop> stops);
