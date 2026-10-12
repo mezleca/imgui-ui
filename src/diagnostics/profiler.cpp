@@ -60,7 +60,8 @@ void Profiler::set_enabled(bool enabled) {
 
     m_enabled = enabled;
     if (enabled) {
-        for (FrameBuffer& frame : m_frames) frame.events.reserve(EVENT_CAPACITY);
+        for (FrameBuffer& frame : m_frames)
+            frame.events.reserve(EVENT_CAPACITY);
     } else {
         m_frame_open = false;
         m_gpu_sample_count = 0;

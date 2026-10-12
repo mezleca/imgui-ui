@@ -2,7 +2,11 @@
 
 using namespace ui;
 
-Widget::Widget(std::string id, std::string_view type_name, InputMode input_mode) : StyledNode(std::move(id), type_name) {
+Widget::Widget(std::string id, std::string_view type_name, InputMode input_mode)
+    : Widget(std::move(id), StackDirection::Vertical, type_name, input_mode) {}
+
+Widget::Widget(std::string id, StackDirection direction, std::string_view type_name, InputMode input_mode)
+    : Container(std::move(id), direction, type_name) {
     set_input_mode(input_mode);
 }
 
@@ -60,16 +64,12 @@ Widget& Widget::on_change(std::function<void()> callback) {
     return *this;
 }
 
-bool Widget::accepts_input() const {
-    return Node::accepts_input() && accepts_visual_input();
-}
-
 void Widget::notify_change() {
     if (m_on_change) m_on_change();
 }
 
 void Widget::dispatch_event(UiEvent& event) {
-    Node::dispatch_event(event);
+    Node::dispatch_event(event); // NOLINT(bugprone-parent-virtual-call)
     if (removal_pending() || event.propagation_stopped) return;
 
     // internal overrides run first, followed by the general callback, the specific callback, and the click hook.
@@ -86,18 +86,5 @@ void Widget::dispatch_event(UiEvent& event) {
     }
 
     if (event.type == EventType::Click) click_event(event);
-}
-
-bool DrawListWidget::paint() {
-    const Rect rect = Rect::from_position_size(ImGui::GetCursorScreenPos(), layout().size());
-    ImGui::Dummy(rect.size());
-    const ComputedStyle& style = computed_style();
-    const PaintContext context{rect, content_rect(rect), painter(), style};
-    paint_surface(context);
-    paint_content(context);
-    return true;
-}
-
-void DrawListWidget::paint_surface(const PaintContext& context) const {
-    context.painter.frame(context.rect, context.style);
+    scroll_event(event);
 }

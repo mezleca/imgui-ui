@@ -2,7 +2,7 @@
 
 #include <imgui-ui/runtime.hpp>
 
-#include <string>
+#include <string_view>
 
 namespace ui {
     class Surface;
@@ -11,4 +11,4 @@ namespace ui {
 void configure_demo_runtime(ui::RuntimeConfig& config);
 
 // requires the surface's initialized imgui context. the demo uses one surface per process.
-void setup_demo(ui::Surface& surface, std::string backend);
+void setup_demo(ui::Surface& surface, std::string_view backend);

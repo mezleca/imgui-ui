@@ -3,30 +3,28 @@
 #include <imgui-ui/surface.hpp>
 #include <imgui-ui/style/theme.hpp>
 
+#include <algorithm>
 #include <utility>
 
 using namespace ui;
 
-ButtonWidget::ButtonWidget(std::string text, LayoutSize size) : DrawListWidget({}, "Button"), m_text(std::move(text)) {
+ButtonWidget::ButtonWidget(std::string text, LayoutSize size) : Widget({}, "Button"), m_text(std::move(text)) {
     set_size(size);
 }
 
 void ButtonWidget::apply_theme_defaults(const Theme& theme) {
-    set_font(surface().get_primary_font(), 16.0F);
-    configure_all_styles([&theme](Style& style) {
-        style.color(theme.text_color)
-            .background_color(theme.background_secondary_color)
-            .border_color(theme.controls.border_color, 0.2F)
-            .padding({10.0F, 2.0F})
-            .border(BORDER_ALL)
-            .border_radius(theme.controls.rounding)
-            .border_thickness(theme.controls.border_thickness)
-            .cursor(ImGuiMouseCursor_Hand);
-    });
+    Container::apply_theme_defaults(theme);
+    set_font(surface().get_primary_font(), theme.controls.font_size);
+    configure_all_styles([&theme](Style& style) { style.control(theme).cursor(ImGuiMouseCursor_Hand); });
 
     style(StyleType::ACTIVE).background_color(theme.controls.active_color).border_color(theme.accent_color, 0.2F);
     style(StyleType::FOCUS).border_color(theme.accent_color);
-    style(StyleType::HOVER).border_color(theme.accent_hover_color);
+    style(StyleType::HOVER).background_color(theme.controls.hover_color).border_color(theme.accent_hover_color);
+    style(StyleType::DISABLED)
+        .color(theme.text_secondary_color)
+        .background_color(theme.background_secondary_color)
+        .border_color(theme.border_color)
+        .cursor(ImGuiMouseCursor_NotAllowed);
 }
 
 ButtonWidget& ButtonWidget::set_text(std::string text) {
@@ -35,6 +33,11 @@ ButtonWidget& ButtonWidget::set_text(std::string text) {
     }
 
     invalidate_measure();
+    return *this;
+}
+
+ButtonWidget& ButtonWidget::set_text_overflow(TextOverflow overflow) {
+    m_text_overflow = overflow;
     return *this;
 }
 
@@ -52,18 +55,28 @@ void ButtonWidget::click_event(UiEvent&) {
 void ButtonWidget::on_measure() {
     m_text.set_font(font(), font_size());
     m_text.set_line_height(computed_style().line_height());
-    set_measured_content_size(m_text.text_size(), true, true);
+
+    ImVec2 size = m_text.text_size();
+    const ImVec2 children_size = measure_children();
+    size = {std::max(size.x, children_size.x), std::max(size.y, children_size.y)};
+
+    set_measured_content_size(size);
 }
 
 void ButtonWidget::paint_content(const PaintContext& context) {
     const Rect content = context.content_rect;
     const ImVec2 text_size = m_text.text_size();
 
-    context.painter.text(
-        {
-            content.min.x + ((content.size().x - text_size.x) * m_text_alignment.x),
-            content.min.y + ((content.size().y - text_size.y) * m_text_alignment.y),
-        },
-        context.style.color().value, m_text
-    );
+    const ImVec2 position = {
+        content.min.x + (std::max(0.0F, content.size().x - text_size.x) * m_text_alignment.x),
+        content.min.y + ((content.size().y - text_size.y) * m_text_alignment.y),
+    };
+    if (m_text_overflow == TextOverflow::Ellipsis) {
+        context.painter.text_ellipsis(
+            position, context.style.color().value, m_text,
+            {content.min.x, content.min.y, content.max.x, content.max.y}
+        );
+    } else {
+        context.painter.text(position, context.style.color().value, m_text);
+    }
 }

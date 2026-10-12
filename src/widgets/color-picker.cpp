@@ -1,6 +1,7 @@
 #include <imgui-ui/widgets/color-picker.hpp>
 
 #include <imgui-ui/imgui/painter.hpp>
+#include <imgui-ui/imgui/window.hpp>
 #include <imgui-ui/style/theme.hpp>
 #include <imgui-ui/surface.hpp>
 #include <imgui-ui/widgets/text-input.hpp>
@@ -88,10 +89,10 @@ static ImColor hsv_color(float hue, float saturation, float value, float alpha =
     return color;
 }
 
-class ui::ColorPickerPreviewNode final : public DrawListWidget {
+class ui::ColorPickerPreviewNode final : public Widget {
 public:
     ColorPickerPreviewNode(ColorPickerWidget& owner, Color& color)
-        : DrawListWidget("preview", "ColorPickerPreview"), m_owner(owner), m_color(&color) {}
+        : Widget("preview", "ColorPickerPreview"), m_owner(owner), m_color(&color) {}
 
     void set_open(bool open) {
         if (open) {
@@ -104,7 +105,7 @@ public:
 
 private:
     void paint_surface(const PaintContext& context) const override {
-        context.painter.frame(context.rect, context.style, *m_color);
+        context.painter.frame_surface(context.rect, context.style, *m_color);
     }
 
     void click_event(UiEvent& event) override {
@@ -135,7 +136,7 @@ public:
           m_window_name(std::format("##color-picker-{}", identity())) {
         set_layout({.in_flow = false});
 
-        m_hex_input = &add<TextInputWidget>(m_hex, "hex");
+        m_hex_input = &add<TextInputWidget>(m_hex, "", LabelPlacement::Inline, "hex");
         m_hex_input->on_change([this] {
             ImColor parsed;
             if (parse_hex(m_hex, parsed)) {
@@ -157,20 +158,18 @@ private:
         configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
                 .background_color(theme.controls.background_color)
-                .border(BORDER_ALL)
+                .border(BorderEdge{theme.controls.border_thickness, BorderType::Solid})
                 .border_color(theme.controls.border_color)
                 .border_radius(theme.metrics.popup_rounding)
-                .border_thickness(theme.controls.border_thickness)
                 .padding({12.0F, 12.0F});
         });
 
         m_hex_input->configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
                 .background_color(theme.background_tertiary_color)
-                .border(BORDER_ALL)
+                .border(BorderEdge{theme.controls.border_thickness, BorderType::Solid})
                 .border_color(theme.controls.border_color)
                 .border_radius(theme.controls.rounding)
-                .border_thickness(theme.controls.border_thickness)
                 .padding(theme.metrics.item_inner_spacing);
         });
         m_hex_input->style(StyleType::HOVER).border_color(theme.accent_hover_color);
@@ -189,7 +188,7 @@ private:
 
         ImGui::SetNextWindowPos(position, ImGuiCond_Always);
         ImGui::SetNextWindowSize({layout().size().x, 0.0F}, ImGuiCond_Always);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.padding());
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.padding().window_padding());
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, style.border_radius());
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{});
@@ -201,6 +200,7 @@ private:
                 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing
         );
 
+        apply_window_insets(style.padding());
         if (draw_content) {
             const Rect popup_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
 
@@ -322,7 +322,8 @@ private:
         ImGui::SetCursorScreenPos({alpha_bar.min.x, alpha_bar.max.y + spacing.y});
 
         arrange_child(
-            *m_hex_input, m_hex_input->layout().constrain_size(
+            *m_hex_input,
+            m_hex_input->layout().constrain_size(
                 {alpha_bar.size().x, m_hex_input->layout().intrinsic_size().y}, content_size(layout().visual_rect().size())
             )
         );
@@ -342,30 +343,36 @@ private:
     TextInputWidget* m_hex_input = nullptr;
 };
 
-ColorPickerWidget::ColorPickerWidget(Color& color, std::string label, std::string id)
-    : Container(std::move(id), StackDirection::Vertical), m_color(&color) {
-    m_label_node = &add<TextWidget>(std::move(label));
+ColorPickerWidget::ColorPickerWidget(Color& color, std::string label, LabelPlacement placement, std::string id)
+    : Widget(std::move(id), StackDirection::Vertical, "ColorPicker"), m_color(&color) {
+    m_label_node = &add<TextWidget>("");
     m_label_node->set_visible(!m_label_node->empty());
     m_preview = &add<ColorPickerPreviewNode>(*this, color);
     m_popup = &add<ColorPickerPopup>(*this);
+    set_label(std::move(label), placement);
 }
 
-ColorPickerWidget& ColorPickerWidget::set_label(std::string label) {
+ColorPickerWidget& ColorPickerWidget::set_label(std::string label, LabelPlacement placement) {
     m_label_node->set_text(std::move(label));
     m_label_node->set_visible(!m_label_node->empty());
+    m_label_placement = placement;
+    set_direction(placement == LabelPlacement::Inline ? StackDirection::Horizontal : StackDirection::Vertical);
+    set_spacing(placement == LabelPlacement::Inline ? m_label_spacing.x : m_label_spacing.y);
     return *this;
 }
 
 void ColorPickerWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
-    set_spacing(theme.metrics.item_spacing.y);
+    set_font(surface().get_primary_font(), theme.controls.font_size);
+    m_label_spacing = {theme.metrics.item_inner_spacing.x, theme.metrics.item_spacing.y};
+    set_spacing(m_label_placement == LabelPlacement::Inline ? m_label_spacing.x : m_label_spacing.y);
 
     const ImVec2 preview_size = {
         (theme.controls.thumb_size * 2.0F) + (theme.metrics.frame_padding.x * 2.0F),
         theme.controls.thumb_size + (theme.metrics.frame_padding.y * 2.0F),
     };
 
-    set_size({px(preview_size.x), fit()});
+    set_size({fit(), fit()});
     m_preview->set_size({px(preview_size.x), px(preview_size.y)});
 
     configure_all_styles([](Style& style) { style.padding({}); });
@@ -373,16 +380,20 @@ void ColorPickerWidget::apply_theme_defaults(const Theme& theme) {
     m_label_node->configure_all_styles([&theme](Style& style) { style.color(theme.text_color); });
     m_preview->configure_all_styles([&theme](Style& style) {
         style.background_color(theme.controls.background_color)
-            .border(BORDER_ALL)
+            .border(BorderEdge{theme.controls.border_thickness, BorderType::Solid})
             .border_color(theme.controls.border_color)
             .border_radius(theme.controls.rounding)
-            .border_thickness(theme.controls.border_thickness)
             .padding({})
             .cursor(ImGuiMouseCursor_Hand);
     });
 
     m_preview->style(StyleType::HOVER).border_color(theme.accent_hover_color);
     m_preview->style(StyleType::ACTIVE).border_color(theme.accent_color);
+    m_preview->style(StyleType::DISABLED)
+        .border_color(theme.border_color)
+        .cursor(ImGuiMouseCursor_NotAllowed);
+    m_label_node->style(StyleType::DISABLED).color(theme.text_secondary_color);
+    style(StyleType::DISABLED).cursor(ImGuiMouseCursor_NotAllowed);
 }
 
 bool ColorPickerWidget::set_color(const Color& color) {

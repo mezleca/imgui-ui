@@ -27,6 +27,6 @@ namespace ui {
 
     BorderPath rounded_rect_border_path(Rect rect, float rounding);
     void draw_border_path(
-        ImDrawList& draw_list, const BorderPath& path, uint8_t border, const Color& color, float thickness, BorderStyle style
+        ImDrawList& draw_list, const BorderPath& path, uint8_t border, const Color& color, float thickness, BorderType style
     );
 } // namespace ui

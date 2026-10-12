@@ -3,13 +3,11 @@
 #include "box-sizing.hpp"
 #include "variables.hpp"
 
+#include <algorithm>
 #include <cstdint>
 
 namespace ui {
     class StyledNode;
-
-    /// fractional layout coordinates can place a 1px dotted edge between pixel centers.
-    inline constexpr float MIN_BORDER_THICKNESS = 1.5F;
 
     enum Border : uint8_t {
         BORDER_NONE = 0,
@@ -21,10 +19,32 @@ namespace ui {
         BORDER_ALL = BORDER_LEFT | BORDER_TOP | BORDER_RIGHT | BORDER_BOTTOM,
     };
 
-    enum class BorderStyle : uint8_t {
+    enum class BorderType : uint8_t {
         Solid,
         Dashed,
         Dotted,
+        None,
+    };
+
+    struct BorderEdge {
+        float size = 0.0F;
+        BorderType type = BorderType::Solid;
+    };
+
+    struct BorderEdges {
+        BorderEdge left;
+        BorderEdge top;
+        BorderEdge right;
+        BorderEdge bottom;
+    };
+
+    struct BorderTypes {
+        BorderType left = BorderType::None;
+        BorderType top = BorderType::None;
+        BorderType right = BorderType::None;
+        BorderType bottom = BorderType::None;
+
+        constexpr bool operator==(const BorderTypes&) const = default;
     };
 
     enum class Overflow : uint8_t {
@@ -56,7 +76,7 @@ namespace ui {
             return m_font_size;
         }
 
-        const ImVec2& padding() const {
+        const BoxInsets& padding() const {
             return m_padding.value;
         }
 
@@ -68,7 +88,7 @@ namespace ui {
             return m_overflow;
         }
 
-        const ImVec2& margin() const {
+        const BoxInsets& margin() const {
             return m_margin.value;
         }
 
@@ -149,15 +169,32 @@ namespace ui {
         }
 
         float border_thickness() const {
-            return m_border_thickness;
+            return std::max({m_border_left_size.value, m_border_top_size.value,
+                             m_border_right_size.value, m_border_bottom_size.value,});
         }
 
-        uint8_t border() const {
-            return m_border;
+        uint8_t border() const;
+        bool uniform_border() const;
+        BoxInsets border_widths() const;
+
+        BorderEdge border_left() const {
+            return {m_border_left_size.value, m_border_types.left};
         }
 
-        BorderStyle border_style() const {
-            return m_border_style;
+        BorderEdge border_top() const {
+            return {m_border_top_size.value, m_border_types.top};
+        }
+
+        BorderEdge border_right() const {
+            return {m_border_right_size.value, m_border_types.right};
+        }
+
+        BorderEdge border_bottom() const {
+            return {m_border_bottom_size.value, m_border_types.bottom};
+        }
+
+        BorderType border_style() const {
+            return m_border_types.left;
         }
 
         const StyleVariableStore& variables() const {
@@ -173,8 +210,8 @@ namespace ui {
 
         ImFont* m_font = nullptr;
         float m_font_size = 0.0F;
-        Vec2Value m_margin;
-        Vec2Value m_padding;
+        Value<BoxInsets> m_margin;
+        Value<BoxInsets> m_padding;
         FloatValue m_line_height{1.0F};
         FloatValue m_rotation{0.0F};
         Vec2Value m_scale{ImVec2{1.0F, 1.0F}};
@@ -185,12 +222,14 @@ namespace ui {
         float m_scrollbar_minimum_grab_size = 12.0F;
         float m_scrollbar_grab_rounding = 9.0F;
         int m_blur = 0;
-        float m_border_thickness = 1.0F;
+        FloatValue m_border_left_size{1.0F};
+        FloatValue m_border_top_size{1.0F};
+        FloatValue m_border_right_size{1.0F};
+        FloatValue m_border_bottom_size{1.0F};
         float m_border_radius = 4.0F;
         BoxSizing m_box_sizing = BoxSizing::ContentBox;
         Overflow m_overflow = Overflow::Visible;
-        uint8_t m_border = BORDER_NONE;
-        BorderStyle m_border_style = BorderStyle::Solid;
+        BorderTypes m_border_types;
         BoxShadowValue m_box_shadow;
         ColorValue m_color;
         ColorValue m_border_color;

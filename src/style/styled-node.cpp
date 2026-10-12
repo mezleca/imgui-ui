@@ -26,9 +26,8 @@ StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::m
     m_state.set_change_callback(this, &StyledNode::style_changed);
 }
 
-void StyledNode::set_surface(Surface* surface) {
+void StyledNode::surface_changed() {
     m_font_cache_valid = false;
-    Node::set_surface(surface);
 }
 
 StyledNode& StyledNode::set_font(ImFont* font, float size) {
@@ -71,24 +70,23 @@ float StyledNode::font_size() const {
 
 BoxInsets StyledNode::box_insets() const {
     const ComputedStyle& style = computed_style();
-    const ImVec2 padding = style.padding();
-    const float thickness = style.border_thickness();
-    const uint8_t border = style.border();
+    const BoxInsets padding = style.padding();
+    const BoxInsets border = style.border_widths();
     return {
-        padding.x + ((border & BORDER_LEFT) != 0 ? thickness : 0.0F),
-        padding.y + ((border & BORDER_TOP) != 0 ? thickness : 0.0F),
-        padding.x + ((border & BORDER_RIGHT) != 0 ? thickness : 0.0F),
-        padding.y + ((border & BORDER_BOTTOM) != 0 ? thickness : 0.0F),
+        padding.left + border.left,
+        padding.top + border.top,
+        padding.right + border.right,
+        padding.bottom + border.bottom,
     };
 }
 
-void StyledNode::set_measured_content_size(ImVec2 size, bool measured_width, bool measured_height) {
+void StyledNode::set_measured_content_size(ImVec2 size) {
     ImGui::PushFont(font(), font_size());
     const float line_height = ImGui::GetTextLineHeight();
     ImGui::PopFont();
 
     size.y = std::max(size.y, line_height * computed_style().line_height());
-    set_measured_size(outer_size(size), measured_width, measured_height);
+    set_measured_size(outer_size(size));
 }
 
 void StyledNode::invalidate_font_cache_subtree(Node& node) {
@@ -140,7 +138,8 @@ void StyledNode::draw() {
         return;
     }
 
-    update_cursor();
+    const bool is_disabled = !enabled();
+    if (!is_disabled) update_cursor();
     const ComputedStyle& current_style = computed_style();
     const PushState push_state = current_style.push(opacity(), font(), font_size());
 
@@ -149,6 +148,7 @@ void StyledNode::draw() {
 
     if (rotation_deg == 0.0F && scale.x == 1.0F && scale.y == 1.0F) {
         Node::draw();
+        if (is_disabled) update_cursor();
         ComputedStyle::pop(push_state);
         return;
     }
@@ -175,6 +175,7 @@ void StyledNode::draw() {
     draw_list_snapshots.push_back({foreground_draw_list, foreground_draw_list->VtxBuffer.Size});
 
     Node::draw();
+    if (is_disabled) update_cursor();
 
     const Rect rect = layout().visual_rect();
     const ImVec2 center = {(rect.min.x + rect.max.x) * 0.5F, (rect.min.y + rect.max.y) * 0.5F};
@@ -206,14 +207,6 @@ void StyledNode::draw() {
     ComputedStyle::pop(push_state);
 }
 
-bool StyledNode::on_draw() {
-    return paint();
-}
-
-bool StyledNode::paint() {
-    return true;
-}
-
 void StyledNode::advance_frame_state(float dt) {
     m_state.update(dt);
 }
@@ -221,11 +214,26 @@ void StyledNode::advance_frame_state(float dt) {
 void StyledNode::input_state_changed() {
     const InputState input = subtree_input_state();
     set_interaction_style(input.hovered, input.active, input.focused);
-    update_cursor();
+    if (enabled()) update_cursor();
+}
+
+void StyledNode::disabled_changed() {
+    if (!enabled()) {
+        m_state.set_style(StyleType::DISABLED);
+        return;
+    }
+
+    const InputState input = subtree_input_state();
+    m_state.set_item_state(input.hovered, input.active, input.focused);
 }
 
 void StyledNode::update_cursor() {
-    if (!input_state().hovered) {
+    if (!enabled()) {
+        const Rect rect = layout().visual_rect();
+        if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) || !ImGui::IsMouseHoveringRect(rect.min, rect.max)) {
+            return;
+        }
+    } else if (!input_state().hovered) {
         return;
     }
 

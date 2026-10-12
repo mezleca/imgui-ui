@@ -1,7 +1,6 @@
 #include <imgui-ui/layout/geometry.hpp>
 
 #include <algorithm>
-#include <stdexcept>
 
 using namespace ui;
 
@@ -24,18 +23,6 @@ float LayoutLimit::resolve(float available) const {
     return percentage ? std::max(0.0F, available) * value / 100.0F : value;
 }
 
-LayoutAxis::LayoutAxis(LayoutAxis minimum, LayoutAxis maximum) : LayoutAxis(grow(), minimum, maximum) {}
-
-LayoutAxis::LayoutAxis(LayoutAxis preferred, LayoutAxis minimum, LayoutAxis maximum) : LayoutAxis(preferred) {
-    if ((minimum.mode != LayoutSizeMode::Fixed && minimum.mode != LayoutSizeMode::Percent) ||
-        (maximum.mode != LayoutSizeMode::Fixed && maximum.mode != LayoutSizeMode::Percent)) {
-        throw std::invalid_argument("size limits must be px or percent");
-    }
-
-    this->minimum = {minimum.value, minimum.mode == LayoutSizeMode::Percent};
-    this->maximum = {maximum.value, maximum.mode == LayoutSizeMode::Percent};
-}
-
 float LayoutAxis::intrinsic(float measured, float insets, BoxSizing box_sizing) const {
     float size = mode == LayoutSizeMode::Percent ? 0.0F : measured;
     if (mode == LayoutSizeMode::Fixed) {
@@ -51,9 +38,12 @@ float LayoutAxis::intrinsic(float measured, float insets, BoxSizing box_sizing) 
 
 float LayoutAxis::resolve(float measured, float available, float insets, BoxSizing box_sizing) const {
     float size = std::max(0.0F, available);
-    if (mode == LayoutSizeMode::Fixed) size = value;
-    else if (mode == LayoutSizeMode::Fit) size = measured;
-    else if (mode == LayoutSizeMode::Percent) size *= value / 100.0F;
+    if (mode == LayoutSizeMode::Fixed)
+        size = value;
+    else if (mode == LayoutSizeMode::Fit)
+        size = measured;
+    else if (mode == LayoutSizeMode::Percent)
+        size *= value / 100.0F;
 
     if ((mode == LayoutSizeMode::Fixed || mode == LayoutSizeMode::Percent) && box_sizing == BoxSizing::ContentBox) size += insets;
     return constrain(size, available, insets, box_sizing);
@@ -64,35 +54,8 @@ float LayoutAxis::constrain(float size, float available, float insets, BoxSizing
 }
 
 bool Placement::operator==(const Placement& other) const {
-    return anchor == other.anchor && origin == other.origin && offset.x == other.offset.x && offset.y == other.offset.y &&
-           anchor_position.x == other.anchor_position.x && anchor_position.y == other.anchor_position.y &&
-           origin_position.x == other.origin_position.x && origin_position.y == other.origin_position.y;
-}
-
-ImVec2 ui::alignment_factor(Anchor alignment) {
-    switch (alignment) {
-        case Anchor::TopLeft:
-            return {0.0F, 0.0F};
-        case Anchor::TopCenter:
-            return {0.5F, 0.0F};
-        case Anchor::TopRight:
-            return {1.0F, 0.0F};
-        case Anchor::CenterLeft:
-            return {0.0F, 0.5F};
-        case Anchor::Center:
-            return {0.5F, 0.5F};
-        case Anchor::CenterRight:
-            return {1.0F, 0.5F};
-        case Anchor::BottomLeft:
-            return {0.0F, 1.0F};
-        case Anchor::BottomCenter:
-            return {0.5F, 1.0F};
-        case Anchor::BottomRight:
-            return {1.0F, 1.0F};
-        case Anchor::Custom:
-            return {};
-    }
-    return {};
+    return anchor.x == other.anchor.x && anchor.y == other.anchor.y && origin.x == other.origin.x && origin.y == other.origin.y &&
+           offset.x == other.offset.x && offset.y == other.offset.y;
 }
 
 ImVec2 ui::clamp_position(Rect bounds, ImVec2 size, ImVec2 position) {
@@ -125,14 +88,12 @@ ImVec2 NodeLayout::constrain_size(ImVec2 size, ImVec2 available_size) const {
 
 void NodeLayout::set_size(LayoutSize size) {
     m_config.size = size;
-    m_has_explicit_size_request = true;
     invalidate_resolved_size();
 }
 
 void NodeLayout::set_config(LayoutConfig config) {
     const bool size_changed = m_config.size != config.size;
     m_config = config;
-    m_has_explicit_size_request = m_has_explicit_size_request || size_changed;
     m_has_arranged_position = false;
 
     // placement changes discard arrangement without discarding an unchanged size allocation.
@@ -141,15 +102,8 @@ void NodeLayout::set_config(LayoutConfig config) {
     }
 }
 
-void NodeLayout::set_measured_size(ImVec2 size, bool measured_width, bool measured_height) {
+void NodeLayout::set_measured_size(ImVec2 size) {
     m_measured_size = size;
-
-    // measured axes become fit only until an explicit size request fixes the sizing rules.
-    if (!m_has_explicit_size_request) {
-        if (measured_width) m_config.size.width = fit();
-        if (measured_height) m_config.size.height = fit();
-    }
-
     invalidate_resolved_size();
 }
 
@@ -171,22 +125,14 @@ void NodeLayout::set_box_sizing(BoxSizing sizing) {
     invalidate_resolved_size();
 }
 
-void NodeLayout::assign_size(ImVec2 size, bool assigned_by_parent) {
+void NodeLayout::assign_size(ImVec2 size) {
     m_size = size;
-    m_has_size = true;
-    m_size_assigned_by_parent = assigned_by_parent;
-}
-
-void NodeLayout::clear_size_assignment() {
-    m_has_size = false;
-    m_size_assigned_by_parent = false;
 }
 
 void NodeLayout::invalidate_resolved_size() {
     // expose the current intrinsic size until the next layout pass resolves or assigns an allocation.
     m_size = intrinsic_size();
-    m_has_size = false;
-    m_size_assigned_by_parent = false;
+    m_has_parent_size = false;
 }
 
 void NodeLayout::set_arranged_rects(Rect local_rect, Rect layout_rect) {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../layout/container.hpp"
+#include "widget.hpp"
 
 #include <cstdint>
 #include <string>
@@ -18,11 +18,14 @@ namespace ui {
         bool operator==(const DropdownOption&) const = default;
     };
 
-    class DropdownWidget : public Container {
+    class DropdownWidget : public Widget {
     public:
-        DropdownWidget(std::string& value, std::vector<DropdownOption> options, std::string id = {});
+        explicit DropdownWidget(
+            std::string& value, std::vector<DropdownOption> options = {}, std::string label = {},
+            LabelPlacement placement = LabelPlacement::Above, std::string id = {}
+        );
 
-        DropdownWidget& set_label(std::string label);
+        DropdownWidget& set_label(std::string label, LabelPlacement placement = LabelPlacement::Above);
         DropdownWidget& set_placeholder(std::string placeholder);
 
         /// returns false if value is absent or already selected. a change closes the popup and notifies listeners.
@@ -62,6 +65,7 @@ namespace ui {
         const DropdownOption* find_option(std::string_view option_value) const;
         const DropdownOption* selected_option() const;
         void finish_close();
+        void update_label_layout();
         void event(UiEvent& event) override;
 
         std::string& m_value;
@@ -71,6 +75,8 @@ namespace ui {
         Body* m_body = nullptr;
         Trigger* m_trigger = nullptr;
         Visibility m_visibility = Visibility::Closed;
+        LabelPlacement m_label_placement = LabelPlacement::Above;
+        ImVec2 m_label_spacing = {8.0F, 10.0F};
         ImVec2 m_arrow_size;
         float m_popup_gap = 0.0F;
         float m_transition_duration = 0.0F;

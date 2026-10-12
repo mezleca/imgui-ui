@@ -5,11 +5,17 @@
 
 using namespace ui;
 
-ImageWidget::ImageWidget(Texture* texture) : DrawListWidget({}, "Image", InputMode::None), m_texture(texture) {}
+ImageWidget::ImageWidget(Texture* texture) : Widget({}, "Image", InputMode::None), m_texture(texture) {
+    set_size({fit(), fit()});
+}
 
 void ImageWidget::on_measure() {
+    const ImVec2 children_size = measure_children();
     if (m_texture != nullptr) {
-        set_measured_content_size(m_texture->size(), true, true);
+        const ImVec2 texture_size = m_texture->size();
+        set_measured_content_size({std::max(texture_size.x, children_size.x), std::max(texture_size.y, children_size.y)});
+    } else {
+        set_measured_size(outer_size(children_size));
     }
 }
 

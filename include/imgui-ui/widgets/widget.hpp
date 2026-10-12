@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../style/styled-node.hpp"
+#include "../layout/container.hpp"
 
 #include <array>
 #include <cstdint>
@@ -16,9 +16,13 @@ namespace ui {
         Above,
     };
 
-    class Widget : public StyledNode {
+    class Widget : public Container {
     public:
         explicit Widget(std::string id, std::string_view type_name = "Widget", InputMode input_mode = InputMode::Target);
+        Widget(
+            std::string id, StackDirection direction, std::string_view type_name = "Widget",
+            InputMode input_mode = InputMode::Target
+        );
 
         /// runs after internal event handling for every event reaching this widget, unless propagation was stopped.
         /// a nonempty callback registers a pointer target when input mode is none. it does not consume events automatically.
@@ -33,8 +37,6 @@ namespace ui {
         Widget& on_key_release(InputCallback callback);
 
         Widget& on_change(std::function<void()> callback);
-
-        bool accepts_input() const override;
 
     protected:
         void notify_change();
@@ -51,19 +53,4 @@ namespace ui {
         std::unique_ptr<EventCallbacks> m_event_callbacks;
     };
 
-    class DrawListWidget : public Widget {
-    public:
-        explicit DrawListWidget(
-            std::string id = {}, std::string_view type_name = "DrawListWidget", InputMode input_mode = InputMode::Target
-        )
-            : Widget(std::move(id), type_name, input_mode) {}
-
-    protected:
-        virtual void paint_surface(const PaintContext& context) const;
-
-    private:
-        bool paint() override;
-
-        virtual void paint_content(const PaintContext&) {}
-    };
 } // namespace ui

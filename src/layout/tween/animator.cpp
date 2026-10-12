@@ -2,7 +2,6 @@
 #include <imgui-ui/style/values.hpp>
 
 #include <algorithm>
-#include <cmath>
 #include <vector>
 
 using namespace ui;
@@ -104,8 +103,8 @@ void Animator::update(float dt) {
         const auto track_it = std::find_if(state.tracks.begin(), state.tracks.end(), [&step](const AnimationTrack& track) {
             return track.target.identity == step.target.identity;
         });
-        AnimationValue start = track_it == state.tracks.end() ? step.target.read(step.target.context)
-                                                              : animation_track_value(*track_it, state.time);
+        AnimationValue start =
+            track_it == state.tracks.end() ? step.target.read(step.target.context) : animation_track_value(*track_it, state.time);
         AnimationValue target;
 
         if (step.release) {
@@ -120,9 +119,7 @@ void Animator::update(float dt) {
             state.tracks.erase(track_it);
         }
 
-        state.tracks.push_back(
-            {step.target, std::move(start), std::move(target), step.transition, step.start, step.release}
-        );
+        state.tracks.push_back({step.target, std::move(start), std::move(target), step.transition, step.start, step.release});
         return true;
     });
 

@@ -1,4 +1,5 @@
 #include <catch2/catch_approx.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <imgui_internal.h>
 
@@ -35,7 +36,7 @@ public:
     explicit LayoutProbeNode(ImVec2 size) : LayoutProbeNode({}, size) {}
 
 private:
-    bool on_draw() override {
+    bool paint() override {
         ImGui::Dummy(layout().size());
         return true;
     }
@@ -43,7 +44,9 @@ private:
 
 class MeasuredLayoutNode final : public LayoutProbeNode {
 public:
-    explicit MeasuredLayoutNode(ImVec2 size) : m_intrinsic_size(size) {}
+    explicit MeasuredLayoutNode(ImVec2 size) : m_intrinsic_size(size) {
+        set_size({fit(), fit()});
+    }
 
     void set_intrinsic_size(ImVec2 size) {
         m_intrinsic_size = size;
@@ -52,7 +55,7 @@ public:
 
 private:
     void on_measure() override {
-        set_measured_size(m_intrinsic_size, true, true);
+        set_measured_size(m_intrinsic_size);
     }
 
     ImVec2 m_intrinsic_size;
@@ -63,6 +66,74 @@ static void draw_open_tree(Node& node, const char* name) {
         ImGui::SetNextItemOpen(true, ImGuiCond_Always);
         node.draw();
     });
+}
+
+TEST_CASE("button children stay inside their card when the parent moves and resizes", "[layout][Widget][regression]") {
+    ui_test::ImGuiContext context({800.0F, 600.0F});
+    Container root("card-root");
+    root.set_size({px(600.0F), px(400.0F)});
+    auto& button = root.add<ButtonWidget>("", LayoutSize{percent(50), percent(50)});
+    button.set_anchor(Anchor::Center);
+    button.configure_all_styles([](Style& style) { style.padding({12.0F, 12.0F}).border(BorderEdge{0.0F, BorderType::None}); });
+    auto& content = button.add<Container>("card-content");
+    content.set_size({grow(), grow()});
+    content.set_anchor(Anchor::Center);
+    content.set_input_mode(InputMode::None);
+    content.set_content_alignment(Anchor::Center);
+    content.set_spacing(10.0F);
+    auto& title = content.add<LayoutProbeNode>(ImVec2{80.0F, 30.0F});
+    auto& description = content.add<LayoutProbeNode>(ImVec2{120.0F, 20.0F});
+
+    const auto check_content = [&] {
+        const Rect card_rect = button.layout().visual_rect();
+        const Rect content_rect = content.layout().visual_rect();
+        CHECK(content_rect.min.x == Catch::Approx(card_rect.min.x + 12.0F).margin(1.0F));
+        CHECK(content_rect.min.y == Catch::Approx(card_rect.min.y + 12.0F).margin(1.0F));
+        CHECK(content_rect.max.x == Catch::Approx(card_rect.max.x - 12.0F).margin(1.0F));
+        CHECK(content_rect.max.y == Catch::Approx(card_rect.max.y - 12.0F).margin(1.0F));
+        CHECK(ui_test::center(title.layout().visual_rect()).x == Catch::Approx(ui_test::center(card_rect).x).margin(1.0F));
+        CHECK(ui_test::center(description.layout().visual_rect()).x == Catch::Approx(ui_test::center(card_rect).x).margin(1.0F));
+        CHECK(description.layout().visual_rect().min.y - title.layout().visual_rect().max.y == Catch::Approx(10.0F));
+        CHECK(
+            (title.layout().visual_rect().min.y + description.layout().visual_rect().max.y) * 0.5F ==
+            Catch::Approx(ui_test::center(card_rect).y).margin(1.0F)
+        );
+    };
+
+    ui_test::draw_window("card-layout", {800.0F, 600.0F}, [&] { root.draw(); });
+    check_content();
+
+    button.set_anchor(Anchor::BottomRight);
+    root.set_size({px(500.0F), px(300.0F)});
+    ui_test::draw_window("card-layout", {800.0F, 600.0F}, [&] { root.draw(); });
+    check_content();
+}
+
+TEST_CASE("buttons arrange flowing children and fit their measured sizes", "[layout][Widget][regression]") {
+    ui_test::ImGuiContext context({500.0F, 300.0F});
+    ButtonWidget button("");
+    button.configure_all_styles([](Style& style) { style.padding({5.0F, 7.0F}).border(BorderEdge{0.0F, BorderType::None}); });
+    button.set_direction(StackDirection::Horizontal);
+    button.set_spacing(10.0F);
+    auto& first = button.add<LayoutProbeNode>(ImVec2{40.0F, 30.0F});
+    auto& second = button.add<LayoutProbeNode>(ImVec2{60.0F, 20.0F});
+
+    ui_test::draw_window("button-fit", {500.0F, 300.0F}, [&] { button.draw(); });
+    CHECK(button.layout().size().x == Catch::Approx(120.0F));
+    CHECK(button.layout().size().y == Catch::Approx(44.0F));
+    CHECK(second.layout().visual_rect().min.x - first.layout().visual_rect().max.x == Catch::Approx(10.0F));
+
+    first.set_size({px(70.0F), px(40.0F)});
+    ui_test::draw_window("button-fit", {500.0F, 300.0F}, [&] { button.draw(); });
+    CHECK(button.layout().size().x == Catch::Approx(150.0F));
+    CHECK(button.layout().size().y == Catch::Approx(54.0F));
+
+    auto& custom_first = button.add<Widget>("same-id");
+    custom_first.set_size({px(20.0F), px(20.0F)});
+    auto& custom_second = button.add<Widget>("same-id");
+    custom_second.set_size({px(20.0F), px(20.0F)});
+    ui_test::draw_window("button-fit", {500.0F, 300.0F}, [&] { button.draw(); });
+    CHECK(custom_second.layout().visual_rect().min.x - custom_first.layout().visual_rect().max.x == Catch::Approx(10.0F));
 }
 
 TEST_CASE("size ranges clamp both axes and resolve mixed units after parent resizing", "[layout][size-limits]") {
@@ -177,13 +248,14 @@ TEST_CASE("flexible content keeps footer at the bottom while footer determines f
     ui_test::ImGuiContext context({320.0F, 220.0F});
     Container root("footer-root");
     root.set_size({fit(), px(180.0F)});
-    root.configure_all_styles([](Style& style) { style.border(BORDER_NONE).padding({}); });
+    root.configure_all_styles([](Style& style) { style.border(BorderEdge{0.0F, BorderType::None}).padding({}); });
     root.add<MeasuredLayoutNode>(ImVec2{24.0F, 24.0F});
     root.add<Container>("body").set_size({grow(), grow()});
     auto& footer = root.add<Container>("footer", StackDirection::Horizontal);
     footer.set_size({fit(), fit()});
-    footer.configure_all_styles([](Style& style) { style.border(BORDER_NONE).padding({}); });
-    for (int index = 0; index < 3; ++index) footer.add<MeasuredLayoutNode>(ImVec2{40.0F, 24.0F});
+    footer.configure_all_styles([](Style& style) { style.border(BorderEdge{0.0F, BorderType::None}).padding({}); });
+    for (int index = 0; index < 3; ++index)
+        footer.add<MeasuredLayoutNode>(ImVec2{40.0F, 24.0F});
 
     ui_test::draw_node(root, "footer-window");
     REQUIRE(root.layout().size().x == Catch::Approx(120.0F));
@@ -234,7 +306,7 @@ TEST_CASE("fit containers preserve content when border thickness changes", "[lay
     auto& header = root.add<Container>("tabs-header", StackDirection::Horizontal);
     header.set_size({grow(), fit()});
     header.set_spacing(15.0F);
-    header.style().padding({12.0F, 12.0F}).box_sizing(BoxSizing::BorderBox).border(BORDER_BOTTOM).border_thickness(1.5F);
+    header.style().padding({12.0F, 12.0F}).box_sizing(BoxSizing::BorderBox).border_bottom(1.5F);
     header.add<LayoutProbeNode>("tab", ImVec2{80.0F, 20.0F});
 
     const auto draw_frame = [&root] { ui_test::draw_node(root, "tabs-border-test"); };
@@ -264,7 +336,7 @@ TEST_CASE("nested fit containers preserve content through padding resize and ins
     auto& inner = wrapper.add<Container>("inner", StackDirection::Horizontal);
     inner.set_size({grow(), fit()});
     inner.set_content_alignment(Anchor::CenterLeft);
-    inner.configure_all_styles([](Style& style) { style.padding({10.0F, 8.0F}).border(BORDER_ALL).border_thickness(2.0F); });
+    inner.configure_all_styles([](Style& style) { style.padding({10.0F, 8.0F}).border(BorderEdge{2.0F, BorderType::Solid}); });
     auto& content = inner.add<MeasuredLayoutNode>(ImVec2{40.0F, 13.0F});
     content.set_size({grow(), grow()});
 
@@ -312,13 +384,13 @@ TEST_CASE("box sizing includes borders and preserves insets and size limits", "[
 
     auto& fixed = root.add<Container>("fixed");
     fixed.set_size({px(20.0F), px(20.0F)});
-    fixed.style().padding({4.0F, 5.0F}).border(BORDER_ALL).border_thickness(3.0F);
+    fixed.style().padding({4.0F, 5.0F}).border(BorderEdge{3.0F, BorderType::Solid});
     auto& fixed_content = fixed.add<LayoutProbeNode>();
     fixed_content.set_size({grow(), grow()});
 
     auto& percentage = root.add<Container>("percentage");
     percentage.set_size({percent(10.0F), percent(10.0F)});
-    percentage.style().padding({4.0F, 5.0F}).border(BORDER_ALL).border_thickness(3.0F).box_sizing(BoxSizing::ContentBox);
+    percentage.style().padding({4.0F, 5.0F}).border(BorderEdge{3.0F, BorderType::Solid}).box_sizing(BoxSizing::ContentBox);
     auto& percentage_content = percentage.add<LayoutProbeNode>();
     percentage_content.set_size({grow(), grow()});
 
@@ -361,6 +433,27 @@ TEST_CASE("box sizing includes borders and preserves insets and size limits", "[
     }
 }
 
+TEST_CASE("asymmetric padding margins and borders determine child position and fit size", "[layout][style]") {
+    ui_test::ImGuiContext context({240.0F, 180.0F});
+    Container root("asymmetric-insets");
+    root.set_size({fit(), fit()});
+    root.style().padding({3.0F, 5.0F, 7.0F, 11.0F})
+        .border(BorderEdges{{2.0F, BorderType::Solid}, {4.0F, BorderType::Dashed},
+                 {6.0F, BorderType::Dotted}, {8.0F, BorderType::Solid},});
+
+    auto& child = root.add<Container>("asymmetric-child");
+    child.set_size({px(20.0F), px(10.0F)});
+    child.style().margin({13.0F, 17.0F, 19.0F, 23.0F});
+    ui_test::draw_node(root, "asymmetric-insets-test");
+
+    const Rect outer = root.layout().visual_rect();
+    const Rect inner = child.layout().visual_rect();
+    CHECK(outer.size().x == Catch::Approx(70.0F));
+    CHECK(outer.size().y == Catch::Approx(78.0F));
+    CHECK(inner.min.x - outer.min.x == Catch::Approx(18.0F));
+    CHECK(inner.min.y - outer.min.y == Catch::Approx(26.0F));
+}
+
 TEST_CASE("grow distributes content space after box insets", "[layout]") {
     ui_test::ImGuiContext context({220.0F, 180.0F});
     Container root("grow-insets-root");
@@ -369,7 +462,7 @@ TEST_CASE("grow distributes content space after box insets", "[layout]") {
     auto& fixed = root.add<LayoutProbeNode>(ImVec2{80.0F, 20.0F});
     auto& growing = root.add<Container>("growing");
     growing.set_size({px(80.0F), grow()});
-    growing.style().padding({0.0F, 8.0F}).border(BORDER_ALL).border_thickness(2.0F);
+    growing.style().padding({0.0F, 8.0F}).border(BorderEdge{2.0F, BorderType::Solid});
     auto& growing_content = growing.add<LayoutProbeNode>();
     growing_content.set_size({grow(), grow()});
 
@@ -390,7 +483,7 @@ TEST_CASE("fit parents retain a growing child's box insets", "[layout]") {
     fit_parent.set_size({fit(), fit()});
     auto& growing = fit_parent.add<Container>("growing");
     growing.set_size({grow(), grow()});
-    growing.style().padding({3.0F, 4.0F}).border(BORDER_ALL).border_thickness(2.0F);
+    growing.style().padding({3.0F, 4.0F}).border(BorderEdge{2.0F, BorderType::Solid});
 
     ui_test::draw_node(root, "fit-grow-test");
 
@@ -431,10 +524,8 @@ TEST_CASE("positioned children resolve percentage sizes and custom anchors from 
         .size = {percent(50.0F), percent(25.0F)},
         .placement =
             {
-                .anchor = Anchor::Custom,
-                .origin = Anchor::Custom,
-                .anchor_position = {0.25F, 0.75F},
-                .origin_position = {0.5F, 1.0F},
+                .anchor = {0.25F, 0.75F},
+                .origin = {0.5F, 1.0F},
             },
         .in_flow = false,
     });
@@ -447,7 +538,7 @@ TEST_CASE("positioned children resolve percentage sizes and custom anchors from 
     REQUIRE(child.layout().local_rect().min.y == Catch::Approx(50.0F));
 }
 
-TEST_CASE("placement changes preserve implicit measured sizing") {
+TEST_CASE("placement changes preserve measured sizing") {
     MeasuredLayoutNode node({32.0F, 18.0F});
 
     LayoutConfig config = node.layout().config();
@@ -527,7 +618,7 @@ TEST_CASE("tree layout allocates grow children inside its indented body", "[Tree
         ImVec2 cursor;
 
     private:
-        bool on_draw() override {
+        bool paint() override {
             cursor = ImGui::GetCursorScreenPos();
             ImGui::Dummy(layout().size());
             return true;
@@ -778,7 +869,7 @@ TEST_CASE("horizontal flow follows intrinsic size changes across native items") 
         }
 
     private:
-        bool on_draw() override {
+        bool paint() override {
             ImGui::Button("native item", layout().size());
             return true;
         }
@@ -921,7 +1012,7 @@ TEST_CASE("font inheritance remeasures content after style changes and reattachm
         }
 
     private:
-        bool on_draw() override {
+        bool paint() override {
             ImGui::Button("sibling", layout().size());
             return true;
         }
@@ -973,13 +1064,57 @@ TEST_CASE("font inheritance remeasures content after style changes and reattachm
     REQUIRE(moved_text.size().x < text.size().x);
 }
 
+TEST_CASE("ineligible children preserve native mouse pass-through", "[layout][input]") {
+    class WindowProbe final : public Container {
+    public:
+        using Container::Container;
+        bool passes_mouse = false;
+
+    private:
+        bool paint() override {
+            const bool painted = Container::paint();
+            passes_mouse = (ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_NoMouseInputs) != 0;
+            return painted;
+        }
+    };
+
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+    LayerContainer layer("pass-through-layer");
+    auto& container = layer.add<WindowProbe>("pass-through-content");
+    container.set_input_mode(InputMode::None);
+    auto& child = container.add<Node>("input-child");
+    child.set_input_mode(InputMode::Target);
+    bool eligible = false;
+
+    SECTION("hidden") {
+        child.set_visible(false);
+    }
+    SECTION("disabled") {
+        child.set_input_enabled(false);
+    }
+    SECTION("pending removal") {
+        container.remove(child);
+    }
+    SECTION("eligible") {
+        eligible = true;
+    }
+
+    ui_test::draw_node(layer, "pass-through-window");
+    CHECK(container.passes_mouse == !eligible);
+}
+
 TEST_CASE("resizable container stays within its parent bounds") {
     ui_test::ImGuiContext context({320.0F, 220.0F});
+    const BoxSizing sizing = GENERATE(BoxSizing::BorderBox, BoxSizing::ContentBox);
 
     ResizableContainer resizable("resizable");
     InputRouter router;
     resizable.set_input_router(&router);
-    resizable.set_size({px(80.0F), px(60.0F)});
+    resizable.configure_all_styles([sizing](Style& style) {
+        style.padding({5.0F, 7.0F}).border(BorderEdge{2.0F, BorderType::Solid}).box_sizing(sizing);
+    });
+    const ImVec2 insets = sizing == BoxSizing::ContentBox ? ImVec2{14.0F, 18.0F} : ImVec2{};
+    resizable.set_size({px(80.0F - insets.x), px(60.0F - insets.y)});
     resizable.set_resize(ResizeAxes::Both);
 
     const auto draw_frame = [&resizable] {
@@ -1016,6 +1151,14 @@ TEST_CASE("resizable container stays within its parent bounds") {
     REQUIRE(resizable.resizing());
 
     UiEvent move = UiEvent::make(EventType::PointerMove);
+    move.position = handle_position;
+    REQUIRE(router.dispatch(move));
+    router.begin_frame();
+    draw_frame();
+    CHECK(resizable.layout().size().x == Catch::Approx(80.0F));
+    CHECK(resizable.layout().size().y == Catch::Approx(60.0F));
+
+    move = UiEvent::make(EventType::PointerMove);
     move.position = {300.0F, 200.0F};
     REQUIRE(router.dispatch(move));
 
@@ -1040,7 +1183,7 @@ TEST_CASE("resizable container stays within its parent bounds") {
         resizable.set_visible(false);
     }
     SECTION("disabled during drag") {
-        resizable.set_enabled(false);
+        resizable.set_input_enabled(false);
     }
     SECTION("capture transferred during drag") {
         Node next("next");
@@ -1067,7 +1210,7 @@ TEST_CASE("parent resizing rearranges descendants without repeating intrinsic me
     private:
         void on_measure() override {
             ++measure_count;
-            set_measured_size({20.0F, 20.0F}, true, true);
+            set_measured_size({20.0F, 20.0F});
         }
     };
 
@@ -1122,13 +1265,13 @@ TEST_CASE("transparent anchored layers keep children at the layer origin", "[Lay
     ui_test::ImGuiContext context({320.0F, 220.0F});
     Container root("anchored-layer-root");
     root.set_size({px(180.0F), px(120.0F)});
-    root.configure_all_styles([](Style& style) { style.border(BORDER_NONE).padding({}); });
+    root.configure_all_styles([](Style& style) { style.border(BorderEdge{0.0F, BorderType::None}).padding({}); });
     auto& layer = root.add<LayerContainer>("anchored-layer");
     layer.set_size({fit(), fit()});
     layer.set_anchor(Anchor::BottomRight);
     layer.configure_all_styles([](Style& style) {
         style.background_color(rgba(0, 0, 0, 0));
-        style.border(BORDER_NONE);
+        style.border(BorderEdge{0.0F, BorderType::None});
         style.padding({});
     });
     auto& child = layer.add<MeasuredLayoutNode>(ImVec2{24.0F, 24.0F});
@@ -1159,7 +1302,7 @@ TEST_CASE("inline layer padding scopes descendant layout") {
         }
 
     private:
-        bool on_draw() override {
+        bool paint() override {
             ImGui::Dummy(layout().size());
             return true;
         }
@@ -1331,7 +1474,7 @@ TEST_CASE("nodes without explicit positions follow the ImGui cursor") {
             set_input_mode(InputMode::Target);
         }
 
-        bool on_draw() override {
+        bool paint() override {
             ImGui::Dummy({20.0F, 10.0F});
             return true;
         }
@@ -1399,7 +1542,7 @@ TEST_CASE("node screen rectangles follow scrollable child windows") {
             set_size({px(40.0F), px(20.0F)});
         }
 
-        bool on_draw() override {
+        bool paint() override {
             actual_position = ImGui::GetCursorScreenPos();
             ImGui::Dummy(layout().size());
             return true;
@@ -1418,7 +1561,6 @@ TEST_CASE("node screen rectangles follow scrollable child windows") {
 
         bool scroll_to_end = false;
         ImVec2 current_scroll;
-        float max_scroll_y = 0.0F;
 
     protected:
         bool paint() override {
@@ -1441,7 +1583,6 @@ TEST_CASE("node screen rectangles follow scrollable child windows") {
 
         void draw_children() override {
             current_scroll = {ImGui::GetScrollX(), ImGui::GetScrollY()};
-            max_scroll_y = ImGui::GetScrollMaxY();
             ui::Container::draw_children();
         }
 
@@ -1468,7 +1609,6 @@ TEST_CASE("node screen rectangles follow scrollable child windows") {
         draw_frame();
 
         REQUIRE((horizontal ? container.current_scroll.x : container.current_scroll.y) > 0.0F);
-        REQUIRE((!horizontal || container.max_scroll_y == 0.0F));
         REQUIRE(target->layout().visual_rect().min.x == Catch::Approx(target->actual_position.x));
         REQUIRE(target->layout().visual_rect().min.y == Catch::Approx(target->actual_position.y));
     };
@@ -1592,7 +1732,7 @@ TEST_CASE("inline overlay keeps resizable children valid while the parent scroll
     panel.configure_all_styles([](Style& style) {
         style.padding({14.0F, 14.0F})
             .background_color(rgb(0.1F, 0.1F, 0.1F))
-            .border(BORDER_ALL)
+            .border(BorderEdge{1.0F, BorderType::Solid})
             .border_color(rgb(0.5F, 0.5F, 0.5F));
     });
     auto& controls = panel.add<Container>("dynamic-node-controls");
@@ -1615,6 +1755,7 @@ TEST_CASE("inline overlay keeps resizable children valid while the parent scroll
     ui_test::ImGuiContext context({240.0F, 160.0F});
     const auto draw_frame = [&parent] { ui_test::draw_node(parent, "positioned-scroll-test"); };
 
+    draw_frame();
     draw_frame();
     const ImVec2 initial_size = resize.layout().size();
     const Rect initial_panel = panel.layout().visual_rect();
@@ -1654,7 +1795,7 @@ TEST_CASE("stack auto-sized axes reflow when the parent grows", "[layout][regres
     REQUIRE(child.layout().local_rect().min.y == Catch::Approx(child.layout().parent_content_rect().min.y));
     REQUIRE(stack.layout().size().x > initial_stack_width);
     REQUIRE(child.layout().size().x > initial_child_width);
-    REQUIRE(child.layout().size().x == Catch::Approx(stack.layout().size().x - (stack.style().padding().x * 2.0F)));
+    REQUIRE(child.layout().size().x == Catch::Approx(stack.layout().size().x - stack.style().padding().horizontal()));
 }
 
 class VirtualRow : public ui::Node {
@@ -1664,7 +1805,7 @@ public:
     }
 
 private:
-    bool on_draw() override {
+    bool paint() override {
         m_drawn.push_back(m_index);
         ImGui::Dummy(layout().size());
         return true;

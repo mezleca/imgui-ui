@@ -24,7 +24,9 @@ public:
     void apply_theme_defaults(const Theme& theme) override {
         ResizableContainer::apply_theme_defaults(theme);
         configure_all_styles([&theme](Style& style) {
-            style.background_color(theme.background_color).border_color(theme.controls.border_color).border(BORDER_NONE);
+            style.background_color(theme.background_color)
+                .border_color(theme.controls.border_color)
+                .border(BorderEdge{0.0F, BorderType::None});
         });
     }
 };

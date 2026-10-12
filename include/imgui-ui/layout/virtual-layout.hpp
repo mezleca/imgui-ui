@@ -41,7 +41,6 @@ namespace ui {
 
     protected:
         void on_measure() override;
-        void arrange_children() override {}
         void draw_children() override;
         bool paint() override;
 

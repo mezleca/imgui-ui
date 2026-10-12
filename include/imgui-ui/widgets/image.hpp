@@ -14,7 +14,7 @@ namespace ui {
         Cover,
     };
 
-    class ImageWidget : public DrawListWidget {
+    class ImageWidget : public Widget {
     public:
         explicit ImageWidget(Texture* texture = nullptr);
 

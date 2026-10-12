@@ -15,7 +15,6 @@ namespace ui {
         void on_draw_end() override;
         ImVec2 child_window_size() const override;
         Rect shadow_rect(Rect child_rect) const override;
-        ImVec2 child_layout_size() const override;
 
         std::string m_label;
         bool m_open = false;

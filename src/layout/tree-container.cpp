@@ -24,11 +24,11 @@ void TreeContainer::on_measure() {
 
     size.x = std::max(size.x, ImGui::CalcTextSize(m_label.c_str()).x);
     size.y += ImGui::GetFrameHeightWithSpacing();
-    set_measured_size(size, layout().size_spec().width.mode == LayoutSizeMode::Fit, true);
+    set_measured_size(size);
 }
 
 bool TreeContainer::paint() {
-    const bool open = ImGui::TreeNodeEx(m_label.c_str());
+    const bool open = ImGui::TreeNodeEx(this, ImGuiTreeNodeFlags_None, "%s", m_label.c_str());
     if (m_open != open) {
         m_open = open;
         invalidate_measure();
@@ -55,7 +55,6 @@ void TreeContainer::on_draw_end() {
     m_outer_rect.max.x = std::max(m_outer_rect.max.x, body_rect.max.x);
     m_outer_rect.max.y = std::max(m_outer_rect.max.y, body_rect.max.y);
     set_layout_rect(m_outer_rect);
-    set_visual_rect(m_outer_rect);
     ImGui::TreePop();
 }
 
@@ -65,8 +64,4 @@ ImVec2 TreeContainer::child_window_size() const {
 
 Rect TreeContainer::shadow_rect(Rect) const {
     return m_outer_rect;
-}
-
-ImVec2 TreeContainer::child_layout_size() const {
-    return content_size(m_body_size);
 }

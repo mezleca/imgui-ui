@@ -16,6 +16,7 @@ namespace ui {
         HOVER,
         ACTIVE,
         FOCUS,
+        DISABLED,
         COUNT,
     };
 
@@ -27,10 +28,14 @@ namespace ui {
         using ComputedStyle::background_color;
         using ComputedStyle::blur;
         using ComputedStyle::border;
+        using ComputedStyle::border_bottom;
         using ComputedStyle::border_color;
+        using ComputedStyle::border_left;
         using ComputedStyle::border_radius;
+        using ComputedStyle::border_right;
         using ComputedStyle::border_style;
         using ComputedStyle::border_thickness;
+        using ComputedStyle::border_top;
         using ComputedStyle::box_shadow;
         using ComputedStyle::box_sizing;
         using ComputedStyle::color;
@@ -56,34 +61,46 @@ namespace ui {
         Style() = default;
 
         Style& font(ImFont* value);
-
-        /// zero inherits the nearest explicit size, or the font's default size.
         Style& font_size(float value);
+
         StyleVariableStore& variables() {
             return m_vars;
         }
 
-        Style& padding(ImVec2 value, TransitionSpec transition = {});
-        Style& margin(ImVec2 value, TransitionSpec transition = {});
+        Style& padding(BoxInsets value, TransitionSpec transition = {});
+        Style& padding_left(float value, TransitionSpec transition = {});
+        Style& padding_top(float value, TransitionSpec transition = {});
+        Style& padding_right(float value, TransitionSpec transition = {});
+        Style& padding_bottom(float value, TransitionSpec transition = {});
+        Style& margin(BoxInsets value, TransitionSpec transition = {});
+        Style& margin_left(float value, TransitionSpec transition = {});
+        Style& margin_top(float value, TransitionSpec transition = {});
+        Style& margin_right(float value, TransitionSpec transition = {});
+        Style& margin_bottom(float value, TransitionSpec transition = {});
         Style& line_height(float value, TransitionSpec transition = {});
         Style& box_sizing(BoxSizing value);
         Style& overflow(Overflow value);
 
-        /// transforms drawing without changing layout or input bounds.
         Style& rotation(float value, TransitionSpec transition = {});
         Style& scale(ImVec2 value, TransitionSpec transition = {});
         Style& scale(float value, TransitionSpec transition = {});
         Style& alpha(float value);
         Style& cursor(ImGuiMouseCursor value);
 
-        Style& control(const Theme& theme, ImVec2 padding = {10.0F, 6.0F}, TransitionSpec transition = {0.15F});
+        Style& control(const Theme& theme, TransitionSpec transition = {0.15F});
+        Style& control(const Theme& theme, ImVec2 padding, TransitionSpec transition = {0.15F});
         Style& color(Color value, TransitionSpec transition = {});
         Style& background_color(Color value, TransitionSpec transition = {});
         Style& border_color(Color value, TransitionSpec transition = {});
         Style& border_radius(float value);
-        Style& border_thickness(float value);
-        Style& border(uint8_t value);
-        Style& border_style(BorderStyle value);
+        Style& border_thickness(float value, TransitionSpec transition = {});
+        Style& border(BorderEdge all, TransitionSpec transition = {});
+        Style& border(BorderEdges edges, TransitionSpec transition = {});
+        Style& border_left(float size, BorderType type = BorderType::Solid, TransitionSpec transition = {});
+        Style& border_top(float size, BorderType type = BorderType::Solid, TransitionSpec transition = {});
+        Style& border_right(float size, BorderType type = BorderType::Solid, TransitionSpec transition = {});
+        Style& border_bottom(float size, BorderType type = BorderType::Solid, TransitionSpec transition = {});
+        Style& border_style(BorderType value);
         Style& box_shadow(BoxShadow value, TransitionSpec transition = {});
         Style& blur(int value);
 

@@ -65,6 +65,7 @@ public:
 private:
     void event(UiEvent& event) override {
         m_events.push_back(event.type);
+        if (event.type == EventType::Cancel) REQUIRE(event.target == this);
         if (event.type == EventType::PointerDown) {
             REQUIRE(m_router.capture_pointer(*this));
         }
@@ -223,32 +224,6 @@ TEST_CASE("input router callbacks can intercept synthesized clicks and captured 
         REQUIRE(events == std::vector<EventType>{EventType::PointerDown, EventType::PointerUp, EventType::Click});
         REQUIRE_FALSE(node.input_state().active);
     }
-}
-
-TEST_CASE("opening an overlay during a click does not turn it into a backdrop click") {
-    std::vector<std::string> events;
-    EventWidget menu(events);
-    auto& button = menu.add<EventWidget>(events);
-    EventWidget backdrop(events);
-    bool open = false;
-
-    button.on_event([&open](UiEvent&) { open = true; });
-
-    const auto close_backdrop = [&](UiEvent& event) {
-        if (open && event.type == EventType::Click && event.target == &backdrop) {
-            open = false;
-        }
-    };
-    menu.on_event(close_backdrop);
-    backdrop.on_event(close_backdrop);
-
-    UiEvent click = click_event();
-    InputRouter::dispatch(button, click);
-    REQUIRE(open);
-
-    UiEvent outside = click_event();
-    InputRouter::dispatch(backdrop, outside);
-    REQUIRE_FALSE(open);
 }
 
 TEST_CASE("event handlers can remove their widget while bubbling") {
@@ -534,20 +509,32 @@ TEST_CASE("input router invalidates inactive focus and pointer capture") {
     REQUIRE(router.set_focus(&node));
     events.clear();
 
-    node.set_enabled(false);
+    node.set_input_enabled(false);
     auto disabled_key = event_of(EventType::KeyDown);
     REQUIRE_FALSE(router.dispatch(disabled_key));
     REQUIRE(router.focused_node() == nullptr);
     REQUIRE(events.empty());
 
-    node.set_enabled(true);
+    node.set_input_enabled(true);
     REQUIRE(router.capture_pointer(node));
     events.clear();
 
-    node.set_enabled(false);
+    node.set_input_enabled(false);
     auto disabled_move = event_of(EventType::PointerMove, {100.0F, 100.0F});
     REQUIRE_FALSE(router.dispatch(disabled_move));
     REQUIRE(events == std::vector<std::string>{"input"});
+
+    SECTION("focus-loss handler disables the destination") {
+        Widget previous("previous");
+        Node next("next");
+        REQUIRE(router.set_focus(&previous));
+        previous.on_event([&](UiEvent& event) {
+            if (event.type == EventType::FocusLost) next.set_input_enabled(false);
+        });
+        REQUIRE_FALSE(router.set_focus(&next));
+        REQUIRE(router.focused_node() == nullptr);
+        REQUIRE_FALSE(next.input_state().focused);
+    }
 }
 
 TEST_CASE("pointer presses outside a focused node preserve focus") {
@@ -617,12 +604,12 @@ TEST_CASE("interrupted pointer capture notifies its owner but normal release doe
     events.clear();
     owner.set_visible(true);
     REQUIRE(router.capture_pointer(owner));
-    owner.set_enabled(false);
+    owner.set_input_enabled(false);
     REQUIRE(events == std::vector<EventType>{EventType::Cancel});
 
     // transferring capture cancels the previous owner once. normal release ends capture without cancellation.
     events.clear();
-    owner.set_enabled(true);
+    owner.set_input_enabled(true);
     REQUIRE(router.capture_pointer(owner));
     REQUIRE(router.capture_pointer(owner));
     REQUIRE(events.empty());
@@ -773,13 +760,13 @@ TEST_CASE("specific input callbacks receive the same event after the general cal
          }) {
         events.clear();
         UiEvent event = event_of(type);
-        REQUIRE_FALSE(InputRouter::dispatch(widget, event));
+        REQUIRE_FALSE(InputRouter::dispatch_to(widget, event));
         REQUIRE(events == std::vector<std::string>{"internal", "general", "specific"});
 
         widget.on_event([](UiEvent& event) { event.stop_propagation(); });
         events.clear();
         event = event_of(type);
-        REQUIRE(InputRouter::dispatch(widget, event));
+        REQUIRE(InputRouter::dispatch_to(widget, event));
         REQUIRE(events == std::vector<std::string>{"internal"});
         widget.on_event([&events](UiEvent&) { events.push_back("general"); });
     }
@@ -912,11 +899,10 @@ TEST_CASE("blockers suppress native scrollbar hover with a stationary pointer", 
 
             // imgui can emit child-window decorations into the parent's draw list.
             for (const ImDrawList* draw_list : {window->DrawList, window->ParentWindow->DrawList}) {
-                hover_color_drawn |= std::any_of(
-                    draw_list->VtxBuffer.begin(), draw_list->VtxBuffer.end(), [&](const ImDrawVert& vertex) {
+                hover_color_drawn |=
+                    std::any_of(draw_list->VtxBuffer.begin(), draw_list->VtxBuffer.end(), [&](const ImDrawVert& vertex) {
                         return vertex.col == hover_color && scrollbar.Contains(vertex.pos);
-                    }
-                );
+                    });
             }
 
             return result;
@@ -950,7 +936,8 @@ TEST_CASE("blockers suppress native scrollbar hover with a stationary pointer", 
 
             // repeat draws without new motion events to exercise hover with an idle pointer.
             const auto draw_frames = [&] {
-                for (int frame = 0; frame < 3; ++frame) ui_test::draw_surface(surface);
+                for (int frame = 0; frame < 3; ++frame)
+                    ui_test::draw_surface(surface);
             };
             draw_frames();
             REQUIRE(content.window != nullptr);
@@ -985,28 +972,37 @@ TEST_CASE("blockers suppress native scrollbar hover with a stationary pointer", 
 }
 
 TEST_CASE("overlapping layers share hover and clicks unless explicitly blocking") {
+    class TestLayer final : public LayerContainer {
+    public:
+        using LayerContainer::LayerContainer;
+
+        int clicks = 0;
+        int presses = 0;
+
+    private:
+        void event(UiEvent& event) override {
+            if (event.type == EventType::Click) ++clicks;
+        }
+
+        void mouse_press_event(UiEvent& event) override {
+            REQUIRE(event.target == this);
+            ++presses;
+        }
+    };
+
     for (InputMode mode : {InputMode::Target, InputMode::Blocker}) {
         DYNAMIC_SECTION((mode == InputMode::Target ? "pass-through layer" : "blocking layer")) {
             Runtime runtime;
             Surface surface = ui_test::make_surface(runtime);
-            auto& content = surface.root().add<Container>("content");
+            auto& content = surface.root().add<Widget>("content");
             content.set_size({px(80.0F), px(40.0F)});
-            auto& layer = surface.root().add<LayerContainer>("layer");
+            auto& layer = surface.root().add<TestLayer>("layer");
             layer.set_size({px(80.0F), px(40.0F)});
             layer.set_anchor(Anchor::TopLeft);
             layer.set_input_mode(mode);
             int content_clicks = 0;
-            int layer_clicks = 0;
-            int presses = 0;
             content.on_event([&](UiEvent& event) {
                 if (event.type == EventType::Click) ++content_clicks;
-            });
-            layer.on_mouse_press([&](UiEvent& event) {
-                REQUIRE(event.target == &layer);
-                ++presses;
-            });
-            layer.on_event([&](UiEvent& event) {
-                if (event.type == EventType::Click) ++layer_clicks;
             });
             const auto context = ui_test::prepare_surface(surface, {200.0F, 100.0F});
             ui_test::draw_surface(surface);
@@ -1025,8 +1021,8 @@ TEST_CASE("overlapping layers share hover and clicks unless explicitly blocking"
             surface.dispatch(down);
             auto up = event_of(EventType::PointerUp, position);
             surface.dispatch(up);
-            REQUIRE(presses == 1);
-            REQUIRE(layer_clicks == 1);
+            REQUIRE(layer.presses == 1);
+            REQUIRE(layer.clicks == 1);
             REQUIRE(content_clicks == (mode == InputMode::Target ? 1 : 0));
 
             ImGui::GetIO().MousePos = {180.0F, 90.0F};

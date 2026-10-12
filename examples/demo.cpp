@@ -5,12 +5,14 @@
 #include <imgui-ui/imgui/effects/opengl.hpp>
 #include <imgui-ui/layout/layer-container.hpp>
 #include <imgui-ui/layout/resizable-container.hpp>
+#include <imgui-ui/layout/tree-container.hpp>
 #include <imgui-ui/layout/virtual-layout.hpp>
 #include <imgui-ui/resources/texture-registry.hpp>
 #include <imgui-ui/style/style.hpp>
 #include <imgui-ui/style/styled-node.hpp>
 #include <imgui-ui/surface.hpp>
 #include <imgui-ui/widgets/button.hpp>
+#include <imgui-ui/widgets/box.hpp>
 #include <imgui-ui/widgets/checkbox.hpp>
 #include <imgui-ui/widgets/color-picker.hpp>
 #include <imgui-ui/widgets/context-menu.hpp>
@@ -39,12 +41,6 @@ static constexpr std::string_view DEMO_INLINE_ICON_SVG = R"(
         <circle cx="12" cy="12" r="8" stroke="white" stroke-width="2"/>
         <path d="M12 8V12L15 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
     </svg>)";
-
-enum class DemoThemeVariant {
-    Default,
-    Pastel,
-    Material,
-};
 
 enum class DemoPanelTone {
     Base,
@@ -106,15 +102,6 @@ static void render_demo_chromatic(void* data, const ImDrawList*, const ImDrawCmd
 
 static DemoChromaticState demo_chromatic_state;
 
-// demo subclasses read this variant when the single demo surface reapplies its theme.
-static DemoThemeVariant s_demo_theme_variant = DemoThemeVariant::Default;
-
-static DemoThemeVariant demo_theme_variant(std::string_view variant) {
-    if (variant == "pastel") return DemoThemeVariant::Pastel;
-    if (variant == "material") return DemoThemeVariant::Material;
-    return DemoThemeVariant::Default;
-}
-
 static Theme make_demo_theme(std::string_view variant) {
     Theme theme{};
 
@@ -174,117 +161,6 @@ static Theme make_demo_theme(std::string_view variant) {
     return theme;
 }
 
-class DemoTextInput final : public TextInputWidget {
-public:
-    using TextInputWidget::TextInputWidget;
-
-protected:
-    void apply_theme_defaults(const Theme& theme) override {
-        TextInputWidget::apply_theme_defaults(theme);
-
-        switch (s_demo_theme_variant) {
-            case DemoThemeVariant::Default:
-                return;
-            case DemoThemeVariant::Pastel:
-                set_spacing(12.0F);
-                configure_all_styles([](Style& style) { style.padding({14.0F, 12.0F}).border_radius(6.0F); });
-                return;
-            case DemoThemeVariant::Material:
-                set_spacing(12.0F);
-                configure_all_styles([](Style& style) { style.padding({16.0F, 12.0F}).border_radius(12.0F); });
-                return;
-        }
-    }
-};
-
-class DemoDropdown final : public DropdownWidget {
-public:
-    using DropdownWidget::DropdownWidget;
-
-protected:
-    void apply_theme_defaults(const Theme& theme) override {
-        DropdownWidget::apply_theme_defaults(theme);
-
-        switch (s_demo_theme_variant) {
-            case DemoThemeVariant::Default:
-                return;
-            case DemoThemeVariant::Pastel:
-                trigger().configure_all_styles([](Style& style) { style.padding({12.0F, 7.0F}).border_radius(10.0F); });
-                return;
-            case DemoThemeVariant::Material:
-                trigger().configure_all_styles([](Style& style) { style.padding({16.0F, 8.0F}).border_radius(12.0F); });
-                return;
-        }
-    }
-};
-
-class DemoCheckbox final : public CheckboxWidget {
-public:
-    using CheckboxWidget::CheckboxWidget;
-
-protected:
-    void apply_theme_defaults(const Theme& theme) override {
-        CheckboxWidget::apply_theme_defaults(theme);
-
-        switch (s_demo_theme_variant) {
-            case DemoThemeVariant::Default:
-                return;
-            case DemoThemeVariant::Pastel:
-                set_box_size(22.0F);
-                frame().configure_all_styles([](Style& style) { style.border_radius(6.0F); });
-                fill().configure_all_styles([](Style& style) { style.border_radius(6.0F); });
-                return;
-            case DemoThemeVariant::Material:
-                set_box_size(24.0F);
-                frame().configure_all_styles([](Style& style) { style.border_radius(5.0F); });
-                fill().configure_all_styles([](Style& style) { style.border_radius(5.0F); });
-                return;
-        }
-    }
-};
-
-class DemoNumberInput final : public NumberInputWidget {
-public:
-    using NumberInputWidget::NumberInputWidget;
-
-protected:
-    void apply_theme_defaults(const Theme& theme) override {
-        NumberInputWidget::apply_theme_defaults(theme);
-
-        switch (s_demo_theme_variant) {
-            case DemoThemeVariant::Default:
-                return;
-            case DemoThemeVariant::Pastel:
-                configure_all_styles([](Style& style) { style.padding({12.0F, 7.0F}).border_radius(10.0F); });
-                return;
-            case DemoThemeVariant::Material:
-                configure_all_styles([](Style& style) { style.padding({16.0F, 8.0F}).border_radius(12.0F); });
-                return;
-        }
-    }
-};
-
-class DemoColorPicker final : public ColorPickerWidget {
-public:
-    using ColorPickerWidget::ColorPickerWidget;
-
-protected:
-    void apply_theme_defaults(const Theme& theme) override {
-        ColorPickerWidget::apply_theme_defaults(theme);
-
-        switch (s_demo_theme_variant) {
-            case DemoThemeVariant::Default:
-                return;
-            case DemoThemeVariant::Pastel:
-                preview().configure_all_styles([](Style& style) { style.border_radius(6.0F); });
-                return;
-            case DemoThemeVariant::Material:
-                preview().configure_all_styles([](Style& style) { style.border_radius(12.0F); });
-                return;
-        }
-    }
-};
-
 void configure_demo_runtime(RuntimeConfig& config) {
     config.theme = make_demo_theme("default");
 
@@ -296,7 +172,7 @@ void configure_demo_runtime(RuntimeConfig& config) {
 class DemoPanel : public Container {
 public:
     explicit DemoPanel(
-        std::string id, DemoPanelTone tone = DemoPanelTone::Base, ImVec2 padding = {14.0F, 14.0F}, uint8_t border = BORDER_NONE,
+        std::string id, DemoPanelTone tone = DemoPanelTone::Base, ImVec2 padding = {14.0F, 14.0F}, BorderEdge border = {},
         bool accent_border = false, bool shadow = false
     )
         : Container(std::move(id)), m_tone(tone), m_padding(padding), m_border(border), m_accent_border(accent_border),
@@ -328,7 +204,7 @@ protected:
 private:
     DemoPanelTone m_tone;
     ImVec2 m_padding;
-    uint8_t m_border;
+    BorderEdge m_border;
     bool m_accent_border;
     bool m_shadow;
 };
@@ -344,7 +220,9 @@ protected:
     void apply_theme_defaults(const Theme& theme) override {
         DemoPanel::apply_theme_defaults(theme);
         configure_all_styles([](Style& style) {
-            style.background_color(rgb(0.0F, 0.0F, 0.0F)).border(BORDER_ALL).border_color(rgb(0.5F, 0.5F, 0.5F));
+            style.background_color(rgb(0.0F, 0.0F, 0.0F))
+                .border(BorderEdge{1.0F, BorderType::Solid})
+                .border_color(rgb(0.5F, 0.5F, 0.5F));
         });
     }
 
@@ -391,6 +269,55 @@ private:
     GradientType m_type;
 };
 
+class DemoBlockerLayer : public LayerContainer {
+public:
+    explicit DemoBlockerLayer(std::string id) : LayerContainer(std::move(id), LayerMode::Window) {}
+
+    void open() {
+        set_visible(true);
+        m_focus_requested = true;
+    }
+
+protected:
+    bool paint() override {
+        // raise the backdrop once when opened, including after an earlier close. retain the floating windows behind it.
+        if (m_focus_requested) {
+            ImGui::SetNextWindowFocus();
+            m_focus_requested = false;
+        }
+        return LayerContainer::paint();
+    }
+
+private:
+    bool m_focus_requested = false;
+};
+
+class DemoModalLayer final : public DemoBlockerLayer {
+public:
+    using DemoBlockerLayer::DemoBlockerLayer;
+
+private:
+    void event(UiEvent& event) override {
+        if (children().empty()) {
+            return;
+        }
+
+        auto& panel = *children().front();
+        const bool clicked_outside = (event.type == EventType::Click || event.type == EventType::PointerDown) &&
+                                     event.button == PointerButton::Left &&
+                                     !panel.layout().visual_rect().contains(event.position);
+        const bool pressed_escape =
+            event.type == EventType::Cancel || (event.type == EventType::KeyDown && event.key == Key::Escape);
+        if (!clicked_outside && !pressed_escape) {
+            return;
+        }
+
+        panel.set_visible(false);
+        set_visible(false);
+        event.stop_propagation();
+    }
+};
+
 class DemoFloatingWindow final : public LayerContainer {
 public:
     DemoFloatingWindow() : LayerContainer("demo-floating-window", LayerMode::Window) {
@@ -404,16 +331,19 @@ public:
             .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-24.0F, 24.0F}},
             .in_flow = false,
         });
+
         set_spacing(12.0F);
-        on_event([](UiEvent& event) {
-            if (ui::contains(EventMask::Pointer, event_mask(event.type))) event.stop_propagation();
-        });
 
         add<TextWidget>("floating window");
         add<TextWidget>("drag the empty area to move\ndrag a corner to resize");
+        add<ButtonWidget>("close window", LayoutSize{grow(), fit()}).on_click([this] { set_visible(false); });
     }
 
 protected:
+    void event(UiEvent& event) override {
+        if (ui::contains(EventMask::Pointer, event_mask(event.type))) event.stop_propagation();
+    }
+
     ImGuiWindowFlags window_flags() const override {
         // LayerMode::Window creates a separate imgui window. the default flags prevent moving, resizing and raising it.
         // clearing these flags enables those interactions. the layer then submits layout position and size with
@@ -428,7 +358,7 @@ protected:
         configure_all_styles([&theme](Style& style) {
             style.background_color(theme.background_secondary_color)
                 .padding({14.0F, 14.0F})
-                .border(BORDER_ALL)
+                .border(BorderEdge{1.0F, BorderType::Solid})
                 .border_color(theme.accent_color)
                 .border_radius(8.0F);
         });
@@ -456,25 +386,8 @@ public:
         configure_all_styles([&theme](Style& style) {
             style.background_color(rgba(0, 0, 0, 0));
             style.blur(11);
-            style.border(BORDER_ALL);
+            style.border(BorderEdge{1.0F, BorderType::Solid});
         });
-    }
-};
-
-class DemoAccentButton final : public ButtonWidget {
-public:
-    DemoAccentButton(std::string text, LayoutSize size) : ButtonWidget(std::move(text), size) {}
-
-protected:
-    void apply_theme_defaults(const Theme& theme) override {
-        ButtonWidget::apply_theme_defaults(theme);
-
-        configure_all_styles([&theme](Style& style) {
-            style.background_color(theme.accent_color).border_color(theme.accent_hover_color);
-        });
-
-        style(StyleType::HOVER).background_color(theme.accent_hover_color).border_color(theme.accent_hover_color);
-        style(StyleType::ACTIVE).background_color(theme.accent_color).border_color(theme.accent_color);
     }
 };
 
@@ -518,11 +431,11 @@ private:
     bool m_hovered = false;
 };
 
-static void apply_border_style(Node& node, BorderStyle style);
+static void apply_border_style(Node& node, BorderType style);
 
-class DemoProgressWidget final : public DrawListWidget {
+class DemoProgressWidget final : public Widget {
 public:
-    DemoProgressWidget() : DrawListWidget("demo-progress") {
+    DemoProgressWidget() : Widget("demo-progress") {
         set_size({grow(), px(68.0F)});
     }
 
@@ -533,7 +446,7 @@ protected:
         configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
                 .background_color(theme.background_tertiary_color)
-                .border(BORDER_ALL)
+                .border(BorderEdge{1.0F, BorderType::Solid})
                 .border_color(theme.border_color)
                 .border_radius(theme.controls.rounding)
                 .border_thickness(theme.controls.border_thickness);
@@ -604,7 +517,7 @@ protected:
         ResizableContainer::apply_theme_defaults(theme);
         configure_all_styles([&theme](Style& style) {
             style.background_color(theme.background_tertiary_color)
-                .border(BORDER_NONE)
+                .border(BorderEdge{0.0F, BorderType::None})
                 .border_radius(4.0F)
                 .padding({20.0F, 20.0F})
                 .cursor(ImGuiMouseCursor_ResizeNWSE);
@@ -621,21 +534,77 @@ protected:
     void apply_theme_defaults(const Theme& theme) override {
         Container::apply_theme_defaults(theme);
         configure_all_styles([&theme](Style& style) {
-            style.padding({8.0F, 8.0F}).background_color(theme.background_tertiary_color).border(BORDER_NONE).border_radius(4.0F);
+            style.padding({8.0F, 8.0F})
+                .background_color(theme.background_tertiary_color)
+                .border(BorderEdge{0.0F, BorderType::None})
+                .border_radius(4.0F);
         });
     }
 };
 
+class DemoTabs final : public Container {
+public:
+    DemoTabs() : Container("demo-tabs") {
+        set_size({grow(), grow()});
+    }
+
+    Container& add_page(std::string label) {
+        auto& page = add<Container>(std::move(label));
+        page.set_size({grow(), grow()});
+        page.set_spacing(4.0F);
+        page.configure_all_styles([](Style& style) { style.padding({16.0F, 12.0F}); });
+        page.set_scrollable(true);
+        return page;
+    }
+
+private:
+    void draw_children() override {
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{18.0F, 10.0F});
+        if (!ImGui::BeginTabBar("demo-sections")) {
+            ImGui::PopStyleVar();
+            return;
+        }
+
+        for (const auto& page : children()) {
+            const bool selected = ImGui::BeginTabItem(page->id().c_str());
+            page->set_visible(selected);
+            if (!selected) continue;
+
+            arrange_child(*page, page->layout().resolve_size(ImGui::GetContentRegionAvail()));
+            page->draw_at_cursor();
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
+        ImGui::PopStyleVar();
+    }
+};
+
+static void setup_size_limits(Container& layouts);
+static void setup_anchors(Container& layouts);
+static void setup_grow_weights(Surface& ui, Container& layouts);
+static void setup_virtual_list(Container& layouts);
+static void setup_effects(Surface& ui, Container& styles);
+
 class DemoScreen final : public Container {
 public:
     DemoScreen();
-    void setup(std::string backend);
-    void setup_dynamic_nodes(Node& parent);
+    Container& setup(std::string_view backend);
     int& blur();
 
 private:
+    void setup_overview(Container& page, std::string_view backend);
+    void setup_buttons(Container& widgets);
+    void setup_numbers(Container& widgets);
+    void setup_inputs(Container& widgets);
+    void setup_images(Container& widgets);
+    static void setup_text(Container& widgets);
+    void setup_stack(Container& layouts);
+    void setup_dynamic_nodes(Node& parent);
+    void setup_appearance(Container& styles);
+
     ImageWidget& add_test_image(Texture* texture);
-    void select_test_image(FileDialogWidget& dialog);
+    void select_test_image(const FileDialogResult& result);
     ImageFit image_fit() const;
     void apply_image_fit();
     void on_update(float dt) override;
@@ -663,6 +632,8 @@ private:
     int m_dynamic_count = 0;
     int m_next_dynamic_id = 0;
     float m_random_value = 0.0f;
+    int m_integer_value = 25;
+    double m_unbounded_value = 1.0;
     std::string m_name = "imgui-ui";
     std::string m_image_fit = "cover";
     std::string m_theme = "default";
@@ -691,39 +662,104 @@ DemoScreen::DemoScreen() : Container("demo", StackDirection::Vertical) {
     // - fit() measures the node's content. containers include flowing children, gaps, margins, padding and borders.
     // - grow() fills the available space. along a stack's direction, growing siblings share what remains after
     //   other children and gaps. grow(2) receives twice the share of grow(1). across the stack, grow fills that axis.
-    // set_size changes only these two rules, preserving placement and in_flow. set_layout replaces all three.
-    // containers default to BorderBox, so px/percent sizes include padding and borders. ContentBox adds them outside
-    // the requested size. fit always includes them in its measured outer extent. margins belong to the parent layout.
-    // here grow/grow keeps the demo sized to its parent as the window resizes, rather than expanding to fit all panels.
-    // set_scrollable(vertical, horizontal) enables scrolling on the selected axes. this call enables vertical scrolling
-    // only, so panels beyond the available height are reached by scrolling instead of enlarging the demo container.
     set_size({grow(), grow()});
-    set_scrollable(true);
     set_spacing(16.0F);
 }
 
-void DemoScreen::setup(std::string backend) {
-    Surface& ui = surface();
-    auto& overview = add<DemoPanel>("overview");
+Container& DemoScreen::setup(std::string_view backend) {
+    setup_overview(*this, backend);
+    auto& tabs = add<DemoTabs>();
+    auto& widgets = tabs.add_page("Widgets");
+    auto& layouts = tabs.add_page("Layout");
+    auto& styles = tabs.add_page("Style & effects");
+    auto& windows = tabs.add_page("Windows & input");
+
+    setup_buttons(widgets);
+    setup_numbers(widgets);
+    setup_inputs(widgets);
+    setup_images(widgets);
+    setup_text(widgets);
+
+    setup_size_limits(layouts);
+    setup_anchors(layouts);
+    setup_grow_weights(surface(), layouts);
+    setup_stack(layouts);
+    setup_virtual_list(layouts);
+    auto& dynamic = layouts.add<TreeContainer>("Dynamic nodes & resizing");
+    setup_dynamic_nodes(dynamic);
+
+    setup_appearance(styles);
+    setup_effects(surface(), styles);
+    return windows;
+}
+
+void DemoScreen::setup_overview(Container& page, std::string_view backend) {
+    auto& overview = page.add<DemoPanel>("overview");
 
     // ordinary nodes default to in_flow=true. a vertical container places them one below another and adds spacing
     // between them. a horizontal container places them side by side. only flowing children contribute to a parent's fit().
     // this panel fills the demo's width, but measures its height from its children. the next panel starts below that height.
     overview.set_size({grow(), fit()});
-    overview.set_spacing(4.0F);
-    overview.add<TextWidget>("imgui-ui example");
-
-    overview.add<TextWidget>(std::format("backend: {}", backend));
+    overview.set_direction(StackDirection::Horizontal);
+    overview.set_spacing(16.0F);
+    overview.add<TextWidget>(std::format("imgui-ui / {}", backend));
     m_fps = &overview.add<TextWidget>("fps: 0.0");
     overview.add<TextWidget>("debugger: shift + d");
-    auto& random_slider = overview.add<DemoNumberInput>(m_random_value);
-    random_slider.set_label("random value");
-    random_slider.set_maximum(10);
+}
 
-    auto& size_limits = add<DemoPanel>("size-limits");
+void DemoScreen::setup_buttons(Container& widgets) {
+    auto& buttons = widgets.add<TreeContainer>("Buttons & child content");
+    buttons.set_spacing(10.0F);
+
+    // buttons stack their children inside the same content box used to draw the button's label.
+    // center aligns the flowing group on both axes. width limits keep each text inside the button and enable ellipsis.
+    auto& card = buttons.add<ButtonWidget>("", LayoutSize{grow(), px(140.0F)});
+    card.set_content_alignment(Anchor::Center);
+    card.set_spacing(10.0F);
+
+    auto& card_title = card.add<TextWidget>("button with children");
+    card_title.set_size({{fit(), px(0), percent(100)}, fit()});
+    card_title.set_overflow(TextOverflow::Ellipsis);
+
+    auto& card_description = card.add<TextWidget>("resize the window or click this card");
+    card_description.set_size({{fit(), px(0), percent(100)}, fit()});
+    card_description.set_overflow(TextOverflow::Ellipsis);
+
+    card.on_click([&card_description] { card_description.set_text("..."); });
+    auto& disabled = buttons.add<ButtonWidget>("disabled button", LayoutSize{px(220.0F), fit()});
+    disabled.set_enabled(false);
+
+    // on_click changes the label's sibling and starts a rotation relative to the button's current angle.
+    auto& status = buttons.add<TextWidget>("no clicks yet");
+    auto& button = buttons.add<ButtonWidget>("click me", LayoutSize{px(140.0F), px(44.0F)});
+    button.on_click([this, &button, &status] {
+        ++m_clicks;
+        status.set_text(std::format("button clicks: {}", m_clicks));
+        button.animate().by(StyleAnimationProperty::Rotation, 180.0F, {0.5F, easing::out_back});
+    });
+}
+
+void DemoScreen::setup_numbers(Container& widgets) {
+    // the input writes directly into m_random_value. its maximum clamps the slider to 10.
+    auto& numbers = widgets.add<TreeContainer>("Number inputs");
+    numbers.set_spacing(8.0F);
+
+    // integral values use whole steps. an above label reserves a separate line over the slider.
+    numbers.add<NumberInputWidget>(m_integer_value, "0 to 100", LabelPlacement::Above).set_range(0, 100);
+
+    // clearing the range switches to unbounded dragging. hide the thumb and choose the drag speed and display precision.
+    numbers.add<NumberInputWidget>(m_unbounded_value, "unbounded double")
+        .clear_range()
+        .set_speed(0.01F)
+        .set_format("%.2f")
+        .set_thumb_visible(false);
+}
+
+static void setup_size_limits(Container& layouts) {
+    auto& size_limits = layouts.add<TreeContainer>("Size limits & grow distribution");
     size_limits.set_size({grow(), fit()});
     size_limits.set_spacing(8.0F);
-    size_limits.add<TextWidget>("size limits - resize the window to change the available width");
+
     auto& bounded_row = size_limits.add<Container>("bounded-row", StackDirection::Horizontal);
     bounded_row.set_size({grow(), px(100.0F)});
     bounded_row.set_spacing(8.0F);
@@ -751,116 +787,174 @@ void DemoScreen::setup(std::string backend) {
     auto& remainder = bounded_row.add<DemoPanel>("bounded-remainder");
     remainder.set_size({grow(), grow()});
     remainder.add<TextWidget>("remaining space");
+}
 
-    auto& profile = add<DemoPanel>("profile");
+void DemoScreen::setup_inputs(Container& widgets) {
+    Surface& ui = surface();
+    // these controls bind to persistent demo values. the name field places its label and svg icon beside the input.
+    auto& profile = widgets.add<TreeContainer>("Text inputs, selections & color");
     profile.set_size({grow(), fit()});
     profile.set_spacing(8.0F);
     profile.add<TextWidget>("profile");
-    auto& name_input = profile.add<DemoTextInput>(m_name, "name");
-    name_input.set_label("name")
-        .set_label_placement(LabelPlacement::Inline)
-        .set_icon(ui.runtime().textures().find("demo-file-icon"));
-    profile.add<DemoCheckbox>(m_enabled, "enabled").set_size({px(360.0F), px(32.0F)});
+    auto& name_input = profile.add<TextInputWidget>(m_name, "name");
+    name_input.set_icon(ui.runtime().textures().find("demo-file-icon"));
+    profile.add<CheckboxWidget>(m_enabled, "enabled").set_size({grow(), fit()});
 
-    // select the shape before attachment so the demo theme overrides its rounding last.
-    auto radio = std::make_unique<DemoCheckbox>(m_radio_selected, "radio");
+    auto radio = std::make_unique<CheckboxWidget>(m_radio_selected, "radio");
     radio->set_type(CheckboxType::Radio);
-    profile.add(std::move(radio)).set_size({px(360.0F), px(32.0F)});
+    profile.add(std::move(radio)).set_size({grow(), fit()});
 
-    profile.add<DemoColorPicker>(m_color, "color", "color-picker");
+    profile.add<ColorPickerWidget>(m_color, "color", LabelPlacement::Above, "color-picker");
+}
 
-    m_test_images = &profile.add<Container>("demo-images", StackDirection::Horizontal);
+void DemoScreen::setup_images(Container& widgets) {
+    Surface& ui = surface();
+    // static and animated textures share this horizontal viewport. new images use the currently selected fit mode.
+    auto& images = widgets.add<TreeContainer>("Images & file dialogs");
+    images.set_spacing(8.0F);
+    m_test_images = &images.add<Container>("demo-images", StackDirection::Horizontal);
     m_test_images->set_size({grow(), px(140.0F)});
     m_test_images->set_spacing(8.0F);
     m_test_images->set_scrollable(false, true);
 
-    m_test_images->configure_all_styles([](Style& style) {
-        style.box_shadow({
-            .offset = {0.0F, 0.0F},
-            .blur = 250.0F,
-            .spread = 10.0F,
-            .color = rgba(1.0F, 1.0F, 1.0F, 110.0F / 255.0F),
-        });
-    });
-
     add_test_image(ui.runtime().textures().find("demo-test-image"));
     add_test_image(ui.runtime().textures().find("demo-test-gif"));
 
-    auto& add_image = profile.add<ButtonWidget>("add test image", LayoutSize{px(140.0F), px(36.0F)});
+    auto& add_image = images.add<ButtonWidget>("add test image", LayoutSize{px(140.0F), px(36.0F)});
     add_image.on_click([this] { add_test_image(surface().runtime().textures().find("demo-test-image")); });
 
-    auto& select_image = profile.add<FileDialogWidget>("add image from file", "select-image");
-    select_image.on_event([this, &select_image](UiEvent& event) {
-        if (event.type == EventType::Click) select_test_image(select_image);
+    auto& select_image = images.add<FileDialogWidget>("add image from file", LabelPlacement::Above, "select-image");
+    const std::array<FileDialogFilter, 1> image_filters{{{"image files", "png,jpg,jpeg,gif,svg"}}};
+    // set_options copies the filters. clicks open the dialog and update its value before on_select receives every path.
+    select_image.set_options({.filters = image_filters}).on_select([this](const FileDialogResult& result) {
+        select_test_image(result);
     });
 
-    auto& image_fit = profile.add<DemoDropdown>(
-        m_image_fit, std::vector<DropdownOption>{{"fill", "fill"}, {"contain", "contain"}, {"cover", "cover"}}, "image-fit"
+    auto& image_fit = images.add<DropdownWidget>(
+        m_image_fit, std::vector<DropdownOption>{{"fill", "fill"}, {"contain", "contain"}, {"cover", "cover"}}, "image fit"
     );
 
-    image_fit.set_label("image fit").set_size({px(280.0F), fit()});
+    image_fit.set_size({px(280.0F), fit()});
     image_fit.on_change([this] { apply_image_fit(); });
+}
 
-    profile.add<DemoAnimatedText>("hover for cool animation");
+void DemoScreen::setup_text(Container& widgets) {
+    // fixed widths show clipping and ellipsis. wrapping measures every line and grows the text's height.
+    auto& text = widgets.add<TreeContainer>("Text overflow & animation");
+    text.set_spacing(8.0F);
+    text.add<DemoAnimatedText>("hover for cool animation");
 
-    profile.add<TextWidget>("ellipsis: this text is longer than the available width")
+    text.add<TextWidget>("ellipsis: this text is longer than the available width")
         .set_overflow(TextOverflow::Ellipsis)
         .set_size({px(220.0F), px(20.0F)});
-    profile.add<TextWidget>("clip: this text is longer than the available width").set_size({px(220.0F), px(20.0F)});
+    text.add<TextWidget>("clip: this text is longer than the available width").set_size({px(220.0F), px(20.0F)});
+    text.add<TextWidget>("wrapped text reserves enough height for every line within a 220 pixel width").set_wrap(220.0F);
+    // the final visible wrapped line gets an ellipsis when the fixed height cannot fit the remaining lines.
+    text.add<TextWidget>("wrapped ellipsis keeps this long paragraph inside two visible lines without overflowing the field")
+        .set_wrap(220.0F)
+        .set_overflow(TextOverflow::Ellipsis)
+        .set_size({px(220.0F), px(40.0F)});
+}
 
-    auto& appearance = add<DemoPanel>("appearance");
+static void setup_anchors(Container& layouts) {
+    // matching anchor and origin align each button with the same point in the preview. the inline layer stays inside it.
+    auto& placement = layouts.add<TreeContainer>("Anchors & inline layers");
+    placement.set_spacing(8.0F);
+
+    auto& preview = placement.add<DemoPanel>("anchor-preview", DemoPanelTone::Tertiary);
+    preview.set_size({grow(), px(200.0F)});
+    for (const auto& [label, anchor] : std::array<std::pair<const char*, ImVec2>, 3>{
+             {{"top left", Anchor::TopLeft}, {"center", Anchor::Center}, {"bottom right", Anchor::BottomRight}},
+         }) {
+        auto& item = preview.add<ButtonWidget>(label, LayoutSize{fit(), fit()});
+        item.set_anchor(anchor);
+    }
+
+    auto& inline_layer = preview.add<LayerContainer>("inline-preview");
+    inline_layer.set_size({px(130.0F), px(40.0F)});
+    inline_layer.set_anchor(Anchor::TopRight);
+    inline_layer.add<TextWidget>("inline overlay");
+}
+
+static void setup_grow_weights(Surface& ui, Container& layouts) {
+    // weighted growth divides space after gaps. the boxes below compare the same size request with different box sizing.
+    auto& weights = layouts.add<TreeContainer>("Grow weights & box sizing");
+    weights.set_spacing(8.0F);
+
+    auto& weighted_row = weights.add<Container>("grow-weights", StackDirection::Horizontal);
+    weighted_row.set_size({grow(), px(80.0F)});
+    weighted_row.set_spacing(8.0F);
+    weighted_row.add<ButtonWidget>("grow(1)", LayoutSize{grow(1), grow()});
+    weighted_row.add<ButtonWidget>("grow(2)", LayoutSize{grow(2), grow()});
+
+    auto& boxes = weights.add<Container>("box-sizing", StackDirection::Horizontal);
+    boxes.set_size({grow(), fit()});
+    boxes.set_spacing(12.0F);
+
+    for (const auto& [label, sizing] : std::array<std::pair<const char*, BoxSizing>, 2>{
+             {{"BorderBox", BoxSizing::BorderBox}, {"ContentBox", BoxSizing::ContentBox}},
+         }) {
+        auto& box = boxes.add<BoxWidget>(label, LayoutSize{px(140.0F), px(60.0F)});
+        box.configure_all_styles([&ui, sizing](Style& style) {
+            style.padding({12.0F, 12.0F})
+                .border(BorderEdge{1.0F, BorderType::Solid})
+                .border_color(ui.theme().accent_color)
+                .box_sizing(sizing);
+        });
+        box.add<TextWidget>(label);
+    }
+}
+
+void DemoScreen::setup_appearance(Container& styles) {
+    auto& appearance = styles.add<TreeContainer>("Themes & borders");
     appearance.set_size({grow(), fit()});
     appearance.set_spacing(8.0F);
     appearance.add<TextWidget>("appearance");
 
-    auto& theme = appearance.add<DemoDropdown>(
+    auto& theme = appearance.add<DropdownWidget>(
         m_theme, std::vector<DropdownOption>{{"default", "default"}, {"pastel", "pastel"}, {"material 3", "material"}}, "theme"
     );
 
-    theme.set_label("theme").set_size({px(360.0F), fit()});
-    theme.on_change([this] {
-        // changing m_theme alone does not recolor existing widgets. set_theme applies the new defaults to the attached tree.
-        // these demo panel subclasses also choose colors from s_demo_theme_variant, so set it before applying the theme.
-        s_demo_theme_variant = demo_theme_variant(m_theme);
-        surface().set_theme(make_demo_theme(m_theme));
-    });
+    theme.set_size({px(360.0F), fit()});
+    theme.on_change([this] { surface().set_theme(make_demo_theme(m_theme)); });
 
-    auto& border_style = appearance.add<DemoDropdown>(
+    auto& border_style = appearance.add<DropdownWidget>(
         m_border_style, std::vector<DropdownOption>{{"solid", "solid"}, {"dashed", "dashed"}, {"dotted", "dotted"}},
-        "border-style"
+        "border style"
     );
 
-    border_style.set_label("border style").set_size({px(360.0F), fit()});
+    border_style.set_size({px(360.0F), fit()});
     border_style.on_change([this] {
-        BorderStyle style = BorderStyle::Solid;
-        if (m_border_style == "dashed") style = BorderStyle::Dashed;
-        if (m_border_style == "dotted") style = BorderStyle::Dotted;
+        BorderType style = BorderType::Solid;
+        if (m_border_style == "dashed") style = BorderType::Dashed;
+        if (m_border_style == "dotted") style = BorderType::Dotted;
 
         apply_border_style(surface().root(), style);
     });
+}
 
-    auto& chromatic = add<DemoChromaticPanel>(ui.effects().register_effect<DemoChromaticCommand>(
+static void setup_effects(Surface& ui, Container& styles) {
+    // the custom pass captures its panel after its children draw. the other panels paint linear and radial gradients.
+    auto& effects = styles.add<TreeContainer>("Gradients & custom shader");
+    effects.set_spacing(12.0F);
+    auto& chromatic = effects.add<DemoChromaticPanel>(ui.effects().register_effect<DemoChromaticCommand>(
         {render_demo_chromatic, initialize_demo_chromatic, nullptr, shutdown_demo_chromatic, &demo_chromatic_state}
     ));
     chromatic.add<TextWidget>("custom chromatic-aberration pass");
 
-    auto& linear = add<DemoGradientPanel>(GradientType::Linear, "linear-gradient");
+    auto& linear = effects.add<DemoGradientPanel>(GradientType::Linear, "linear-gradient");
     linear.add<TextWidget>("linear gradient");
 
-    auto& radial = add<DemoGradientPanel>(GradientType::Radial, "radial-gradient");
+    auto& radial = effects.add<DemoGradientPanel>(GradientType::Radial, "radial-gradient");
     radial.add<TextWidget>("radial gradient");
+}
 
-    auto& actions = add<DemoPanel>("actions");
-    actions.set_size({grow(), fit()});
-    actions.set_spacing(8.0F);
-    actions.add<TextWidget>("actions");
-    auto& status = actions.add<TextWidget>("no clicks yet");
-    auto& button = actions.add<ButtonWidget>("click me", LayoutSize{px(140.0F), px(44.0F)});
-
-    auto& list_section = add<DemoPanel>("list-section");
+void DemoScreen::setup_stack(Container& layouts) {
+    // changing the direction reuses the same children and recomputes their positions and the stack's fit size.
+    auto& list_section = layouts.add<TreeContainer>("Stack direction");
     list_section.set_size({grow(), fit()});
     list_section.set_spacing(8.0F);
-    list_section.add<TextWidget>("dynamic stack layout");
+
     m_text_list = &list_section.add<DemoTextListWidget>(std::vector<std::string>{"first item", "second item", "third item"});
 
     auto& text_list_orientation = list_section.add<ButtonWidget>("list orientation: vertical", LayoutSize{px(240.0F), px(36.0F)});
@@ -869,11 +963,12 @@ void DemoScreen::setup(std::string backend) {
         m_text_list->set_direction(m_text_list_horizontal ? StackDirection::Horizontal : StackDirection::Vertical);
         text_list_orientation.set_text(m_text_list_horizontal ? "list orientation: horizontal" : "list orientation: vertical");
     });
+}
 
-    auto& virtual_section = add<DemoPanel>("virtual-section");
+static void setup_virtual_list(Container& layouts) {
+    auto& virtual_section = layouts.add<TreeContainer>("Virtual list: 100000 rows");
     virtual_section.set_size({grow(), fit()});
     virtual_section.set_spacing(8.0F);
-    virtual_section.add<TextWidget>("virtual list (100000 items)");
     virtual_section.add<TextWidget>("click to expand or collapse it");
 
     auto& virtual_list = virtual_section.add<VirtualLayout>("demo-virtual-list", 32.0F);
@@ -910,30 +1005,18 @@ void DemoScreen::setup(std::string backend) {
             return row;
         }
     );
-
-    button.on_click([this, &button, &status] {
-        ++m_clicks;
-        status.set_text(std::format("button clicks: {}", m_clicks));
-        button.animate().by(StyleAnimationProperty::Rotation, 180.0F, {0.5F, easing::out_back});
-    });
 }
 
 void DemoScreen::setup_dynamic_nodes(Node& parent) {
     auto& dynamic_section =
-        parent.add<DemoPanel>("dynamic-section", DemoPanelTone::Base, ImVec2{14.0F, 14.0F}, BORDER_ALL, true, true);
+        parent.add<DemoPanel>(
+            "dynamic-section", DemoPanelTone::Base, ImVec2{14.0F, 14.0F}, BorderEdge{1.0F, BorderType::Solid}, true, true
+        );
 
     dynamic_section.set_direction(StackDirection::Horizontal);
     dynamic_section.set_spacing(8.0F);
 
-    // anchor and origin both select TopRight. the panel's top-right sits 20 pixels left and 72 pixels below the overlay's.
-    // in_flow=false affects this panel's relationship with its parent, not the layout of its own children.
-    // it neither advances the parent's stack cursor nor enlarges a fit-sized parent. its children still stack horizontally.
-    // fit/fit measures those children, so adding a wider child grows the panel leftward while its top-right stays anchored.
-    dynamic_section.set_layout({
-        .size = {fit(), fit()},
-        .placement = {.anchor = Anchor::TopRight, .origin = Anchor::TopRight, .offset = {-20.0F, 72.0F}},
-        .in_flow = false,
-    });
+    dynamic_section.set_size({grow(), px(320.0F)});
 
     auto& node_controls = dynamic_section.add<Container>("dynamic-node-controls", StackDirection::Vertical);
     node_controls.set_size({fit(), fit()});
@@ -1009,9 +1092,9 @@ ImageWidget& DemoScreen::add_test_image(Texture* texture) {
             return;
         }
 
-        image_ptr->set_enabled(false);
+        image_ptr->set_input_enabled(false);
 
-        // set_enabled(false) leaves the image drawn but stops it receiving another click while this sequence runs.
+        // set_input_enabled(false) leaves the image drawn but stops it receiving another click while this sequence runs.
         // by adds to the property's starting value, while to chooses an absolute target. calls in a phase run together.
         // release_all animates properties back to their style values. end runs after that final phase completes.
         // the callback marks the image for deferred removal, so it is not destroyed while its animation callback is executing.
@@ -1036,17 +1119,13 @@ ImageWidget& DemoScreen::add_test_image(Texture* texture) {
     return image;
 }
 
-void DemoScreen::select_test_image(FileDialogWidget& dialog) {
-    static const std::array<FileDialogFilter, 1> image_filters{{{"image files", "png,jpg,jpeg,gif,svg"}}};
-
-    const FileDialogResult result = dialog.show_dialog(FileDialogOperation::OpenFile, {.filters = image_filters});
+void DemoScreen::select_test_image(const FileDialogResult& result) {
     if (!result.accepted() || result.paths.empty()) {
         return;
     }
 
     Texture* texture = surface().runtime().textures().add(result.paths.front().filename().string(), result.paths.front());
     add_test_image(texture);
-    dialog.set_value(result.paths.front().filename().string());
 }
 
 ImageFit DemoScreen::image_fit() const {
@@ -1075,7 +1154,7 @@ void DemoScreen::on_update(float dt) {
     }
 }
 
-static void apply_border_style(Node& node, BorderStyle style) {
+static void apply_border_style(Node& node, BorderType style) {
     if (auto* styled_node = dynamic_cast<StyledNode*>(&node)) {
         styled_node->configure_all_styles([style](Style& current_style) { current_style.border_style(style); });
     }
@@ -1085,37 +1164,24 @@ static void apply_border_style(Node& node, BorderStyle style) {
     }
 }
 
-void setup_demo(Surface& surface, std::string backend) {
-    Runtime& runtime = surface.runtime();
-#ifdef IMGUI_UI_ASSETS_DIR
+static DemoFloatingWindow& setup_floating_window(Container& windows) {
+    // this window is submitted only while its section is expanded. the toggle keeps it closed on startup.
+    auto& floating_section = windows.add<TreeContainer>("Movable window");
+    auto& floating = floating_section.add<DemoFloatingWindow>();
+    floating.set_visible(false);
+    floating_section.add<ButtonWidget>("toggle floating window", LayoutSize{px(220.0F), fit()}).on_click([&floating] {
+        floating.set_visible(!floating.visible());
+    });
+    return floating;
+}
 
-    // register fonts before widgets request them. each font loads once per imgui context.
-    const std::filesystem::path assets = std::filesystem::path{IMGUI_UI_ASSETS_DIR};
-    runtime.fonts().add("Inter Regular", assets / "fonts/Inter.ttf");
-    surface.set_primary_font(runtime.fonts().find("Inter Regular"));
-
-    runtime.textures().add("demo-file-icon", assets / "icons/demo.svg");
-    runtime.textures().add("demo-test-image", assets / "images/tiny.jpg");
-    runtime.textures().add("demo-test-gif", assets / "images/t3.gif");
-    runtime.textures().add("demo-inline-icon", DEMO_INLINE_ICON_SVG);
-#endif
-    Texture* inline_icon = runtime.textures().find("demo-inline-icon");
-
-    auto& demo = surface.root().add<DemoScreen>();
-    demo.setup(std::move(backend));
-
-    surface.root().add<DemoFloatingWindow>();
-
-    auto& overlay = demo.add<LayerContainer>("##demo-overlay");
-
-    // LayerMode::Inline draws inside a child window over the parent's content box, rather than in a separate movable window.
-    // layers default to in_flow=false. without an explicit size, this one fills the parent's content box and reserves no stack
-    // space. the layer compensates for its parent's scroll position, keeping these controls in the demo viewport as the panels
-    // scroll.
-    demo.setup_dynamic_nodes(overlay);
-
-    auto& context_status = demo.add<TextWidget>("context menu: no selection");
-    auto& context_button = demo.add<ButtonWidget>("open context menu", LayoutSize{px(220.0F), px(40.0F)});
+static void setup_context_menu(Surface& surface, Container& windows) {
+    // the popup belongs to the surface root so page scrolling does not clip its submenu.
+    Texture* inline_icon = surface.runtime().textures().find("demo-inline-icon");
+    auto& context_section = windows.add<TreeContainer>("Context menus & submenus");
+    context_section.set_spacing(8.0F);
+    auto& context_status = context_section.add<TextWidget>("context menu: no selection");
+    auto& context_button = context_section.add<ButtonWidget>("open context menu", LayoutSize{px(220.0F), px(40.0F)});
     ContextMenuItems context_items = {
         ContextMenuItem::action(
             "first action", [&context_status](auto&) { context_status.set_text("context menu: first action"); }
@@ -1133,22 +1199,25 @@ void setup_demo(Surface& surface, std::string backend) {
     context_menu.set_hover_close_delay(2.0f);
 
     context_button.on_click([&context_menu] { context_menu.open(); });
+}
 
+static void setup_pointer_blocker(Surface& surface, Container& windows) {
     // the full-size layer is the input barrier, while its child is only the visible centered panel.
     // InputMode::Blocker excludes unrelated branches behind the layer from pointer events, including native scrollbar
     // interaction. descendants remain eligible, so the panel's close button works. clicking outside the panel still hits the
     // backdrop instead of the demo underneath. hiding the layer removes that barrier and restores input to the demo.
-    auto& input_blocker = surface.root().add<LayerContainer>("##input-blocker");
+    auto& input_blocker = surface.root().add<DemoBlockerLayer>("##input-blocker");
     input_blocker.set_visible(false);
 
     auto& blocker_panel = input_blocker.add<InputBlocker>();
     blocker_panel.add<TextWidget>("pointer input is blocked below this panel");
 
-    auto& block_button = demo.add<ButtonWidget>("block pointer input", LayoutSize{px(220.0F), px(40.0F)});
+    auto& blocking = windows.add<TreeContainer>("Pointer blocking");
+    auto& block_button = blocking.add<ButtonWidget>("block pointer input", LayoutSize{px(220.0F), px(40.0F)});
     auto& unblock_button = blocker_panel.add<ButtonWidget>("disable pointer block", LayoutSize{px(284.0F), px(40.0F)});
 
     block_button.on_click([&input_blocker, &block_button] {
-        input_blocker.set_visible(true);
+        input_blocker.open();
         input_blocker.set_input_mode(InputMode::Blocker);
         block_button.set_text("pointer input blocked");
     });
@@ -1158,16 +1227,20 @@ void setup_demo(Surface& surface, std::string backend) {
         input_blocker.set_visible(false);
         block_button.set_text("block pointer input");
     });
+}
 
+static void setup_modal(DemoScreen& demo, Surface& surface, Container& windows) {
     // apply blur to the full-size backdrop rather than to the modal panel. it samples content drawn earlier behind the layer.
     // the panel is drawn as a descendant over that blurred background. Blocker makes the entire backdrop reject input to the
     // demo, including the transparent area outside the panel, so transparency does not make the modal pass input through.
-    auto& modal_layer = surface.root().add<LayerContainer>("##modal-layer", LayerMode::Inline);
+    auto& modal_layer = surface.root().add<DemoModalLayer>("##modal-layer");
     modal_layer.set_visible(false);
     modal_layer.set_input_mode(InputMode::Blocker);
     modal_layer.configure_all_styles([](Style& style) { style.background_color(rgba(0.0F, 0.0F, 0.0F, 0.0F)).blur(5); });
 
-    auto& modal = modal_layer.add<DemoPanel>("demo-modal", DemoPanelTone::Secondary, ImVec2{24.0F, 24.0F}, BORDER_ALL);
+    auto& modal = modal_layer.add<DemoPanel>(
+        "demo-modal", DemoPanelTone::Secondary, ImVec2{24.0F, 24.0F}, BorderEdge{1.0F, BorderType::Solid}
+    );
     modal.set_visible(false);
 
     // a fixed 480x220 panel is centered in the full-size backdrop by aligning Center with Center.
@@ -1179,25 +1252,9 @@ void setup_demo(Surface& surface, std::string backend) {
     });
     modal.set_spacing(10.0F);
 
-    // close both the panel and backdrop on an outside left press or click, or escape. stop delivery to underlying targets.
-    modal_layer.on_event([&modal_layer, &modal](UiEvent& event) {
-        const bool clicked_outside = (event.type == EventType::Click || event.type == EventType::PointerDown) &&
-                                     event.button == PointerButton::Left &&
-                                     !modal.layout().visual_rect().contains(event.position);
-        const bool pressed_escape =
-            event.type == EventType::Cancel || (event.type == EventType::KeyDown && event.key == Key::Escape);
-        if (!clicked_outside && !pressed_escape) {
-            return;
-        }
-
-        modal.set_visible(false);
-        modal_layer.set_visible(false);
-        event.stop_propagation();
-    });
-
     modal.add<TextWidget>("modal overlay");
-    auto& blur = modal.add<NumberInputWidget>(demo.blur(), "modal-blur");
-    blur.set_label("backdrop blur").set_range(0, 32);
+    auto& blur = modal.add<NumberInputWidget>(demo.blur(), "backdrop blur");
+    blur.set_range(0, 32);
     blur.on_change([&demo, &modal_layer] {
         modal_layer.configure_all_styles([&demo](Style& style) { style.blur(demo.blur()); });
     });
@@ -1214,17 +1271,40 @@ void setup_demo(Surface& surface, std::string backend) {
         modal_layer.set_visible(false);
     });
 
-    auto& modal_button = demo.add<ButtonWidget>("open modal", LayoutSize{px(220.0F), px(40.0F)});
+    auto& modal_section = windows.add<TreeContainer>("Modal backdrop & blur");
+    auto& modal_button = modal_section.add<ButtonWidget>("open modal", LayoutSize{px(220.0F), px(40.0F)});
     modal_button.on_click([&modal_layer, &modal, &surface] {
         if (modal.visible()) {
             return;
         }
 
-        modal_layer.set_visible(true);
+        modal_layer.open();
         modal.set_visible(true);
 
         // showing a layer does not give it keyboard focus. assign focus explicitly so escape reaches the backdrop's handler
         // immediately. once a descendant receives focus, its unhandled events can still bubble to that handler.
         surface.input_router().set_focus(&modal_layer);
     });
+}
+
+void setup_demo(Surface& surface, std::string_view backend) {
+    Runtime& runtime = surface.runtime();
+#ifdef IMGUI_UI_ASSETS_DIR
+    // register resources before building controls. both backends use the same fonts, textures and example tree.
+    const std::filesystem::path assets = std::filesystem::path{IMGUI_UI_ASSETS_DIR};
+    runtime.fonts().add("Inter Regular", assets / "fonts/Inter.ttf");
+    surface.set_primary_font(runtime.fonts().find("Inter Regular"));
+    runtime.textures().add("demo-file-icon", assets / "icons/demo.svg");
+    runtime.textures().add("demo-test-image", assets / "images/tiny.jpg");
+    runtime.textures().add("demo-test-gif", assets / "images/t3.gif");
+    runtime.textures().add("demo-inline-icon", DEMO_INLINE_ICON_SVG);
+#endif
+
+    auto& demo = surface.root().add<DemoScreen>();
+    auto& windows = demo.setup(backend);
+
+    setup_floating_window(windows);
+    setup_context_menu(surface, windows);
+    setup_pointer_blocker(surface, windows);
+    setup_modal(demo, surface, windows);
 }

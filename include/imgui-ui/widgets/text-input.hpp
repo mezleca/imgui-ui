@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../layout/container.hpp"
+#include "widget.hpp"
 
 #include <string>
 
@@ -9,12 +9,13 @@ namespace ui {
     class ImageWidget;
     class TextWidget;
 
-    class TextInputWidget : public Container {
+    class TextInputWidget : public Widget {
     public:
-        explicit TextInputWidget(std::string& value, std::string id = {});
+        explicit TextInputWidget(
+            std::string& value, std::string label = {}, LabelPlacement placement = LabelPlacement::Inline, std::string id = {}
+        );
 
-        TextInputWidget& set_label(std::string label);
-        TextInputWidget& set_label_placement(LabelPlacement placement);
+        TextInputWidget& set_label(std::string label, LabelPlacement placement = LabelPlacement::Inline);
         TextInputWidget& set_icon(Texture* icon);
         bool set_value(std::string value);
 

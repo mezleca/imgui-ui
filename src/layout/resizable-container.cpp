@@ -30,7 +30,6 @@ ImGuiMouseCursor ResizableContainer::resize_cursor() const {
 }
 
 void ResizableContainer::on_draw_end() {
-    set_visual_rect(Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize()));
     draw_resize_indicator();
     Container::on_draw_end();
 
@@ -97,14 +96,19 @@ void ResizableContainer::mouse_move_event(UiEvent& event) {
     };
 
     LayoutSize updated = layout().size_spec();
+    const ImVec2 insets = layout().box_sizing() == BoxSizing::ContentBox
+                              ? ImVec2{layout().box_insets().horizontal(), layout().box_insets().vertical()}
+                              : ImVec2{};
     if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) {
         updated.width.mode = LayoutSizeMode::Fixed;
-        updated.width.value = std::clamp(m_previous_size.x + event.position.x - m_drag_start.x, MIN_CHILD_SIZE, max_size.x);
+        const float width = std::clamp(m_previous_size.x + event.position.x - m_drag_start.x, MIN_CHILD_SIZE, max_size.x);
+        updated.width.value = std::max(0.0F, width - insets.x);
     }
 
     if ((m_resizing & ResizeAxes::Y) != ResizeAxes::None) {
         updated.height.mode = LayoutSizeMode::Fixed;
-        updated.height.value = std::clamp(m_previous_size.y + event.position.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y);
+        const float height = std::clamp(m_previous_size.y + event.position.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y);
+        updated.height.value = std::max(0.0F, height - insets.y);
     }
 
     set_size(updated);

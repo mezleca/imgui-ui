@@ -1,4 +1,5 @@
 #include <imgui-ui/widgets/dropdown.hpp>
+#include <imgui-ui/imgui/window.hpp>
 
 #include <imgui-ui/imgui/painter.hpp>
 #include <imgui-ui/style/theme.hpp>
@@ -57,13 +58,16 @@ protected:
             style.color(theme.text_color)
                 .background_color(theme.transparent)
                 .padding({10.0F, 4.0F})
-                .border(BORDER_NONE)
+                .border(BorderEdge{0.0F, BorderType::None})
                 .border_radius(rounding)
                 .cursor(ImGuiMouseCursor_Hand);
         });
 
         style(StyleType::HOVER).background_color(theme.controls.hover_color);
         style(StyleType::ACTIVE).background_color(theme.controls.active_color);
+        style(StyleType::DISABLED)
+            .color(theme.text_secondary_color)
+            .cursor(ImGuiMouseCursor_NotAllowed);
     }
 
 private:
@@ -71,9 +75,9 @@ private:
     std::size_t m_index;
 };
 
-class ui::DropdownWidget::Trigger final : public DrawListWidget {
+class ui::DropdownWidget::Trigger final : public Widget {
 public:
-    explicit Trigger(DropdownWidget& owner) : DrawListWidget("trigger", "DropdownTrigger"), m_owner(owner) {
+    explicit Trigger(DropdownWidget& owner) : Widget("trigger", "DropdownTrigger"), m_owner(owner) {
         set_size({grow(), fit()});
     }
 
@@ -93,8 +97,7 @@ private:
         const ImVec2 text_size = ImGui::CalcTextSize(preview.data(), preview.data() + preview.size());
         set_measured_content_size(
             {text_size.x + m_owner.m_arrow_size.x + ImGui::GetStyle().ItemInnerSpacing.x,
-             std::max(text_size.y, m_owner.m_arrow_size.y)},
-            true, true
+             std::max(text_size.y, m_owner.m_arrow_size.y)}
         );
     }
 
@@ -147,10 +150,9 @@ void DropdownWidget::Body::apply_theme_defaults(const Theme& theme) {
     configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color)
             .background_color(theme.controls.background_color)
-            .border(BORDER_ALL)
+            .border(BorderEdge{theme.controls.border_thickness, BorderType::Solid})
             .border_color(theme.controls.border_color)
             .border_radius(theme.controls.rounding)
-            .border_thickness(theme.controls.border_thickness)
             .padding({});
     });
 }
@@ -194,9 +196,9 @@ bool DropdownWidget::Body::paint() {
     const ComputedStyle& style = computed_style();
     const auto first_row =
         std::find_if(children().begin(), children().end(), [](const auto& child) { return !child->removal_pending(); });
-    const ImVec2 item_padding =
-        first_row == children().end() ? ImVec2{} : static_cast<const Option&>(**first_row).computed_style().padding();
-    m_item_height = ImGui::GetTextLineHeight() + (item_padding.y * 2.0F);
+    const BoxInsets item_padding =
+        first_row == children().end() ? BoxInsets{} : static_cast<const Option&>(**first_row).computed_style().padding();
+    m_item_height = ImGui::GetTextLineHeight() + item_padding.vertical();
     ImGui::SetNextWindowPos(popup_position, ImGuiCond_Always);
     ImGui::SetNextWindowSize(outer_size({popup_width, m_item_height * static_cast<float>(m_owner.m_options.size())}));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, box_insets().window_padding());
@@ -206,6 +208,7 @@ bool DropdownWidget::Body::paint() {
     ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4{});
 
     if (ImGui::BeginPopup("body", ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
+        apply_window_insets(box_insets());
         const Rect body_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
         set_visual_rect(body_rect);
         draw_surface(body_rect);
@@ -290,7 +293,7 @@ void DropdownWidget::open() {
     m_visibility = Visibility::Open;
 
     m_trigger->set_open(true);
-    m_body->set_enabled(true);
+    m_body->set_input_enabled(true);
     m_body->fade_in({m_transition_duration, easing::linear});
 }
 
@@ -303,24 +306,27 @@ void DropdownWidget::close() {
     m_trigger->set_open(false);
 
     // keep the body registered while it fades out. closing rows cannot be selected.
-    m_body->set_enabled(true);
+    m_body->set_input_enabled(true);
     m_body->fade_out({m_transition_duration, easing::linear});
 }
 
 void DropdownWidget::finish_close() {
     m_visibility = Visibility::Closed;
-    m_body->set_enabled(false);
+    m_body->set_input_enabled(false);
 }
 
-DropdownWidget::DropdownWidget(std::string& value, std::vector<DropdownOption> options, std::string id)
-    : Container(std::move(id), "Dropdown"), m_value(value), m_options(std::move(options)) {
+DropdownWidget::DropdownWidget(
+    std::string& value, std::vector<DropdownOption> options, std::string label, LabelPlacement placement, std::string id
+)
+    : Widget(std::move(id), "Dropdown"), m_value(value), m_options(std::move(options)) {
     set_size({fit(), fit()});
 
     m_label_node = &add<TextWidget>("");
     m_label_node->set_visible(false);
     m_trigger = &add<Trigger>(*this);
     m_body = &add<Body>(*this);
-    m_body->set_enabled(false);
+    m_body->set_input_enabled(false);
+    set_label(std::move(label), placement);
 }
 
 void DropdownWidget::event(UiEvent& event) {
@@ -331,6 +337,7 @@ void DropdownWidget::event(UiEvent& event) {
 
 void DropdownWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
+    set_font(surface().get_primary_font(), theme.controls.font_size);
     m_arrow_size = {8.0F, 4.0F};
     m_popup_gap = 4.0F;
     m_transition_duration = 0.06F;
@@ -339,25 +346,40 @@ void DropdownWidget::apply_theme_defaults(const Theme& theme) {
         style.color(theme.text_color)
             .background_color(theme.transparent)
             .border_color(theme.controls.border_color)
-            .border(BORDER_NONE)
+            .border(BorderEdge{0.0F, BorderType::None})
             .border_radius(theme.controls.rounding)
             .border_thickness(theme.controls.border_thickness)
             .padding({});
     });
 
-    set_spacing(theme.metrics.item_spacing.y);
+    m_label_spacing = {theme.metrics.item_inner_spacing.x, theme.metrics.item_spacing.y};
+    update_label_layout();
     m_label_node->style().color(theme.text_color);
-    m_trigger->configure_all_styles([&theme](Style& style) {
-        style.control(theme, {10.0F, 6.0F}).cursor(ImGuiMouseCursor_Hand);
-    });
+    m_trigger->configure_all_styles([&theme](Style& style) { style.control(theme).cursor(ImGuiMouseCursor_Hand); });
     m_trigger->style(StyleType::HOVER).background_color(theme.controls.hover_color);
     m_trigger->style(StyleType::ACTIVE).background_color(theme.controls.active_color);
+    m_trigger->style(StyleType::DISABLED)
+        .color(theme.text_secondary_color)
+        .background_color(theme.background_secondary_color)
+        .border_color(theme.border_color)
+        .cursor(ImGuiMouseCursor_NotAllowed);
+    m_label_node->style(StyleType::DISABLED).color(theme.text_secondary_color);
+    style(StyleType::DISABLED).cursor(ImGuiMouseCursor_NotAllowed);
 }
 
-DropdownWidget& DropdownWidget::set_label(std::string label) {
+DropdownWidget& DropdownWidget::set_label(std::string label, LabelPlacement placement) {
     m_label_node->set_visible(!label.empty());
     m_label_node->set_text(std::move(label));
+    m_label_placement = placement;
+    update_label_layout();
     return *this;
+}
+
+void DropdownWidget::update_label_layout() {
+    const bool inline_label = m_label_placement == LabelPlacement::Inline;
+    set_direction(inline_label ? StackDirection::Horizontal : StackDirection::Vertical);
+    set_content_alignment({0.0F, inline_label ? 0.5F : 0.0F});
+    set_spacing(inline_label ? m_label_spacing.x : m_label_spacing.y);
 }
 
 bool DropdownWidget::select_value(std::string_view value) {

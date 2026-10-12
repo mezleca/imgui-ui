@@ -324,13 +324,11 @@ BorderPath ui::rounded_rect_border_path(Rect rect, float rounding) {
 }
 
 void ui::draw_border_path(
-    ImDrawList& draw_list, const BorderPath& path, uint8_t border, const Color& color, float thickness, BorderStyle style
+    ImDrawList& draw_list, const BorderPath& path, uint8_t border, const Color& color, float thickness, BorderType style
 ) {
     if (border == BORDER_NONE || thickness <= 0.0F) {
         return;
     }
-
-    thickness = std::max(MIN_BORDER_THICKNESS, thickness);
 
     const ImU32 draw_color = ImColor{color.rgba()};
     if ((draw_color & IM_COL32_A_MASK) == 0) {
@@ -338,14 +336,16 @@ void ui::draw_border_path(
     }
 
     switch (style) {
-        case BorderStyle::Solid:
+        case BorderType::Solid:
             stroke_solid_path(draw_list, path, border, draw_color, thickness);
             return;
-        case BorderStyle::Dashed:
+        case BorderType::Dashed:
             stroke_dashed_path(draw_list, path, border, draw_color, thickness);
             return;
-        case BorderStyle::Dotted:
+        case BorderType::Dotted:
             stroke_dotted_path(draw_list, path, border, draw_color, thickness);
+            return;
+        case BorderType::None:
             return;
     }
 }

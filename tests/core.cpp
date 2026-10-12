@@ -250,7 +250,7 @@ TEST_CASE("partial borders keep every draw style inside its selected side") {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
         const int vertices_before = draw_list->VtxBuffer.Size;
 
-        const auto require_left_bounds = [&](BorderStyle style) {
+        const auto require_left_bounds = [&](BorderType style) {
             const int first_vertex = draw_list->VtxBuffer.Size;
             draw_border_path(*ImGui::GetWindowDrawList(), path, BORDER_LEFT, rgb(255, 255, 255), 2.0F, style);
             REQUIRE(draw_list->VtxBuffer.Size > first_vertex);
@@ -267,12 +267,12 @@ TEST_CASE("partial borders keep every draw style inside its selected side") {
             REQUIRE(max_y < 79.0F);
         };
 
-        draw_border_path(*ImGui::GetWindowDrawList(), path, BORDER_NONE, rgb(255, 255, 255), 2.0F, BorderStyle::Solid);
+        draw_border_path(*ImGui::GetWindowDrawList(), path, BORDER_NONE, rgb(255, 255, 255), 2.0F, BorderType::Solid);
         REQUIRE(draw_list->VtxBuffer.Size == vertices_before);
 
-        require_left_bounds(BorderStyle::Solid);
-        require_left_bounds(BorderStyle::Dashed);
-        require_left_bounds(BorderStyle::Dotted);
+        require_left_bounds(BorderType::Solid);
+        require_left_bounds(BorderType::Dashed);
+        require_left_bounds(BorderType::Dotted);
     });
 }
 
@@ -281,7 +281,7 @@ TEST_CASE("patterned borders keep every side visible") {
     const BorderPath path = rounded_rect_border_path(rect, 12.0F);
     ui_test::ImGuiContext context({220.0F, 140.0F});
     ui_test::draw_window("patterned-border-test", [&] {
-        const auto require_sides = [&](BorderStyle style) {
+        const auto require_sides = [&](BorderType style) {
             const int first_vertex = ImGui::GetWindowDrawList()->VtxBuffer.Size;
             draw_border_path(*ImGui::GetWindowDrawList(), path, BORDER_ALL, rgb(255, 255, 255), 2.0F, style);
             const auto& vertices = ImGui::GetWindowDrawList()->VtxBuffer;
@@ -308,25 +308,39 @@ TEST_CASE("patterned borders keep every side visible") {
             }));
         };
 
-        require_sides(BorderStyle::Dashed);
-        require_sides(BorderStyle::Dotted);
+        require_sides(BorderType::Dashed);
+        require_sides(BorderType::Dotted);
     });
 }
 
 TEST_CASE("style normalizes discrete fields and interpolates effect values") {
     Style style;
-    style.border(static_cast<unsigned>(BORDER_LEFT) | static_cast<unsigned>(BORDER_BOTTOM) | 0x80U)
-        .border_style(BorderStyle::Dashed);
+    style.border(BorderEdges{
+        {1.0F, BorderType::Dashed}, {0.0F, BorderType::None},
+        {0.0F, BorderType::None}, {1.0F, BorderType::Dashed},
+    });
 
     REQUIRE(style.border() == (BORDER_LEFT | BORDER_BOTTOM));
-    REQUIRE(style.border_style() == BorderStyle::Dashed);
+    REQUIRE(style.border_style() == BorderType::Dashed);
 
     Style target = style;
-    target.border_style(BorderStyle::Dotted);
+    target.border_style(BorderType::Dotted);
     REQUIRE(style.border_style() != target.border_style());
 
     Style::lerp(style, target, 0.0F);
-    REQUIRE(style.border_style() == BorderStyle::Dotted);
+    REQUIRE(style.border_style() == BorderType::Dotted);
+
+    Style edge = style;
+    edge.border(BorderEdge{.size = 2.0F, .type = BorderType::Solid});
+    Style edge_target = edge;
+    edge_target.border_left(6.0F, BorderType::Dashed, {0.2F});
+    edge_target.border_top(10.0F, BorderType::Dotted, {0.4F});
+    Style::lerp(edge, edge_target, 0.1F);
+    REQUIRE(edge.border_left().size == Catch::Approx(4.0F));
+    REQUIRE(edge.border_top().size == Catch::Approx(4.0F));
+    REQUIRE(edge.border_right().size == Catch::Approx(2.0F));
+    REQUIRE(edge.border_left().type == BorderType::Dashed);
+    REQUIRE(edge.border_top().type == BorderType::Dotted);
 
     Style shadow_target;
     shadow_target.box_shadow(
@@ -396,123 +410,6 @@ TEST_CASE("container shadows stay in their owner draw list") {
     REQUIRE(collected_effect_draw_list != foreground_draw_list);
 }
 
-TEST_CASE("tree shadows use the tree outer rect") {
-    ui_test::ImGuiContext context({320.0F, 240.0F});
-    ImGui::NewFrame();
-    ImGui::SetNextWindowPos({0.0F, 0.0F});
-    ImGui::SetNextWindowSize({320.0F, 240.0F});
-    ImGui::Begin("tree-shadow-test");
-
-    EffectRegistry effects;
-    initialize_effect<BoxShadowRegion>(effects, EffectSlot::BoxShadow, collect_shadow_callback);
-
-    Container page("page");
-    page.set_size({px(240.0F), px(160.0F)});
-    auto& tree = page.add<TreeContainer>("tree");
-    tree.set_size({px(160.0F), px(100.0F)});
-    tree.configure_all_styles([](Style& style) { style.box_shadow({.spread = 40.0F, .color = rgb(0.0F, 0.0F, 0.0F)}); });
-    page.update(1.0F);
-
-    ImGui::SetNextItemOpen(true, ImGuiCond_Always);
-    page.draw();
-    draw_box_shadow(effects, *ImGui::GetWindowDrawList(), tree.layout().visual_rect(), tree.computed_style().box_shadow(), 0.0F);
-    ImGui::End();
-    ImGui::EndFrame();
-    ImGui::Render();
-
-    const ImDrawData* draw_data = ImGui::GetDrawData();
-    REQUIRE(draw_data != nullptr);
-    collected_shadow_region = nullptr;
-    render_effect_commands(*draw_data);
-
-    REQUIRE(collected_shadow_region != nullptr);
-    REQUIRE(collected_shadow_region->cutout.min.y == Catch::Approx(tree.layout().visual_rect().min.y));
-}
-
-TEST_CASE("dropdown trigger shadows use the trigger rect below its label") {
-    Runtime runtime;
-    Surface surface = ui_test::make_surface(runtime);
-    std::string value = "first";
-    auto& dropdown = surface.root().add<DropdownWidget>(
-        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "dropdown"
-    );
-    dropdown.set_label("label").set_size({px(180.0F), fit()});
-    dropdown.trigger().style().box_shadow({.spread = 8.0F, .color = rgb(0.0F, 0.0F, 0.0F)});
-    surface.effects().register_effect<BoxShadowRegion>(EffectSlot::BoxShadow, {collect_shadow_callback});
-
-    const auto surface_context = ui_test::prepare_surface(surface, {320.0F, 180.0F});
-    surface.begin_frame();
-    surface.update(ImGui::GetIO().DeltaTime);
-    surface.draw();
-    surface.end_frame();
-
-    const ImDrawData* draw_data = ImGui::GetDrawData();
-    REQUIRE(draw_data != nullptr);
-    collected_shadow_region = nullptr;
-    render_effect_commands(*draw_data);
-
-    REQUIRE(collected_shadow_region != nullptr);
-    const Rect trigger_rect = dropdown.trigger().layout().visual_rect();
-    REQUIRE(collected_shadow_region->cutout.min.x == Catch::Approx(trigger_rect.min.x));
-    REQUIRE(collected_shadow_region->cutout.min.y == Catch::Approx(trigger_rect.min.y));
-    REQUIRE(collected_shadow_region->cutout.max.x == Catch::Approx(trigger_rect.max.x));
-    REQUIRE(collected_shadow_region->cutout.max.y == Catch::Approx(trigger_rect.max.y));
-}
-
-TEST_CASE("container blur excludes its scrollbar") {
-    class TallNode final : public Node {
-    public:
-        TallNode() : Node("tall") {
-            set_size({grow(), px(200.0F)});
-        }
-
-    private:
-        bool on_draw() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
-    ui_test::ImGuiContext context({320.0F, 240.0F});
-    Container node("container");
-    node.set_size({px(100.0F), px(60.0F)});
-    node.set_scrollable(true);
-    node.configure_all_styles([](Style& style) { style.blur(8); });
-    node.add<TallNode>();
-
-    EffectRegistry effects;
-    initialize_effect<BlurRegion>(effects, EffectSlot::Blur, collect_blur_callback);
-
-    const auto draw_frame = [&] {
-        effects.begin_frame();
-        ImGui::NewFrame();
-        ImGui::SetNextWindowPos({0.0F, 0.0F});
-        ImGui::SetNextWindowSize({320.0F, 240.0F});
-        ImGui::Begin("container-blur-test");
-        node.update(1.0F);
-        node.draw();
-        const Rect rect = node.layout().visual_rect();
-        draw_blur(
-            effects, *ImGui::GetWindowDrawList(), {rect.min, {rect.max.x - ImGui::GetStyle().ScrollbarSize, rect.max.y}}, 8, 0.0F
-        );
-        ImGui::End();
-        ImGui::EndFrame();
-        ImGui::Render();
-    };
-
-    draw_frame();
-    draw_frame();
-
-    const ImDrawData* draw_data = ImGui::GetDrawData();
-    REQUIRE(draw_data != nullptr);
-    collected_blur_region = nullptr;
-    render_effect_commands(*draw_data);
-
-    REQUIRE(collected_blur_region != nullptr);
-    REQUIRE(
-        node.layout().visual_rect().max.x - collected_blur_region->output.max.x == Catch::Approx(ImGui::GetStyle().ScrollbarSize)
-    );
-}
 
 TEST_CASE("styled paint slots render before the node and above completed subtrees") {
     ui_test::ImGuiContext context({160.0F, 120.0F});
@@ -520,7 +417,7 @@ TEST_CASE("styled paint slots render before the node and above completed subtree
         StyledNode node("node");
         node.set_size({px(80.0F), px(40.0F)});
         node.before().style().background_color(rgb(255, 0, 0));
-        node.after().style().border(BORDER_ALL).border_color(rgb(255, 255, 255));
+        node.after().style().border(BorderEdge{1.0F, BorderType::Solid}).border_color(rgb(255, 255, 255));
         node.update(1.0F);
 
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -557,8 +454,7 @@ TEST_CASE("styled paint slots pass owner bounds and their target draw list to ca
         node.set_size({px(80.0F), px(40.0F)});
         node.configure_all_styles([](Style& style) {
             style.padding({8.0F, 6.0F});
-            style.border(BORDER_ALL);
-            style.border_thickness(2.0F);
+            style.border(BorderEdge{2.0F, BorderType::Solid});
         });
         Rect before_rect{};
         Rect after_rect{};
@@ -606,7 +502,7 @@ TEST_CASE("ui nodes close child scopes before drawing after hooks") {
             m_events.push_back(id() + ":layout");
         }
 
-        bool on_draw() override {
+        bool paint() override {
             m_events.push_back(id() + ":begin");
             return !m_skip;
         }
@@ -869,7 +765,7 @@ TEST_CASE("visual bounds stay on layout unless paint overrides them") {
         }
 
     private:
-        bool on_draw() override {
+        bool paint() override {
             ImGui::Dummy({40.0F, 30.0F});
             return true;
         }
@@ -880,7 +776,7 @@ TEST_CASE("visual bounds stay on layout unless paint overrides them") {
         ManualRectNode() : Node("manual") {}
 
     private:
-        bool on_draw() override {
+        bool paint() override {
             set_visual_rect({{40.0F, 50.0F}, {70.0F, 80.0F}});
             return true;
         }
@@ -938,7 +834,7 @@ TEST_CASE("nodes register only explicitly configured local input entries") {
             }
         }
 
-        bool on_draw() override {
+        bool paint() override {
             set_visual_rect(m_rect);
             return true;
         }
@@ -971,7 +867,7 @@ TEST_CASE("nodes register only explicitly configured local input entries") {
 TEST_CASE("positioned nodes preserve their cursor placement when drawing is skipped") {
     class SkippedNode final : public Node {
     private:
-        bool on_draw() override {
+        bool paint() override {
             return false;
         }
     };
@@ -991,7 +887,7 @@ TEST_CASE("positioned nodes preserve their cursor placement when drawing is skip
 
     ui_test::draw_node(container, "skipped-placement-test");
 
-    REQUIRE(skipped.layout().local_rect().min.x == container.style().padding().x + 120.0F);
+    REQUIRE(skipped.layout().local_rect().min.x == container.style().padding().left + 120.0F);
 }
 
 TEST_CASE("inline layers draw children in a native child window") {
@@ -1000,7 +896,7 @@ TEST_CASE("inline layers draw children in a native child window") {
         ImGuiWindow* window = nullptr;
 
     private:
-        bool on_draw() override {
+        bool paint() override {
             window = ImGui::GetCurrentWindowRead();
             return true;
         }

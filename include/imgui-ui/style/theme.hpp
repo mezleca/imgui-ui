@@ -17,6 +17,7 @@ namespace ui {
         } scrollbar;
 
         struct Controls {
+            float font_size = 18.0F;
             float rounding = 4.0F;
             float border_thickness = 1.0F;
             float thumb_size = 12.0F;

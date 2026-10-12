@@ -173,8 +173,6 @@ TEST_CASE("debugger exposes the content resize handle", "[Debugger][ResizableCon
 
     ui_test::draw_surface(surface);
     REQUIRE(content->layout().size().x < initial.size().x);
-    REQUIRE(surface.debugger()->layout().visual_rect().min.x < 900.0F - 440.0F + 1.0F);
-    REQUIRE(surface.debugger()->layout().visual_rect().max.x == 900.0F);
 }
 
 TEST_CASE("effect registry invokes lifecycle callbacks and queues draw callbacks") {

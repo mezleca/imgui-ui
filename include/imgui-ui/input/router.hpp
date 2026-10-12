@@ -4,7 +4,6 @@
 
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <vector>
 
 namespace ui {
@@ -22,6 +21,9 @@ namespace ui {
         std::size_t entry_checks = 0;
     };
 
+    /// routes input through the node tree. drawing registers pointer regions each frame. dispatch selects targets
+    /// using those regions, keyboard focus or pointer capture, then bubbles events through their parents.
+    /// blockers restrict which branches receive input. the router stores node references without owning them.
     class InputRouter {
     public:
         InputRouter() = default;
@@ -70,8 +72,9 @@ namespace ui {
         /// invokes the router callback before node routing. stop_propagation skips node delivery.
         bool dispatch(UiEvent& event);
 
-        /// dispatches to target, then walks its parent chain until propagation stops.
-        static bool dispatch(Node& target, UiEvent& event);
+        /// bypasses hit testing and delivers to target and its parents, including hidden or disabled nodes.
+        /// pending removal or stop_propagation ends delivery. focus notifications use this path after input is disabled.
+        static bool dispatch_to(Node& target, UiEvent& event);
 
         /// returns the front target or blocking owner using the same hit rules as event dispatch.
         Node* node_at(ImVec2 position, EventType type = EventType::PointerMove) const;
@@ -124,7 +127,7 @@ namespace ui {
 
         /// selects capture or a hit-test snapshot and updates hover and active state before delivery.
         /// reached optionally records delivered targets. a nonempty eligible list restricts click delivery.
-        bool route_pointer(UiEvent& event, std::vector<Node*>* reached = nullptr, const std::vector<Node*>& eligible = {});
+        void route_pointer(UiEvent& event, std::vector<Node*>* reached = nullptr, const std::vector<Node*>& eligible = {});
 
         /// delivers entry callbacks and bubbles front to back, visiting shared ancestors once within the blocker scope.
         /// rechecks node attachment after callbacks. reached records only targets still attached at that point.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "text-value.hpp"
+#include "text.hpp"
 #include "widget.hpp"
 
 #include <functional>
@@ -8,7 +9,7 @@
 #include <utility>
 
 namespace ui {
-    class ButtonWidget : public DrawListWidget {
+    class ButtonWidget : public Widget {
     public:
         explicit ButtonWidget(std::string text, LayoutSize size = {fit(), fit()});
 
@@ -18,6 +19,7 @@ namespace ui {
         }
 
         ButtonWidget& set_text(std::string text);
+        ButtonWidget& set_text_overflow(TextOverflow overflow);
 
         /// runs after the click feedback is scheduled and before that animation advances.
         ButtonWidget& on_click(std::function<void()> callback) {
@@ -36,6 +38,7 @@ namespace ui {
         GenericValue m_text;
         std::function<void()> m_on_click;
         ImVec2 m_text_alignment{0.5F, 0.5F};
+        TextOverflow m_text_overflow = TextOverflow::Clip;
     };
 
 } // namespace ui

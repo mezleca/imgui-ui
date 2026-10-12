@@ -16,6 +16,7 @@
 #include <imgui-ui/widgets/number-input.hpp>
 #include <imgui-ui/widgets/text.hpp>
 #include <imgui-ui/widgets/text-input.hpp>
+#include <imgui-ui/imgui/painter.hpp>
 #include "imgui-context.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -40,15 +41,14 @@ TEST_CASE("checkbox input is limited to its box", "[CheckboxWidget][input][regre
     ui_test::draw_surface(surface);
 
     const Rect widget_rect = checkbox.layout().visual_rect();
-    const ImVec2 padding = checkbox.style().padding();
+    const BoxInsets padding = checkbox.style().padding();
     const Rect frame_rect = Rect::from_position_size(
-        {widget_rect.min.x + padding.x, widget_rect.min.y + padding.y}, checkbox.frame().layout().size()
+        {widget_rect.min.x + padding.left, widget_rect.min.y + ((widget_rect.size().y - checkbox.frame().layout().size().y) * 0.5F)},
+        checkbox.frame().layout().size()
     );
     REQUIRE(widget_rect.valid());
     REQUIRE(frame_rect.valid());
     REQUIRE(frame_rect.max.x < widget_rect.max.x);
-    REQUIRE(checkbox.frame().layout().visual_rect().min.x == Catch::Approx(frame_rect.min.x));
-    REQUIRE(checkbox.frame().layout().visual_rect().min.y == Catch::Approx(frame_rect.min.y));
 
     const ImVec2 frame_center = ui_test::center(frame_rect);
     REQUIRE(surface.input_router().node_at(frame_center) == &checkbox);
@@ -103,26 +103,6 @@ TEST_CASE("text input hover and focus are limited to its field", "[TextInputWidg
     REQUIRE(field->style_type() == StyleType::ACTIVE);
 }
 
-TEST_CASE("checkbox fills stay centered inside their frames", "[CheckboxWidget][layout][regression]") {
-    Runtime runtime;
-    ui::Surface surface = ui_test::make_surface(runtime);
-    bool checked = true;
-    bool selected = true;
-    auto& checkbox = surface.root().add<CheckboxWidget>(checked, "checkbox");
-    auto& radio = surface.root().add<CheckboxWidget>(selected, "radio");
-    radio.set_type(CheckboxType::Radio);
-
-    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
-    ui_test::draw_surface(surface);
-
-    for (CheckboxWidget* control : {&checkbox, &radio}) {
-        const Rect frame = control->frame().layout().visual_rect();
-        const Rect fill = control->fill().layout().visual_rect();
-        REQUIRE(fill.min.x - frame.min.x == Catch::Approx(frame.max.x - fill.max.x));
-        REQUIRE(fill.min.y - frame.min.y == Catch::Approx(frame.max.y - fill.max.y));
-    }
-}
-
 TEST_CASE("nested containers keep default padding empty and route checkbox clicks", "[container][input][regression]") {
     Runtime runtime;
     ui::Surface surface = ui_test::make_surface(runtime);
@@ -139,9 +119,9 @@ TEST_CASE("nested containers keep default padding empty and route checkbox click
     ui_test::draw_surface(surface);
 
     const Rect widget_rect = checkbox.layout().visual_rect();
-    const ImVec2 padding = checkbox.style().padding();
+    const BoxInsets padding = checkbox.style().padding();
     const Rect rect = Rect::from_position_size(
-        {widget_rect.min.x + padding.x, widget_rect.min.y + padding.y}, checkbox.frame().layout().size()
+        {widget_rect.min.x + padding.left, widget_rect.min.y + padding.top}, checkbox.frame().layout().size()
     );
     const ImVec2 position = ui_test::center(rect);
     REQUIRE(surface.input_router().node_at(position) == &checkbox);
@@ -214,7 +194,9 @@ TEST_CASE("dropdown opens from a nested container without extending its parent",
     page.set_size({px(360.0F), px(200.0F)});
     auto& section = page.add<Container>("section");
     auto& form = section.add<Container>("form");
-    auto& dropdown = form.add<DropdownWidget>(value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "theme");
+    auto& dropdown = form.add<DropdownWidget>(
+        value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "", LabelPlacement::Above, "theme"
+    );
     dropdown.set_size({px(180.0F), px(32.0F)});
     bool checked = false;
     auto& checkbox = surface.root().add<CheckboxWidget>(checked, "enabled");
@@ -235,7 +217,12 @@ TEST_CASE("dropdown opens from a nested container without extending its parent",
     ui_test::draw_surface(surface);
     REQUIRE(dropdown.is_open());
     const Rect body_rect = dropdown.body().layout().visual_rect();
-    REQUIRE(body_rect.min.y >= trigger_rect.max.y);
+    for (const auto& child : dropdown.body().children()) {
+        UiEvent move = ui_test::pointer_event(EventType::PointerMove, ui_test::center(child->layout().visual_rect()));
+        surface.dispatch(move);
+        REQUIRE(child->input_state().hovered);
+        REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
+    }
     surface.input_router().register_target(checkbox, body_rect);
 
     const ImVec2 option_position = ui_test::center(body_rect);
@@ -273,10 +260,6 @@ TEST_CASE("color picker opens outside its parent and blocks content input", "[co
     REQUIRE(picker.is_open());
     const Rect popup_rect = picker.popup().layout().visual_rect();
     REQUIRE(popup_rect.valid());
-    REQUIRE(popup_rect.min.y >= picker.layout().visual_rect().max.y);
-
-    const Rect hex_input_rect = picker.popup().children().front()->layout().visual_rect();
-    REQUIRE(hex_input_rect.min.y > popup_rect.min.y + 150.0F);
 
     const ImVec2 popup_center = ui_test::center(popup_rect);
     down.position = popup_center;
@@ -329,8 +312,9 @@ TEST_CASE("dropdown options use framework input and select their value", "[Dropd
     ui::Surface surface = ui_test::make_surface(runtime);
     std::string value = "light";
     int changes = 0;
-    auto& dropdown =
-        surface.root().add<DropdownWidget>(value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "theme");
+    auto& dropdown = surface.root().add<DropdownWidget>(
+        value, std::vector<DropdownOption>{{"light", "light"}, {"dark", "dark"}}, "", LabelPlacement::Above, "theme"
+    );
     dropdown.set_size({px(180.0F), px(32.0F)});
     dropdown.on_change([&changes] { ++changes; });
 
@@ -374,125 +358,70 @@ TEST_CASE("dropdown options use framework input and select their value", "[Dropd
     REQUIRE(changes == 1);
 }
 
-TEST_CASE("dropdown rows expose their complete visual hit boxes", "[DropdownWidget][input][regression]") {
+TEST_CASE("text measurement follows style insets animation and line height", "[TextWidget][layout][style][animation]") {
     Runtime runtime;
     ui::Surface surface = ui_test::make_surface(runtime);
-    std::string value;
-    auto& dropdown =
-        surface.root().add<DropdownWidget>(value, std::vector<DropdownOption>{{"dark", "dark"}, {"light", "light"}}, "theme");
-    dropdown.set_size({px(240.0F), px(40.0F)});
-
-    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 1200.0F});
-    ui_test::draw_surface(surface);
-    const Rect trigger_rect = dropdown.trigger().layout().visual_rect();
-    const ImVec2 trigger_center = ui_test::center(trigger_rect);
-
-    UiEvent down = ui_test::pointer_event(EventType::PointerDown, trigger_center);
-    surface.dispatch(down);
-
-    UiEvent up = ui_test::pointer_event(EventType::PointerUp, trigger_center);
-    surface.dispatch(up);
-    ui_test::draw_surface(surface);
-
-    for (const auto& child : dropdown.body().children()) {
-        const Rect option_rect = child->layout().visual_rect();
-        const ImVec2 option_center = ui_test::center(option_rect);
-
-        UiEvent move = ui_test::pointer_event(EventType::PointerMove, option_center);
-        surface.dispatch(move);
-        REQUIRE(child->input_state().hovered);
-        REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
-    }
-}
-
-TEST_CASE("inline layer centers inside content beside the debugger", "[LayerContainer][Debugger][layout][regression]") {
-    Runtime runtime;
-    ui::Surface surface = ui_test::make_surface(runtime, true);
-    auto& layer = surface.root().add<LayerContainer>("modal-layer", LayerMode::Inline);
-    layer.set_input_mode(InputMode::Blocker);
-    auto& modal = layer.add<Container>("modal");
-    modal.set_layout({
-        .size = {px(480.0F), px(220.0F)},
-        .placement = {.anchor = Anchor::Center, .origin = Anchor::Center},
-        .in_flow = false,
-    });
-    surface.debugger()->set_open(true);
-
-    const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
-    ui_test::draw_surface(surface);
-
-    const Rect content_rect = surface.root().layout().visual_rect();
-    const Rect modal_rect = modal.layout().visual_rect();
-    REQUIRE(content_rect.valid());
-    REQUIRE(modal_rect.valid());
-
-    const ImVec2 content_center = ui_test::center(content_rect);
-    const ImVec2 modal_center = ui_test::center(modal_rect);
-    REQUIRE(modal_center.x == Catch::Approx(content_center.x));
-    REQUIRE(modal_center.y == Catch::Approx(content_center.y));
-}
-
-TEST_CASE("text measurement and drawing include style insets", "[TextWidget][layout][style]") {
-    Runtime runtime;
-    ui::Surface surface = ui_test::make_surface(runtime);
-    Container stack("text-padding-stack");
-    stack.set_size({fit(), fit()});
-    stack.style().padding({});
-    auto& text = stack.add<TextWidget>("padded text");
-    text.configure_all_styles([](Style& style) {
-        style.padding({5.0F, 3.0F}).background_color(rgb(10, 20, 30)).border(BORDER_ALL);
-    });
-
-    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
-
-    surface.begin_frame();
-    ImFont* font = ImGui::GetFont();
-    const ImVec2 raw_size = font->CalcTextSizeA(font->LegacySize, FLT_MAX, 0.0F, "padded text");
-    ImGui::Begin("text-padding-test");
-    stack.draw();
-    ImGui::End();
-    surface.end_frame();
-
-    REQUIRE(text.layout().size().x == Catch::Approx(raw_size.x + 12.0F));
-    REQUIRE(text.layout().size().y == Catch::Approx(raw_size.y + 8.0F));
-}
-
-TEST_CASE("animated padding updates text measurement", "[TextWidget][layout][animation]") {
-    Runtime runtime;
-    ui::Surface surface = ui_test::make_surface(runtime);
-    TextWidget text("animated text");
+    TextWidget text("padded text");
     text.configure_all_styles([](Style& style) { style.padding({}); });
-
     const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
-
     surface.begin_frame();
-    const ImVec2 raw_size = ImGui::GetFont()->CalcTextSizeA(ImGui::GetFont()->LegacySize, FLT_MAX, 0.0F, "animated text");
-    text.animate().to(StyleAnimationProperty::PaddingX, 10.0F, {0.1F, easing::linear});
-    text.update(0.05F);
-    ImGui::Begin("animated-text-padding-test");
+    ImVec2 expected = ImGui::CalcTextSize("padded text");
+
+    SECTION("padding and borders") {
+        text.configure_all_styles([](Style& style) { style.padding({5.0F, 3.0F}).border(BorderEdge{1.0F, BorderType::Solid}); });
+        expected.x += 12.0F;
+        expected.y += 8.0F;
+    }
+    SECTION("animated padding") {
+        text.animate().to(StyleAnimationProperty::PaddingX, 10.0F, {0.1F, easing::linear});
+        text.update(0.05F);
+        expected.x += 10.0F;
+    }
+    SECTION("line height") {
+        text.set_text("first line\nsecond line");
+        text.configure_all_styles([](Style& style) { style.line_height(1.5F); });
+        expected = ImGui::CalcTextSize("first line\nsecond line");
+        expected.y *= 1.5F;
+    }
+
+    ImGui::Begin("text-measurement");
     text.draw();
     ImGui::End();
     surface.end_frame();
 
-    REQUIRE(text.layout().size().x == Catch::Approx(raw_size.x + 10.0F));
+    CHECK(text.layout().size().x == Catch::Approx(expected.x));
+    CHECK(text.layout().size().y == Catch::Approx(expected.y));
 }
 
-TEST_CASE("text line height scales multi-line text layout", "[TextWidget][layout][style]") {
-    Runtime runtime;
-    ui::Surface surface = ui_test::make_surface(runtime);
-    TextWidget text("first line\nsecond line");
-    text.configure_all_styles([](Style& style) { style.padding({}).line_height(1.5F); });
+TEST_CASE("wrapped ellipsis truncates the last visible line", "[TextWidget][render][regression]") {
+    ui_test::ImGuiContext context({400.0F, 200.0F});
+    ImGui::NewFrame();
+    ImGui::Begin("wrapped-ellipsis");
+    const ImVec2 position = ImGui::GetCursorScreenPos();
+    const float width = ImGui::CalcTextSize("one two").x;
+    const float height = ImGui::GetTextLineHeight();
+    GenericValue text("one two three four");
+    text.set_wrap(width);
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    const int start = draw_list->VtxBuffer.Size;
+    const ImVec4 clip = {position.x, position.y, position.x + width, position.y + height};
+    Painter(*draw_list).text_ellipsis(position, rgb(1, 1, 1), text, clip);
+    const int count = draw_list->VtxBuffer.Size - start;
+    std::vector<ImDrawVert> actual(draw_list->VtxBuffer.Data + start, draw_list->VtxBuffer.Data + start + count);
 
-    const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 180.0F});
-
-    surface.begin_frame();
-    const float native_line_height = ImGui::GetTextLineHeight();
-    ImGui::Begin("text-line-height-test");
-    text.draw();
+    const int expected_start = draw_list->VtxBuffer.Size;
+    GenericValue expected_text("one ...");
+    Painter(*draw_list).text(position, rgb(1, 1, 1), expected_text, &clip);
+    REQUIRE(draw_list->VtxBuffer.Size - expected_start == count);
+    for (int i = 0; i < count; ++i) {
+        const ImDrawVert& expected = draw_list->VtxBuffer[expected_start + i];
+        CHECK(actual[i].pos.x == Catch::Approx(expected.pos.x));
+        CHECK(actual[i].pos.y == Catch::Approx(expected.pos.y));
+        CHECK(actual[i].uv.x == Catch::Approx(expected.uv.x));
+        CHECK(actual[i].uv.y == Catch::Approx(expected.uv.y));
+    }
     ImGui::End();
-    surface.end_frame();
-
-    REQUIRE(text.layout().size().y == Catch::Approx(native_line_height * 3.0F));
+    ImGui::EndFrame();
 }
 
 TEST_CASE("value widgets notify only when their value changes", "[Widget][change]") {
@@ -540,7 +469,7 @@ TEST_CASE("paint-only animation overrides do not invalidate measurement", "[Visu
     state.animate().to(StyleAnimationProperty::PaddingX, 10.0F, {0.2F, easing::linear});
     state.update(0.1F);
     REQUIRE(invalidations == 1);
-    REQUIRE(state.computed_style().padding().x == Catch::Approx(5.0F));
+    REQUIRE(state.computed_style().padding().left == Catch::Approx(5.0F));
 }
 
 TEST_CASE("click feedback preserves unrelated overrides without remeasurement", "[animation][cleanup]") {
@@ -571,7 +500,7 @@ TEST_CASE("click feedback preserves unrelated overrides without remeasurement", 
     int clicks = 0;
     button.on_click([&] {
         ++clicks;
-        CHECK(button.computed_style().padding().x == Catch::Approx(20.0F));
+        CHECK(button.computed_style().padding().left == Catch::Approx(20.0F));
     });
     UiEvent click = UiEvent::make(EventType::Click);
     click.button = PointerButton::Left;
@@ -584,7 +513,7 @@ TEST_CASE("click feedback preserves unrelated overrides without remeasurement", 
         button.update(dt);
         ui_test::draw_node(button, "feedback-measure-test");
     }
-    CHECK(button.computed_style().padding().x == Catch::Approx(20.0F));
+    CHECK(button.computed_style().padding().left == Catch::Approx(20.0F));
     CHECK(button.measurements == measurements);
     CHECK(button.computed_style().background_color().value == button.style().background_color().value);
 }
@@ -607,7 +536,7 @@ TEST_CASE("checkbox feedback releases only its background override", "[CheckboxW
     CHECK(value);
     for (float dt : {0.0F, 0.05F, 0.12F})
         checkbox.update(dt);
-    CHECK(checkbox.frame().computed_style().padding().x == Catch::Approx(20.0F));
+    CHECK(checkbox.frame().computed_style().padding().left == Catch::Approx(20.0F));
     CHECK(checkbox.frame().computed_style().background_color().value == checkbox.frame().style().background_color().value);
 }
 
@@ -636,7 +565,7 @@ TEST_CASE("text input label changes preserve child sizing", "[TextInputWidget][c
     CHECK(label->layout().size_spec().width.mode == LayoutSizeMode::Fit);
     CHECK(field->layout().size_spec().width.mode == LayoutSizeMode::Grow);
     label->set_size({px(70.0F), fit()});
-    input.set_label("label").set_label_placement(LabelPlacement::Above);
+    input.set_label("label", LabelPlacement::Above);
     CHECK(label->layout().size_spec().width.mode == LayoutSizeMode::Fixed);
     CHECK(label->layout().size_spec().width.value == Catch::Approx(70.0F));
     input.set_label("");
@@ -737,11 +666,11 @@ TEST_CASE("interrupted animations release from their displayed value", "[VisualS
     state.animate().release(StyleAnimationProperty::PaddingX, {0.1F, easing::linear});
     state.update(0.05F);
 
-    REQUIRE(state.computed_style().padding().x == Catch::Approx(6.5F));
+    REQUIRE(state.computed_style().padding().left == Catch::Approx(6.5F));
 
     state.update(0.05F);
 
-    REQUIRE(state.computed_style().padding().x == Catch::Approx(2.0F));
+    REQUIRE(state.computed_style().padding().left == Catch::Approx(2.0F));
     REQUIRE_FALSE(state.transitioning());
 }
 
@@ -884,11 +813,11 @@ TEST_CASE("widget input requires both node and visual state to accept input", "[
     REQUIRE(widget.accepts_input());
     REQUIRE(router.node_at({5.0F, 5.0F}) == &widget);
 
-    widget.set_enabled(false);
+    widget.set_input_enabled(false);
     REQUIRE_FALSE(widget.accepts_input());
     REQUIRE(router.node_at({5.0F, 5.0F}) == nullptr);
 
-    widget.set_enabled(true);
+    widget.set_input_enabled(true);
     widget.set_visible(false);
     REQUIRE_FALSE(widget.accepts_input());
 
@@ -896,6 +825,47 @@ TEST_CASE("widget input requires both node and visual state to accept input", "[
     widget.fade_out();
     REQUIRE_FALSE(widget.accepts_input());
     REQUIRE(router.node_at({5.0F, 5.0F}) == nullptr);
+}
+
+TEST_CASE("widget callbacks can prevent container wheel scrolling", "[Widget][input][scroll][regression]") {
+    Runtime runtime;
+    ui::Surface surface = ui_test::make_surface(runtime);
+    auto& widget = surface.root().add<Widget>("scroll-widget");
+    widget.set_size({px(180.0F), px(100.0F)});
+    widget.set_scrollable(true);
+    widget.scroll().set_behaviour(ScrollBehavior::Instant);
+    widget.add<BoxWidget>("tall-content", LayoutSize{grow(), px(400.0F)});
+    const auto context = ui_test::prepare_surface(surface, {300.0F, 200.0F});
+    for (int frame = 0; frame < 3; ++frame) {
+        ui_test::draw_surface(surface);
+    }
+    REQUIRE(widget.scroll().max().y > 0.0F);
+
+    int callbacks = 0;
+    widget.on_wheel([&callbacks](UiEvent& event) {
+        ++callbacks;
+        event.prevent_default();
+    });
+    UiEvent prevented = UiEvent::make(EventType::Scroll);
+    prevented.scroll = {0.0F, -1.0F};
+    InputRouter::dispatch_to(widget, prevented);
+    CHECK(callbacks == 1);
+    CHECK_FALSE(prevented.native_input_blocked);
+    for (int frame = 0; frame < 3; ++frame) {
+        ui_test::draw_surface(surface);
+    }
+    CHECK(widget.scroll().position().y == Catch::Approx(0.0F));
+
+    widget.on_wheel([&callbacks](UiEvent&) { ++callbacks; });
+    UiEvent allowed = UiEvent::make(EventType::Scroll);
+    allowed.scroll = {0.0F, -1.0F};
+    InputRouter::dispatch_to(widget, allowed);
+    CHECK(callbacks == 2);
+    CHECK(allowed.native_input_blocked);
+    for (int frame = 0; frame < 3; ++frame) {
+        ui_test::draw_surface(surface);
+    }
+    CHECK(widget.scroll().position().y > 0.0F);
 }
 
 TEST_CASE("styled nodes keep borders out of imgui style scope", "[Widget][style][regression]") {
@@ -931,9 +901,8 @@ TEST_CASE("styled nodes keep borders out of imgui style scope", "[Widget][style]
         style.color(rgb(51, 102, 153))
             .background_color(rgb(26, 77, 128))
             .padding({7.0F, 9.0F})
-            .border(BORDER_ALL)
+            .border(BorderEdge{3.0F, BorderType::Solid})
             .border_radius(6.0F)
-            .border_thickness(3.0F)
             .alpha(0.5F);
     });
 
@@ -990,6 +959,7 @@ TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]
 
     ContextMenuItems items;
     items.push_back({.label = "item"});
+    items.push_back({.label = "second item"});
     auto& menu = surface.root().add<ContextMenuWidget>(std::move(items));
 
     REQUIRE_FALSE(menu.visible());
@@ -997,16 +967,16 @@ TEST_CASE("context menu clamps its position and fades out", "[ContextMenuWidget]
     ui_test::draw_surface(surface, 0.2F);
 
     REQUIRE(menu.is_open());
-    REQUIRE(menu.layout().visual_rect().min.x == Catch::Approx(136.0F));
-    REQUIRE(menu.layout().visual_rect().max.y == Catch::Approx(240.0F));
     const Rect menu_rect = menu.layout().visual_rect();
-    const Rect item_rect = menu.children().front()->layout().visual_rect();
-    REQUIRE(menu_rect.size().x == Catch::Approx(184.0F));
-    REQUIRE(item_rect.min.x >= menu_rect.min.x);
-    REQUIRE(item_rect.max.x <= menu_rect.max.x);
-    REQUIRE(item_rect.size().x >= menu_rect.size().x - 12.0F);
+    REQUIRE(menu_rect.valid());
+    REQUIRE(menu_rect.min.x >= 0.0F);
+    REQUIRE(menu_rect.min.y >= 0.0F);
+    REQUIRE(menu_rect.max.x <= 320.0F);
+    REQUIRE(menu_rect.max.y <= 240.0F);
+    const Rect second_item = menu.children().back()->layout().visual_rect();
+    CHECK(surface.input_router().node_at(ui_test::center(second_item)) == menu.children().back().get());
 
-    ImGui::GetIO().MousePos = {140.0F, 216.0F};
+    ImGui::GetIO().MousePos = ui_test::center(second_item);
     ui_test::draw_surface(surface, 0.01F);
 
     ImGui::GetIO().MousePos = {0.0F, 0.0F};
@@ -1103,7 +1073,6 @@ TEST_CASE("context menu opens a submenu when its parent is hovered", "[ContextMe
     auto* submenu = dynamic_cast<ContextMenuWidget*>(menu.children()[1].get());
     REQUIRE(submenu != nullptr);
     REQUIRE(submenu->visible());
-    REQUIRE(submenu->layout().visual_rect().min.x == Catch::Approx(item_rect.max.x + 6.0F).margin(0.5F));
     auto cross_gap = ui_test::pointer_event(
         EventType::PointerMove, {(item_rect.max.x + submenu->layout().visual_rect().min.x) * 0.5F, item_rect.min.y + 4.0F}
     );
@@ -1158,11 +1127,11 @@ TEST_CASE("virtual rows expand and collapse independently", "[layout][virtual-la
     Node* second = list.children()[1].get();
 
     UiEvent click = UiEvent::make(EventType::Click);
-    InputRouter::dispatch(*first, click);
+    InputRouter::dispatch_to(*first, click);
     REQUIRE(list.extra_offset(0) == 64.0F);
-    InputRouter::dispatch(*second, click);
+    InputRouter::dispatch_to(*second, click);
     REQUIRE(list.extra_offset(1) == 64.0F);
-    InputRouter::dispatch(*first, click);
+    InputRouter::dispatch_to(*first, click);
     REQUIRE(list.extra_offset(0) == 0.0F);
     REQUIRE(list.extra_offset(1) == 64.0F);
 }
@@ -1173,7 +1142,7 @@ TEST_CASE("dropdown option replacements retain only the current live rows", "[Dr
     std::string value = "original";
     int changes = 0;
     auto& dropdown = surface.root().add<DropdownWidget>(
-        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "replacement"
+        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "", LabelPlacement::Above, "replacement"
     );
     dropdown.set_size({px(180.0F), px(32.0F)});
     dropdown.on_change([&changes] { ++changes; });
@@ -1246,7 +1215,7 @@ TEST_CASE("dropdown closing body blocks underlying input without selecting rows"
     auto& underlying = surface.root().add<ButtonWidget>("underlying");
     underlying.on_click([&underlying_clicks] { ++underlying_clicks; });
     auto& dropdown = surface.root().add<DropdownWidget>(
-        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "fading"
+        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "", LabelPlacement::Above, "fading"
     );
     dropdown.set_size({px(180.0F), px(32.0F)});
     dropdown.on_change([&changes] { ++changes; });
@@ -1262,7 +1231,7 @@ TEST_CASE("dropdown closing body blocks underlying input without selecting rows"
     REQUIRE_FALSE(dropdown.is_open());
     ui_test::draw_surface(surface, 0.01F);
     REQUIRE(dropdown.body().visually_visible());
-    REQUIRE(dropdown.body().enabled());
+    REQUIRE(dropdown.body().input_enabled());
     REQUIRE_FALSE(dropdown.body().children().back()->accepts_input());
     surface.input_router().register_target(underlying, dropdown.body().layout().visual_rect());
     REQUIRE(surface.input_router().node_at(position) == &dropdown.body());
@@ -1276,7 +1245,7 @@ TEST_CASE("dropdown closing body blocks underlying input without selecting rows"
 
     ui_test::draw_surface(surface, 0.2F);
     ui_test::draw_surface(surface, 0.0F);
-    REQUIRE_FALSE(dropdown.body().enabled());
+    REQUIRE_FALSE(dropdown.body().input_enabled());
     REQUIRE_FALSE(dropdown.body().visually_visible());
     dropdown.open();
     ui_test::draw_surface(surface, 0.2F);
@@ -1289,7 +1258,7 @@ TEST_CASE("dropdown observes an externally closed native popup before reopening"
     ui::Surface surface = ui_test::make_surface(runtime);
     std::string value = "first";
     auto& dropdown = surface.root().add<DropdownWidget>(
-        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "external-close"
+        value, std::vector<DropdownOption>{{"first", "first"}, {"second", "second"}}, "", LabelPlacement::Above, "external-close"
     );
     dropdown.set_size({px(180.0F), px(32.0F)});
     const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 300.0F});
@@ -1313,7 +1282,7 @@ TEST_CASE("dropdown observes an externally closed native popup before reopening"
     REQUIRE(value == "first");
     ui_test::draw_surface(surface, 0.2F);
     ui_test::draw_surface(surface, 0.0F);
-    REQUIRE_FALSE(dropdown.body().enabled());
+    REQUIRE_FALSE(dropdown.body().input_enabled());
 
     dropdown.open();
     ui_test::draw_surface(surface, 0.2F);

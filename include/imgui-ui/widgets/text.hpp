@@ -15,7 +15,9 @@ namespace ui {
 
     class TextWidget : public StyledNode {
     public:
-        explicit TextWidget(std::string text) : StyledNode({}, "Text"), m_text(std::move(text)) {}
+        explicit TextWidget(std::string text) : StyledNode({}, "Text"), m_text(std::move(text)) {
+            set_size({fit(), fit()});
+        }
 
         TextWidget& set_wrap(float width);
         TextWidget& set_overflow(TextOverflow overflow);

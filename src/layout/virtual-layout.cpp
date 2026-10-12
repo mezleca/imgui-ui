@@ -127,7 +127,7 @@ void VirtualLayout::on_measure() {
 
     // fit height is computable from the source count and offsets without creating any nodes.
     if (size.height.mode == LayoutSizeMode::Fit) {
-        set_measured_size(outer_size({0.0F, content_height()}), false, true);
+        set_measured_size(outer_size({0.0F, content_height()}));
     }
 }
 
@@ -225,16 +225,17 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
                 continue;
             }
 
-            const ImVec2 margin = child.layout_margin();
+            const BoxInsets margin = child.layout_margin();
             const float y = offset + (static_cast<float>(row) * stride);
 
             arrange_child(
-                child, child.layout().constrain_size(
-                    {std::max(0.0F, width - (margin.x * 2.0F)), std::max(0.0F, height - (margin.y * 2.0F))},
-                    {std::max(0.0F, width - (margin.x * 2.0F)),
-                     std::max(0.0F, content_size(layout().size()).y - (margin.y * 2.0F))}
+                child,
+                child.layout().constrain_size(
+                    {std::max(0.0F, width - margin.horizontal()), std::max(0.0F, height - margin.vertical())},
+                    {std::max(0.0F, width - margin.horizontal()),
+                     std::max(0.0F, content_size(layout().size()).y - margin.vertical())}
                 ),
-                {.offset = {margin.x, y + margin.y}}
+                {.offset = {margin.left, y + margin.top}}
             );
 
             child.draw();

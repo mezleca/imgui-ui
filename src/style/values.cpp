@@ -18,6 +18,15 @@ Color ui::interpolate_value(const Color& start, const Color& target, float progr
     return interpolate_color(start, target, progress);
 }
 
+BoxInsets ui::interpolate_value(BoxInsets start, BoxInsets target, float progress) {
+    return {
+        std::lerp(start.left, target.left, progress),
+        std::lerp(start.top, target.top, progress),
+        std::lerp(start.right, target.right, progress),
+        std::lerp(start.bottom, target.bottom, progress),
+    };
+}
+
 BoxShadow ui::interpolate_value(const BoxShadow& start, const BoxShadow& target, float progress) {
     return {
         interpolate_value(start.offset, target.offset, progress),

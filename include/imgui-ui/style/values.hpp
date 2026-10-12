@@ -2,6 +2,7 @@
 
 #include "../transition.hpp"
 #include "color.hpp"
+#include "../layout/geometry.hpp"
 
 #include <algorithm>
 #include <imgui.h>
@@ -21,6 +22,7 @@ namespace ui {
     float interpolate_value(float start, float target, float progress);
     int interpolate_value(int start, int target, float progress);
     ImVec2 interpolate_value(ImVec2 start, ImVec2 target, float progress);
+    BoxInsets interpolate_value(BoxInsets start, BoxInsets target, float progress);
     Color interpolate_value(const Color& start, const Color& target, float progress);
     BoxShadow interpolate_value(const BoxShadow& start, const BoxShadow& target, float progress);
 

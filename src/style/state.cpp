@@ -7,13 +7,13 @@ using namespace ui;
 static AnimationValue read_style_property(const ComputedStyle& style, StyleAnimationProperty property) {
     switch (property) {
         case StyleAnimationProperty::PaddingX:
-            return style.padding().x;
+            return style.padding().left;
         case StyleAnimationProperty::PaddingY:
-            return style.padding().y;
+            return style.padding().top;
         case StyleAnimationProperty::MarginX:
-            return style.margin().x;
+            return style.margin().left;
         case StyleAnimationProperty::MarginY:
-            return style.margin().y;
+            return style.margin().top;
         case StyleAnimationProperty::Rotation:
             return style.rotation();
         case StyleAnimationProperty::Scale:
@@ -34,16 +34,16 @@ static AnimationValue read_style_property(const ComputedStyle& style, StyleAnima
 static void apply_style_property(Style& style, StyleAnimationProperty property, const AnimationValue& value) {
     switch (property) {
         case StyleAnimationProperty::PaddingX:
-            style.padding({std::max(0.0F, std::get<float>(value)), style.padding().y});
+            style.padding_left(std::get<float>(value)).padding_right(std::get<float>(value));
             return;
         case StyleAnimationProperty::PaddingY:
-            style.padding({style.padding().x, std::max(0.0F, std::get<float>(value))});
+            style.padding_top(std::get<float>(value)).padding_bottom(std::get<float>(value));
             return;
         case StyleAnimationProperty::MarginX:
-            style.margin({std::max(0.0F, std::get<float>(value)), style.margin().y});
+            style.margin_left(std::get<float>(value)).margin_right(std::get<float>(value));
             return;
         case StyleAnimationProperty::MarginY:
-            style.margin({style.margin().x, std::max(0.0F, std::get<float>(value))});
+            style.margin_top(std::get<float>(value)).margin_bottom(std::get<float>(value));
             return;
         case StyleAnimationProperty::Rotation:
             style.rotation(std::get<float>(value));

@@ -90,8 +90,13 @@ static constexpr const char* ALIGNMENT_NAMES[] = {
     "center-right", "bottom-left", "bottom-center", "bottom-right", "custom",
 };
 
-static constexpr const char* STYLE_NAMES[] = {"all", "default", "hover", "active", "focus"};
-static constexpr const char* BORDER_STYLE_NAMES[] = {"solid", "dashed", "dotted"};
+static constexpr ImVec2 ALIGNMENTS[] = {
+    Anchor::TopLeft,     Anchor::TopCenter,  Anchor::TopRight,     Anchor::CenterLeft,  Anchor::Center,
+    Anchor::CenterRight, Anchor::BottomLeft, Anchor::BottomCenter, Anchor::BottomRight,
+};
+
+static constexpr const char* STYLE_NAMES[] = {"all", "default", "hover", "active", "focus", "disabled"};
+static constexpr const char* BORDER_STYLE_NAMES[] = {"solid", "dashed", "dotted", "none"};
 static constexpr const char* BOX_SIZING_NAMES[] = {"content-box", "border-box"};
 static constexpr const char* OVERFLOW_NAMES[] = {"visible", "hidden", "clip"};
 static constexpr const char* SIZE_MODE_NAMES[] = {"fixed", "percent", "fit", "grow"};
@@ -352,37 +357,6 @@ static bool draw_inline_combo(std::string_view label, int& selected, const char*
     });
 }
 
-static bool draw_border_flags(std::string_view label, uint8_t* value) {
-    return draw_labeled_input(label, [value] {
-        bool changed = false;
-        const auto draw_flag = [&](const char* name, uint8_t flag) {
-            bool enabled = (*value & flag) != 0;
-            if (ImGui::Checkbox(name, &enabled)) {
-                *value =
-                    enabled ? static_cast<uint8_t>(*value | flag) : static_cast<uint8_t>(*value & ~static_cast<unsigned>(flag));
-                changed = true;
-            }
-        };
-
-        draw_flag("left", BORDER_LEFT);
-        ImGui::SameLine(0.0F, 4.0F);
-        draw_flag("top", BORDER_TOP);
-        ImGui::SameLine(0.0F, 4.0F);
-        draw_flag("right", BORDER_RIGHT);
-        ImGui::SameLine(0.0F, 4.0F);
-        draw_flag("bottom", BORDER_BOTTOM);
-        ImGui::SameLine(0.0F, 4.0F);
-
-        bool all = (*value & BORDER_ALL) == BORDER_ALL;
-        if (ImGui::Checkbox("all", &all)) {
-            *value = all ? static_cast<uint8_t>(BORDER_ALL) : BORDER_NONE;
-            changed = true;
-        }
-
-        return changed;
-    });
-}
-
 static bool draw_number_input(
     std::string_view label, ImGuiDataType type, void* values, int components, float speed, const void* minimum,
     const void* maximum, const char* format
@@ -482,8 +456,7 @@ void Debugger::apply_theme_defaults(const Theme& theme) {
         style.color(theme.text_color)
             .background_color(theme.background_secondary_color)
             .border_color(theme.controls.border_color)
-            .border(BORDER_ALL)
-            .border_thickness(theme.controls.border_thickness)
+            .border(BorderEdge{theme.controls.border_thickness, BorderType::Solid})
             .border_radius(0.0F)
             .padding({WINDOW_PADDING, WINDOW_PADDING});
     });
@@ -565,7 +538,7 @@ void Debugger::remove_target() {
 
     if (std::unique_ptr<Node> detached = parent->detach(*target); detached != nullptr) {
         detached->set_visible(false);
-        detached->set_enabled(false);
+        detached->set_input_enabled(false);
         m_detached_nodes.push_back(std::move(detached));
     }
 }
@@ -861,8 +834,8 @@ bool Debugger::should_restore_flow_position(const LayoutConfig& config) const {
     }
 
     const Placement& placement = config.placement;
-    return placement.anchor == Anchor::TopLeft && placement.origin == Anchor::TopLeft && placement.offset.x == 0.0F &&
-           placement.offset.y == 0.0F;
+    return placement.anchor.x == 0.0F && placement.anchor.y == 0.0F && placement.origin.x == 0.0F && placement.origin.y == 0.0F &&
+           placement.offset.x == 0.0F && placement.offset.y == 0.0F;
 }
 
 void Debugger::draw_highlight() {
@@ -888,8 +861,8 @@ void Debugger::draw_highlight() {
     ImVec2 origin_factor;
     ImVec2 anchor_factor;
     if (!target_layout.in_flow()) {
-        origin_factor = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
-        anchor_factor = placement.anchor == Anchor::Custom ? placement.anchor_position : alignment_factor(placement.anchor);
+        origin_factor = placement.origin;
+        anchor_factor = placement.anchor;
     }
 
     const Rect parent_rect = target_layout.parent_content_rect();
@@ -1012,9 +985,14 @@ void Debugger::render_node_properties() {
         m_node_target->set_visible(visible);
     }
 
-    bool enabled = m_node_target->enabled();
+    bool enabled = m_node_target->input_enabled();
     if (draw_labeled_input("input enabled", [&enabled] { return ImGui::Checkbox("##value", &enabled); })) {
-        m_node_target->set_enabled(enabled);
+        m_node_target->set_input_enabled(enabled);
+    }
+
+    bool node_enabled = m_node_target->enabled();
+    if (draw_labeled_input("enabled", [&node_enabled] { return ImGui::Checkbox("##value", &node_enabled); })) {
+        m_node_target->set_enabled(node_enabled);
     }
 
     draw_property_value("id", "{}", m_node_target->id().empty() ? "unnamed" : m_node_target->id().c_str());
@@ -1219,41 +1197,26 @@ void Debugger::render_layout_properties() {
         });
     }
 
-    int anchor = static_cast<int>(request.placement.anchor);
-    if (draw_inline_combo("anchor (parent)", anchor, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
-        update_request([&](LayoutConfig& config) {
-            config.placement.anchor = static_cast<Anchor>(anchor);
-            config.in_flow = should_restore_flow_position(config);
-        });
-    }
+    const auto edit_anchor = [&](const char* label, const char* point_label, ImVec2 Placement::* member) {
+        ImVec2 point = request.placement.*member;
+        int selected = IM_ARRAYSIZE(ALIGNMENTS);
+        for (int index = 0; index < IM_ARRAYSIZE(ALIGNMENTS); ++index) {
+            if (point.x == ALIGNMENTS[index].x && point.y == ALIGNMENTS[index].y) selected = index;
+        }
 
-    int origin = static_cast<int>(request.placement.origin);
-    if (draw_inline_combo("origin (node)", origin, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES))) {
-        update_request([&](LayoutConfig& config) {
-            config.placement.origin = static_cast<Anchor>(origin);
-            config.in_flow = should_restore_flow_position(config);
-        });
-    }
-
-    if (request.placement.anchor == Anchor::Custom) {
-        ImVec2 anchor_position = request.placement.anchor_position;
-        if (draw_number_input("anchor point", &anchor_position.x, 2, 0.01F)) {
+        bool changed = draw_inline_combo(label, selected, ALIGNMENT_NAMES, IM_ARRAYSIZE(ALIGNMENT_NAMES));
+        if (changed && selected < IM_ARRAYSIZE(ALIGNMENTS)) point = ALIGNMENTS[selected];
+        changed |= draw_number_input(point_label, &point.x, 2, 0.01F);
+        if (changed) {
             update_request([&](LayoutConfig& config) {
-                config.placement.anchor_position = anchor_position;
-                config.in_flow = false;
+                config.placement.*member = point;
+                config.in_flow = should_restore_flow_position(config);
             });
         }
-    }
+    };
 
-    if (request.placement.origin == Anchor::Custom) {
-        ImVec2 origin_position = request.placement.origin_position;
-        if (draw_number_input("origin point", &origin_position.x, 2, 0.01F)) {
-            update_request([&](LayoutConfig& config) {
-                config.placement.origin_position = origin_position;
-                config.in_flow = false;
-            });
-        }
-    }
+    edit_anchor("anchor (parent)", "anchor point", &Placement::anchor);
+    edit_anchor("origin (node)", "origin point", &Placement::origin);
 }
 
 void Debugger::render_style_variables(Style& style, std::span<Style*> all_styles) {
@@ -1372,15 +1335,23 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
         edit_color("background", style.background_color(), &Style::background_color);
         edit_color("border color", style.border_color(), &Style::border_color);
 
-        uint8_t border = style.border();
-        if (draw_border_flags("border sides", &border)) {
-            apply([border](Style& target) { target.border(border); });
-        }
-
-        int border_style = static_cast<int>(style.border_style());
-        if (draw_inline_combo("border style", border_style, BORDER_STYLE_NAMES, IM_ARRAYSIZE(BORDER_STYLE_NAMES))) {
-            apply([border_style](Style& target) { target.border_style(static_cast<BorderStyle>(border_style)); });
-        }
+        const auto edit_border = [&](const char* label, BorderEdge edge,
+                                     Style& (Style::*setter)(float, BorderType, TransitionSpec)) {
+            ImGui::PushID(label);
+            const bool size_changed = draw_number_input(label, &edge.size, 1, 0.1F, 0.0F, 128.0F);
+            int type = static_cast<int>(edge.type);
+            const bool type_changed = draw_inline_combo("type", type, BORDER_STYLE_NAMES, IM_ARRAYSIZE(BORDER_STYLE_NAMES));
+            if (size_changed || type_changed) {
+                apply([edge, type, setter](Style& target) {
+                    (target.*setter)(edge.size, static_cast<BorderType>(type), {});
+                });
+            }
+            ImGui::PopID();
+        };
+        edit_border("border left", style.border_left(), &Style::border_left);
+        edit_border("border top", style.border_top(), &Style::border_top);
+        edit_border("border right", style.border_right(), &Style::border_right);
+        edit_border("border bottom", style.border_bottom(), &Style::border_bottom);
 
         float radius = style.border_radius();
         if (draw_number_input("border radius", &radius, 1, 0.1F, 0.0F, 64.0F)) {
@@ -1411,8 +1382,8 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
             apply([shadow](Style& target) { target.box_shadow(shadow); });
         }
 
-        ImVec2 padding = style.padding();
-        if (draw_number_input("padding", &padding.x, 2, 0.1F, 0.0F, 128.0F)) {
+        BoxInsets padding = style.padding();
+        if (draw_number_input("padding (left/top/right/bottom)", &padding.left, 4, 0.1F, 0.0F, 128.0F)) {
             apply([padding](Style& target) { target.padding(padding); });
         }
 
@@ -1426,8 +1397,8 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
             apply([overflow](Style& target) { target.overflow(static_cast<Overflow>(overflow)); });
         }
 
-        ImVec2 margin = style.margin();
-        if (draw_number_input("margin", &margin.x, 2, 0.1F, 0.0F, 128.0F)) {
+        BoxInsets margin = style.margin();
+        if (draw_number_input("margin (left/top/right/bottom)", &margin.left, 4, 0.1F, 0.0F, 128.0F)) {
             apply([margin](Style& target) { target.margin(margin); });
         }
 

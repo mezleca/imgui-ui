@@ -44,11 +44,11 @@ namespace ui {
         }
 
         void set_visual_style(StyleType type) {
-            m_state.set_style(type);
+            if (enabled() || type == StyleType::DISABLED) m_state.set_style(type);
         }
 
         void set_interaction_style(bool hovered, bool active, bool focused = false) {
-            m_state.set_item_state(hovered, active, focused);
+            if (enabled()) m_state.set_item_state(hovered, active, focused);
         }
 
         StyleAnimationSequence animate() {
@@ -89,7 +89,7 @@ namespace ui {
             return m_state.accepts_input();
         }
 
-        ImVec2 layout_margin() const override {
+        BoxInsets layout_margin() const override {
             return computed_style().margin();
         }
 
@@ -122,9 +122,7 @@ namespace ui {
         void draw() override;
 
     protected:
-        void set_surface(Surface* surface) override;
-        bool on_draw() final;
-        virtual bool paint();
+        void surface_changed() override;
 
         void set_type_name(std::string_view type_name) {
             m_type_name = type_name;
@@ -132,6 +130,7 @@ namespace ui {
 
         void advance_frame_state(float dt) final;
         void input_state_changed() override;
+        void disabled_changed() override;
         void draw_before() override;
         void draw_after() override;
 
@@ -142,7 +141,7 @@ namespace ui {
         }
 
         /// adds padding and borders to the content measurement, keeping at least one configured text line in height.
-        void set_measured_content_size(ImVec2 size, bool measured_width, bool measured_height);
+        void set_measured_content_size(ImVec2 size);
 
         Painter painter() const;
         void draw_surface(Rect rect, const std::optional<Color>& background = {}) const;

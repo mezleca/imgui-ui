@@ -13,15 +13,16 @@ static bool is_flow_child(const Node& child) {
 }
 
 static ImVec2 stack_available_size(const Node& child, ImVec2 content_size) {
-    const ImVec2 margin = child.layout_margin();
-    return {std::max(0.0F, content_size.x - (margin.x * 2.0F)), std::max(0.0F, content_size.y - (margin.y * 2.0F))};
+    const BoxInsets margin = child.layout_margin();
+    return {std::max(0.0F, content_size.x - margin.horizontal()), std::max(0.0F, content_size.y - margin.vertical())};
 }
 
 Container::Container(std::string id, std::string_view type_name)
     : Container(std::move(id), StackDirection::Vertical, type_name) {}
 
 Container::Container(std::string id, StackDirection direction, std::string_view type_name)
-    : Widget(std::move(id), type_name, InputMode::Target), m_direction(direction) {
+    : StyledNode(std::move(id), type_name), m_direction(direction) {
+    set_input_mode(InputMode::Target);
     configure_all_styles([](Style& style) { style.padding({}).box_sizing(BoxSizing::BorderBox); });
 }
 
@@ -31,15 +32,21 @@ Container& Container::set_scrollable(bool vertical, bool horizontal) {
 }
 
 void Container::dispatch_event(UiEvent& event) {
-    Widget::dispatch_event(event);
+    Node::dispatch_event(event);
+    scroll_event(event);
+}
 
-    // let widget callbacks prevent wheel scrolling first. block imgui's wheel path even at the limit so only
-    // framework ancestors can scroll.
+void Container::scroll_event(UiEvent& event) {
+    // block imgui's wheel path even at the limit so only framework ancestors can scroll.
     if (!removal_pending() && !event.propagation_stopped && event.type == EventType::Scroll && !event.default_prevented &&
         scrollable() && computed_style().overflow() != Overflow::Clip) {
         event.block_native_input();
         if (m_scroll.wheel(event.scroll)) event.stop_propagation();
     }
+}
+
+bool Container::accepts_input() const {
+    return Node::accepts_input() && accepts_visual_input();
 }
 
 Container& Container::set_direction(StackDirection direction) {
@@ -50,10 +57,6 @@ Container& Container::set_direction(StackDirection direction) {
     m_direction = direction;
     invalidate_measure();
     return *this;
-}
-
-Container& Container::set_content_alignment(Anchor alignment) {
-    return set_content_alignment(alignment_factor(alignment));
 }
 
 Container& Container::set_content_alignment(ImVec2 alignment) {
@@ -86,9 +89,10 @@ void Container::apply_theme_defaults(const Theme& theme) {
 }
 
 void Container::on_measure() {
-    const LayoutSize& size = layout().size_spec();
-    const bool fit_width = size.width.mode == LayoutSizeMode::Fit;
-    const bool fit_height = size.height.mode == LayoutSizeMode::Fit;
+    set_measured_size(outer_size(measure_children()));
+}
+
+ImVec2 Container::measure_children() const {
     const int main = m_direction == StackDirection::Horizontal ? 0 : 1;
     const int cross = 1 - main;
     ImVec2 content_size{};
@@ -101,8 +105,8 @@ void Container::on_measure() {
         }
 
         const ImVec2 child_size = child->layout().intrinsic_size();
-        const ImVec2 margin = child->layout_margin();
-        const ImVec2 outer_size = {child_size.x + (margin.x * 2.0F), child_size.y + (margin.y * 2.0F)};
+        const BoxInsets margin = child->layout_margin();
+        const ImVec2 outer_size = {child_size.x + margin.horizontal(), child_size.y + margin.vertical()};
 
         content_size[main] += outer_size[main];
         content_size[cross] = std::max(content_size[cross], outer_size[cross]);
@@ -113,12 +117,7 @@ void Container::on_measure() {
     const float spacing = flow_count > 0 ? m_spacing * static_cast<float>(flow_count - 1) : 0.0F;
     content_size[main] += spacing;
 
-    // fit includes padding and borders so arranging children can recover the measured content space.
-    set_measured_size(outer_size(content_size), fit_width, fit_height);
-}
-
-void Container::arrange_children() {
-    arrange_children(child_layout_size());
+    return content_size;
 }
 
 void Container::arrange_children(ImVec2 content_size) {
@@ -134,7 +133,7 @@ void Container::arrange_children(ImVec2 content_size) {
         if (!is_flow_child(*child)) continue;
         const LayoutSize& request = child->layout().size_spec();
         const LayoutAxis& axis = main == 0 ? request.width : request.height;
-        const ImVec2 margin = child->layout_margin();
+        const BoxInsets margin = child->layout_margin();
         const ImVec2 available = stack_available_size(*child, content_size);
 
         LayoutItem item{child.get(), child->layout().resolve_size(available), std::numeric_limits<float>::infinity(), 0.0F};
@@ -142,15 +141,14 @@ void Container::arrange_children(ImVec2 content_size) {
         if (axis.mode == LayoutSizeMode::Grow) {
             const float insets = child->layout().box_insets().axis(main == 0);
             item.size[main] = axis.constrain(0.0F, available[main], insets, child->layout().box_sizing());
-            item.maximum = axis.constrain(
-                std::numeric_limits<float>::infinity(), available[main], insets, child->layout().box_sizing()
-            );
+            item.maximum =
+                axis.constrain(std::numeric_limits<float>::infinity(), available[main], insets, child->layout().box_sizing());
 
             item.weight = axis.value;
             grow_weight += item.weight;
         }
 
-        flow_size += item.size[main] + (margin[main] * 2.0F);
+        flow_size += item.size[main] + margin.axis(main == 0);
         m_layout_items.push_back(item);
     }
 
@@ -189,20 +187,14 @@ void Container::arrange_children(ImVec2 content_size) {
 
     float cursor = (content_size[main] - flow_size) * m_content_alignment[main];
     for (const auto& item : m_layout_items) {
-        const ImVec2 margin = item.node->layout_margin();
-        ImVec2 child_offset = margin;
+        const BoxInsets margin = item.node->layout_margin();
+        ImVec2 child_offset = {margin.left, margin.top};
         child_offset[main] += cursor;
-        child_offset[cross] +=
-            (content_size[cross] - item.size[cross] - (margin[cross] * 2.0F)) * m_content_alignment[cross];
+        child_offset[cross] += (content_size[cross] - item.size[cross] - margin.axis(cross == 0)) * m_content_alignment[cross];
 
         arrange_child(*item.node, item.size, {.offset = child_offset});
-
-        cursor += item.size[main] + (margin[main] * 2.0F) + m_spacing;
+        cursor += item.size[main] + margin.axis(main == 0) + m_spacing;
     }
-}
-
-ImVec2 Container::child_window_padding() const {
-    return box_insets().window_padding();
 }
 
 ImVec2 Container::child_window_size() const {
@@ -226,14 +218,16 @@ Rect Container::shadow_rect(Rect child_rect) const {
 }
 
 ImVec2 Container::child_layout_size() const {
-    return content_size(child_window_size());
+    const ImVec2 size = child_window_size();
+    const ImVec2 scrollbars = ImGui::GetCurrentWindow()->ScrollbarSizes;
+    return content_size({size.x - scrollbars.x, size.y - scrollbars.y});
 }
 
 void Container::draw_children() {
-    arrange_children();
     const ImVec2 available = child_layout_size();
+    arrange_children(available);
     for (const auto& child : children()) {
-        if (child->removal_pending()) {
+        if (child->removal_pending() || !child->visible()) {
             continue;
         }
 
@@ -242,11 +236,11 @@ void Container::draw_children() {
             continue;
         }
 
-        const ImVec2 margin = child->layout_margin();
+        const BoxInsets margin = child->layout_margin();
         Placement placement = child->layout().placement();
-        const ImVec2 origin = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
-        placement.offset.x += margin.x * (1.0F - (2.0F * origin.x));
-        placement.offset.y += margin.y * (1.0F - (2.0F * origin.y));
+        const ImVec2 origin = placement.origin;
+        placement.offset.x += (margin.left * (1.0F - origin.x)) - (margin.right * origin.x);
+        placement.offset.y += (margin.top * (1.0F - origin.y)) - (margin.bottom * origin.y);
         const ImVec2 child_available = stack_available_size(*child, available);
         const ImVec2 size = child->layout().resolve_size(child_available);
         arrange_child(*child, size, placement);

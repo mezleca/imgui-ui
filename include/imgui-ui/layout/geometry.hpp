@@ -8,17 +8,16 @@
 #include <limits>
 
 namespace ui {
-    enum class Anchor : uint8_t {
-        TopLeft,
-        TopCenter,
-        TopRight,
-        CenterLeft,
-        Center,
-        CenterRight,
-        BottomLeft,
-        BottomCenter,
-        BottomRight,
-        Custom,
+    struct Anchor {
+        static constexpr ImVec2 TopLeft{0.0F, 0.0F};
+        static constexpr ImVec2 TopCenter{0.5F, 0.0F};
+        static constexpr ImVec2 TopRight{1.0F, 0.0F};
+        static constexpr ImVec2 CenterLeft{0.0F, 0.5F};
+        static constexpr ImVec2 Center{0.5F, 0.5F};
+        static constexpr ImVec2 CenterRight{1.0F, 0.5F};
+        static constexpr ImVec2 BottomLeft{0.0F, 1.0F};
+        static constexpr ImVec2 BottomCenter{0.5F, 1.0F};
+        static constexpr ImVec2 BottomRight{1.0F, 1.0F};
     };
 
     enum class StackDirection : uint8_t {
@@ -51,13 +50,16 @@ namespace ui {
     struct LayoutAxis {
         constexpr LayoutAxis() = default;
         constexpr LayoutAxis(LayoutSizeMode mode, float value) : mode(mode), value(value) {}
+        constexpr LayoutAxis(LayoutLimit length) // NOLINT(misc-explicit-constructor)
+            : mode(length.percentage ? LayoutSizeMode::Percent : LayoutSizeMode::Fixed), value(length.value) {}
 
         /// grows between minimum and maximum, which must be px() or percent(). a resolved minimum above the
         /// maximum takes priority. {px(150), percent(50)} therefore never shrinks below 150 pixels.
-        LayoutAxis(LayoutAxis minimum, LayoutAxis maximum);
+        constexpr LayoutAxis(LayoutLimit minimum, LayoutLimit maximum) : minimum(minimum), maximum(maximum) {}
 
         /// applies limits to an explicit rule, for example {fit(), px(10), px(100)} measures content within 10–100 pixels.
-        LayoutAxis(LayoutAxis preferred, LayoutAxis minimum, LayoutAxis maximum);
+        constexpr LayoutAxis(LayoutAxis preferred, LayoutLimit minimum, LayoutLimit maximum)
+            : mode(preferred.mode), value(preferred.value), minimum(minimum), maximum(maximum) {}
 
         /// measures with pixel limits. percentage limits wait until parent space is available during resolve().
         float intrinsic(float measured, float insets = 0.0F, BoxSizing box_sizing = BoxSizing::BorderBox) const;
@@ -80,16 +82,21 @@ namespace ui {
         LayoutAxis height;
     };
 
+    struct LayoutBounds {
+        LayoutLimit width;
+        LayoutLimit height;
+    };
+
     /// requests a fixed pixel extent, clamped to zero. ContentBox adds padding and borders outside this extent,
     /// while BorderBox includes them, with padding and borders as the minimum outer size.
-    constexpr LayoutAxis px(float value) {
-        return {LayoutSizeMode::Fixed, std::max(0.0F, value)};
+    constexpr LayoutLimit px(float value) {
+        return {std::max(0.0F, value), false};
     }
 
     /// percent(50) requests half the available parent space on this axis, not half the remainder after siblings.
     /// the percentage is clamped to [0, 100]. padding and borders follow the same box-sizing rule as px().
-    constexpr LayoutAxis percent(float value) {
-        return {LayoutSizeMode::Percent, std::clamp(value, 0.0F, 100.0F)};
+    constexpr LayoutLimit percent(float value) {
+        return {std::clamp(value, 0.0F, 100.0F), true};
     }
 
     /// fills available space across a stack. along its direction, growing children reserve their minimum, then
@@ -110,12 +117,9 @@ namespace ui {
         bool operator==(const Placement& other) const;
 
         // aligns origin on the node with anchor in the parent's content box, then adds offset in pixels.
-        // Custom reads anchor_position or origin_position as normalized factors instead of a named anchor.
-        Anchor anchor = Anchor::TopLeft;
-        Anchor origin = Anchor::TopLeft;
+        ImVec2 anchor = Anchor::TopLeft;
+        ImVec2 origin = Anchor::TopLeft;
         ImVec2 offset;
-        ImVec2 anchor_position;
-        ImVec2 origin_position;
     };
 
     struct LayoutConfig {
@@ -159,6 +163,13 @@ namespace ui {
     };
 
     struct BoxInsets {
+        constexpr BoxInsets() = default;
+        constexpr BoxInsets(float all) : BoxInsets(all, all, all, all) {} // NOLINT(misc-explicit-constructor)
+        constexpr BoxInsets(float horizontal, float vertical) : BoxInsets(horizontal, vertical, horizontal, vertical) {}
+        constexpr BoxInsets(float left, float top, float right, float bottom)
+            : left(left), top(top), right(right), bottom(bottom) {}
+        BoxInsets(ImVec2 axes) : BoxInsets(axes.x, axes.y) {} // NOLINT(misc-explicit-constructor)
+
         float horizontal() const {
             return left + right;
         }
@@ -172,7 +183,7 @@ namespace ui {
         }
 
         ImVec2 window_padding() const {
-            return {std::max(left, right), std::max(top, bottom)};
+            return {horizontal() * 0.5F, vertical() * 0.5F};
         }
 
         constexpr bool operator==(const BoxInsets&) const = default;
@@ -183,7 +194,6 @@ namespace ui {
         float bottom = 0.0F;
     };
 
-    ImVec2 alignment_factor(Anchor alignment);
     ImVec2 clamp_position(Rect bounds, ImVec2 size, ImVec2 position);
     Rect viewport_work_area();
 
@@ -270,12 +280,11 @@ namespace ui {
 
         void set_size(LayoutSize size);
         void set_config(LayoutConfig config);
-        void set_measured_size(ImVec2 size, bool measured_width, bool measured_height);
+        void set_measured_size(ImVec2 size);
         void set_box_insets(BoxInsets insets);
         void set_box_sizing(BoxSizing sizing);
 
-        void assign_size(ImVec2 size, bool assigned_by_parent = false);
-        void clear_size_assignment();
+        void assign_size(ImVec2 size);
         void invalidate_resolved_size();
 
         void set_arranged_placement(Placement placement) {
@@ -294,6 +303,7 @@ namespace ui {
         void set_arranged_rects(Rect local_rect, Rect layout_rect);
         void set_layout_rect(Rect rect) {
             m_layout_rect = rect;
+            m_visual_rect = rect;
         }
 
         void set_visual_rect(Rect rect) {
@@ -307,7 +317,7 @@ namespace ui {
 
         LayoutConfig m_config{};
         ImVec2 m_measured_size;
-        BoxInsets m_box_insets{};
+        BoxInsets m_box_insets;
         BoxSizing m_box_sizing = BoxSizing::ContentBox;
         ImVec2 m_size;
         Rect m_local_rect{};
@@ -316,9 +326,7 @@ namespace ui {
         Rect m_parent_content_rect{};
         ImVec2 m_available_size;
         Placement m_arranged_placement{};
-        bool m_has_explicit_size_request = false;
-        bool m_has_size = false;
-        bool m_size_assigned_by_parent = false;
+        bool m_has_parent_size = false;
         bool m_has_arranged_position = false;
     };
 

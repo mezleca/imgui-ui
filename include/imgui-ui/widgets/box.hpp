@@ -6,10 +6,10 @@
 #include <utility>
 
 namespace ui {
-    class BoxWidget : public DrawListWidget {
+    class BoxWidget : public Widget {
     public:
         explicit BoxWidget(std::string id = {}, LayoutSize size = {fit(), fit()})
-            : DrawListWidget(std::move(id), "Box", InputMode::None) {
+            : Widget(std::move(id), "Box", InputMode::None) {
             set_size(size);
         }
     };

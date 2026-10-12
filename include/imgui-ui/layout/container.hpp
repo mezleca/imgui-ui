@@ -1,7 +1,7 @@
 #pragma once
 
 #include "scroll.hpp"
-#include "../widgets/widget.hpp"
+#include "../style/styled-node.hpp"
 
 #include <string>
 #include <string_view>
@@ -15,7 +15,7 @@ namespace ui {
         float weight;
     };
 
-    class Container : public Widget {
+    class Container : public StyledNode {
     public:
         /// its background receives pointer events without blocking targets underneath. use input mode blocker to block them.
         explicit Container(std::string id, std::string_view type_name = "Container");
@@ -24,9 +24,11 @@ namespace ui {
         /// enables the requested scrollbars. imgui may still show a vertical scrollbar when horizontal scrolling is enabled,
         /// even if vertical is false.
         Container& set_scrollable(bool vertical, bool horizontal = false);
+
         Scroll& scroll() {
             return m_scroll;
         }
+
         const Scroll& scroll() const {
             return m_scroll;
         }
@@ -36,29 +38,32 @@ namespace ui {
 
         /// aligns the flowing group within available content space. named anchors map to normalized {x, y} factors,
         /// and explicit factors are clamped to [0, 1]. this does not change placement of out-of-flow children.
-        Container& set_content_alignment(Anchor alignment);
         Container& set_content_alignment(ImVec2 alignment);
 
         /// pixel gap between consecutive flowing children, clamped to zero. there is no gap before or after the group.
         virtual Container& set_spacing(float spacing);
 
+        bool accepts_input() const override;
+
     protected:
         void apply_theme_defaults(const Theme& theme) override;
 
         void on_measure() override;
-        virtual void arrange_children();
+        ImVec2 measure_children() const;
         void arrange_children(ImVec2 content_size);
         void draw_children() override;
-
-        virtual ImVec2 child_window_padding() const;
-        virtual ImVec2 child_window_size() const;
-        virtual ImGuiWindowFlags child_window_flags() const;
-        virtual Rect shadow_rect(Rect child_rect) const;
         bool paint() override;
         void on_draw_end() override;
 
-        virtual ImVec2 child_layout_size() const;
+        virtual ImVec2 child_window_size() const;
+        virtual ImGuiWindowFlags child_window_flags() const;
+        virtual Rect shadow_rect(Rect child_rect) const;
+        virtual void paint_surface(const PaintContext& context) const;
+        virtual void paint_content(const PaintContext&) {}
+        ImVec2 child_layout_size() const;
+
         void dispatch_event(UiEvent& event) override;
+        void scroll_event(UiEvent& event);
         bool scrollable() const {
             return m_scroll.enabled();
         }
@@ -70,5 +75,6 @@ namespace ui {
         float m_spacing = 0.0F;
         ImVec2 m_content_alignment;
         bool m_content_clip_pushed = false;
+        bool m_child_window_open = false;
     };
 } // namespace ui

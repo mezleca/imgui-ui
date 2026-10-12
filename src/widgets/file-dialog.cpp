@@ -3,36 +3,95 @@
 #include <imgui-ui/style/theme.hpp>
 #include <imgui-ui/surface.hpp>
 #include <imgui-ui/widgets/text.hpp>
+#include <imgui-ui/widgets/button.hpp>
 
 using namespace ui;
 
-FileDialogWidget::FileDialogWidget(std::string label, std::string id)
-    : Container(std::move(id), StackDirection::Horizontal, "FileDialog"), m_value(std::move(label)),
-      m_field(add<TextWidget>(m_value)) {
-    set_content_alignment({0.5F, 0.5F});
-    set_size({fit(), fit()});
+class FileDialogButton final : public ButtonWidget {
+public:
+    FileDialogButton() : ButtonWidget("select a file", {grow(), fit()}) {}
+
+protected:
+    void apply_theme_defaults(const Theme& theme) override {
+        ButtonWidget::apply_theme_defaults(theme);
+        configure_all_styles([&theme](Style& style) {
+            style.background_color(theme.background_tertiary_color)
+                .border(BorderEdge{theme.controls.border_thickness, BorderType::Dashed})
+                .border_color(theme.controls.border_color);
+        });
+        style(StyleType::HOVER).background_color(theme.background_secondary_color);
+    }
+};
+
+FileDialogWidget::FileDialogWidget(std::string label, LabelPlacement placement, std::string id)
+    : Widget(std::move(id), "FileDialog", InputMode::None), m_label(add<TextWidget>(std::move(label))),
+      m_button(add<FileDialogButton>()) {
+    set_size({grow(), fit()});
+    m_button.set_text_alignment({0.0F, 0.5F}).set_text_overflow(TextOverflow::Ellipsis);
+    m_button.on_click([this] {
+        show_dialog(m_operation, {
+            .filters = m_filters,
+            .default_path = m_default_path,
+            .default_name = m_default_name,
+            .title = m_title,
+            .accept_label = m_accept_label,
+            .cancel_label = m_cancel_label,
+        });
+    });
+    m_label_placement = placement;
+    update_label_layout();
 }
 
 void FileDialogWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
-    set_font(surface().get_primary_font(), 18.0F);
-
-    configure_all_styles([&theme](Style& style) {
-        style.border_color(theme.border_color, 0.15F)
-            .padding({14.0F, 18.0F})
-            .background_color(theme.background_color)
-            .border(BORDER_ALL)
-            .border_radius(4.0F)
-            .border_style(BorderStyle::Dashed);
-    });
-    style(StyleType::HOVER).background_color(theme.background_secondary_color).border_color(theme.accent_color);
-    m_field.configure_all_styles([&theme](Style& style) {
-        style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BORDER_NONE);
-    });
+    set_font(surface().get_primary_font(), theme.controls.font_size);
+    configure_all_styles([](Style& style) { style.padding({}).border(BorderEdge{0.0F, BorderType::None}); });
+    m_label_spacing = {theme.metrics.item_inner_spacing.x, theme.metrics.item_spacing.y};
+    update_label_layout();
 }
 
 FileDialogResult FileDialogWidget::show_dialog(FileDialogOperation operation, const FileDialogOptions& options) {
-    return surface().file_dialog().show(operation, options);
+    FileDialogResult result = surface().file_dialog().show(operation, options);
+    if (result.accepted()) {
+        if (!result.paths.empty()) set_value(result.paths.front().string());
+        if (m_on_select) m_on_select(result);
+    }
+    return result;
+}
+
+FileDialogWidget& FileDialogWidget::set_label(std::string label, LabelPlacement placement) {
+    m_label.set_text(std::move(label));
+    m_label_placement = placement;
+    update_label_layout();
+    return *this;
+}
+
+void FileDialogWidget::update_label_layout() {
+    const bool inline_label = m_label_placement == LabelPlacement::Inline;
+    set_direction(inline_label ? StackDirection::Horizontal : StackDirection::Vertical);
+    set_content_alignment({0.0F, inline_label ? 0.5F : 0.0F});
+    m_label.set_visible(!m_label.empty());
+    set_spacing(inline_label ? m_label_spacing.x : m_label_spacing.y);
+}
+
+FileDialogWidget& FileDialogWidget::set_operation(FileDialogOperation operation) {
+    m_operation = operation;
+    return *this;
+}
+
+FileDialogWidget& FileDialogWidget::set_options(const FileDialogOptions& options) {
+    m_filters.assign(options.filters.begin(), options.filters.end());
+    m_default_path = options.default_path;
+    m_default_name = options.default_name;
+    m_title = options.title;
+    m_accept_label = options.accept_label;
+    m_cancel_label = options.cancel_label;
+    return *this;
+}
+
+FileDialogWidget& FileDialogWidget::on_select(std::function<void(const FileDialogResult&)> callback) {
+    m_on_select = std::move(callback);
+    return *this;
 }
 
 const std::string& FileDialogWidget::value() const {
@@ -43,7 +102,7 @@ bool FileDialogWidget::set_value(std::string_view value) {
     if (m_value == value) return false;
 
     m_value = value;
-    m_field.set_text(m_value);
+    m_button.set_text(m_value.empty() ? "select a file" : m_value);
     notify_change();
     return true;
 }

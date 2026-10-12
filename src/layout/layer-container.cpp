@@ -1,4 +1,5 @@
 #include <imgui-ui/layout/layer-container.hpp>
+#include <imgui-ui/imgui/window.hpp>
 #include <imgui-ui/constants.hpp>
 #include <imgui-ui/imgui/painter.hpp>
 
@@ -21,8 +22,10 @@ ImGuiWindowFlags LayerContainer::child_window_flags() const {
     // imgui performs native scrollbar hit testing separately from our input router. an active blocker must accept
     // native mouse hit testing so imgui selects its window instead of hovering the scrollbar underneath.
     // other layers keep NoMouseInputs so their child window does not intercept native input intended for the parent.
-    // native hover is resolved after BeginChild, so test tree eligibility without Widget's visual hit test here.
-    return input_mode() == InputMode::Blocker && Node::accepts_input() ? flags : flags | ImGuiWindowFlags_NoMouseInputs; // NOLINT(bugprone-parent-virtual-call)
+    // native hover is resolved after BeginChild, so test tree eligibility without the container's visual hit test here.
+    return input_mode() == InputMode::Blocker && Node::accepts_input() // NOLINT(bugprone-parent-virtual-call)
+               ? flags
+               : flags | ImGuiWindowFlags_NoMouseInputs;
 }
 
 ImGuiWindowFlags LayerContainer::window_flags() const {
@@ -30,7 +33,7 @@ ImGuiWindowFlags LayerContainer::window_flags() const {
 }
 
 void LayerContainer::on_layout() {
-    if (has_size()) {
+    if (has_parent_size()) {
         return;
     }
 
@@ -84,8 +87,8 @@ bool LayerContainer::paint_window() {
     // so user dragging and saved window sizes cannot escape the node's configured range.
     const ImVec2 content =
         layout().parent_content_rect().valid() ? layout().parent_content_rect().size() : ImGui::GetMainViewport()->WorkSize;
-    const ImVec2 margin = layout_margin();
-    const ImVec2 available = {std::max(0.0F, content.x - (margin.x * 2.0F)), std::max(0.0F, content.y - (margin.y * 2.0F))};
+    const BoxInsets margin = layout_margin();
+    const ImVec2 available = {std::max(0.0F, content.x - margin.horizontal()), std::max(0.0F, content.y - margin.vertical())};
     ImGui::SetNextWindowSizeConstraints(
         layout().constrain_size({}, available),
         layout().constrain_size({std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity()}, available)
@@ -98,12 +101,12 @@ bool LayerContainer::paint_window() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2{});
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{});
     ImGui::Begin(id().c_str(), nullptr, flags);
+    apply_window_insets(box_insets());
     m_window_initialized = true;
 
     const Rect window_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
     assign_size(window_rect.size());
     set_layout_rect(window_rect);
-    set_visual_rect(window_rect);
 
     draw_surface(window_rect);
     return true;

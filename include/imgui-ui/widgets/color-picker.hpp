@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../layout/container.hpp"
+#include "widget.hpp"
 
 #include <string>
 
@@ -9,11 +9,13 @@ namespace ui {
     class ColorPickerPreviewNode;
     class TextWidget;
 
-    class ColorPickerWidget : public Container {
+    class ColorPickerWidget : public Widget {
     public:
-        explicit ColorPickerWidget(Color& color, std::string label = {}, std::string id = {});
+        explicit ColorPickerWidget(
+            Color& color, std::string label = {}, LabelPlacement placement = LabelPlacement::Above, std::string id = {}
+        );
 
-        ColorPickerWidget& set_label(std::string label);
+        ColorPickerWidget& set_label(std::string label, LabelPlacement placement = LabelPlacement::Above);
         bool set_color(const Color& color);
         void open();
         void close();
@@ -37,5 +39,7 @@ namespace ui {
         ColorPickerPreviewNode* m_preview = nullptr;
         ColorPickerPopup* m_popup = nullptr;
         bool m_open = false;
+        LabelPlacement m_label_placement = LabelPlacement::Above;
+        ImVec2 m_label_spacing = {8.0F, 10.0F};
     };
 } // namespace ui

@@ -24,7 +24,7 @@ static int pointer_button_index(PointerButton button) {
 }
 
 static bool is_input_target(const Node* node) {
-    return node != nullptr && !node->removal_pending() && node->accepts_input();
+    return node != nullptr && node->accepts_input();
 }
 
 InputRouter::~InputRouter() {
@@ -117,13 +117,19 @@ void InputRouter::set_hovered(const HitTestIndex::Route& route) {
     }
 
     m_hovered_nodes.clear();
-    for (const auto& entry : route.targets)
+    for (const auto& entry : route.targets) {
         m_hovered_nodes.push_back(entry.node);
-    if (owner != nullptr) m_hovered_nodes.push_back(owner);
-    for (Node* node : m_hovered_nodes)
-        node->set_input_state(set_input_flag(node->input_state(), &InputState::hovered, true));
+        entry.node->set_input_state(set_input_flag(entry.node->input_state(), &InputState::hovered, true));
+    }
+    if (owner != nullptr) {
+        m_hovered_nodes.push_back(owner);
+        owner->set_input_state(set_input_flag(owner->input_state(), &InputState::hovered, true));
+    }
 
-    if (m_hovered_nodes.empty() && ImGui::GetCurrentContext() != nullptr) ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
+    if (m_hovered_nodes.empty() && ImGui::GetCurrentContext() != nullptr &&
+        ImGui::GetMouseCursor() != ImGuiMouseCursor_NotAllowed) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Arrow);
+    }
 }
 
 void InputRouter::register_target(Node& node, Rect rect, InputCallback callback, EventMask events) {
@@ -162,6 +168,7 @@ void InputRouter::cancel_capture() {
 
     // clear ownership before notifying the former owner, whose handler may release or transfer capture.
     UiEvent event = UiEvent::make(EventType::Cancel);
+    event.target = captured;
     captured->dispatch_event(event);
 }
 
@@ -182,14 +189,19 @@ bool InputRouter::set_focus(Node* node) {
     // notify the old branch, replace its focus flag, then notify the new branch.
     if (m_focused_node != nullptr) {
         UiEvent event = UiEvent::make(EventType::FocusLost);
-        dispatch(*m_focused_node, event);
+        dispatch_to(*m_focused_node, event);
+    }
+
+    if (node != nullptr && !is_input_target(node)) {
+        set_input_target(m_focused_node, nullptr, &InputState::focused);
+        return false;
     }
 
     set_input_target(m_focused_node, node, &InputState::focused);
 
     if (node != nullptr) {
         UiEvent event = UiEvent::make(EventType::FocusGained);
-        dispatch(*node, event);
+        dispatch_to(*node, event);
     }
 
     return true;
@@ -344,10 +356,13 @@ bool InputRouter::dispatch_keyboard(UiEvent& event) {
     return event.handled;
 }
 
-bool InputRouter::route_pointer(UiEvent& event, std::vector<Node*>* reached, const std::vector<Node*>& eligible) {
-    if (event.propagation_stopped) return event.handled;
+void InputRouter::route_pointer(UiEvent& event, std::vector<Node*>* reached, const std::vector<Node*>& eligible) {
+    if (event.propagation_stopped) return;
 
-    if (event.type == EventType::PointerMove && m_pointer_capture != nullptr) return dispatch(*m_pointer_capture, event);
+    if (event.type == EventType::PointerMove && m_pointer_capture != nullptr) {
+        dispatch_to(*m_pointer_capture, event);
+        return;
+    }
 
     // snapshot before callbacks can open another layer. newly registered targets wait for the next event.
     auto route = m_hit_test.route_at(event.position, event.type);
@@ -366,7 +381,8 @@ bool InputRouter::route_pointer(UiEvent& event, std::vector<Node*>* reached, con
         Node* captured = m_pointer_capture;
         if (event.type == EventType::PointerDown || !captured->contains(front)) {
             if (reached != nullptr && (event.type == EventType::PointerDown || front == captured)) reached->push_back(captured);
-            return dispatch(*captured, event);
+            dispatch_to(*captured, event);
+            return;
         }
 
         // release reaches hit descendants before bubbling to capture. unrelated overlapping branches stay excluded.
@@ -374,7 +390,6 @@ bool InputRouter::route_pointer(UiEvent& event, std::vector<Node*>* reached, con
     }
 
     dispatch_targets(event, route, reached, eligible);
-    return event.handled;
 }
 
 void InputRouter::dispatch_targets(
@@ -418,7 +433,7 @@ void InputRouter::dispatch_targets(
     if (route.blocker) event.stop_propagation();
 }
 
-bool InputRouter::dispatch(Node& target, UiEvent& event) {
+bool InputRouter::dispatch_to(Node& target, UiEvent& event) {
     event.target = &target;
 
     for (Node* current = &target; current != nullptr && !event.propagation_stopped; current = current->parent()) {

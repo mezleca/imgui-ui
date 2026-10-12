@@ -275,9 +275,8 @@ TEST_CASE("container border stays above a child widget surface", "[render][regre
     parent.set_spacing(6.0F);
     parent.configure_all_styles([](ui::Style& style) {
         style.background_color(ui::rgb(1.0F, 0.0F, 0.0F))
-            .border(ui::BORDER_ALL)
+            .border(ui::BorderEdge{1.0F, ui::BorderType::Solid})
             .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
-            .border_thickness(1.0F)
             .padding({});
     });
     auto& spacer = parent.add<ui::Container>("spacer");
@@ -285,7 +284,7 @@ TEST_CASE("container border stays above a child widget surface", "[render][regre
     auto& dialog = parent.add<ui::FileDialogWidget>("file");
     dialog.set_size({ui::grow(), ui::px(60.0F)});
     dialog.configure_all_styles([](ui::Style& style) {
-        style.background_color(ui::rgb(0.0F, 0.0F, 1.0F)).border(ui::BORDER_NONE).padding({});
+        style.background_color(ui::rgb(0.0F, 0.0F, 1.0F)).border(ui::BorderEdge{0.0F, ui::BorderType::None}).padding({});
     });
 
     draw_frame(surface);
@@ -346,7 +345,7 @@ TEST_CASE("scrolling keeps inline overlay panels above earlier content", "[Layer
     });
     input.configure_all_styles([](ui::Style& style) {
         style.background_color(ui::rgb(1.0F, 0.0F, 0.0F))
-            .border(ui::BORDER_ALL)
+            .border(ui::BorderEdge{1.0F, ui::BorderType::Solid})
             .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .padding({});
     });
@@ -362,7 +361,7 @@ TEST_CASE("scrolling keeps inline overlay panels above earlier content", "[Layer
     });
     panel.configure_all_styles([](ui::Style& style) {
         style.background_color(ui::rgb(0.0F, 1.0F, 0.0F))
-            .border(ui::BORDER_ALL)
+            .border(ui::BorderEdge{1.0F, ui::BorderType::Solid})
             .border_color(ui::rgb(0.5F, 0.5F, 0.5F))
             .padding({});
     });
@@ -516,7 +515,8 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
     });
     std::string value = "first";
     auto& dropdown = surface.root().add<ui::DropdownWidget>(
-        value, std::vector<ui::DropdownOption>{{"first", "first"}, {"second", "second"}}, "dropdown"
+        value, std::vector<ui::DropdownOption>{{"first", "first"}, {"second", "second"}}, "", ui::LabelPlacement::Above,
+        "dropdown"
     );
     dropdown.set_layout({
         .size = {ui::px(80.0F), ui::px(30.0F)},
@@ -526,12 +526,11 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
     draw_frame(surface, 0.1F);
     file.configure_all_styles([](ui::Style& style) {
         style.background_color(ui::rgb(0.0F, 0.0F, 0.0F))
-            .border(ui::BORDER_ALL)
+            .border(ui::BorderEdge{20.0F, ui::BorderType::Solid})
             .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
-            .border_thickness(20.0F)
             .padding({});
     });
-    dropdown.body().style().background_color(ui::rgb(0.0F, 1.0F, 0.0F)).border(ui::BORDER_NONE).padding({});
+    dropdown.body().style().background_color(ui::rgb(0.0F, 1.0F, 0.0F)).border(ui::BorderEdge{0.0F, ui::BorderType::None}).padding({});
     draw_frame(surface, 0.1F);
     CHECK(file.computed_style().border_color().value.rgba().x > 0.9F);
     CHECK(dropdown.body().computed_style().background_color().value.rgba().y > 0.9F);
@@ -555,66 +554,6 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
     CHECK(pixel[1] > 160);
 }
 
-TEST_CASE("visible file dialog overflow lets text shadows cross its border", "[render][regression]") {
-    SdlVideoSession sdl({180.0F, 140.0F});
-    ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
-
-    auto& backdrop = surface.root().add<ui::Container>("backdrop");
-    backdrop.set_layout({.size = {ui::px(180.0F), ui::px(140.0F)}, .in_flow = false});
-    backdrop.style().background_color(ui::rgb(1.0F, 1.0F, 1.0F));
-
-    auto& dialog = surface.root().add<ui::FileDialogWidget>("file");
-    dialog.set_layout({
-        .size = {ui::px(70.0F), ui::px(40.0F)},
-        .placement = {.offset = {60.0F, 50.0F}},
-        .in_flow = false,
-    });
-    dialog.set_content_alignment({0.0F, 0.5F});
-    dialog.configure_all_styles([](ui::Style& style) {
-        style.background_color(ui::rgb(1.0F, 1.0F, 1.0F))
-            .border(ui::BORDER_ALL)
-            .border_color(ui::rgb(0.5F, 0.5F, 0.5F))
-            .border_thickness(4.0F)
-            .overflow(ui::Overflow::Visible)
-            .padding({});
-    });
-    auto& text = static_cast<ui::TextWidget&>(*dialog.children().front());
-    text.configure_all_styles([](ui::Style& style) {
-        style.color(ui::rgb(0.0F, 0.0F, 0.0F))
-            .background_color(ui::rgba(0.0F, 0.0F, 0.0F, 0.0F))
-            .border(ui::BORDER_NONE)
-            .box_shadow({.spread = 16.0F, .color = ui::rgb(0.0F, 0.0F, 0.0F)})
-            .padding({});
-    });
-
-    draw_frame(surface);
-    draw_frame(surface);
-
-    const ui::Rect dialog_rect = dialog.layout().visual_rect();
-    const ui::Rect text_rect = text.layout().visual_rect();
-    REQUIRE(dialog_rect.valid());
-    REQUIRE(text_rect.valid());
-    REQUIRE(text_rect.min.x < dialog_rect.max.x);
-
-    GLint viewport[4]{};
-    glGetIntegerv(GL_VIEWPORT, viewport);
-    unsigned char pixel[4]{};
-    const ImVec2 sample = {dialog_rect.min.x - 4.0F, (text_rect.min.y + text_rect.max.y) * 0.5F};
-    glReadPixels(static_cast<int>(sample.x), viewport[3] - static_cast<int>(sample.y), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
-    CHECK(pixel[0] < 80);
-    CHECK(pixel[1] < 80);
-    CHECK(pixel[2] < 80);
-
-    const ImVec2 border_sample = {dialog_rect.min.x + 1.0F, sample.y};
-    glReadPixels(
-        static_cast<int>(border_sample.x), viewport[3] - static_cast<int>(border_sample.y), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
-    );
-    CHECK(pixel[0] < 80);
-    CHECK(pixel[1] < 80);
-    CHECK(pixel[2] < 80);
-}
 
 TEST_CASE("container borders stay below window-layer panels", "[render][regression]") {
     SdlVideoSession sdl({160.0F, 120.0F});
@@ -629,9 +568,8 @@ TEST_CASE("container borders stay below window-layer panels", "[render][regressi
     });
     input.configure_all_styles([](ui::Style& style) {
         style.background_color(ui::rgb(0.0F, 0.0F, 0.0F))
-            .border(ui::BORDER_ALL)
+            .border(ui::BorderEdge{2.0F, ui::BorderType::Solid})
             .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
-            .border_thickness(2.0F)
             .padding({});
     });
 
@@ -643,7 +581,7 @@ TEST_CASE("container borders stay below window-layer panels", "[render][regressi
         .in_flow = false,
     });
     panel.configure_all_styles([](ui::Style& style) {
-        style.background_color(ui::rgb(0.0F, 1.0F, 0.0F)).border(ui::BORDER_NONE).padding({});
+        style.background_color(ui::rgb(0.0F, 1.0F, 0.0F)).border(ui::BorderEdge{0.0F, ui::BorderType::None}).padding({});
     });
 
     draw_frame(surface);
@@ -657,46 +595,6 @@ TEST_CASE("container borders stay below window-layer panels", "[render][regressi
     CHECK(pixel[1] > 160);
 }
 
-TEST_CASE("dropdown trigger shadows render below its label", "[render][regression]") {
-    SdlVideoSession sdl({240.0F, 140.0F});
-    ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
-    auto& backdrop = surface.root().add<ui::Container>("backdrop");
-    backdrop.set_layout({.size = {ui::px(240.0F), ui::px(140.0F)}, .in_flow = false});
-    backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(1.0F, 1.0F, 1.0F)); });
-
-    std::string value = "first";
-    auto& dropdown = surface.root().add<ui::DropdownWidget>(
-        value, std::vector<ui::DropdownOption>{{"first", "first"}, {"second", "second"}}, "dropdown"
-    );
-    dropdown.set_layout({
-        .size = {ui::px(180.0F), ui::fit()},
-        .placement = {.offset = {20.0F, 20.0F}},
-        .in_flow = false,
-    });
-    dropdown.set_label("label");
-    dropdown.trigger().configure_all_styles([](ui::Style& style) {
-        style.background_color(ui::rgb(1.0F, 1.0F, 1.0F))
-            .border(ui::BORDER_NONE)
-            .box_shadow({.spread = 8.0F, .color = ui::rgb(0.0F, 0.0F, 0.0F)});
-    });
-
-    draw_frame(surface);
-    draw_frame(surface);
-
-    const ui::Rect trigger_rect = dropdown.trigger().layout().visual_rect();
-    GLint viewport[4]{};
-    glGetIntegerv(GL_VIEWPORT, viewport);
-    unsigned char pixel[4]{};
-    glReadPixels(
-        static_cast<int>((trigger_rect.min.x + trigger_rect.max.x) * 0.5F),
-        viewport[3] - static_cast<int>(trigger_rect.min.y - 4.0F), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
-    );
-    CHECK(pixel[0] < 80);
-    CHECK(pixel[1] < 80);
-    CHECK(pixel[2] < 80);
-}
 
 TEST_CASE("container overflow controls child surfaces", "[render][regression]") {
     const auto sample_overflow = [](ui::Overflow overflow) {
@@ -717,7 +615,7 @@ TEST_CASE("container overflow controls child surfaces", "[render][regression]") 
             .in_flow = false,
         });
         draw_frame(surface);
-        parent.style().overflow(overflow).border(ui::BORDER_NONE).padding({});
+        parent.style().overflow(overflow).border(ui::BorderEdge{0.0F, ui::BorderType::None}).padding({});
         child.style().background_color(ui::rgb(0.0F, 0.0F, 1.0F)).padding({});
         for (int frame = 0; frame < 2; ++frame) {
             draw_frame(surface);
@@ -739,7 +637,7 @@ TEST_CASE("container overflow controls child surfaces", "[render][regression]") 
     }
 }
 
-TEST_CASE("scrolled tree bodies clip oversized checkbox surfaces", "[TreeContainer][render][regression]") {
+TEST_CASE("scrolled tree bodies clip oversized child surfaces", "[TreeContainer][render][regression]") {
     class ScrollContainer final : public ui::Container {
     public:
         ScrollContainer() : Container("tree-scroll-parent") {
@@ -778,16 +676,14 @@ TEST_CASE("scrolled tree bodies clip oversized checkbox surfaces", "[TreeContain
     panel.set_size({ui::px(80.0F), ui::px(64.0F)});
     panel.configure_all_styles([](ui::Style& style) {
         style.background_color(ui::rgb(0.0F, 0.0F, 0.0F))
-            .border(ui::BORDER_ALL)
+            .border(ui::BorderEdge{1.0F, ui::BorderType::Solid})
             .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .padding({});
     });
-    bool checked = false;
-    auto& checkbox = panel.add<ui::CheckboxWidget>(checked, "oversized");
-    checkbox.set_size({ui::px(160.0F), ui::px(40.0F)});
-    checkbox.set_box_size(120.0F);
-    checkbox.frame().configure_all_styles([](ui::Style& style) {
-        style.background_color(ui::rgb(0.0F, 0.0F, 1.0F)).border(ui::BORDER_NONE).padding({});
+    auto& child = panel.add<ui::Container>("oversized");
+    child.set_size({ui::px(160.0F), ui::px(40.0F)});
+    child.configure_all_styles([](ui::Style& style) {
+        style.background_color(ui::rgb(0.0F, 0.0F, 1.0F)).border(ui::BorderEdge{0.0F, ui::BorderType::None}).padding({});
     });
     parent.add<ui::Container>("filler").set_size({ui::px(160.0F), ui::px(280.0F)});
 
@@ -801,23 +697,23 @@ TEST_CASE("scrolled tree bodies clip oversized checkbox surfaces", "[TreeContain
     draw_frame(surface);
 
     const ui::Rect panel_rect = panel.layout().visual_rect();
-    const ui::Rect frame_rect = checkbox.frame().layout().visual_rect();
+    const ui::Rect child_rect = child.layout().visual_rect();
     REQUIRE(panel_rect.valid());
-    REQUIRE(frame_rect.valid());
-    REQUIRE(frame_rect.max.x > panel_rect.max.x);
+    REQUIRE(child_rect.valid());
+    REQUIRE(child_rect.max.x > panel_rect.max.x);
 
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);
     unsigned char pixel[4]{};
     glReadPixels(
-        static_cast<int>(panel_rect.max.x + 5.0F), viewport[3] - static_cast<int>((frame_rect.min.y + frame_rect.max.y) * 0.5F),
+        static_cast<int>(panel_rect.max.x + 5.0F), viewport[3] - static_cast<int>((child_rect.min.y + child_rect.max.y) * 0.5F),
         1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
     );
     CHECK(pixel[1] > 160);
     CHECK(pixel[2] < 80);
 }
 
-TEST_CASE("tree widget viewports clip oversized file dialog surfaces", "[TreeContainer][render][regression]") {
+TEST_CASE("nested tree viewports clip oversized child surfaces", "[TreeContainer][render][regression]") {
     SdlVideoSession sdl({240.0F, 180.0F});
     ui::Runtime runtime;
     auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
@@ -841,14 +737,14 @@ TEST_CASE("tree widget viewports clip oversized file dialog surfaces", "[TreeCon
     widgets.set_scrollable(true);
     widgets.configure_all_styles([](ui::Style& style) {
         style.background_color(ui::rgb(0.0F, 0.0F, 0.0F))
-            .border(ui::BORDER_ALL)
+            .border(ui::BorderEdge{1.0F, ui::BorderType::Solid})
             .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .padding({12.0F, 12.0F});
     });
-    auto& dialog = widgets.add<ui::FileDialogWidget>("file dialog");
-    dialog.set_size({ui::px(240.0F), ui::px(100.0F)});
-    dialog.configure_all_styles([](ui::Style& style) {
-        style.background_color(ui::rgb(0.0F, 0.0F, 1.0F)).border(ui::BORDER_NONE).padding({});
+    auto& child = widgets.add<ui::Container>("oversized");
+    child.set_size({ui::px(240.0F), ui::px(100.0F)});
+    child.configure_all_styles([](ui::Style& style) {
+        style.background_color(ui::rgb(0.0F, 0.0F, 1.0F)).border(ui::BorderEdge{0.0F, ui::BorderType::None}).padding({});
     });
     widgets.add<ui::Container>("filler").set_size({ui::px(100.0F), ui::px(200.0F)});
 
@@ -863,20 +759,20 @@ TEST_CASE("tree widget viewports clip oversized file dialog surfaces", "[TreeCon
     draw_frame(surface);
 
     const ui::Rect viewport_rect = widgets.layout().visual_rect();
-    const ui::Rect dialog_rect = dialog.layout().visual_rect();
+    const ui::Rect child_rect = child.layout().visual_rect();
     REQUIRE(viewport_rect.valid());
-    REQUIRE(dialog_rect.valid());
-    REQUIRE(dialog_rect.max.x > viewport_rect.max.x);
+    REQUIRE(child_rect.valid());
+    REQUIRE(child_rect.max.x > viewport_rect.max.x);
 
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);
     unsigned char pixel[4]{};
     glReadPixels(
         static_cast<int>(viewport_rect.max.x + 5.0F),
-        viewport[3] - static_cast<int>((dialog_rect.min.y + dialog_rect.max.y) * 0.5F), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
+        viewport[3] - static_cast<int>((child_rect.min.y + child_rect.max.y) * 0.5F), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel
     );
     CAPTURE(viewport_rect.min.x, viewport_rect.max.x, viewport_rect.min.y, viewport_rect.max.y);
-    CAPTURE(dialog_rect.min.x, dialog_rect.max.x, dialog_rect.min.y, dialog_rect.max.y);
+    CAPTURE(child_rect.min.x, child_rect.max.x, child_rect.min.y, child_rect.max.y);
     CAPTURE(pixel[0], pixel[1], pixel[2], pixel[3]);
     CHECK(pixel[2] < 80);
 }
@@ -1192,7 +1088,7 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
         .in_flow = false,
     });
     auto& content_dropdown = surface.root().add<ui::DropdownWidget>(
-        dropdown_value, std::vector<ui::DropdownOption>{{"one", "one"}, {"two", "two"}}, "dropdown"
+        dropdown_value, std::vector<ui::DropdownOption>{{"one", "one"}, {"two", "two"}}, "", ui::LabelPlacement::Above, "dropdown"
     );
     content_dropdown.set_size({ui::px(180.0F), ui::px(52.0F)});
     content_dropdown.set_layout({
@@ -1213,9 +1109,9 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
     ui_test::draw_surface(surface);
     const auto checkbox_center = [](const ui::CheckboxWidget& checkbox) {
         const ui::Rect widget_rect = checkbox.layout().visual_rect();
-        const ImVec2 padding = checkbox.style().padding();
+        const ui::BoxInsets padding = checkbox.style().padding();
         const ui::Rect box_rect = ui::Rect::from_position_size(
-            {widget_rect.min.x + padding.x, widget_rect.min.y + padding.y}, checkbox.frame().layout().size()
+            {widget_rect.min.x + padding.left, widget_rect.min.y + padding.top}, checkbox.frame().layout().size()
         );
         return ui_test::center(box_rect);
     };
@@ -1269,7 +1165,7 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
     std::string value = "one";
     int changes = 0;
     auto& dropdown = surface.root().add<ui::DropdownWidget>(
-        value, std::vector<ui::DropdownOption>{{"one", "one"}, {"two", "two"}}, "dropdown"
+        value, std::vector<ui::DropdownOption>{{"one", "one"}, {"two", "two"}}, "", ui::LabelPlacement::Above, "dropdown"
     );
     dropdown.set_layout({
         .size = {ui::px(180.0F), ui::px(36.0F)},

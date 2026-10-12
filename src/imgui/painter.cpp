@@ -63,21 +63,39 @@ void Painter::image(ImTextureID texture, Rect rect, ImVec2 uv_min, ImVec2 uv_max
 
 void Painter::border(Rect rect, const ComputedStyle& style, const Color& source) const {
     const ImColor draw_color = color(source);
-    if (style.border() == BORDER_ALL && style.border_style() == BorderStyle::Solid) {
-        m_draw_list.AddRect(rect.min, rect.max, draw_color, style.border_radius(), style.border_thickness());
-        return;
-    }
-
-    if (m_state != nullptr) {
-        draw_border_path(
-            m_draw_list, m_state->border_path(rect, style.border_radius()), style.border(), draw_color, style.border_thickness(),
-            style.border_style()
+    if (style.uniform_border() && style.border_style() == BorderType::Solid) {
+        const float inset = style.border_thickness() * 0.5F;
+        m_draw_list.AddRect(
+            {rect.min.x + inset, rect.min.y + inset}, {rect.max.x - inset, rect.max.y - inset}, draw_color,
+            std::max(0.0F, style.border_radius() - inset), ImDrawFlags_RoundCornersAll, style.border_thickness()
         );
         return;
     }
 
-    draw_border_path(
-        m_draw_list, rounded_rect_border_path(rect, style.border_radius()), style.border(), draw_color, style.border_thickness(),
-        style.border_style()
-    );
+    const BoxInsets widths = style.border_widths();
+    const Rect stroke_rect{
+        {rect.min.x + (widths.left * 0.5F), rect.min.y + (widths.top * 0.5F)},
+        {rect.max.x - (widths.right * 0.5F), rect.max.y - (widths.bottom * 0.5F)},
+    };
+    const float stroke_radius = std::max(0.0F, style.border_radius() - (style.border_thickness() * 0.5F));
+
+    const auto draw_edges = [&](const BorderPath& path) {
+        const auto draw_edge = [&](uint8_t side, BorderEdge edge) {
+            if (edge.type != BorderType::None) {
+                draw_border_path(m_draw_list, path, side, draw_color, edge.size, edge.type);
+            }
+        };
+        draw_edge(BORDER_LEFT, style.border_left());
+        draw_edge(BORDER_TOP, style.border_top());
+        draw_edge(BORDER_RIGHT, style.border_right());
+        draw_edge(BORDER_BOTTOM, style.border_bottom());
+    };
+
+    m_draw_list.PushClipRect(rect.min, rect.max, true);
+    if (m_state != nullptr) {
+        draw_edges(m_state->border_path(stroke_rect, stroke_radius));
+    } else {
+        draw_edges(rounded_rect_border_path(stroke_rect, stroke_radius));
+    }
+    m_draw_list.PopClipRect();
 }

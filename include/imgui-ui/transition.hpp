@@ -72,7 +72,9 @@ namespace ui {
 
     struct TransitionSpec {
         // duration alone converts to a linear transition.
-        constexpr TransitionSpec(float transition_duration = 0.0F, EasingFunction transition_easing = easing::linear) // NOLINT(misc-explicit-constructor)
+        constexpr TransitionSpec( // NOLINT(misc-explicit-constructor)
+            float transition_duration = 0.0F, EasingFunction transition_easing = easing::linear
+        )
             : duration(transition_duration), easing(transition_easing) {}
 
         float duration = 0.0F;

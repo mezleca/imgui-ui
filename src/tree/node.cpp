@@ -3,9 +3,7 @@
 #include <imgui-ui/diagnostics/profiler.hpp>
 #include <imgui-ui/input/router.hpp>
 #include <imgui-ui/surface.hpp>
-
 #include <imgui_internal.h>
-
 #include <algorithm>
 #include <cstddef>
 #include <stdexcept>
@@ -45,10 +43,8 @@ Node& Node::add(std::unique_ptr<Node> child) {
     Node& result = *child;
 
     // connect the parent and inherited services before applying the surface theme to the subtree.
-    result.m_parent = this;
-    result.set_surface(m_surface);
+    result.set_parent(this);
     result.set_input_router(m_input_router);
-    result.set_profiler(m_profiler);
     if (m_surface != nullptr) result.apply_theme(m_surface->theme());
 
     m_children.emplace_back(std::move(child));
@@ -58,13 +54,13 @@ Node& Node::add(std::unique_ptr<Node> child) {
 }
 
 Node& Node::set_size(LayoutSize size) {
-    if (m_layout.m_has_explicit_size_request && m_layout.size_spec() == size) return *this;
+    if (m_layout.size_spec() == size) return *this;
     m_layout.set_size(size);
     invalidate_measure();
     return *this;
 }
 
-Node& Node::set_size(LayoutSize minimum, LayoutSize maximum) {
+Node& Node::set_size(LayoutBounds minimum, LayoutBounds maximum) {
     return set_size({{minimum.width, maximum.width}, {minimum.height, maximum.height}});
 }
 
@@ -79,7 +75,7 @@ Node& Node::set_layout(LayoutConfig config) {
     return *this;
 }
 
-Node& Node::set_anchor(Anchor anchor, Anchor origin) {
+Node& Node::set_anchor(ImVec2 anchor, ImVec2 origin) {
     LayoutConfig config = m_layout.config();
     config.placement.anchor = anchor;
     config.placement.origin = origin;
@@ -140,21 +136,28 @@ PaintState& Node::paint_state() const {
     return *m_detached_paint_state;
 }
 
-void Node::set_surface(Surface* surface) {
-    m_surface = surface;
-    invalidate_measure();
-    for (const auto& child : m_children) {
-        child->set_surface(surface);
-    }
-}
-
-void Node::set_enabled(bool enabled) {
-    if (m_enabled == enabled) {
+void Node::set_input_enabled(bool enabled) {
+    if (m_input_enabled == enabled) {
         return;
     }
 
+    m_input_enabled = enabled;
+    if (!enabled && m_input_router != nullptr) m_input_router->clear_input_state(*this);
+}
+
+void Node::set_enabled(bool enabled) {
+    if (m_enabled == enabled) return;
+
     m_enabled = enabled;
     if (!enabled && m_input_router != nullptr) m_input_router->clear_input_state(*this);
+    refresh_disabled_state();
+}
+
+void Node::refresh_disabled_state() {
+    disabled_changed();
+    for (const auto& child : m_children) {
+        child->refresh_disabled_state();
+    }
 }
 
 Node& Node::set_input_mode(InputMode mode, Rect area) {
@@ -170,7 +173,7 @@ Node& Node::set_input_mode(InputMode mode, Rect area) {
     return *this;
 }
 
-ImVec2 Node::layout_margin() const {
+BoxInsets Node::layout_margin() const {
     return {};
 }
 
@@ -221,8 +224,8 @@ void Node::resolve_position(bool at_cursor) {
     if (m_layout.has_position() && !at_cursor) {
         const Rect parent_rect = m_layout.parent_content_rect();
         const Placement& placement = m_layout.active_placement();
-        const ImVec2 anchor = placement.anchor == Anchor::Custom ? placement.anchor_position : alignment_factor(placement.anchor);
-        const ImVec2 origin = placement.origin == Anchor::Custom ? placement.origin_position : alignment_factor(placement.origin);
+        const ImVec2 anchor = placement.anchor;
+        const ImVec2 origin = placement.origin;
         local_position = {
             parent_rect.min.x + (parent_rect.size().x * anchor.x) - (size.x * origin.x) + placement.offset.x,
             parent_rect.min.y + (parent_rect.size().y * anchor.y) - (size.y * origin.y) + placement.offset.y,
@@ -256,22 +259,44 @@ void Node::capture_parent_content() {
 }
 
 void Node::set_input_router(InputRouter* router) {
-    if (m_input_router == router) {
-        return;
-    }
+    if (m_input_router == router) return;
 
-    if (m_input_router != nullptr) {
-        m_input_router->clear_input_state(*this);
-        std::erase(m_input_router->m_attached_nodes, this);
-    }
+    if (m_input_router != nullptr) m_input_router->clear_input_state(*this);
+    bind_input_router(router);
+}
 
+void Node::bind_input_router(InputRouter* router) {
+    if (m_input_router == router) return;
+
+    InputRouter* previous_router = m_input_router;
+    if (previous_router != nullptr) std::erase(previous_router->m_attached_nodes, this);
     m_input_router = router;
-    if (m_input_router != nullptr) {
-        m_input_router->m_attached_nodes.push_back(this);
-    }
+    if (router != nullptr) router->m_attached_nodes.push_back(this);
 
     for (const auto& child : m_children) {
-        child->set_input_router(router);
+        if (child->m_input_router == previous_router) {
+            child->bind_input_router(router);
+        } else {
+            child->set_input_router(router);
+        }
+    }
+}
+
+void Node::set_surface(Surface* surface) {
+    m_surface = surface;
+    surface_changed();
+    invalidate_measure();
+}
+
+void Node::set_parent(Node* parent) {
+    m_parent = parent;
+
+    set_surface(parent != nullptr ? parent->m_surface : nullptr);
+    disabled_changed();
+    m_profiler = parent != nullptr ? parent->m_profiler : nullptr;
+
+    for (const auto& child : m_children) {
+        child->set_parent(this);
     }
 }
 
@@ -297,9 +322,7 @@ void Node::set_visible(bool visible) {
 }
 
 void Node::set_profiler(Profiler* profiler) {
-    if (m_profiler == profiler) {
-        return;
-    }
+    if (m_profiler == profiler) return;
 
     m_profiler = profiler;
     for (const auto& child : m_children) {
@@ -307,16 +330,16 @@ void Node::set_profiler(Profiler* profiler) {
     }
 }
 
-bool Node::has_size() const {
-    return m_layout.m_has_size;
+bool Node::has_parent_size() const {
+    return m_layout.m_has_parent_size;
 }
 
 void Node::assign_size(ImVec2 size) {
     m_layout.assign_size(size);
 }
 
-void Node::set_measured_size(ImVec2 size, bool measured_width, bool measured_height) {
-    m_layout.set_measured_size(size, measured_width, measured_height);
+void Node::set_measured_size(ImVec2 size) {
+    m_layout.set_measured_size(size);
 }
 
 ImVec2 Node::content_size(ImVec2 size) const {
@@ -346,7 +369,8 @@ void Node::set_layout_rect(Rect rect) {
 }
 
 void Node::arrange_child(Node& child, ImVec2 size, Placement placement) {
-    child.m_layout.assign_size(size, true);
+    child.m_layout.assign_size(size);
+    child.m_layout.m_has_parent_size = true;
     child.m_layout.set_arranged_placement(placement);
 }
 
@@ -395,10 +419,8 @@ std::unique_ptr<Node> Node::detach_child(size_t index) {
     std::unique_ptr<Node> result = std::move(*it);
     m_children.erase(it);
     result->m_removal_pending = false;
-    result->m_parent = nullptr;
-    result->set_surface(nullptr);
+    result->set_parent(nullptr);
     result->set_input_router(nullptr);
-    result->set_profiler(nullptr);
     refresh_input_state();
     invalidate_measure();
     return result;
@@ -457,7 +479,9 @@ void Node::update(float dt) {
     for (size_t index = 0; index < child_count && index < m_children.size();) {
         Node* child = m_children[index].get();
         if (child->m_removal_pending) {
-            detach_child(index);
+            auto removed = std::move(m_children[index]);
+            m_children.erase(m_children.begin() + static_cast<std::ptrdiff_t>(index));
+            removed->m_parent = nullptr;
             --child_count;
             continue;
         }
@@ -484,7 +508,10 @@ void Node::invalidate_measure() {
     m_layout.set_box_insets(box_insets());
     m_layout.set_box_sizing(box_sizing());
     m_measure_dirty = true;
-    if (m_parent != nullptr && !m_parent->m_measure_dirty) m_parent->invalidate_measure();
+
+    if (m_parent != nullptr && !m_parent->m_measure_dirty) {
+        m_parent->invalidate_measure();
+    }
 }
 
 void Node::measure_tree() {
@@ -528,8 +555,10 @@ void Node::draw_impl(bool at_cursor) {
 
     // measure and arrange before paint so input uses the bounds produced by this draw.
     prepare_layout(at_cursor);
+    const bool is_disabled = !enabled();
+    if (is_disabled) ImGui::BeginDisabled();
     draw_before();
-    const bool draw_content = on_draw();
+    const bool draw_content = paint();
 
     if (draw_content) {
         draw_children();
@@ -537,6 +566,7 @@ void Node::draw_impl(bool at_cursor) {
         draw_after();
     }
 
+    if (is_disabled) ImGui::EndDisabled();
     submit_positioned_item(at_cursor);
 
     if (!draw_content || m_input_router == nullptr) return;
@@ -574,14 +604,10 @@ void Node::prepare_layout(bool at_cursor) {
     }
 
     // keep the parent's assigned size through on_layout, then clear it so the next draw resolves a fresh allocation.
-    if (!m_layout.m_size_assigned_by_parent) {
-        m_layout.clear_size_assignment();
-    }
-
     capture_parent_content();
     on_layout();
     resolve_position(at_cursor);
-    m_layout.clear_size_assignment();
+    m_layout.m_has_parent_size = false;
 }
 
 void Node::draw_children() {
@@ -592,19 +618,15 @@ void Node::draw_children() {
     }
 }
 
-bool Node::on_draw() {
+bool Node::paint() {
     return true;
 }
 
-void Node::draw_before() {}
-void Node::on_update(float) {}
-void Node::advance_frame_state(float) {}
-void Node::on_measure() {}
 void Node::on_layout() {
-    if (!has_size()) assign_size(m_layout.resolved_size());
+    if (!has_parent_size()) {
+        assign_size(m_layout.resolved_size());
+    }
 }
-void Node::on_draw_end() {}
-void Node::draw_after() {}
 
 BoxInsets Node::box_insets() const {
     return {};
@@ -613,3 +635,10 @@ BoxInsets Node::box_insets() const {
 BoxSizing Node::box_sizing() const {
     return BoxSizing::ContentBox;
 }
+
+void Node::draw_before() {}
+void Node::on_update(float) {}
+void Node::advance_frame_state(float) {}
+void Node::on_measure() {}
+void Node::on_draw_end() {}
+void Node::draw_after() {}

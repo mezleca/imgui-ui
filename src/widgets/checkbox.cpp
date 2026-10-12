@@ -7,8 +7,8 @@
 
 using namespace ui;
 
-CheckboxWidget::CheckboxWidget(bool& value, std::string label, std::string id)
-    : Container(std::move(id), StackDirection::Horizontal, "Checkbox"), m_value(&value) {
+CheckboxWidget::CheckboxWidget(bool& value, std::string label, LabelPlacement placement, std::string id)
+    : Widget(std::move(id), StackDirection::Horizontal, "Checkbox"), m_value(&value) {
     set_size({fit(), fit()});
     set_content_alignment(Anchor::CenterLeft);
 
@@ -20,33 +20,50 @@ CheckboxWidget::CheckboxWidget(bool& value, std::string label, std::string id)
     m_frame_node->set_input_mode(InputMode::None);
     m_frame_node->set_size({grow(), grow()});
     m_fill_node = &m_frame_node->add<BoxWidget>("fill", LayoutSize{grow(), grow()});
-    m_label_node = &add<TextWidget>(std::move(label));
+    m_label_node = &add<TextWidget>("");
+    set_label(std::move(label), placement);
     m_fill_node->set_visible(*m_value);
 }
 
 void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
-    set_font(surface().get_primary_font(), 16.0F);
-    set_spacing(theme.metrics.item_inner_spacing.x);
+    set_font(surface().get_primary_font(), theme.controls.font_size);
+    m_label_spacing = {theme.metrics.item_inner_spacing.x, theme.metrics.item_spacing.y};
+    set_spacing(m_label_placement == LabelPlacement::Inline ? m_label_spacing.x : m_label_spacing.y);
     m_label_node->configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({0.0F, 2.0F}); });
 
     configure_all_styles([&theme](Style& style) { style.color(theme.text_color).padding({4.0F, 4.0F}); });
 
     m_frame_border_thickness = theme.controls.border_thickness;
+    m_rounding = theme.controls.rounding;
     m_frame_node->configure_all_styles([&theme](Style& style) { style.control(theme); });
 
     m_fill_node->configure_all_styles([&theme](Style& style) {
-        style.background_color(theme.controls.mark_color).border(BORDER_NONE);
+        style.background_color(theme.controls.mark_color).border(BorderEdge{0.0F, BorderType::None});
     });
 
     m_frame_node->style(StyleType::HOVER).background_color(theme.controls.hover_color).border_color(theme.accent_hover_color);
     m_frame_node->style(StyleType::ACTIVE).background_color(theme.controls.active_color).border_color(theme.accent_color);
+    m_frame_node->style(StyleType::DISABLED)
+        .background_color(theme.background_secondary_color)
+        .border_color(theme.border_color);
+    m_fill_node->style(StyleType::DISABLED).background_color(theme.text_secondary_color);
+    m_label_node->style(StyleType::DISABLED).color(theme.text_secondary_color);
+    style(StyleType::DISABLED).cursor(ImGuiMouseCursor_NotAllowed);
 
     update_shape();
 }
 
-CheckboxWidget& CheckboxWidget::set_label(std::string label) {
+CheckboxWidget& CheckboxWidget::set_label(std::string label, LabelPlacement placement) {
     m_label_node->set_text(std::move(label));
+    m_label_node->set_visible(!m_label_node->empty());
+    if (m_label_placement != placement) {
+        Node& last = placement == LabelPlacement::Above ? static_cast<Node&>(*m_box_node) : static_cast<Node&>(*m_label_node);
+        add(detach(last));
+    }
+    m_label_placement = placement;
+    set_direction(placement == LabelPlacement::Inline ? StackDirection::Horizontal : StackDirection::Vertical);
+    set_spacing(placement == LabelPlacement::Inline ? m_label_spacing.x : m_label_spacing.y);
     return *this;
 }
 
@@ -135,7 +152,7 @@ Rect CheckboxWidget::hit_rect(Rect) const {
 }
 
 void CheckboxWidget::update_shape() {
-    const float radius = m_type == CheckboxType::Radio ? m_box_size * 0.5F : 2.0F;
+    const float radius = m_type == CheckboxType::Radio ? m_box_size * 0.5F : std::min(m_rounding, m_box_size * 0.5F);
     m_frame_node->configure_all_styles([radius](Style& style) { style.border_radius(radius); });
     m_fill_node->configure_all_styles([radius](Style& style) { style.border_radius(radius); });
 

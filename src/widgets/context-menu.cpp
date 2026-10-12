@@ -11,14 +11,10 @@
 
 using namespace ui;
 
-static float menu_height(std::size_t item_count) {
-    return 28.0F * static_cast<float>(item_count);
-}
-
-class ui::ContextMenuItemNode final : public DrawListWidget {
+class ui::ContextMenuItemNode final : public Widget {
 public:
     ContextMenuItemNode(ContextMenuWidget& menu, std::string label, ContextMenuCallback callback)
-        : DrawListWidget("item", "ContextMenuItem"), m_menu(menu), m_label(std::move(label)), m_callback(std::move(callback)) {}
+        : Widget("item", "ContextMenuItem"), m_menu(menu), m_label(std::move(label)), m_callback(std::move(callback)) {}
 
     bool accepts_input() const override {
         return m_menu.is_open() && Widget::accepts_input();
@@ -29,15 +25,18 @@ protected:
         configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
                 .background_color(theme.transparent)
-                .padding({8.0F, 4.0F})
-                .border(BORDER_NONE)
+                .padding(theme.metrics.item_inner_spacing)
+                .border(BorderEdge{0.0F, BorderType::None})
                 .border_radius(theme.controls.rounding)
                 .cursor(ImGuiMouseCursor_Hand);
         });
 
         style(StyleType::HOVER).background_color(theme.controls.hover_color);
         style(StyleType::ACTIVE).background_color(theme.controls.active_color);
-        set_size({grow(), px(20.0F)});
+        style(StyleType::DISABLED)
+            .color(theme.text_secondary_color)
+            .cursor(ImGuiMouseCursor_NotAllowed);
+        set_size({grow(), px(theme.controls.font_size + (theme.metrics.item_inner_spacing.y * 2.0F))});
     }
 
 private:
@@ -77,7 +76,7 @@ private:
             {content.max.x - icon_size, content.min.y + ((content.size().y - icon_size) * 0.5F)}, {icon_size, icon_size}
         );
 
-        if (m_submenu_icon == nullptr) {
+        if (m_menu.m_submenu_icon == nullptr) {
             context.painter.triangle(
                 {icon.min.x + (icon_size * 0.5F), icon.min.y + (icon_size * 0.5F)}, {icon_size * 0.5F, icon_size * 0.3F},
                 context.style.color().value, TriangleDirection::Right
@@ -85,7 +84,7 @@ private:
             return;
         }
 
-        const ImTextureID texture = m_submenu_icon->get(icon.size());
+        const ImTextureID texture = m_menu.m_submenu_icon->get(icon.size());
         context.painter.draw_list().AddImageQuad(
             texture, icon.min, {icon.max.x, icon.min.y}, icon.max, {icon.min.x, icon.max.y}, {0, 1}, {0, 0}, {1, 0}, {1, 1},
             context.style.color().get_col()
@@ -96,14 +95,14 @@ private:
     std::string m_label;
     ContextMenuCallback m_callback;
     ContextMenuWidget* m_submenu = nullptr;
-    Texture* m_submenu_icon = nullptr;
 };
 
 ContextMenuWidget::ContextMenuWidget(ContextMenuItems items, Texture* submenu_icon)
-    : Container({}, "ContextMenu"), m_submenu_icon(submenu_icon) {
+    : Widget({}, "ContextMenu"), m_submenu_icon(submenu_icon) {
     set_layout({.in_flow = false});
+    set_size({px(184.0F), fit()});
     set_visible(false);
-    set_enabled(false);
+    set_input_enabled(false);
 
     set_items(std::move(items));
 }
@@ -114,24 +113,23 @@ void ContextMenuWidget::mouse_move_event(UiEvent& event) {
 
 void ContextMenuWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
+    set_font(surface().get_primary_font(), theme.controls.font_size);
+    set_spacing(0.0F);
     if (m_submenu_icon == nullptr) {
         set_submenu_icon(surface().runtime().textures().find("context-menu-chevron"));
     }
     configure_all_styles([&theme](Style& style) {
         style.padding({4.0F, 4.0F})
             .background_color(theme.background_secondary_color)
-            .border(BORDER_ALL)
-            .border_thickness(theme.controls.border_thickness)
-            .border_radius(4.0F)
+            .border(BorderEdge{theme.controls.border_thickness, BorderType::Solid})
+            .border_radius(theme.metrics.popup_rounding)
             .border_color(theme.border_color);
     });
-    set_size({px(184.0F), px(menu_height(m_items.size()) + box_insets().vertical())});
 }
 
 ContextMenuWidget& ContextMenuWidget::set_items(ContextMenuItems items) {
     m_items.clear();
     clear();
-    set_size({px(184.0F), px(menu_height(items.size()) + box_insets().vertical())});
 
     for (ContextMenuItem& item : items) {
         auto& menu_item = add<ContextMenuItemNode>(*this, std::move(item.label), std::move(item.callback));
@@ -143,8 +141,8 @@ ContextMenuWidget& ContextMenuWidget::set_items(ContextMenuItems items) {
 
         auto& submenu = add<ContextMenuWidget>(std::move(item.children), m_submenu_icon);
         submenu.m_parent_menu = this;
+        submenu.set_hover_close_delay(m_hover_close_delay_duration);
         menu_item.m_submenu = &submenu;
-        menu_item.m_submenu_icon = m_submenu_icon;
     }
 
     return *this;
@@ -159,7 +157,6 @@ ContextMenuWidget& ContextMenuWidget::set_submenu_icon(Texture* icon) {
 
     for (ContextMenuItemNode* item : m_items) {
         if (item->m_submenu != nullptr) {
-            item->m_submenu_icon = icon;
             item->m_submenu->set_submenu_icon(icon);
         }
     }
@@ -192,7 +189,7 @@ void ContextMenuWidget::open() {
 
 void ContextMenuWidget::open_at(ImVec2 screen_position) {
     if (m_parent_menu != nullptr) {
-        open();
+        activate();
         return;
     }
 
@@ -200,10 +197,10 @@ void ContextMenuWidget::open_at(ImVec2 screen_position) {
     if (!work_area.valid()) {
         return;
     }
-    const ImVec2 position = clamp_position(work_area, layout().intrinsic_size(), screen_position);
     LayoutConfig config = layout().config();
-    config.placement.offset = {position.x - work_area.min.x, position.y - work_area.min.y};
+    config.placement.offset = {screen_position.x - work_area.min.x, screen_position.y - work_area.min.y};
     set_layout(config);
+    invalidate_measure();
     activate();
 }
 
@@ -219,7 +216,7 @@ void ContextMenuWidget::activate() {
         m_pointer_was_inside = false;
     }
     set_visible(true);
-    set_enabled(true);
+    set_input_enabled(true);
     fade_in();
 }
 
@@ -231,7 +228,11 @@ void ContextMenuWidget::close() {
     m_open = false;
     m_closing = true;
     fade_out();
-    close_children();
+    for (ContextMenuItemNode* item : m_items) {
+        if (item->m_submenu != nullptr) {
+            item->m_submenu->close();
+        }
+    }
 }
 
 void ContextMenuWidget::cancel_close() {
@@ -251,13 +252,29 @@ void ContextMenuWidget::on_update(float dt) {
     if (m_closing && opacity() <= VISIBILITY_OPACITY_THRESHOLD) {
         m_closing = false;
         set_visible(false);
-        set_enabled(false);
+        set_input_enabled(false);
         set_opacity(0.0F);
     }
 }
 
+void ContextMenuWidget::on_measure() {
+    Container::on_measure();
+    if (m_parent_menu != nullptr || !m_open) return;
+
+    const Rect work_area = viewport_work_area();
+    if (!work_area.valid()) return;
+
+    LayoutConfig config = layout().config();
+    const ImVec2 position = clamp_position(
+        work_area, layout().intrinsic_size(),
+        {work_area.min.x + config.placement.offset.x, work_area.min.y + config.placement.offset.y}
+    );
+    config.placement.offset = {position.x - work_area.min.x, position.y - work_area.min.y};
+    set_layout(config);
+}
+
 void ContextMenuWidget::draw_children() {
-    arrange_children();
+    arrange_children(child_layout_size());
     for (ContextMenuItemNode* item : m_items) {
         if (!item->removal_pending()) {
             item->draw();
@@ -319,9 +336,7 @@ void ContextMenuWidget::open_submenu(ContextMenuItemNode& item) {
         }
     }
 
-    if (item.m_submenu != nullptr) {
-        item.m_submenu->open();
-    }
+    item.m_submenu->activate();
 }
 
 void ContextMenuWidget::update_pointer_hover(ImVec2 position) {
@@ -375,7 +390,6 @@ void ContextMenuWidget::position_submenu(ContextMenuWidget& submenu, const Conte
     const ImVec2 content_origin = {window_position.x + content_offset.x, window_position.y + content_offset.y};
     LayoutConfig config = submenu.layout().config();
     config.placement.offset = {position.x - content_origin.x, position.y - content_origin.y};
-    config.in_flow = false;
     submenu.set_layout(config);
     submenu.draw();
 }
@@ -401,12 +415,4 @@ ContextMenuWidget& ContextMenuWidget::root_menu() {
     }
 
     return *root;
-}
-
-void ContextMenuWidget::close_children() {
-    for (ContextMenuItemNode* item : m_items) {
-        if (item->m_submenu != nullptr) {
-            item->m_submenu->close();
-        }
-    }
 }

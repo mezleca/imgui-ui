@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../layout/container.hpp"
+#include "widget.hpp"
 #include "box.hpp"
 
 #include <cstdint>
@@ -14,11 +14,13 @@ namespace ui {
         Radio,
     };
 
-    class CheckboxWidget : public Container {
+    class CheckboxWidget : public Widget {
     public:
-        CheckboxWidget(bool& value, std::string label, std::string id = {});
+        explicit CheckboxWidget(
+            bool& value, std::string label = {}, LabelPlacement placement = LabelPlacement::Inline, std::string id = {}
+        );
 
-        CheckboxWidget& set_label(std::string label);
+        CheckboxWidget& set_label(std::string label, LabelPlacement placement = LabelPlacement::Inline);
         bool set_checked(bool checked);
         CheckboxWidget& set_type(CheckboxType type);
         CheckboxWidget& set_box_size(float size);
@@ -45,7 +47,10 @@ namespace ui {
         BoxWidget* m_fill_node = nullptr;
         TextWidget* m_label_node = nullptr;
         CheckboxType m_type = CheckboxType::Standard;
+        LabelPlacement m_label_placement = LabelPlacement::Inline;
+        ImVec2 m_label_spacing = {8.0F, 10.0F};
         float m_box_size = 20.0F;
         float m_frame_border_thickness = 1.0F;
+        float m_rounding = 4.0F;
     };
 } // namespace ui

@@ -5,6 +5,28 @@
 
 using namespace ui;
 
+BoxInsets ComputedStyle::border_widths() const {
+    return {
+        m_border_types.left == BorderType::None ? 0.0F : m_border_left_size.value,
+        m_border_types.top == BorderType::None ? 0.0F : m_border_top_size.value,
+        m_border_types.right == BorderType::None ? 0.0F : m_border_right_size.value,
+        m_border_types.bottom == BorderType::None ? 0.0F : m_border_bottom_size.value,
+    };
+}
+
+uint8_t ComputedStyle::border() const {
+    const BoxInsets widths = border_widths();
+    return (widths.left > 0.0F ? BORDER_LEFT : 0) | (widths.top > 0.0F ? BORDER_TOP : 0) |
+           (widths.right > 0.0F ? BORDER_RIGHT : 0) | (widths.bottom > 0.0F ? BORDER_BOTTOM : 0);
+}
+
+bool ComputedStyle::uniform_border() const {
+    const BoxInsets widths = border_widths();
+    return widths.left > 0.0F && widths.left == widths.top && widths.left == widths.right && widths.left == widths.bottom &&
+           m_border_types.left == m_border_types.top && m_border_types.left == m_border_types.right &&
+           m_border_types.left == m_border_types.bottom;
+}
+
 static bool same_color(ImVec4 left, ImVec4 right) {
     return left.x == right.x && left.y == right.y && left.z == right.z && left.w == right.w;
 }
@@ -41,8 +63,9 @@ PushState ComputedStyle::push(float opacity, ImFont* effective_font, float effec
         ++state.colors;
     };
 
-    if (current.FramePadding.x != m_padding.value.x || current.FramePadding.y != m_padding.value.y) {
-        push_var(ImGuiStyleVar_FramePadding, m_padding.value);
+    const ImVec2 padding = m_padding.value.window_padding();
+    if (current.FramePadding.x != padding.x || current.FramePadding.y != padding.y) {
+        push_var(ImGuiStyleVar_FramePadding, padding);
     }
     if (current.FrameRounding != m_border_radius) push_var(ImGuiStyleVar_FrameRounding, m_border_radius);
     if (current.FrameBorderSize != 0.0F) push_var(ImGuiStyleVar_FrameBorderSize, 0.0F);

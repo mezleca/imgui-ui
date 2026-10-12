@@ -1,20 +1,31 @@
 #pragma once
 
 #include "../file-dialog/file-dialog.hpp"
-#include "../layout/container.hpp"
+#include "widget.hpp"
 
 #include <string>
 #include <string_view>
+#include <functional>
 
 namespace ui {
     class TextWidget;
+    class ButtonWidget;
 
-    class FileDialogWidget final : public Container {
+    class FileDialogWidget final : public Widget {
     public:
-        explicit FileDialogWidget(std::string label, std::string id = "FileDialog");
+        explicit FileDialogWidget(
+            std::string label = {}, LabelPlacement placement = LabelPlacement::Above, std::string id = "FileDialog"
+        );
 
         FileDialogResult show_dialog(FileDialogOperation operation, const FileDialogOptions& options = {});
+        FileDialogWidget& set_label(std::string label, LabelPlacement placement = LabelPlacement::Above);
+        FileDialogWidget& set_operation(FileDialogOperation operation);
+        /// copies options and filters. clicking opens OpenFile unless another operation is configured.
+        FileDialogWidget& set_options(const FileDialogOptions& options);
+        /// receives every accepted result, including all paths from a multiple selection.
+        FileDialogWidget& on_select(std::function<void(const FileDialogResult&)> callback);
 
+        /// stores the first accepted path. cancelling leaves the previous value unchanged.
         [[nodiscard]] const std::string& value() const;
         bool set_value(std::string_view value);
 
@@ -22,7 +33,20 @@ namespace ui {
         void apply_theme_defaults(const Theme& theme) override;
 
     private:
+        void update_label_layout();
+
         std::string m_value;
-        TextWidget& m_field;
+        TextWidget& m_label;
+        ButtonWidget& m_button;
+        LabelPlacement m_label_placement = LabelPlacement::Above;
+        ImVec2 m_label_spacing = {8.0F, 10.0F};
+        FileDialogOperation m_operation = FileDialogOperation::OpenFile;
+        std::vector<FileDialogFilter> m_filters;
+        std::filesystem::path m_default_path;
+        std::string m_default_name;
+        std::string m_title;
+        std::string m_accept_label;
+        std::string m_cancel_label;
+        std::function<void(const FileDialogResult&)> m_on_select;
     };
 } // namespace ui

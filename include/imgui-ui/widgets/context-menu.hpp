@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../layout/container.hpp"
+#include "widget.hpp"
 
 #include <functional>
 #include <string>
@@ -30,7 +30,7 @@ namespace ui {
 
     using ContextMenuItems = std::vector<ContextMenuItem>;
 
-    class ContextMenuWidget : public Container {
+    class ContextMenuWidget : public Widget {
     public:
         explicit ContextMenuWidget(ContextMenuItems items = {}, Texture* submenu_icon = nullptr);
 
@@ -64,6 +64,7 @@ namespace ui {
         friend class ContextMenuItemNode;
 
         void on_update(float) override;
+        void on_measure() override;
         void mouse_move_event(UiEvent& event) override;
         void draw_children() override;
         void on_draw_end() override;
@@ -76,7 +77,6 @@ namespace ui {
         static void position_submenu(ContextMenuWidget& submenu, const ContextMenuItemNode& item);
         bool contains_open_menu(ImVec2 position) const;
         ContextMenuWidget& root_menu();
-        void close_children();
 
         Texture* m_submenu_icon = nullptr;
         std::vector<ContextMenuItemNode*> m_items;

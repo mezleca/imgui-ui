@@ -7,7 +7,6 @@
 
 #include <cfloat>
 #include <imgui_stdlib.h>
-
 #include <algorithm>
 
 using namespace ui;
@@ -15,7 +14,9 @@ using namespace ui;
 class TextInputWidget::FieldNode final : public StyledNode {
 public:
     FieldNode(std::string& value, bool& focus_requested)
-        : StyledNode("text", "TextInput"), m_value(&value), m_focus_requested(&focus_requested) {}
+        : StyledNode("text", "TextInput"), m_value(&value), m_focus_requested(&focus_requested) {
+        set_size({grow(), fit()});
+    }
 
     bool accepts_input() const override {
         return false;
@@ -30,8 +31,7 @@ private:
         ImGui::PushFont(font(), font_size());
         const float line_height = ImGui::GetTextLineHeight();
         ImGui::PopFont();
-        set_measured_size({0.0F, line_height}, false, true);
-        m_line_height = line_height;
+        set_measured_size({0.0F, line_height});
     }
 
     bool paint() override {
@@ -42,7 +42,7 @@ private:
         }
 
         ImGui::PushID(this);
-        const float padding_y = std::max(0.0F, (layout().size().y - m_line_height) * 0.5F);
+        const float padding_y = std::max(0.0F, (layout().size().y - layout().measured_size().y) * 0.5F);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {ImGui::GetStyle().FramePadding.x, padding_y});
         ImGui::SetNextItemWidth(-FLT_MIN);
         m_changed = ImGui::InputText("##value", m_value);
@@ -53,18 +53,16 @@ private:
 
     std::string* m_value;
     bool* m_focus_requested;
-    float m_line_height = 0.0F;
     bool m_changed = false;
 };
 
-TextInputWidget::TextInputWidget(std::string& value, std::string id)
-    : Container(std::move(id), StackDirection::Horizontal, "TextInput"), m_value(&value) {
+TextInputWidget::TextInputWidget(std::string& value, std::string label, LabelPlacement placement, std::string id)
+    : Widget(std::move(id), StackDirection::Horizontal, "TextInput"), m_value(&value) {
     set_size({grow(), fit()});
 
     set_content_alignment(Anchor::CenterLeft);
     m_label_node = &add<TextWidget>("");
     m_label_node->set_id("label");
-    m_label_node->set_size({fit(), fit()});
     m_label_node->set_visible(false);
 
     m_input_node = &add<Container>("input", StackDirection::Horizontal, "TextInputField");
@@ -74,10 +72,11 @@ TextInputWidget::TextInputWidget(std::string& value, std::string id)
 
     m_icon_node = &m_input_node->add<ImageWidget>();
     m_icon_node->set_id("icon");
-    m_icon_node->set_enabled(false);
+    m_icon_node->set_input_enabled(false);
     m_icon_node->set_visible(false);
 
     m_field_node = &m_input_node->add<FieldNode>(value, m_focus_requested);
+    set_label(std::move(label), placement);
 }
 
 void TextInputWidget::event(UiEvent& event) {
@@ -98,7 +97,7 @@ void TextInputWidget::event(UiEvent& event) {
 
 void TextInputWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
-    set_font(surface().get_primary_font(), 18.0F);
+    set_font(surface().get_primary_font(), theme.controls.font_size);
     const TransitionSpec transition{0.25F, easing::out_quad};
     m_label_spacing = {theme.metrics.item_inner_spacing.x, theme.metrics.item_spacing.y};
     update_label_layout();
@@ -106,11 +105,9 @@ void TextInputWidget::apply_theme_defaults(const Theme& theme) {
     m_icon_node->set_size({px(18.0F), px(18.0F)});
     m_field_node->set_size({grow(), grow()});
 
-    configure_all_styles([](Style& style) { style.padding({}).border(BORDER_NONE); });
+    configure_all_styles([](Style& style) { style.padding({}).border(BorderEdge{0.0F, BorderType::None}); });
 
-    m_input_node->configure_all_styles([&theme, transition](Style& style) {
-        style.control(theme, {10.0F, 8.0F}, transition).border_radius(4.0F);
-    });
+    m_input_node->configure_all_styles([&theme, transition](Style& style) { style.control(theme, transition); });
 
     for (StyleType type : {StyleType::ACTIVE, StyleType::FOCUS}) {
         m_input_node->style(type)
@@ -118,9 +115,13 @@ void TextInputWidget::apply_theme_defaults(const Theme& theme) {
             .border_color(theme.accent_color, transition);
     }
     m_input_node->style(StyleType::HOVER).background_color(theme.controls.hover_color, transition);
+    m_input_node->style(StyleType::DISABLED)
+        .background_color(theme.background_secondary_color)
+        .border_color(theme.border_color);
+    style(StyleType::DISABLED).cursor(ImGuiMouseCursor_NotAllowed);
 
     m_field_node->configure_all_styles([&theme](Style& style) {
-        style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BORDER_NONE);
+        style.color(theme.text_color).background_color(theme.transparent).padding({}).border(BorderEdge{0.0F, BorderType::None});
     });
 }
 
@@ -134,17 +135,9 @@ Rect TextInputWidget::hit_rect(Rect) const {
     return m_input_node->layout().visual_rect();
 }
 
-TextInputWidget& TextInputWidget::set_label(std::string label) {
+TextInputWidget& TextInputWidget::set_label(std::string label, LabelPlacement placement) {
     m_label_node->set_text(std::move(label));
     m_label_node->set_visible(!m_label_node->empty());
-    return *this;
-}
-
-TextInputWidget& TextInputWidget::set_label_placement(LabelPlacement placement) {
-    if (m_label_placement == placement) {
-        return *this;
-    }
-
     m_label_placement = placement;
     update_label_layout();
     return *this;
