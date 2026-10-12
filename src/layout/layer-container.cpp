@@ -16,6 +16,10 @@ LayerContainer::LayerContainer(std::string id, LayerMode mode, std::string_view 
     set_input_mode(InputMode::None);
 }
 
+void LayerContainer::set_popup_position(ImVec2 position) {
+    m_popup_position = position;
+}
+
 ImGuiWindowFlags LayerContainer::child_window_flags() const {
     const ImGuiWindowFlags flags = Container::child_window_flags();
 
@@ -29,6 +33,10 @@ ImGuiWindowFlags LayerContainer::child_window_flags() const {
 }
 
 ImGuiWindowFlags LayerContainer::window_flags() const {
+    if (m_mode == LayerMode::Popup) {
+        return (constants::WINDOW_FLAGS & ~ImGuiWindowFlags_NoBringToFrontOnFocus) | ImGuiWindowFlags_NoFocusOnAppearing;
+    }
+
     return constants::WINDOW_FLAGS;
 }
 
@@ -62,6 +70,7 @@ bool LayerContainer::paint_inline() {
 }
 
 bool LayerContainer::paint_window() {
+    const bool popup = m_mode == LayerMode::Popup;
     const bool accepts_input = this->accepts_input();
     ImGuiWindowFlags flags = window_flags();
 
@@ -69,19 +78,24 @@ bool LayerContainer::paint_window() {
     if (!m_window_initialized) {
         flags &= ~ImGuiWindowFlags_NoBringToFrontOnFocus;
     }
-    if (!accepts_input) {
+    if (!accepts_input && !popup) {
         flags |= ImGuiWindowFlags_NoInputs;
     }
 
-    ImVec2 position = layout().layout_rect().min;
-    if (parent() == nullptr) {
+    ImVec2 position = popup ? m_popup_position : layout().layout_rect().min;
+    ImVec2 size = layout().size();
+    if (popup) {
+        const Rect work_area = viewport_work_area();
+        size = {std::min(size.x, work_area.size().x), std::min(size.y, work_area.size().y)};
+        position = clamp_position(work_area, size, position);
+    } else if (parent() == nullptr) {
         const ImVec2 viewport_position = ImGui::GetMainViewport()->WorkPos;
         position = {position.x + viewport_position.x, position.y + viewport_position.y};
     }
 
     // set movable windows' position and resizable windows' size only on first use.
     ImGui::SetNextWindowPos(position, (flags & ImGuiWindowFlags_NoMove) ? ImGuiCond_Always : ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(layout().size(), (flags & ImGuiWindowFlags_NoResize) ? ImGuiCond_Always : ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(size, (flags & ImGuiWindowFlags_NoResize) ? ImGuiCond_Always : ImGuiCond_FirstUseEver);
 
     // native window resizing bypasses container allocation. give imgui the same resolved limits before Begin
     // so user dragging and saved window sizes cannot escape the node's configured range.
@@ -94,7 +108,7 @@ bool LayerContainer::paint_window() {
         layout().constrain_size({std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity()}, available)
     );
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, box_insets().window_padding());
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0F);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, popup ? computed_style().border_radius() : 0.0F);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
 
     // imgui applies its style minimum after size constraints. use the node's configured minimum instead.

@@ -1,7 +1,7 @@
 #include <imgui-ui/widgets/color-picker.hpp>
 
 #include <imgui-ui/imgui/painter.hpp>
-#include <imgui-ui/imgui/window.hpp>
+#include <imgui-ui/layout/layer-container.hpp>
 #include <imgui-ui/style/theme.hpp>
 #include <imgui-ui/surface.hpp>
 #include <imgui-ui/widgets/text-input.hpp>
@@ -129,13 +129,35 @@ private:
     Color* m_color = nullptr;
 };
 
-class ui::ColorPickerPopup final : public Widget {
+class ui::ColorPickerControlsNode final : public Widget {
+public:
+    ColorPickerControlsNode(ColorPickerWidget& owner, std::string& hex)
+        : Widget("controls", "ColorPickerControls", InputMode::None), m_owner(owner), m_hex(hex) {
+        set_size({grow(), grow()});
+    }
+
+private:
+    void on_measure() override {
+        const Theme& theme = surface().theme();
+        const float bar_size = std::max(1.0F, theme.controls.thumb_size);
+        const float size = 196.0F + theme.metrics.item_spacing.x + bar_size;
+        set_measured_content_size({size, size});
+    }
+
+    void paint_content(const PaintContext& context) override;
+    void set_hsv(float hue, float saturation, float value, float alpha);
+
+    ColorPickerWidget& m_owner;
+    std::string& m_hex;
+};
+
+class ui::ColorPickerPopup final : public LayerContainer {
 public:
     explicit ColorPickerPopup(ColorPickerWidget& owner)
-        : Widget("popup", "ColorPickerPopup", InputMode::None), m_owner(owner),
-          m_window_name(std::format("##color-picker-{}", identity())) {
-        set_layout({.in_flow = false});
+        : LayerContainer("popup", LayerMode::Popup, "ColorPickerPopup"), m_owner(owner) {
+        set_id(std::format("##color-picker-{}", identity()));
 
+        m_controls = &add<ColorPickerControlsNode>(m_owner, m_hex);
         m_hex_input = &add<TextInputWidget>(m_hex, "", LabelPlacement::Inline, "hex");
         m_hex_input->on_change([this] {
             ImColor parsed;
@@ -151,9 +173,8 @@ public:
 
 private:
     void apply_theme_defaults(const Theme& theme) override {
-        const float bar_size = std::max(1.0F, theme.controls.thumb_size);
-
-        set_size({px(196.0F + theme.metrics.item_spacing.x + bar_size), fit()});
+        set_size({fit(), fit()});
+        set_spacing(theme.metrics.item_spacing.y);
 
         configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
@@ -175,173 +196,140 @@ private:
         m_hex_input->style(StyleType::HOVER).border_color(theme.accent_hover_color);
         m_hex_input->style(StyleType::ACTIVE).border_color(theme.accent_color);
         m_hex_input->style(StyleType::FOCUS).border_color(theme.accent_color);
+        m_controls->configure_all_styles([](Style& style) { style.padding({}).border(BorderEdge{}); });
     }
 
     bool paint() override {
-        if (!m_owner.is_open()) {
-            return false;
-        }
+        if (!m_owner.is_open()) return false;
 
         const Rect preview_rect = m_owner.preview().layout().visual_rect();
-        const ImVec2 position = {preview_rect.min.x, preview_rect.max.y + surface().theme().metrics.item_spacing.y};
-        const ComputedStyle& style = computed_style();
+        const Rect work_area = viewport_work_area();
+        if (!work_area.valid()) return false;
 
-        ImGui::SetNextWindowPos(position, ImGuiCond_Always);
-        ImGui::SetNextWindowSize({layout().size().x, 0.0F}, ImGuiCond_Always);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.padding().window_padding());
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, style.border_radius());
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0F);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{});
+        set_popup_position({preview_rect.min.x, preview_rect.max.y + surface().theme().metrics.item_spacing.y});
+        if (!LayerContainer::paint()) return false;
 
-        // a regular window leaves an existing root popup open when this picker opens from the debugger.
-        const bool draw_content = ImGui::Begin(
-            m_window_name.c_str(), nullptr,
-            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-                ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing
-        );
+        const Rect popup_rect = layout().visual_rect();
 
-        apply_window_insets(style.padding());
-        if (draw_content) {
-            const Rect popup_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
+        surface().input_router().register_target(*this, popup_rect);
 
-            set_visual_rect(popup_rect);
-            draw_surface(popup_rect);
-
-            surface().input_router().register_target(*this, popup_rect);
-
-            // block the whole work area so an empty outside press can close the popup without click synthesis.
-            surface().input_router().register_blocker(*this, viewport_work_area(), [this, popup_rect](UiEvent& event) {
-                if (event.type == EventType::PointerDown && event.button == PointerButton::Left &&
-                    !popup_rect.contains(event.position)) {
-                    m_owner.close();
-                }
-            });
-
-            draw_picker();
-        }
-
-        ImGui::End();
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar(3);
-        return draw_content;
+        // block the whole work area so an empty outside press can close the popup without click synthesis.
+        surface().input_router().register_blocker(*this, work_area, [this, popup_rect](UiEvent& event) {
+            if (event.type == EventType::PointerDown && event.button == PointerButton::Left &&
+                !popup_rect.contains(event.position)) {
+                m_owner.close();
+            }
+        });
+        return true;
     }
-
-    void draw_picker() {
-        const Theme& theme = surface().theme();
-        const ImVec2 spacing = theme.metrics.item_spacing;
-        const float bar_size = std::max(1.0F, theme.controls.thumb_size);
-
-        ImColor color = m_owner.m_color->rgba();
-        float hue = 0.0F;
-        float saturation = 0.0F;
-        float value = 0.0F;
-
-        ImGui::ColorConvertRGBtoHSV(color.Value.x, color.Value.y, color.Value.z, hue, saturation, value);
-
-        const ImVec2 origin = ImGui::GetCursorScreenPos();
-        const float selector_size = std::max(1.0F, ImGui::GetContentRegionAvail().x - spacing.x - bar_size);
-        const Rect selector = Rect::from_position_size(origin, {selector_size, selector_size});
-        const Rect hue_bar = Rect::from_position_size({selector.max.x + spacing.x, selector.min.y}, {bar_size, selector_size});
-        const Rect alpha_bar =
-            Rect::from_position_size({selector.min.x, selector.max.y + spacing.y}, {hue_bar.max.x - selector.min.x, bar_size});
-
-        // invisible controls update hsv before the surfaces below read the new color for this frame.
-        ImGui::InvisibleButton("selector", selector.size());
-        if (ImGui::IsItemActive()) {
-            const ImVec2 mouse = ImGui::GetIO().MousePos;
-            saturation = saturate((mouse.x - selector.min.x) / selector.size().x);
-            value = 1.0F - saturate((mouse.y - selector.min.y) / selector.size().y);
-            set_hsv(hue, saturation, value, color.Value.w);
-            color = m_owner.m_color->rgba();
-        }
-
-        ImGui::SetCursorScreenPos(hue_bar.min);
-        ImGui::InvisibleButton("hue", hue_bar.size());
-        if (ImGui::IsItemActive()) {
-            hue = saturate((ImGui::GetIO().MousePos.y - hue_bar.min.y) / hue_bar.size().y);
-            set_hsv(hue, saturation, value, color.Value.w);
-            color = m_owner.m_color->rgba();
-        }
-
-        ImGui::SetCursorScreenPos(alpha_bar.min);
-        ImGui::InvisibleButton("alpha", alpha_bar.size());
-        if (ImGui::IsItemActive()) {
-            color.Value.w = saturate((ImGui::GetIO().MousePos.x - alpha_bar.min.x) / alpha_bar.size().x);
-            m_owner.set_color(color);
-            m_hex = format_hex(color);
-        }
-
-        const Painter paint = painter();
-        ImDrawList& draw_list = paint.draw_list();
-        const ImColor hue_color = hsv_color(hue, 1.0F, 1.0F);
-        draw_picker_gradient(draw_list, selector, rgb(255, 255, 255), hue_color, hue_color, rgb(255, 255, 255));
-        draw_picker_gradient(draw_list, selector, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0), rgb(0, 0, 0), rgb(0, 0, 0));
-        paint.rect_outline(selector, theme.controls.border_color);
-
-        for (int index = 0; index < 6; ++index) {
-            const float top = hue_bar.min.y + (hue_bar.size().y * static_cast<float>(index) / 6.0F);
-            const float bottom = hue_bar.min.y + (hue_bar.size().y * static_cast<float>(index + 1) / 6.0F);
-            const ImColor first = hsv_color(static_cast<float>(index) / 6.0F, 1.0F, 1.0F);
-            const ImColor second = hsv_color(static_cast<float>(index + 1) / 6.0F, 1.0F, 1.0F);
-            draw_picker_gradient(draw_list, {{hue_bar.min.x, top}, {hue_bar.max.x, bottom}}, first, first, second, second);
-        }
-        paint.rect_outline(hue_bar, theme.controls.border_color);
-
-        draw_checkerboard(paint, alpha_bar, bar_size * 0.5F, theme.background_secondary_color, theme.background_tertiary_color);
-
-        const ImColor opaque = ImColor(color.Value.x, color.Value.y, color.Value.z, 1.0F);
-        const ImColor transparent = ImColor(color.Value.x, color.Value.y, color.Value.z, 0.0F);
-
-        draw_picker_gradient(draw_list, alpha_bar, transparent, opaque, opaque, transparent);
-        paint.rect_outline(alpha_bar, theme.controls.border_color);
-
-        const ImVec2 selector_cursor = {
-            selector.min.x + (saturation * selector.size().x),
-            selector.min.y + ((1.0F - value) * selector.size().y),
-        };
-
-        paint.circle(selector_cursor, 5.0F, theme.background_color);
-        paint.circle_outline(selector_cursor, 5.0F, theme.text_color, 1.5F);
-
-        const float hue_cursor_y = hue_bar.min.y + (hue * hue_bar.size().y);
-
-        paint.line({hue_bar.min.x - 2.0F, hue_cursor_y}, {hue_bar.max.x + 2.0F, hue_cursor_y}, theme.text_color, 2.0F);
-        paint.line(
-            {hue_bar.min.x - 2.0F, hue_cursor_y + 1.0F}, {hue_bar.max.x + 2.0F, hue_cursor_y + 1.0F}, theme.background_color, 1.0F
-        );
-
-        const float alpha_cursor_x = alpha_bar.min.x + (color.Value.w * alpha_bar.size().x);
-
-        paint.line({alpha_cursor_x, alpha_bar.min.y - 2.0F}, {alpha_cursor_x, alpha_bar.max.y + 2.0F}, theme.text_color, 2.0F);
-
-        paint.line(
-            {alpha_cursor_x + 1.0F, alpha_bar.min.y - 2.0F}, {alpha_cursor_x + 1.0F, alpha_bar.max.y + 2.0F},
-            theme.background_color, 1.0F
-        );
-
-        ImGui::SetCursorScreenPos({alpha_bar.min.x, alpha_bar.max.y + spacing.y});
-
-        arrange_child(
-            *m_hex_input,
-            m_hex_input->layout().constrain_size(
-                {alpha_bar.size().x, m_hex_input->layout().intrinsic_size().y}, content_size(layout().visual_rect().size())
-            )
-        );
-        m_hex_input->draw_at_cursor();
-    }
-
-    void set_hsv(float hue, float saturation, float value, float alpha) {
-        m_owner.set_color(hsv_color(hue, saturation, value, alpha));
-        m_hex = format_hex(m_owner.m_color->rgba());
-    }
-
-    void draw_children() override {}
 
     ColorPickerWidget& m_owner;
-    std::string m_window_name;
     std::string m_hex;
+    ColorPickerControlsNode* m_controls = nullptr;
     TextInputWidget* m_hex_input = nullptr;
 };
+
+void ColorPickerControlsNode::paint_content(const PaintContext& context) {
+    const Rect content = context.content_rect;
+    const Theme& theme = surface().theme();
+    const ImVec2 spacing = theme.metrics.item_spacing;
+    const float bar_size = std::max(1.0F, theme.controls.thumb_size);
+
+    ImColor color = m_owner.m_color->rgba();
+    float hue = 0.0F;
+    float saturation = 0.0F;
+    float value = 0.0F;
+
+    ImGui::ColorConvertRGBtoHSV(color.Value.x, color.Value.y, color.Value.z, hue, saturation, value);
+
+    const ImVec2 origin = content.min;
+    const float selector_size =
+        std::max(1.0F, std::min(content.size().x - spacing.x - bar_size, content.size().y - spacing.y - bar_size));
+    const Rect selector = Rect::from_position_size(origin, {selector_size, selector_size});
+    const Rect hue_bar = Rect::from_position_size({selector.max.x + spacing.x, selector.min.y}, {bar_size, selector_size});
+    const Rect alpha_bar =
+        Rect::from_position_size({selector.min.x, selector.max.y + spacing.y}, {hue_bar.max.x - selector.min.x, bar_size});
+
+    // invisible controls update hsv before the surfaces below read the new color for this frame.
+    ImGui::SetCursorScreenPos(selector.min);
+    ImGui::InvisibleButton("selector", selector.size());
+    if (ImGui::IsItemActive()) {
+        const ImVec2 mouse = ImGui::GetIO().MousePos;
+        saturation = saturate((mouse.x - selector.min.x) / selector.size().x);
+        value = 1.0F - saturate((mouse.y - selector.min.y) / selector.size().y);
+        set_hsv(hue, saturation, value, color.Value.w);
+        color = m_owner.m_color->rgba();
+    }
+
+    ImGui::SetCursorScreenPos(hue_bar.min);
+    ImGui::InvisibleButton("hue", hue_bar.size());
+    if (ImGui::IsItemActive()) {
+        hue = saturate((ImGui::GetIO().MousePos.y - hue_bar.min.y) / hue_bar.size().y);
+        set_hsv(hue, saturation, value, color.Value.w);
+        color = m_owner.m_color->rgba();
+    }
+
+    ImGui::SetCursorScreenPos(alpha_bar.min);
+    ImGui::InvisibleButton("alpha", alpha_bar.size());
+    if (ImGui::IsItemActive()) {
+        color.Value.w = saturate((ImGui::GetIO().MousePos.x - alpha_bar.min.x) / alpha_bar.size().x);
+        m_owner.set_color(color);
+        m_hex = format_hex(color);
+    }
+
+    const Painter paint = painter();
+    ImDrawList& draw_list = paint.draw_list();
+    const ImColor hue_color = hsv_color(hue, 1.0F, 1.0F);
+    draw_picker_gradient(draw_list, selector, rgb(255, 255, 255), hue_color, hue_color, rgb(255, 255, 255));
+    draw_picker_gradient(draw_list, selector, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0), rgb(0, 0, 0), rgb(0, 0, 0));
+    paint.rect_outline(selector, theme.controls.border_color);
+
+    for (int index = 0; index < 6; ++index) {
+        const float top = hue_bar.min.y + (hue_bar.size().y * static_cast<float>(index) / 6.0F);
+        const float bottom = hue_bar.min.y + (hue_bar.size().y * static_cast<float>(index + 1) / 6.0F);
+        const ImColor first = hsv_color(static_cast<float>(index) / 6.0F, 1.0F, 1.0F);
+        const ImColor second = hsv_color(static_cast<float>(index + 1) / 6.0F, 1.0F, 1.0F);
+        draw_picker_gradient(draw_list, {{hue_bar.min.x, top}, {hue_bar.max.x, bottom}}, first, first, second, second);
+    }
+    paint.rect_outline(hue_bar, theme.controls.border_color);
+
+    draw_checkerboard(paint, alpha_bar, bar_size * 0.5F, theme.background_secondary_color, theme.background_tertiary_color);
+
+    const ImColor opaque = ImColor(color.Value.x, color.Value.y, color.Value.z, 1.0F);
+    const ImColor transparent = ImColor(color.Value.x, color.Value.y, color.Value.z, 0.0F);
+
+    draw_picker_gradient(draw_list, alpha_bar, transparent, opaque, opaque, transparent);
+    paint.rect_outline(alpha_bar, theme.controls.border_color);
+
+    const ImVec2 selector_cursor = {
+        selector.min.x + (saturation * selector.size().x),
+        selector.min.y + ((1.0F - value) * selector.size().y),
+    };
+
+    paint.circle(selector_cursor, 5.0F, theme.background_color);
+    paint.circle_outline(selector_cursor, 5.0F, theme.text_color, 1.5F);
+
+    const float hue_cursor_y = hue_bar.min.y + (hue * hue_bar.size().y);
+
+    paint.line({hue_bar.min.x - 2.0F, hue_cursor_y}, {hue_bar.max.x + 2.0F, hue_cursor_y}, theme.text_color, 2.0F);
+    paint.line(
+        {hue_bar.min.x - 2.0F, hue_cursor_y + 1.0F}, {hue_bar.max.x + 2.0F, hue_cursor_y + 1.0F}, theme.background_color, 1.0F
+    );
+
+    const float alpha_cursor_x = alpha_bar.min.x + (color.Value.w * alpha_bar.size().x);
+
+    paint.line({alpha_cursor_x, alpha_bar.min.y - 2.0F}, {alpha_cursor_x, alpha_bar.max.y + 2.0F}, theme.text_color, 2.0F);
+
+    paint.line(
+        {alpha_cursor_x + 1.0F, alpha_bar.min.y - 2.0F}, {alpha_cursor_x + 1.0F, alpha_bar.max.y + 2.0F}, theme.background_color,
+        1.0F
+    );
+}
+
+void ColorPickerControlsNode::set_hsv(float hue, float saturation, float value, float alpha) {
+    m_owner.set_color(hsv_color(hue, saturation, value, alpha));
+    m_hex = format_hex(m_owner.m_color->rgba());
+}
 
 ColorPickerWidget::ColorPickerWidget(Color& color, std::string label, LabelPlacement placement, std::string id)
     : Widget(std::move(id), StackDirection::Vertical, "ColorPicker"), m_color(&color) {
@@ -389,9 +377,7 @@ void ColorPickerWidget::apply_theme_defaults(const Theme& theme) {
 
     m_preview->style(StyleType::HOVER).border_color(theme.accent_hover_color);
     m_preview->style(StyleType::ACTIVE).border_color(theme.accent_color);
-    m_preview->style(StyleType::DISABLED)
-        .border_color(theme.border_color)
-        .cursor(ImGuiMouseCursor_NotAllowed);
+    m_preview->style(StyleType::DISABLED).border_color(theme.border_color).cursor(ImGuiMouseCursor_NotAllowed);
     m_label_node->style(StyleType::DISABLED).color(theme.text_secondary_color);
     style(StyleType::DISABLED).cursor(ImGuiMouseCursor_NotAllowed);
 }
@@ -429,6 +415,6 @@ Widget& ColorPickerWidget::preview() {
     return *m_preview;
 }
 
-Widget& ColorPickerWidget::popup() {
+Container& ColorPickerWidget::popup() {
     return *m_popup;
 }

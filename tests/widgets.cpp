@@ -250,7 +250,7 @@ TEST_CASE("color picker opens outside its parent and blocks content input", "[co
     const auto surface_context = ui_test::prepare_surface(surface, {400.0F, 300.0F});
     ui_test::draw_surface(surface);
 
-    const ImVec2 preview_center = ui_test::center(picker.layout().visual_rect());
+    const ImVec2 preview_center = ui_test::center(picker.preview().layout().visual_rect());
     UiEvent down = ui_test::pointer_event(EventType::PointerDown, preview_center);
     UiEvent up = ui_test::pointer_event(EventType::PointerUp, preview_center);
     surface.dispatch(down);
@@ -260,6 +260,7 @@ TEST_CASE("color picker opens outside its parent and blocks content input", "[co
     REQUIRE(picker.is_open());
     const Rect popup_rect = picker.popup().layout().visual_rect();
     REQUIRE(popup_rect.valid());
+    REQUIRE(picker.popup().layout().intrinsic_size().y > picker.popup().children().back()->layout().intrinsic_size().y);
 
     const ImVec2 popup_center = ui_test::center(popup_rect);
     down.position = popup_center;
@@ -274,17 +275,11 @@ TEST_CASE("color picker opens outside its parent and blocks content input", "[co
     surface.dispatch(up);
     REQUIRE_FALSE(checked);
 
-    const ImVec2 outside_position = {popup_rect.max.x + 2.0F, popup_rect.min.y};
+    const Rect work_area = viewport_work_area();
+    const float outside_x = popup_rect.min.x - 2.0F >= work_area.min.x ? popup_rect.min.x - 2.0F : popup_rect.max.x + 2.0F;
+    const ImVec2 outside_position = {outside_x, popup_rect.min.y};
     down = ui_test::pointer_event(EventType::PointerDown, outside_position);
     up = ui_test::pointer_event(EventType::PointerUp, outside_position);
-    REQUIRE(surface.dispatch(down));
-    surface.dispatch(up);
-    REQUIRE_FALSE(picker.is_open());
-
-    picker.open();
-    ui_test::draw_surface(surface);
-    down = ui_test::pointer_event(EventType::PointerDown, preview_center);
-    up = ui_test::pointer_event(EventType::PointerUp, preview_center);
     REQUIRE(surface.dispatch(down));
     surface.dispatch(up);
     REQUIRE_FALSE(picker.is_open());

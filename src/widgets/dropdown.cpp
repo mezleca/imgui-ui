@@ -23,11 +23,11 @@ private:
     bool paint() override;
     void draw_children() override;
     void on_draw_end() override;
+    void on_layout() override;
     void apply_theme_defaults(const Theme& theme) override;
     void on_update(float dt) override;
 
     DropdownWidget& m_owner;
-    float m_item_height = 0.0F;
     bool m_popup_opened = false;
 };
 
@@ -141,9 +141,15 @@ private:
 };
 
 DropdownWidget::Body::Body(DropdownWidget& owner) : Widget("body", "DropdownBody", InputMode::None), m_owner(owner) {
-    set_layout({.size = {px(0.0F), px(0.0F)}, .in_flow = false});
+    set_layout({.size = {px(0.0F), fit()}, .in_flow = false});
+    set_spacing(0.0F);
     fade_out();
     rebuild_options();
+}
+
+void DropdownWidget::Body::on_layout() {
+    Node::on_layout();
+    assign_size({m_owner.m_trigger->layout().size().x, layout().size().y});
 }
 
 void DropdownWidget::Body::apply_theme_defaults(const Theme& theme) {
@@ -183,8 +189,6 @@ bool DropdownWidget::Body::paint() {
 
     const Rect trigger_rect = m_owner.m_trigger->layout().visual_rect();
     const ImVec2 popup_position = {trigger_rect.min.x, trigger_rect.max.y + m_owner.m_popup_gap};
-    const float popup_width = trigger_rect.size().x;
-
     ImGui::PushID(this);
 
     // open the native popup once for each closed-to-open cycle. keep it drawn while the framework body fades out.
@@ -194,13 +198,8 @@ bool DropdownWidget::Body::paint() {
     }
 
     const ComputedStyle& style = computed_style();
-    const auto first_row =
-        std::find_if(children().begin(), children().end(), [](const auto& child) { return !child->removal_pending(); });
-    const BoxInsets item_padding =
-        first_row == children().end() ? BoxInsets{} : static_cast<const Option&>(**first_row).computed_style().padding();
-    m_item_height = ImGui::GetTextLineHeight() + item_padding.vertical();
     ImGui::SetNextWindowPos(popup_position, ImGuiCond_Always);
-    ImGui::SetNextWindowSize(outer_size({popup_width, m_item_height * static_cast<float>(m_owner.m_options.size())}));
+    ImGui::SetNextWindowSize(layout().size());
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, box_insets().window_padding());
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{});
     ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, style.border_radius());
@@ -229,30 +228,19 @@ bool DropdownWidget::Body::paint() {
 }
 
 void DropdownWidget::Body::draw_children() {
-    const ImVec2 available = content_size(layout().visual_rect().size());
-    const ImVec2 item_size = {available.x, m_item_height};
-
     std::size_t index = 0;
     for (const auto& child : children()) {
-        if (child->removal_pending()) {
-            continue;
-        }
+        if (child->removal_pending()) continue;
 
-        auto& option_node = static_cast<Option&>(*child);
-        arrange_child(
-            option_node, option_node.layout().constrain_size(item_size, available),
-            {.offset = {0.0F, m_item_height * static_cast<float>(index)}}
-        );
-        const InputState& input = option_node.input_state();
-
+        auto& option = static_cast<Option&>(*child);
+        const InputState& input = option.input_state();
         if (!input.hovered && !input.active && !input.focused) {
-            const bool selected = m_owner.m_options[index].value == m_owner.m_value;
-            option_node.set_visual_style(selected ? StyleType::ACTIVE : StyleType::DEFAULT);
+            option.set_visual_style(m_owner.m_options[index].value == m_owner.m_value ? StyleType::ACTIVE : StyleType::DEFAULT);
         }
-
-        option_node.draw();
         ++index;
     }
+
+    Container::draw_children();
 }
 
 void DropdownWidget::Body::on_draw_end() {

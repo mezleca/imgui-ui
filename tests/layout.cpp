@@ -1402,6 +1402,22 @@ TEST_CASE("window layers preserve explicit sizes", "[LayerContainer][layout][reg
     REQUIRE(layer.layout().visual_rect().size().y == Catch::Approx(80.0F));
 }
 
+TEST_CASE("popup layers stay inside the viewport", "[LayerContainer][popup][layout]") {
+    ui_test::ImGuiContext context({320.0F, 220.0F});
+    LayerContainer layer("popup-layer", LayerMode::Popup);
+    layer.set_size({px(180.0F), px(80.0F)});
+    layer.set_popup_position({300.0F, 210.0F});
+
+    ui_test::draw_node(layer, "popup-parent");
+
+    const Rect popup = layer.layout().visual_rect();
+    const Rect work_area = viewport_work_area();
+    REQUIRE(popup.min.x >= work_area.min.x);
+    REQUIRE(popup.min.y >= work_area.min.y);
+    REQUIRE(popup.max.x <= work_area.max.x);
+    REQUIRE(popup.max.y <= work_area.max.y);
+}
+
 TEST_CASE("movable window layers preserve imgui geometry within size limits", "[LayerContainer][layout][size-limits]") {
     class FloatingLayer final : public LayerContainer {
     public:

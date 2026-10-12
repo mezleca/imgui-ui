@@ -7,6 +7,7 @@
 namespace ui {
     class ColorPickerPopup;
     class ColorPickerPreviewNode;
+    class ColorPickerControlsNode;
     class TextWidget;
 
     class ColorPickerWidget : public Widget {
@@ -26,13 +27,14 @@ namespace ui {
 
         TextWidget& label();
         Widget& preview();
-        Widget& popup();
+        Container& popup();
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;
 
     private:
         friend class ColorPickerPopup;
+        friend class ColorPickerControlsNode;
 
         Color* m_color = nullptr;
         TextWidget* m_label_node = nullptr;
