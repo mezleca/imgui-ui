@@ -115,9 +115,7 @@ void TextInputWidget::apply_theme_defaults(const Theme& theme) {
             .border_color(theme.accent_color, transition);
     }
     m_input_node->style(StyleType::HOVER).background_color(theme.controls.hover_color, transition);
-    m_input_node->style(StyleType::DISABLED)
-        .background_color(theme.background_secondary_color)
-        .border_color(theme.border_color);
+    m_input_node->style(StyleType::DISABLED).background_color(theme.background_secondary_color).border_color(theme.border_color);
     style(StyleType::DISABLED).cursor(ImGuiMouseCursor_NotAllowed);
 
     m_field_node->configure_all_styles([&theme](Style& style) {

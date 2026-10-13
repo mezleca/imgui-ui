@@ -10,6 +10,7 @@
 #include <imgui-ui/widgets/color-picker.hpp>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <filesystem>
 #include <fstream>
@@ -124,10 +125,13 @@ TEST_CASE("debugger clicks preserve an open popup") {
     surface.dispatch(up);
     ui_test::draw_surface(surface);
     REQUIRE(picker.is_open());
+    REQUIRE_FALSE(ImGui::GetCurrentContext()->OpenPopupStack.empty());
+    const ImGuiID popup_id = ImGui::GetCurrentContext()->OpenPopupStack.back().PopupId;
 
     surface.debugger()->set_open(true);
     ui_test::draw_surface(surface);
     REQUIRE(picker.is_open());
+    REQUIRE(ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_AnyPopupLevel));
 
     const ui::Rect debugger_rect = surface.debugger()->layout().visual_rect();
     const ImVec2 inspect = {debugger_rect.min.x + 20.0F, debugger_rect.min.y + 20.0F};
@@ -144,6 +148,7 @@ TEST_CASE("debugger clicks preserve an open popup") {
     ImGui::GetIO().AddMouseButtonEvent(0, false);
     ui_test::draw_surface(surface);
     REQUIRE(picker.is_open());
+    REQUIRE(ImGui::IsPopupOpen(popup_id, ImGuiPopupFlags_AnyPopupLevel));
 }
 
 TEST_CASE("debugger exposes the content resize handle", "[Debugger][ResizableContainer][regression]") {

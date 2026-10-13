@@ -46,7 +46,7 @@ namespace ui {
 
         Widget& trigger() const;
 
-        Widget& body() const;
+        Container& body() const;
 
     protected:
         void apply_theme_defaults(const Theme& theme) override;

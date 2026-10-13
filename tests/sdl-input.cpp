@@ -530,7 +530,11 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
             .border_color(ui::rgb(1.0F, 0.0F, 0.0F))
             .padding({});
     });
-    dropdown.body().style().background_color(ui::rgb(0.0F, 1.0F, 0.0F)).border(ui::BorderEdge{0.0F, ui::BorderType::None}).padding({});
+    dropdown.body()
+        .style()
+        .background_color(ui::rgb(0.0F, 1.0F, 0.0F))
+        .border(ui::BorderEdge{0.0F, ui::BorderType::None})
+        .padding({});
     draw_frame(surface, 0.1F);
     CHECK(file.computed_style().border_color().value.rgba().x > 0.9F);
     CHECK(dropdown.body().computed_style().background_color().value.rgba().y > 0.9F);
@@ -553,7 +557,6 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
     CHECK(pixel[0] < 96);
     CHECK(pixel[1] > 160);
 }
-
 
 TEST_CASE("container borders stay below window-layer panels", "[render][regression]") {
     SdlVideoSession sdl({160.0F, 120.0F});
@@ -594,7 +597,6 @@ TEST_CASE("container borders stay below window-layer panels", "[render][regressi
     CHECK(pixel[0] < 96);
     CHECK(pixel[1] > 160);
 }
-
 
 TEST_CASE("container overflow controls child surfaces", "[render][regression]") {
     const auto sample_overflow = [](ui::Overflow overflow) {
@@ -1173,6 +1175,12 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
         .in_flow = false,
     });
     dropdown.on_change([&changes] { ++changes; });
+    auto& outside = surface.root().add<ui::TreeContainer>("outside tree");
+    outside.set_layout({
+        .size = {ui::px(80.0F), ui::fit()},
+        .placement = {.offset = {220.0F, 20.0F}},
+        .in_flow = false,
+    });
 
     const SDL_WindowID window_id = surface.backend().window_id();
     const auto send_pointer = [window_id, &surface](SDL_EventType type, ImVec2 position) {
@@ -1200,6 +1208,17 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
     ui_test::draw_surface(surface);
     REQUIRE(dropdown.is_open());
     REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
+
+    const ImVec2 outside_position = ui_test::center(outside.layout().visual_rect());
+    send_pointer(SDL_EVENT_MOUSE_BUTTON_DOWN, outside_position);
+    send_pointer(SDL_EVENT_MOUSE_BUTTON_UP, outside_position);
+    ui_test::draw_surface(surface);
+    REQUIRE_FALSE(dropdown.is_open());
+
+    send_pointer(SDL_EVENT_MOUSE_BUTTON_DOWN, trigger_position);
+    send_pointer(SDL_EVENT_MOUSE_BUTTON_UP, trigger_position);
+    ui_test::draw_surface(surface);
+    REQUIRE(dropdown.is_open());
 
     const ui::Rect body_rect = dropdown.body().layout().visual_rect();
     const float item_height = body_rect.size().y * 0.5F;

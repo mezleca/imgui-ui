@@ -169,8 +169,12 @@ namespace ui {
         }
 
         float border_thickness() const {
-            return std::max({m_border_left_size.value, m_border_top_size.value,
-                             m_border_right_size.value, m_border_bottom_size.value,});
+            return std::max({
+                m_border_left_size.value,
+                m_border_top_size.value,
+                m_border_right_size.value,
+                m_border_bottom_size.value,
+            });
         }
 
         uint8_t border() const;

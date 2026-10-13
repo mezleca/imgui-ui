@@ -35,6 +35,9 @@ namespace ui {
     private:
         friend class ColorPickerPopup;
         friend class ColorPickerControlsNode;
+        friend class ColorPickerPreviewNode;
+
+        bool native_popup_open() const;
 
         Color* m_color = nullptr;
         TextWidget* m_label_node = nullptr;

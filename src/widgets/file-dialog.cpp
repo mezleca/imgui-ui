@@ -29,14 +29,16 @@ FileDialogWidget::FileDialogWidget(std::string label, LabelPlacement placement, 
     set_size({grow(), fit()});
     m_button.set_text_alignment({0.0F, 0.5F}).set_text_overflow(TextOverflow::Ellipsis);
     m_button.on_click([this] {
-        show_dialog(m_operation, {
-            .filters = m_filters,
-            .default_path = m_default_path,
-            .default_name = m_default_name,
-            .title = m_title,
-            .accept_label = m_accept_label,
-            .cancel_label = m_cancel_label,
-        });
+        show_dialog(
+            m_operation, {
+                             .filters = m_filters,
+                             .default_path = m_default_path,
+                             .default_name = m_default_name,
+                             .title = m_title,
+                             .accept_label = m_accept_label,
+                             .cancel_label = m_cancel_label,
+                         }
+        );
     });
     m_label_placement = placement;
     update_label_layout();

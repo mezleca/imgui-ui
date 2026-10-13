@@ -1008,10 +1008,9 @@ static void setup_virtual_list(Container& layouts) {
 }
 
 void DemoScreen::setup_dynamic_nodes(Node& parent) {
-    auto& dynamic_section =
-        parent.add<DemoPanel>(
-            "dynamic-section", DemoPanelTone::Base, ImVec2{14.0F, 14.0F}, BorderEdge{1.0F, BorderType::Solid}, true, true
-        );
+    auto& dynamic_section = parent.add<DemoPanel>(
+        "dynamic-section", DemoPanelTone::Base, ImVec2{14.0F, 14.0F}, BorderEdge{1.0F, BorderType::Solid}, true, true
+    );
 
     dynamic_section.set_direction(StackDirection::Horizontal);
     dynamic_section.set_spacing(8.0F);

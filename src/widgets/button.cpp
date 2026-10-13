@@ -73,8 +73,7 @@ void ButtonWidget::paint_content(const PaintContext& context) {
     };
     if (m_text_overflow == TextOverflow::Ellipsis) {
         context.painter.text_ellipsis(
-            position, context.style.color().value, m_text,
-            {content.min.x, content.min.y, content.max.x, content.max.y}
+            position, context.style.color().value, m_text, {content.min.x, content.min.y, content.max.x, content.max.y}
         );
     } else {
         context.painter.text(position, context.style.color().value, m_text);

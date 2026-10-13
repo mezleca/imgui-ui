@@ -117,10 +117,12 @@ void InputRouter::set_hovered(const HitTestIndex::Route& route) {
     }
 
     m_hovered_nodes.clear();
+
     for (const auto& entry : route.targets) {
         m_hovered_nodes.push_back(entry.node);
         entry.node->set_input_state(set_input_flag(entry.node->input_state(), &InputState::hovered, true));
     }
+
     if (owner != nullptr) {
         m_hovered_nodes.push_back(owner);
         owner->set_input_state(set_input_flag(owner->input_state(), &InputState::hovered, true));
@@ -473,6 +475,7 @@ void InputRouter::clear_inactive_targets() {
         node->set_input_state(set_input_flag(node->input_state(), &InputState::hovered, false));
         return true;
     });
+
     if (m_hovered_nodes.empty()) set_hovered({});
     if (!is_input_target(m_active_node)) set_input_target(m_active_node, nullptr, &InputState::active);
 

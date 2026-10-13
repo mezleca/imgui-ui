@@ -44,9 +44,7 @@ void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
 
     m_frame_node->style(StyleType::HOVER).background_color(theme.controls.hover_color).border_color(theme.accent_hover_color);
     m_frame_node->style(StyleType::ACTIVE).background_color(theme.controls.active_color).border_color(theme.accent_color);
-    m_frame_node->style(StyleType::DISABLED)
-        .background_color(theme.background_secondary_color)
-        .border_color(theme.border_color);
+    m_frame_node->style(StyleType::DISABLED).background_color(theme.background_secondary_color).border_color(theme.border_color);
     m_fill_node->style(StyleType::DISABLED).background_color(theme.text_secondary_color);
     m_label_node->style(StyleType::DISABLED).color(theme.text_secondary_color);
     style(StyleType::DISABLED).cursor(ImGuiMouseCursor_NotAllowed);

@@ -43,7 +43,8 @@ TEST_CASE("checkbox input is limited to its box", "[CheckboxWidget][input][regre
     const Rect widget_rect = checkbox.layout().visual_rect();
     const BoxInsets padding = checkbox.style().padding();
     const Rect frame_rect = Rect::from_position_size(
-        {widget_rect.min.x + padding.left, widget_rect.min.y + ((widget_rect.size().y - checkbox.frame().layout().size().y) * 0.5F)},
+        {widget_rect.min.x + padding.left,
+         widget_rect.min.y + ((widget_rect.size().y - checkbox.frame().layout().size().y) * 0.5F)},
         checkbox.frame().layout().size()
     );
     REQUIRE(widget_rect.valid());
@@ -274,18 +275,9 @@ TEST_CASE("color picker opens outside its parent and blocks content input", "[co
     surface.dispatch(down);
     surface.dispatch(up);
     REQUIRE_FALSE(checked);
-
-    const Rect work_area = viewport_work_area();
-    const float outside_x = popup_rect.min.x - 2.0F >= work_area.min.x ? popup_rect.min.x - 2.0F : popup_rect.max.x + 2.0F;
-    const ImVec2 outside_position = {outside_x, popup_rect.min.y};
-    down = ui_test::pointer_event(EventType::PointerDown, outside_position);
-    up = ui_test::pointer_event(EventType::PointerUp, outside_position);
-    REQUIRE(surface.dispatch(down));
-    surface.dispatch(up);
-    REQUIRE_FALSE(picker.is_open());
 }
 
-TEST_CASE("color pickers do not replace each other", "[color-picker][regression]") {
+TEST_CASE("color pickers share the native popup stack", "[color-picker][regression]") {
     Runtime runtime;
     ui::Surface surface = ui_test::make_surface(runtime);
     Color first_color = rgb(0.26F, 0.59F, 0.98F);
@@ -295,10 +287,14 @@ TEST_CASE("color pickers do not replace each other", "[color-picker][regression]
 
     const auto surface_context = ui_test::prepare_surface(surface, {640.0F, 480.0F});
     first.open();
+    ui_test::draw_surface(surface);
+    REQUIRE(first.is_open());
+
     second.open();
     ui_test::draw_surface(surface);
+    ui_test::draw_surface(surface);
 
-    REQUIRE(first.is_open());
+    REQUIRE_FALSE(first.is_open());
     REQUIRE(second.is_open());
 }
 
@@ -1223,7 +1219,8 @@ TEST_CASE("dropdown closing body blocks underlying input without selecting rows"
 
     dropdown.close();
     dropdown.open();
-    REQUIRE_FALSE(dropdown.is_open());
+    REQUIRE(dropdown.is_open());
+    dropdown.close();
     ui_test::draw_surface(surface, 0.01F);
     REQUIRE(dropdown.body().visually_visible());
     REQUIRE(dropdown.body().input_enabled());

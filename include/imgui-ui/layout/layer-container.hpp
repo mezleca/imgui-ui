@@ -12,8 +12,7 @@ namespace ui {
         /// draws in a separate imgui window. defaults to the main viewport's work area.
         Window,
 
-        /// draws a regular imgui window at a screen position, constrained to the viewport work area.
-        /// it remains open alongside native imgui popups.
+        /// draws a native imgui popup at a screen position, constrained to the viewport work area.
         Popup,
     };
 
@@ -25,6 +24,15 @@ namespace ui {
         /// defaults to InputMode::None, allowing input through empty areas. Blocker also occludes native controls behind
         /// an active inline layer, while its descendants remain interactive. hiding or disabling the layer removes that barrier.
         explicit LayerContainer(std::string id, LayerMode mode = LayerMode::Inline);
+
+        /// requests a native popup on the next draw.
+        void open_popup();
+
+        /// closes a native popup on the next draw.
+        void close_popup();
+
+        /// returns whether imgui still has this popup open after processing the last frame.
+        bool native_popup_open() const;
 
         /// sets the screen position used by popup mode before viewport clamping.
         void set_popup_position(ImVec2 position);
@@ -40,9 +48,15 @@ namespace ui {
     private:
         bool paint_inline();
         bool paint_window();
+        bool paint_popup();
+        void prepare_window(ImVec2 position, ImVec2 size, ImGuiWindowFlags flags, bool popup);
+        void paint_window_contents();
 
         LayerMode m_mode;
         ImVec2 m_popup_position;
         bool m_window_initialized = false;
+        bool m_popup_requested = false;
+        bool m_popup_opened = false;
+        ImGuiID m_popup_id = 0;
     };
 } // namespace ui

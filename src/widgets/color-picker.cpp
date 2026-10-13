@@ -115,9 +115,9 @@ private:
 
         if (m_owner.is_open()) {
             m_owner.close();
-        } else {
-            m_owner.open();
+            if (m_owner.native_popup_open()) return;
         }
+        m_owner.open();
     }
 
     void input_state_changed() override {
@@ -200,26 +200,20 @@ private:
     }
 
     bool paint() override {
-        if (!m_owner.is_open()) return false;
+        if (!m_owner.is_open()) return LayerContainer::paint();
 
         const Rect preview_rect = m_owner.preview().layout().visual_rect();
-        const Rect work_area = viewport_work_area();
-        if (!work_area.valid()) return false;
-
         set_popup_position({preview_rect.min.x, preview_rect.max.y + surface().theme().metrics.item_spacing.y});
-        if (!LayerContainer::paint()) return false;
+        if (!LayerContainer::paint()) {
+            m_owner.close();
+            return false;
+        }
 
         const Rect popup_rect = layout().visual_rect();
 
         surface().input_router().register_target(*this, popup_rect);
+        surface().input_router().register_blocker(*this, popup_rect);
 
-        // block the whole work area so an empty outside press can close the popup without click synthesis.
-        surface().input_router().register_blocker(*this, work_area, [this, popup_rect](UiEvent& event) {
-            if (event.type == EventType::PointerDown && event.button == PointerButton::Left &&
-                !popup_rect.contains(event.position)) {
-                m_owner.close();
-            }
-        });
         return true;
     }
 
@@ -399,12 +393,18 @@ void ColorPickerWidget::open() {
 
     m_open = true;
     m_popup->show();
+    m_popup->open_popup();
     m_preview->set_open(true);
 }
 
 void ColorPickerWidget::close() {
     m_open = false;
+    m_popup->close_popup();
     m_preview->set_open(false);
+}
+
+bool ColorPickerWidget::native_popup_open() const {
+    return m_popup->native_popup_open();
 }
 
 TextWidget& ColorPickerWidget::label() {

@@ -315,10 +315,14 @@ TEST_CASE("patterned borders keep every side visible") {
 
 TEST_CASE("style normalizes discrete fields and interpolates effect values") {
     Style style;
-    style.border(BorderEdges{
-        {1.0F, BorderType::Dashed}, {0.0F, BorderType::None},
-        {0.0F, BorderType::None}, {1.0F, BorderType::Dashed},
-    });
+    style.border(
+        BorderEdges{
+            {1.0F, BorderType::Dashed},
+            {0.0F, BorderType::None},
+            {0.0F, BorderType::None},
+            {1.0F, BorderType::Dashed},
+        }
+    );
 
     REQUIRE(style.border() == (BORDER_LEFT | BORDER_BOTTOM));
     REQUIRE(style.border_style() == BorderType::Dashed);
@@ -409,7 +413,6 @@ TEST_CASE("container shadows stay in their owner draw list") {
     REQUIRE(collected_shadow_region->cutout.size().y == Catch::Approx(60.0F));
     REQUIRE(collected_effect_draw_list != foreground_draw_list);
 }
-
 
 TEST_CASE("styled paint slots render before the node and above completed subtrees") {
     ui_test::ImGuiContext context({160.0F, 120.0F});

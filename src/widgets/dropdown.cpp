@@ -1,7 +1,6 @@
 #include <imgui-ui/widgets/dropdown.hpp>
-#include <imgui-ui/imgui/window.hpp>
+#include <imgui-ui/layout/layer-container.hpp>
 
-#include <imgui-ui/imgui/painter.hpp>
 #include <imgui-ui/style/theme.hpp>
 #include <imgui-ui/surface.hpp>
 #include <imgui-ui/widgets/button.hpp>
@@ -13,7 +12,7 @@
 
 using namespace ui;
 
-class ui::DropdownWidget::Body final : public Widget {
+class ui::DropdownWidget::Body final : public LayerContainer {
 public:
     explicit Body(DropdownWidget& owner);
 
@@ -22,13 +21,11 @@ public:
 private:
     bool paint() override;
     void draw_children() override;
-    void on_draw_end() override;
     void on_layout() override;
     void apply_theme_defaults(const Theme& theme) override;
     void on_update(float dt) override;
 
     DropdownWidget& m_owner;
-    bool m_popup_opened = false;
 };
 
 class ui::DropdownWidget::Option final : public ButtonWidget {
@@ -65,9 +62,7 @@ protected:
 
         style(StyleType::HOVER).background_color(theme.controls.hover_color);
         style(StyleType::ACTIVE).background_color(theme.controls.active_color);
-        style(StyleType::DISABLED)
-            .color(theme.text_secondary_color)
-            .cursor(ImGuiMouseCursor_NotAllowed);
+        style(StyleType::DISABLED).color(theme.text_secondary_color).cursor(ImGuiMouseCursor_NotAllowed);
     }
 
 private:
@@ -106,11 +101,11 @@ private:
             return;
         }
 
-        if (m_owner.m_visibility == Visibility::Closed) {
-            m_owner.open();
-        } else {
+        if (m_owner.is_open()) {
             m_owner.close();
+            if (m_owner.m_body->native_popup_open()) return;
         }
+        m_owner.open();
     }
 
     void paint_content(const PaintContext& context) override {
@@ -140,7 +135,7 @@ private:
     DropdownWidget& m_owner;
 };
 
-DropdownWidget::Body::Body(DropdownWidget& owner) : Widget("body", "DropdownBody", InputMode::None), m_owner(owner) {
+DropdownWidget::Body::Body(DropdownWidget& owner) : LayerContainer("body", LayerMode::Popup, "DropdownBody"), m_owner(owner) {
     set_layout({.size = {px(0.0F), fit()}, .in_flow = false});
     set_spacing(0.0F);
     fade_out();
@@ -184,46 +179,20 @@ void DropdownWidget::Body::rebuild_options() {
 
 bool DropdownWidget::Body::paint() {
     if (m_owner.m_visibility == Visibility::Closed) {
-        return false;
+        return LayerContainer::paint();
     }
 
     const Rect trigger_rect = m_owner.m_trigger->layout().visual_rect();
-    const ImVec2 popup_position = {trigger_rect.min.x, trigger_rect.max.y + m_owner.m_popup_gap};
-    ImGui::PushID(this);
-
-    // open the native popup once for each closed-to-open cycle. keep it drawn while the framework body fades out.
-    if (m_owner.is_open() && !m_popup_opened) {
-        ImGui::OpenPopup("body");
-        m_popup_opened = true;
-    }
-
-    const ComputedStyle& style = computed_style();
-    ImGui::SetNextWindowPos(popup_position, ImGuiCond_Always);
-    ImGui::SetNextWindowSize(layout().size());
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, box_insets().window_padding());
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{});
-    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, style.border_radius());
-    ImGui::PushStyleVar(ImGuiStyleVar_PopupBorderSize, 0.0F);
-    ImGui::PushStyleColor(ImGuiCol_PopupBg, ImVec4{});
-
-    if (ImGui::BeginPopup("body", ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
-        apply_window_insets(box_insets());
-        const Rect body_rect = Rect::from_position_size(ImGui::GetWindowPos(), ImGui::GetWindowSize());
-        set_visual_rect(body_rect);
-        draw_surface(body_rect);
+    set_popup_position({trigger_rect.min.x, trigger_rect.max.y + m_owner.m_popup_gap});
+    if (LayerContainer::paint()) {
+        const Rect body_rect = layout().visual_rect();
 
         // block the body while keeping its option rows targetable.
         surface().input_router().register_blocker(*this, body_rect);
         return true;
     }
-    if (m_owner.is_open()) {
-        m_owner.close();
-        m_popup_opened = false;
-    }
 
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(4);
-    ImGui::PopID();
+    if (m_owner.is_open()) m_owner.close();
     return false;
 }
 
@@ -243,23 +212,12 @@ void DropdownWidget::Body::draw_children() {
     Container::draw_children();
 }
 
-void DropdownWidget::Body::on_draw_end() {
-    const ComputedStyle& style = computed_style();
-    painter().border(layout().visual_rect(), style, style.border_color().value);
-
-    ImGui::EndPopup();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(4);
-    ImGui::PopID();
-}
-
 void DropdownWidget::Body::on_update(float) {
     if (m_owner.m_visibility != Visibility::Closing || opacity() > VISIBILITY_OPACITY_THRESHOLD) {
         return;
     }
 
     m_owner.finish_close();
-    m_popup_opened = false;
 }
 
 const DropdownOption* DropdownWidget::find_option(std::string_view option_value) const {
@@ -274,11 +232,12 @@ const DropdownOption* DropdownWidget::selected_option() const {
 }
 
 void DropdownWidget::open() {
-    if (m_visibility != Visibility::Closed) {
+    if (m_visibility == Visibility::Open) {
         return;
     }
 
     m_visibility = Visibility::Open;
+    m_body->open_popup();
 
     m_trigger->set_open(true);
     m_body->set_input_enabled(true);
@@ -300,6 +259,7 @@ void DropdownWidget::close() {
 
 void DropdownWidget::finish_close() {
     m_visibility = Visibility::Closed;
+    m_body->close_popup();
     m_body->set_input_enabled(false);
 }
 
@@ -408,6 +368,6 @@ Widget& DropdownWidget::trigger() const {
     return *m_trigger;
 }
 
-Widget& DropdownWidget::body() const {
+Container& DropdownWidget::body() const {
     return *m_body;
 }

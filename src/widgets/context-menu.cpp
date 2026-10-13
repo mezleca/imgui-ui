@@ -33,9 +33,7 @@ protected:
 
         style(StyleType::HOVER).background_color(theme.controls.hover_color);
         style(StyleType::ACTIVE).background_color(theme.controls.active_color);
-        style(StyleType::DISABLED)
-            .color(theme.text_secondary_color)
-            .cursor(ImGuiMouseCursor_NotAllowed);
+        style(StyleType::DISABLED).color(theme.text_secondary_color).cursor(ImGuiMouseCursor_NotAllowed);
         set_size({grow(), px(theme.controls.font_size + (theme.metrics.item_inner_spacing.y * 2.0F))});
     }
 

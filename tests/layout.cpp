@@ -437,9 +437,16 @@ TEST_CASE("asymmetric padding margins and borders determine child position and f
     ui_test::ImGuiContext context({240.0F, 180.0F});
     Container root("asymmetric-insets");
     root.set_size({fit(), fit()});
-    root.style().padding({3.0F, 5.0F, 7.0F, 11.0F})
-        .border(BorderEdges{{2.0F, BorderType::Solid}, {4.0F, BorderType::Dashed},
-                 {6.0F, BorderType::Dotted}, {8.0F, BorderType::Solid},});
+    root.style()
+        .padding({3.0F, 5.0F, 7.0F, 11.0F})
+        .border(
+            BorderEdges{
+                {2.0F, BorderType::Solid},
+                {4.0F, BorderType::Dashed},
+                {6.0F, BorderType::Dotted},
+                {8.0F, BorderType::Solid},
+            }
+        );
 
     auto& child = root.add<Container>("asymmetric-child");
     child.set_size({px(20.0F), px(10.0F)});
@@ -1407,11 +1414,16 @@ TEST_CASE("popup layers stay inside the viewport", "[LayerContainer][popup][layo
     LayerContainer layer("popup-layer", LayerMode::Popup);
     layer.set_size({px(180.0F), px(80.0F)});
     layer.set_popup_position({300.0F, 210.0F});
+    layer.open_popup();
 
     ui_test::draw_node(layer, "popup-parent");
 
     const Rect popup = layer.layout().visual_rect();
     const Rect work_area = viewport_work_area();
+    REQUIRE(ImGui::GetCurrentContext()->OpenPopupStack.Size == 1);
+    REQUIRE((ImGui::GetCurrentContext()->OpenPopupStack[0].Window->Flags & ImGuiWindowFlags_Popup) != 0);
+    REQUIRE(popup.size().x == Catch::Approx(180.0F));
+    REQUIRE(popup.size().y == Catch::Approx(80.0F));
     REQUIRE(popup.min.x >= work_area.min.x);
     REQUIRE(popup.min.y >= work_area.min.y);
     REQUIRE(popup.max.x <= work_area.max.x);

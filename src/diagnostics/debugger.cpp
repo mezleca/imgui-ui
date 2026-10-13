@@ -1342,9 +1342,7 @@ void Debugger::render_style_controls(Style& style, bool is_line, std::span<Style
             int type = static_cast<int>(edge.type);
             const bool type_changed = draw_inline_combo("type", type, BORDER_STYLE_NAMES, IM_ARRAYSIZE(BORDER_STYLE_NAMES));
             if (size_changed || type_changed) {
-                apply([edge, type, setter](Style& target) {
-                    (target.*setter)(edge.size, static_cast<BorderType>(type), {});
-                });
+                apply([edge, type, setter](Style& target) { (target.*setter)(edge.size, static_cast<BorderType>(type), {}); });
             }
             ImGui::PopID();
         };

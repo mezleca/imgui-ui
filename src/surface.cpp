@@ -9,6 +9,7 @@
 #include <imgui-ui/style/theme.hpp>
 
 #include <algorithm>
+#include <imgui_internal.h>
 #include <stdexcept>
 #include <utility>
 
@@ -220,7 +221,17 @@ bool Surface::dispatch(UiEvent& event) {
         return true;
     }
 
-    return input_router().dispatch(event);
+    const bool handled = input_router().dispatch(event);
+
+    // route the click first so its trigger sees the popup before an outside release closes it.
+    if (event.type == EventType::PointerUp && event.button == PointerButton::Left &&
+        ImGui::IsPopupOpen((ImGuiID)0, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
+        ImGuiWindow* hovered = nullptr;
+        ImGui::FindHoveredWindowEx(event.position, true, &hovered, nullptr);
+        ImGui::ClosePopupsOverWindow(hovered, true);
+    }
+
+    return handled;
 }
 
 bool Surface::debugger_blocks_pointer_input() const {
