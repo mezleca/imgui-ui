@@ -44,6 +44,7 @@ namespace ui {
 
         static constexpr ImGuiDataType scalar_type();
         void update_label_layout();
+        void value_changed();
         Rect hit_rect(Rect visual_rect) const override;
         void mouse_press_event(UiEvent& event) override;
         bool draw_value();
@@ -93,7 +94,7 @@ namespace ui {
             ImGui::SetNextItemWidth(layout().size().x);
 
             if (m_owner.draw_value()) {
-                m_owner.notify_change();
+                m_owner.value_changed();
             }
 
             set_interaction_style(ImGui::IsItemHovered(), ImGui::IsItemActive(), m_owner.input_state().focused);
@@ -177,6 +178,11 @@ namespace ui {
         set_direction(inline_label ? StackDirection::Horizontal : StackDirection::Vertical);
         set_content_alignment({0.0F, inline_label ? 0.5F : 0.0F});
         set_spacing(inline_label ? m_label_spacing.x : m_label_spacing.y);
+    }
+
+    template <NumberInputType T>
+    void NumberInputWidget<T>::value_changed() {
+        notify_change();
     }
 
     template <NumberInputType T>

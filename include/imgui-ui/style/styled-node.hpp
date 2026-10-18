@@ -5,6 +5,7 @@
 #include "../tree/node.hpp"
 
 #include <imgui.h>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -75,6 +76,12 @@ namespace ui {
         void fade_out(TransitionSpec transition = OPACITY_TRANSITION) {
             m_state.fade_out(transition);
         }
+
+        /// shows a plain text tooltip while the pointer hovers this node.
+        StyledNode& set_tooltip(std::string text);
+
+        /// shows a tooltip while the pointer hovers this node. the callback emits the tooltip content.
+        StyledNode& set_tooltip(std::function<void()> callback);
 
         void set_opacity(float opacity, TransitionSpec transition = OPACITY_TRANSITION) {
             m_state.set_opacity(opacity, transition);
@@ -165,5 +172,7 @@ namespace ui {
         std::unique_ptr<PaintSlot> m_after;
         mutable ImFont* m_cached_font = nullptr;
         mutable bool m_font_cache_valid = false;
+        std::function<void()> m_tooltip_callback;
+        std::string m_tooltip_text;
     };
 } // namespace ui

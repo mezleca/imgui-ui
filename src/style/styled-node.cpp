@@ -1,7 +1,9 @@
 #include <imgui-ui/style/styled-node.hpp>
 
 #include <imgui-ui/style/paint-slot.hpp>
+#include <imgui-ui/style/theme.hpp>
 #include <imgui-ui/imgui/painter.hpp>
+#include <imgui-ui/surface.hpp>
 
 #include <imgui_internal.h>
 
@@ -250,12 +252,55 @@ void StyledNode::update_cursor() {
     if (cursor != ImGuiMouseCursor_None) ImGui::SetMouseCursor(cursor);
 }
 
+StyledNode& StyledNode::set_tooltip(std::string text) {
+    m_tooltip_text = std::move(text);
+    m_tooltip_callback = {};
+
+    if (!has_input_mode()) {
+        set_input_mode(InputMode::Target);
+    }
+
+    return *this;
+}
+
+StyledNode& StyledNode::set_tooltip(std::function<void()> callback) {
+    m_tooltip_text.clear();
+    m_tooltip_callback = std::move(callback);
+
+    if (!has_input_mode()) {
+        set_input_mode(InputMode::Target);
+    }
+
+    return *this;
+}
+
 void StyledNode::draw_before() {
     if (m_before != nullptr) draw_slot(*m_before, *ImGui::GetWindowDrawList());
 }
 
 void StyledNode::draw_after() {
     if (m_after != nullptr) draw_slot(*m_after, *ImGui::GetForegroundDrawList());
+    if (!input_state().hovered) return;
+    if (!m_tooltip_callback && m_tooltip_text.empty()) return;
+
+    const Theme& theme = surface().theme();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, theme.metrics.window_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, theme.metrics.popup_rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, theme.controls.border_thickness);
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, theme.controls.background_color.rgba());
+    ImGui::PushStyleColor(ImGuiCol_Border, theme.controls.border_color.rgba());
+
+    if (m_tooltip_callback) {
+        if (ImGui::BeginTooltip()) {
+            m_tooltip_callback();
+            ImGui::EndTooltip();
+        }
+    } else {
+        ImGui::SetTooltip("%s", m_tooltip_text.c_str());
+    }
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
 }
 
 void StyledNode::draw_slot(PaintSlot& slot, ImDrawList& draw_list) {

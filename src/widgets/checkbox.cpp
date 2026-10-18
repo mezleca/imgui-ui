@@ -133,6 +133,14 @@ const StyledNode& CheckboxWidget::fill() const {
     return *m_fill_node;
 }
 
+TextWidget& CheckboxWidget::label() {
+    return *m_label_node;
+}
+
+const TextWidget& CheckboxWidget::label() const {
+    return *m_label_node;
+}
+
 void CheckboxWidget::input_state_changed() {
     Container::input_state_changed();
     const InputState& state = input_state();

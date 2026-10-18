@@ -33,6 +33,9 @@ namespace ui {
         StyledNode& fill();
         const StyledNode& fill() const;
 
+        TextWidget& label();
+        const TextWidget& label() const;
+
     protected:
         void apply_theme_defaults(const Theme& theme) override;
 
