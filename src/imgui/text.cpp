@@ -54,56 +54,50 @@ void Painter::text(ImVec2 position, const Color& source, const GenericValue& tex
 }
 
 void Painter::text_ellipsis(ImVec2 position, const Color& source, const GenericValue& text, ImVec4 clip_rect) const {
+    if (position.x >= clip_rect.z) {
+        return;
+    }
+
     const ImColor draw_color = color(source);
     ImFont* font = text.font() != nullptr ? text.font() : ImGui::GetFont();
     const float font_size = ImGui::GetFontSize();
-    const std::string& string = text.str();
-    const char* const value = string.c_str();
-    const char* const value_end = value + string.size();
     const float line_height = font_size * text.line_height_multiplier();
-    float y = position.y;
+    const float available_width = clip_rect.z - position.x;
+    const float wrap_width = text.wrap_width() > 0.0F ? std::min(text.wrap_width(), available_width) : 0.0F;
+    constexpr char ellipsis[] = "...";
+    const float ellipsis_width = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, ellipsis).x;
+    const float truncated_width = std::max(0.0F, available_width - ellipsis_width);
 
-    for (const char* line = value;;) {
-        if (y + font_size > clip_rect.w || position.x >= clip_rect.z) break;
+    const auto draw = [&](float x, float y, const char* begin, const char* end) {
+        m_draw_list.AddText(font, font_size, {x, y}, draw_color, begin, end, 0.0F, &clip_rect);
+    };
 
+    const std::string& string = text.str();
+    const char* const value_end = string.c_str() + string.size();
+    const char* line = string.c_str();
+
+    for (float y = position.y; y + font_size <= clip_rect.w; y += line_height) {
         const char* const paragraph_end = std::find(line, value_end, '\n');
-        const float available_width = std::max(0.0F, clip_rect.z - position.x);
-        const float wrap_width = text.wrap_width() > 0.0F ? std::min(text.wrap_width(), available_width) : 0.0F;
         const char* line_end = paragraph_end;
         if (wrap_width > 0.0F && line < paragraph_end) {
             line_end = font->CalcWordWrapPosition(font_size, line, paragraph_end, wrap_width);
         }
 
-        const bool last_visible_line = y + line_height + font_size > clip_rect.w;
-        const bool hidden_lines = last_visible_line && (line_end < paragraph_end || paragraph_end < value_end);
-        const ImVec2 text_size = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, line, line_end);
-        if (text_size.x <= available_width && !hidden_lines) {
-            m_draw_list.AddText(font, font_size, {position.x, y}, draw_color, line, line_end, 0.0F, &clip_rect);
+        const bool hidden_lines = y + line_height + font_size > clip_rect.w && line_end < value_end;
+        if (!hidden_lines && font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, line, line_end).x <= available_width) {
+            draw(position.x, y, line, line_end);
         } else {
-            constexpr char ellipsis[] = "...";
-            const float ellipsis_width = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, ellipsis).x;
             const char* visible_end = line;
-            const float text_width = std::max(0.0F, available_width - ellipsis_width);
-            const ImVec2 visible_size = font->CalcTextSizeA(font_size, text_width, 0.0F, line, line_end, &visible_end);
-
-            if (visible_end != line) {
-                m_draw_list.AddText(font, font_size, {position.x, y}, draw_color, line, visible_end, 0.0F, &clip_rect);
-            }
-
-            m_draw_list.AddText(
-                font, font_size, {position.x + visible_size.x, y}, draw_color, ellipsis, nullptr, 0.0F, &clip_rect
-            );
+            const float visible_width = font->CalcTextSizeA(font_size, truncated_width, 0.0F, line, line_end, &visible_end).x;
+            draw(position.x, y, line, visible_end);
+            draw(position.x + visible_width, y, ellipsis, nullptr);
         }
 
-        if (line_end == value_end || hidden_lines) break;
-
-        line = line_end;
-        if (line_end == paragraph_end) {
-            ++line;
-        } else {
-            while (line < paragraph_end && (*line == ' ' || *line == '\t'))
-                ++line;
+        if (line_end == value_end) {
+            break;
         }
-        y += line_height;
+
+        line = line_end == paragraph_end ? line_end + 1
+                                         : std::find_if(line_end, paragraph_end, [](char c) { return c != ' ' && c != '\t'; });
     }
 }

@@ -49,6 +49,10 @@ namespace ui {
         bool wheel(ImVec2 delta);
         void advance(ImGuiWindow& window);
 
+        ImVec2 destination() const {
+            return m_request ? m_request->target : m_position;
+        }
+
         struct Request {
             ImVec2 target;
             ImVec2 start;

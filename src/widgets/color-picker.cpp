@@ -21,6 +21,12 @@ static float saturate(float value) {
     return std::clamp(value, 0.0F, 1.0F);
 }
 
+static bool active_area(const char* id, Rect rect) {
+    ImGui::SetCursorScreenPos(rect.min);
+    ImGui::InvisibleButton(id, rect.size());
+    return ImGui::IsItemActive();
+}
+
 static void draw_picker_gradient(
     ImDrawList& draw_list, Rect rect, ImVec4 top_left, ImVec4 top_right, ImVec4 bottom_right, ImVec4 bottom_left
 ) {
@@ -91,21 +97,11 @@ static ImColor hsv_color(float hue, float saturation, float value, float alpha =
 
 class ui::ColorPickerPreviewNode final : public Widget {
 public:
-    ColorPickerPreviewNode(ColorPickerWidget& owner, Color& color)
-        : Widget("preview", "ColorPickerPreview"), m_owner(owner), m_color(&color) {}
-
-    void set_open(bool open) {
-        if (open) {
-            set_visual_style(StyleType::ACTIVE);
-            return;
-        }
-
-        set_interaction_style(input_state().hovered, input_state().active, input_state().focused);
-    }
+    explicit ColorPickerPreviewNode(ColorPickerWidget& owner) : Widget("preview", "ColorPickerPreview"), m_owner(owner) {}
 
 private:
     void paint_surface(const PaintContext& context) const override {
-        context.painter.frame_surface(context.rect, context.style, *m_color);
+        context.painter.frame_surface(context.rect, context.style, m_owner.m_value.value());
     }
 
     void click_event(UiEvent& event) override {
@@ -126,7 +122,6 @@ private:
     }
 
     ColorPickerWidget& m_owner;
-    Color* m_color = nullptr;
 };
 
 class ui::ColorPickerControlsNode final : public Widget {
@@ -168,7 +163,7 @@ public:
     }
 
     void show() {
-        m_hex = format_hex(m_owner.m_color->rgba());
+        m_hex = format_hex(m_owner.m_value.value().rgba());
     }
 
 private:
@@ -191,7 +186,7 @@ private:
                 .border(BorderEdge{theme.controls.border_thickness, BorderType::Solid})
                 .border_color(theme.controls.border_color)
                 .border_radius(theme.controls.rounding)
-                .padding(theme.metrics.item_inner_spacing);
+                .padding(BoxInsets{theme.metrics.item_inner_spacing.x, theme.metrics.item_inner_spacing.y});
         });
         m_hex_input->style(StyleType::HOVER).border_color(theme.accent_hover_color);
         m_hex_input->style(StyleType::ACTIVE).border_color(theme.accent_color);
@@ -229,7 +224,7 @@ void ColorPickerControlsNode::paint_content(const PaintContext& context) {
     const ImVec2 spacing = theme.metrics.item_spacing;
     const float bar_size = std::max(1.0F, theme.controls.thumb_size);
 
-    ImColor color = m_owner.m_color->rgba();
+    ImColor color = m_owner.m_value.value().rgba();
     float hue = 0.0F;
     float saturation = 0.0F;
     float value = 0.0F;
@@ -245,27 +240,21 @@ void ColorPickerControlsNode::paint_content(const PaintContext& context) {
         Rect::from_position_size({selector.min.x, selector.max.y + spacing.y}, {hue_bar.max.x - selector.min.x, bar_size});
 
     // invisible controls update hsv before the surfaces below read the new color for this frame.
-    ImGui::SetCursorScreenPos(selector.min);
-    ImGui::InvisibleButton("selector", selector.size());
-    if (ImGui::IsItemActive()) {
+    if (active_area("selector", selector)) {
         const ImVec2 mouse = ImGui::GetIO().MousePos;
         saturation = saturate((mouse.x - selector.min.x) / selector.size().x);
         value = 1.0F - saturate((mouse.y - selector.min.y) / selector.size().y);
         set_hsv(hue, saturation, value, color.Value.w);
-        color = m_owner.m_color->rgba();
+        color = m_owner.m_value.value().rgba();
     }
 
-    ImGui::SetCursorScreenPos(hue_bar.min);
-    ImGui::InvisibleButton("hue", hue_bar.size());
-    if (ImGui::IsItemActive()) {
+    if (active_area("hue", hue_bar)) {
         hue = saturate((ImGui::GetIO().MousePos.y - hue_bar.min.y) / hue_bar.size().y);
         set_hsv(hue, saturation, value, color.Value.w);
-        color = m_owner.m_color->rgba();
+        color = m_owner.m_value.value().rgba();
     }
 
-    ImGui::SetCursorScreenPos(alpha_bar.min);
-    ImGui::InvisibleButton("alpha", alpha_bar.size());
-    if (ImGui::IsItemActive()) {
+    if (active_area("alpha", alpha_bar)) {
         color.Value.w = saturate((ImGui::GetIO().MousePos.x - alpha_bar.min.x) / alpha_bar.size().x);
         m_owner.set_color(color);
         m_hex = format_hex(color);
@@ -322,14 +311,14 @@ void ColorPickerControlsNode::paint_content(const PaintContext& context) {
 
 void ColorPickerControlsNode::set_hsv(float hue, float saturation, float value, float alpha) {
     m_owner.set_color(hsv_color(hue, saturation, value, alpha));
-    m_hex = format_hex(m_owner.m_color->rgba());
+    m_hex = format_hex(m_owner.m_value.value().rgba());
 }
 
-ColorPickerWidget::ColorPickerWidget(Color& color, std::string label, LabelPlacement placement, std::string id)
-    : Widget(std::move(id), StackDirection::Vertical, "ColorPicker"), m_color(&color) {
+ColorPickerWidget::ColorPickerWidget(WidgetValue<Color> value, std::string label, LabelPlacement placement, std::string id)
+    : Widget(std::move(id), StackDirection::Vertical, "ColorPicker"), m_value(std::move(value)) {
     m_label_node = &add<TextWidget>("");
     m_label_node->set_visible(!m_label_node->empty());
-    m_preview = &add<ColorPickerPreviewNode>(*this, color);
+    m_preview = &add<ColorPickerPreviewNode>(*this);
     m_popup = &add<ColorPickerPopup>(*this);
     set_label(std::move(label), placement);
 }
@@ -338,16 +327,21 @@ ColorPickerWidget& ColorPickerWidget::set_label(std::string label, LabelPlacemen
     m_label_node->set_text(std::move(label));
     m_label_node->set_visible(!m_label_node->empty());
     m_label_placement = placement;
-    set_direction(placement == LabelPlacement::Inline ? StackDirection::Horizontal : StackDirection::Vertical);
-    set_spacing(placement == LabelPlacement::Inline ? m_label_spacing.x : m_label_spacing.y);
+    update_label_layout();
     return *this;
+}
+
+void ColorPickerWidget::update_label_layout() {
+    const bool inline_label = m_label_placement == LabelPlacement::Inline;
+    set_direction(inline_label ? StackDirection::Horizontal : StackDirection::Vertical);
+    set_spacing(inline_label ? m_label_spacing.x : m_label_spacing.y);
 }
 
 void ColorPickerWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
     set_font(surface().get_primary_font(), theme.controls.font_size);
     m_label_spacing = {theme.metrics.item_inner_spacing.x, theme.metrics.item_spacing.y};
-    set_spacing(m_label_placement == LabelPlacement::Inline ? m_label_spacing.x : m_label_spacing.y);
+    update_label_layout();
 
     const ImVec2 preview_size = {
         (theme.controls.thumb_size * 2.0F) + (theme.metrics.frame_padding.x * 2.0F),
@@ -377,11 +371,10 @@ void ColorPickerWidget::apply_theme_defaults(const Theme& theme) {
 }
 
 bool ColorPickerWidget::set_color(const Color& color) {
-    if (*m_color == color) {
+    if (!m_value.set(color)) {
         return false;
     }
 
-    *m_color = color;
     notify_change();
     return true;
 }
@@ -394,13 +387,13 @@ void ColorPickerWidget::open() {
     m_open = true;
     m_popup->show();
     m_popup->open_popup();
-    m_preview->set_open(true);
+    m_preview->set_open_style(true);
 }
 
 void ColorPickerWidget::close() {
     m_open = false;
     m_popup->close_popup();
-    m_preview->set_open(false);
+    m_preview->set_open_style(false);
 }
 
 bool ColorPickerWidget::native_popup_open() const {

@@ -27,10 +27,6 @@ bool ComputedStyle::uniform_border() const {
            m_border_types.left == m_border_types.bottom;
 }
 
-static bool same_color(ImVec4 left, ImVec4 right) {
-    return left.x == right.x && left.y == right.y && left.z == right.z && left.w == right.w;
-}
-
 ComputedStyle::ComputedStyle() {
     const Theme theme{};
     m_color.set(theme.text_color);
@@ -54,11 +50,7 @@ PushState ComputedStyle::push(float opacity, ImFont* effective_font, float effec
         ++state.variables;
     };
 
-    const auto push_color = [&current, &state](ImGuiCol color, ImVec4 value) {
-        if (same_color(current.Colors[color], value)) {
-            return;
-        }
-
+    const auto push_color = [&state](ImGuiCol color, ImVec4 value) {
         ImGui::PushStyleColor(color, value);
         ++state.colors;
     };
@@ -67,6 +59,7 @@ PushState ComputedStyle::push(float opacity, ImFont* effective_font, float effec
     if (current.FramePadding.x != padding.x || current.FramePadding.y != padding.y) {
         push_var(ImGuiStyleVar_FramePadding, padding);
     }
+
     if (current.FrameRounding != m_border_radius) push_var(ImGuiStyleVar_FrameRounding, m_border_radius);
     if (current.FrameBorderSize != 0.0F) push_var(ImGuiStyleVar_FrameBorderSize, 0.0F);
     if (current.ScrollbarSize != m_scrollbar_size) push_var(ImGuiStyleVar_ScrollbarSize, m_scrollbar_size);

@@ -1118,21 +1118,10 @@ void Debugger::render_layout_properties() {
         LayoutAxis& axis = width ? size.width : size.height;
         const float resolved = width ? layout.size().x : layout.size().y;
         axis.mode = mode;
-
-        switch (mode) {
-            case LayoutSizeMode::Fixed:
-                axis.value = resolved;
-                break;
-            case LayoutSizeMode::Percent:
-                axis.value = 100.0F;
-                break;
-            case LayoutSizeMode::Fit:
-                axis.value = 0.0F;
-                break;
-            case LayoutSizeMode::Grow:
-                axis.value = 1.0F;
-                break;
-        }
+        axis.value = mode == LayoutSizeMode::Fixed     ? resolved
+                     : mode == LayoutSizeMode::Percent ? 100.0F
+                     : mode == LayoutSizeMode::Grow    ? 1.0F
+                                                       : 0.0F;
         m_node_target->set_size(size);
     };
 

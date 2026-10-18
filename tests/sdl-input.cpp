@@ -79,6 +79,10 @@ static bool process_sdl_event(ui::Surface& surface, const SDL_Event& event) {
     return static_cast<ui::SdlBackend&>(surface.backend()).process_event(surface, event);
 }
 
+static std::unique_ptr<ui::SdlBackend> make_sdl_backend(SdlVideoSession& session) {
+    return std::make_unique<ui::SdlBackend>(session.window(), session.context());
+}
+
 static void draw_frame(ui::Surface& surface, std::optional<float> delta_time = std::nullopt) {
     surface.begin_frame();
     surface.update(delta_time.value_or(ImGui::GetIO().DeltaTime));
@@ -176,8 +180,7 @@ static void release_click(ui::Surface& surface) {
 TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regression]") {
     SdlVideoSession sdl({128.0F, 128.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     auto& panel = surface.root().add<ui::Container>("shadow-panel");
     panel.set_layout({
         .size = {ui::px(40.0F), ui::px(40.0F)},
@@ -223,8 +226,7 @@ TEST_CASE("opengl box shadows cover the spread outside a panel", "[render][regre
 TEST_CASE("opengl blur excludes content outside its rect", "[render][regression]") {
     SdlVideoSession sdl({160.0F, 160.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     auto& parent = surface.root().add<ui::Container>("scroll-parent");
     parent.set_layout({
         .size = {ui::px(100.0F), ui::px(100.0F)},
@@ -264,8 +266,7 @@ TEST_CASE("opengl blur excludes content outside its rect", "[render][regression]
 TEST_CASE("container border stays above a child widget surface", "[render][regression]") {
     SdlVideoSession sdl({160.0F, 140.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     auto& parent = surface.root().add<ui::Container>("parent");
     parent.set_layout({
         .size = {ui::px(120.0F), ui::px(80.0F)},
@@ -333,8 +334,7 @@ TEST_CASE("scrolling keeps inline overlay panels above earlier content", "[Layer
 
     SdlVideoSession sdl({240.0F, 180.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     auto& scroll = surface.root().add<ScrollContainer>();
 
     auto& input = scroll.add<ui::Container>("input");
@@ -409,8 +409,7 @@ TEST_CASE("scrolled inline layers keep virtual list input separate", "[LayerCont
 
     SdlVideoSession sdl({900.0F, 600.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     auto& demo = surface.root().add<ui::Container>("demo");
     demo.set_size({ui::px(900.0F), ui::px(600.0F)});
     demo.set_scrollable(true).style().padding({12.0F, 12.0F});
@@ -505,8 +504,7 @@ TEST_CASE("scrolled inline layers keep virtual list input separate", "[LayerCont
 TEST_CASE("container borders stay below popup surfaces", "[render][regression]") {
     SdlVideoSession sdl({160.0F, 120.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     auto& file = surface.root().add<ui::FileDialogWidget>("file");
     file.set_layout({
         .size = {ui::px(120.0F), ui::px(50.0F)},
@@ -561,8 +559,7 @@ TEST_CASE("container borders stay below popup surfaces", "[render][regression]")
 TEST_CASE("container borders stay below window-layer panels", "[render][regression]") {
     SdlVideoSession sdl({160.0F, 120.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     auto& input = surface.root().add<ui::Container>("input");
     input.set_layout({
         .size = {ui::px(120.0F), ui::px(50.0F)},
@@ -602,8 +599,7 @@ TEST_CASE("container overflow controls child surfaces", "[render][regression]") 
     const auto sample_overflow = [](ui::Overflow overflow) {
         SdlVideoSession sdl({160.0F, 120.0F});
         ui::Runtime runtime;
-        auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-        ui::Surface surface(runtime, {.backend = std::move(backend)});
+        ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
         auto& parent = surface.root().add<ui::Container>("parent");
         parent.set_layout({
             .size = {ui::px(80.0F), ui::px(60.0F)},
@@ -665,8 +661,7 @@ TEST_CASE("scrolled tree bodies clip oversized child surfaces", "[TreeContainer]
 
     SdlVideoSession sdl({240.0F, 180.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     auto& backdrop = surface.root().add<ui::Container>("backdrop");
     backdrop.set_layout({.size = {ui::px(240.0F), ui::px(180.0F)}, .in_flow = false});
     backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(1.0F, 1.0F, 1.0F)); });
@@ -718,8 +713,7 @@ TEST_CASE("scrolled tree bodies clip oversized child surfaces", "[TreeContainer]
 TEST_CASE("nested tree viewports clip oversized child surfaces", "[TreeContainer][render][regression]") {
     SdlVideoSession sdl({240.0F, 180.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     auto& backdrop = surface.root().add<ui::Container>("backdrop");
     backdrop.set_layout({.size = {ui::px(240.0F), ui::px(180.0F)}, .in_flow = false});
     backdrop.configure_all_styles([](ui::Style& style) { style.background_color(ui::rgb(0.0F, 1.0F, 0.0F)); });
@@ -782,8 +776,7 @@ TEST_CASE("nested tree viewports clip oversized child surfaces", "[TreeContainer
 TEST_CASE("nested tree shadows escape their parent body clip", "[render][regression]") {
     SdlVideoSession sdl({200.0F, 180.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     auto& backdrop = surface.root().add<ui::Container>("backdrop");
     backdrop.set_layout({
         .size = {ui::px(200.0F), ui::px(180.0F)},
@@ -883,8 +876,7 @@ TEST_CASE("gif texture data decodes into an opengl texture", "[texture][gif]") {
 
     SdlVideoSession sdl({128.0F, 128.0F});
     ui::Runtime runtime({.texture_loader = std::make_unique<ui::OpenGLTextureLoader>()});
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     ui::Texture* texture = runtime.textures().add("gif", gif);
     REQUIRE(texture != nullptr);
     REQUIRE(texture->size().x == 1.0F);
@@ -899,8 +891,7 @@ TEST_CASE("gif texture data decodes into an opengl texture", "[texture][gif]") {
 TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regression]") {
     SdlVideoSession sdl({320.0F, 240.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     const auto surface_context = ui_test::prepare_surface(surface);
 
     int click_count = 0;
@@ -946,8 +937,7 @@ TEST_CASE("handled button clicks still release ImGui mouse state", "[input][regr
 TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input][regression]") {
     SdlVideoSession sdl({900.0F, 600.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     const auto surface_context = ui_test::prepare_surface(surface, {900.0F, 600.0F});
 
     auto& modal_layer = surface.root().add<ui::LayerContainer>("modal-layer");
@@ -966,7 +956,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
     modal.set_spacing(10.0F);
 
     int value = 5;
-    auto& input = modal.add<ui::NumberInputWidget>(value, "modal-blur");
+    auto& input = modal.add<ui::NumberInputWidget<int>>(value, "modal-blur");
     input.set_range(0, 32).set_size({ui::px(180.0F), ui::px(48.0F)});
     input.on_change([&modal_layer, &value] {
         modal_layer.configure_all_styles([&value](ui::Style& style) { style.blur(value); });
@@ -1043,13 +1033,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
 TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regression]") {
     SdlVideoSession sdl({320.0F, 240.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(
-        runtime, {
-                     .backend = std::move(backend),
-                     .enable_debugger = true,
-                 }
-    );
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl), .enable_debugger = true});
     REQUIRE(surface.debugger() != nullptr);
     surface.debugger()->set_open(false);
     const auto surface_context = ui_test::prepare_surface(surface);
@@ -1076,8 +1060,7 @@ TEST_CASE("debugger hotkey is received through the sdl backend", "[input][regres
 TEST_CASE("pointer blocker prevents native content mutation but keeps descendants interactive", "[input][regression]") {
     SdlVideoSession sdl({320.0F, 240.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     const auto surface_context = ui_test::prepare_surface(surface);
 
     bool content_value = false;
@@ -1160,8 +1143,7 @@ TEST_CASE("pointer blocker prevents native content mutation but keeps descendant
 TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][input][regression]") {
     SdlVideoSession sdl({320.0F, 240.0F});
     ui::Runtime runtime;
-    auto backend = std::make_unique<ui::SdlBackend>(sdl.window(), sdl.context());
-    ui::Surface surface(runtime, {.backend = std::move(backend)});
+    ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
     const auto surface_context = ui_test::prepare_surface(surface);
 
     std::string value = "one";

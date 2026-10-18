@@ -29,14 +29,14 @@ void Scroll::seek_to(ImVec2 position, ScrollBehavior behavior) {
 
 void Scroll::seek_by(ImVec2 distance, ScrollBehavior behavior) {
     // repeated seeks add to the pending destination instead of restarting from the last rendered frame.
-    const ImVec2 from = m_request ? m_request->target : m_position;
+    const ImVec2 from = destination();
     seek_to({from.x + distance.x, from.y + distance.y}, behavior);
 }
 
 bool Scroll::wheel(ImVec2 delta) {
     // accumulate wheel movement against the pending destination, then clamp it to the content bounds.
     // returning false leaves the event available to a scrollable parent.
-    const ImVec2 from = m_request ? m_request->target : m_position;
+    const ImVec2 from = destination();
     ImVec2 target = from;
     if (m_horizontal && delta.x != 0.0F) target.x = std::clamp(from.x - (delta.x * m_wheel_step.x), 0.0F, m_max.x);
     if (m_vertical && delta.y != 0.0F) target.y = std::clamp(from.y - (delta.y * m_wheel_step.y), 0.0F, m_max.y);

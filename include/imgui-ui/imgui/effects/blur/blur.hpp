@@ -6,7 +6,6 @@ namespace ui {
     class EffectRegistry;
 
     struct BlurRegion {
-        Rect sample;
         Rect output;
         int strength = 0;
         float rounding = 0.0F;

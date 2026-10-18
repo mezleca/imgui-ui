@@ -1,6 +1,7 @@
 #pragma once
 
 #include "widget.hpp"
+#include "value.hpp"
 
 #include <string>
 
@@ -12,7 +13,8 @@ namespace ui {
     class TextInputWidget : public Widget {
     public:
         explicit TextInputWidget(
-            std::string& value, std::string label = {}, LabelPlacement placement = LabelPlacement::Inline, std::string id = {}
+            WidgetValue<std::string> value = {}, std::string label = {}, LabelPlacement placement = LabelPlacement::Inline,
+            std::string id = {}
         );
 
         TextInputWidget& set_label(std::string label, LabelPlacement placement = LabelPlacement::Inline);
@@ -31,7 +33,7 @@ namespace ui {
         void on_draw_end() override;
         void update_label_layout();
 
-        std::string* m_value;
+        WidgetValue<std::string> m_value;
         TextWidget* m_label_node = nullptr;
         Container* m_input_node = nullptr;
         ImageWidget* m_icon_node = nullptr;

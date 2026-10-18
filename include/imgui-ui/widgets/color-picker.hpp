@@ -1,6 +1,7 @@
 #pragma once
 
 #include "widget.hpp"
+#include "value.hpp"
 
 #include <string>
 
@@ -13,7 +14,8 @@ namespace ui {
     class ColorPickerWidget : public Widget {
     public:
         explicit ColorPickerWidget(
-            Color& color, std::string label = {}, LabelPlacement placement = LabelPlacement::Above, std::string id = {}
+            WidgetValue<Color> value = {}, std::string label = {}, LabelPlacement placement = LabelPlacement::Above,
+            std::string id = {}
         );
 
         ColorPickerWidget& set_label(std::string label, LabelPlacement placement = LabelPlacement::Above);
@@ -38,8 +40,9 @@ namespace ui {
         friend class ColorPickerPreviewNode;
 
         bool native_popup_open() const;
+        void update_label_layout();
 
-        Color* m_color = nullptr;
+        WidgetValue<Color> m_value;
         TextWidget* m_label_node = nullptr;
         ColorPickerPreviewNode* m_preview = nullptr;
         ColorPickerPopup* m_popup = nullptr;

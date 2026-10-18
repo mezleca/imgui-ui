@@ -7,8 +7,8 @@
 
 using namespace ui;
 
-CheckboxWidget::CheckboxWidget(bool& value, std::string label, LabelPlacement placement, std::string id)
-    : Widget(std::move(id), StackDirection::Horizontal, "Checkbox"), m_value(&value) {
+CheckboxWidget::CheckboxWidget(WidgetValue<bool> value, std::string label, LabelPlacement placement, std::string id)
+    : Widget(std::move(id), StackDirection::Horizontal, "Checkbox"), m_value(std::move(value)) {
     set_size({fit(), fit()});
     set_content_alignment(Anchor::CenterLeft);
 
@@ -22,7 +22,7 @@ CheckboxWidget::CheckboxWidget(bool& value, std::string label, LabelPlacement pl
     m_fill_node = &m_frame_node->add<BoxWidget>("fill", LayoutSize{grow(), grow()});
     m_label_node = &add<TextWidget>("");
     set_label(std::move(label), placement);
-    m_fill_node->set_visible(*m_value);
+    m_fill_node->set_visible(m_value.value());
 }
 
 void CheckboxWidget::apply_theme_defaults(const Theme& theme) {
@@ -66,11 +66,10 @@ CheckboxWidget& CheckboxWidget::set_label(std::string label, LabelPlacement plac
 }
 
 bool CheckboxWidget::set_checked(bool checked) {
-    if (*m_value == checked) {
+    if (!m_value.set(checked)) {
         return false;
     }
 
-    *m_value = checked;
     m_fill_node->set_visible(checked);
     notify_change();
     return true;
@@ -81,7 +80,7 @@ void CheckboxWidget::click_event(UiEvent& event) {
         return;
     }
 
-    if (!set_checked(m_type == CheckboxType::Radio || !*m_value)) {
+    if (!set_checked(m_type == CheckboxType::Radio || !m_value.value())) {
         return;
     }
 
@@ -142,7 +141,7 @@ void CheckboxWidget::input_state_changed() {
 }
 
 void CheckboxWidget::on_update(float) {
-    m_fill_node->set_visible(*m_value);
+    m_fill_node->set_visible(m_value.value());
 }
 
 Rect CheckboxWidget::hit_rect(Rect) const {

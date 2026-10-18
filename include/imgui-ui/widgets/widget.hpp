@@ -38,9 +38,16 @@ namespace ui {
 
         Widget& on_change(std::function<void()> callback);
 
+        /// shows a plain text tooltip while the pointer hovers this widget.
+        Widget& set_tooltip(std::string text);
+
+        /// shows a tooltip while the pointer hovers this widget. the callback emits the tooltip content.
+        Widget& set_tooltip(std::function<void()> callback);
+
     protected:
         void notify_change();
         void dispatch_event(UiEvent& event) override;
+        void draw_after() override;
         virtual void click_event(UiEvent&) {}
 
     private:
@@ -50,7 +57,9 @@ namespace ui {
 
         InputCallback m_on_event;
         std::function<void()> m_on_change;
+        std::function<void()> m_tooltip_callback;
         std::unique_ptr<EventCallbacks> m_event_callbacks;
+        std::string m_tooltip_text;
     };
 
 } // namespace ui

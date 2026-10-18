@@ -39,7 +39,7 @@ void Container::dispatch_event(UiEvent& event) {
 void Container::scroll_event(UiEvent& event) {
     // block imgui's wheel path even at the limit so only framework ancestors can scroll.
     if (!removal_pending() && !event.propagation_stopped && event.type == EventType::Scroll && !event.default_prevented &&
-        scrollable() && computed_style().overflow() != Overflow::Clip) {
+        scroll_active()) {
         event.block_native_input();
         if (m_scroll.wheel(event.scroll)) event.stop_propagation();
     }

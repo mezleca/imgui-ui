@@ -120,6 +120,13 @@ namespace ui {
         friend class VisualState;
         friend class PaintSlot;
 
+        Style&
+        set_inset(Value<BoxInsets> ComputedStyle::* member, float BoxInsets::* field, float value, TransitionSpec transition);
+        Style& set_border_edge(
+            FloatValue ComputedStyle::* size, BorderType BorderTypes::* type, float value, BorderType border_type,
+            TransitionSpec transition
+        );
+
         template <typename Field>
         Style& set_property(Field ComputedStyle::* member, Field value, bool affects_measure = true) {
             Field& current = this->*member;

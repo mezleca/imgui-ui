@@ -2,6 +2,7 @@
 
 #include "widget.hpp"
 #include "box.hpp"
+#include "value.hpp"
 
 #include <cstdint>
 #include <string>
@@ -17,7 +18,8 @@ namespace ui {
     class CheckboxWidget : public Widget {
     public:
         explicit CheckboxWidget(
-            bool& value, std::string label = {}, LabelPlacement placement = LabelPlacement::Inline, std::string id = {}
+            WidgetValue<bool> value = {}, std::string label = {}, LabelPlacement placement = LabelPlacement::Inline,
+            std::string id = {}
         );
 
         CheckboxWidget& set_label(std::string label, LabelPlacement placement = LabelPlacement::Inline);
@@ -41,7 +43,7 @@ namespace ui {
         Rect hit_rect(Rect visual_rect) const override;
         void update_shape();
 
-        bool* m_value;
+        WidgetValue<bool> m_value;
         Container* m_box_node = nullptr;
         Container* m_frame_node = nullptr;
         BoxWidget* m_fill_node = nullptr;

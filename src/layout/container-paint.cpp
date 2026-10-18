@@ -39,7 +39,7 @@ bool Container::paint() {
 
     ImGuiChildFlags child_flags = ImGuiChildFlags_AlwaysUseWindowPadding;
     ImGuiWindowFlags window_flags = child_window_flags() | ImGuiWindowFlags_NoBackground;
-    const bool scrollable = m_scroll.enabled() && current_style.overflow() != Overflow::Clip;
+    const bool scrollable = scroll_active();
     // keep native scrollbar dragging enabled. routed wheel events enqueue the container's configured scroll behavior.
     if (scrollable) {
         window_flags &= ~ImGuiWindowFlags_NoScrollbar;

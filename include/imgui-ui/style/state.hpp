@@ -9,6 +9,7 @@
 namespace ui {
     static constexpr float OPACITY_TRANSITION_DURATION = 0.15F;
     static constexpr float VISIBILITY_OPACITY_THRESHOLD = 0.002f;
+    inline constexpr TransitionSpec OPACITY_TRANSITION{OPACITY_TRANSITION_DURATION, easing::linear};
 
     enum class StyleAnimationProperty : uint8_t {
         PaddingX,
@@ -25,7 +26,6 @@ namespace ui {
 
     struct StyleAnimationSlot {
         std::optional<AnimationValue> override;
-        AnimationValue current = 0.0F;
         AnimationValue base = 0.0F;
 
         /// points to the owner's invalidation flag only for properties that change padding or margin.
@@ -46,7 +46,7 @@ namespace ui {
         }
 
         const ComputedStyle& computed_style() const {
-            return m_has_presentation_style ? m_presentation_style : active_style();
+            return has_animation_overrides() ? m_presentation_style : active_style();
         }
 
         template <typename Func>
@@ -65,10 +65,6 @@ namespace ui {
             return m_target_style;
         }
 
-        void set_visible(bool value) {
-            visible = value;
-        }
-
         bool is_visible() const {
             return visible &&
                    (m_opacity >= VISIBILITY_OPACITY_THRESHOLD || current_opacity.value >= VISIBILITY_OPACITY_THRESHOLD);
@@ -78,9 +74,9 @@ namespace ui {
             return visible && m_opacity >= VISIBILITY_OPACITY_THRESHOLD;
         }
 
-        void set_opacity(float value, TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear});
-        void fade_in(TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear});
-        void fade_out(TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear}) {
+        void set_opacity(float value, TransitionSpec transition = OPACITY_TRANSITION);
+        void fade_in(TransitionSpec transition = OPACITY_TRANSITION);
+        void fade_out(TransitionSpec transition = OPACITY_TRANSITION) {
             set_opacity(0.0F, transition);
         }
 
@@ -124,10 +120,9 @@ namespace ui {
         Animator m_style_animator;
         Animator m_animator;
         float m_opacity = 1.0f;
-        TransitionSpec m_opacity_transition{OPACITY_TRANSITION_DURATION, easing::linear};
+        TransitionSpec m_opacity_transition = OPACITY_TRANSITION;
         bool visible = true;
         bool first_frame = true;
-        bool m_has_presentation_style = false;
         bool m_layout_dirty = false;
         StyleType m_target_style = StyleType::DEFAULT;
         void* m_change_owner = nullptr;

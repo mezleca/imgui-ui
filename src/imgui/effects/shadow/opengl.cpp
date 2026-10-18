@@ -153,20 +153,15 @@ static void render_box_shadow(void*, const ImDrawList*, const ImDrawCmd* command
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);
     const int height = viewport[3];
-    const ImDrawData* draw_data = ImGui::GetDrawData();
-    const ImVec2 display_position = draw_data == nullptr ? ImVec2{} : draw_data->DisplayPos;
-    const ImVec2 scale = draw_data == nullptr ? ImVec2{1.0F, 1.0F} : draw_data->FramebufferScale;
-    const auto to_framebuffer = [&](ImVec2 point) {
-        return ImVec2{(point.x - display_position.x) * scale.x, (point.y - display_position.y) * scale.y};
-    };
+    const FramebufferTransform transform = framebuffer_transform();
+    const float scale_factor = std::min(transform.scale.x, transform.scale.y);
 
-    const ImVec2 shape_min = to_framebuffer(region->shape.min);
-    const ImVec2 shape_max = to_framebuffer(region->shape.max);
-    const ImVec2 cutout_min = to_framebuffer(region->cutout.min);
-    const ImVec2 cutout_max = to_framebuffer(region->cutout.max);
+    const ImVec2 shape_min = transform.apply(region->shape.min);
+    const ImVec2 shape_max = transform.apply(region->shape.max);
+    const ImVec2 cutout_min = transform.apply(region->cutout.min);
+    const ImVec2 cutout_max = transform.apply(region->cutout.max);
     const Rect bounds = gl_state->effect.framebuffer_bounds();
 
-    const float scale_factor = std::min(scale.x, scale.y);
     const float shape_width = shape_max.x - shape_min.x;
     const float shape_height = shape_max.y - shape_min.y;
     const float radius = std::min(region->rounding * scale_factor, std::min(shape_width, shape_height) * 0.5F);

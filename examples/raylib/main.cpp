@@ -1,9 +1,8 @@
-#include <imgui-ui/backends/raylib/backend.hpp>
-#include <imgui-ui/tree/node.hpp>
-#include <imgui-ui/surface.hpp>
-#include <imgui-ui/runtime.hpp>
 #include "../demo.hpp"
 
+#include <imgui-ui/backends/raylib/backend.hpp>
+#include <imgui-ui/surface.hpp>
+#include <imgui-ui/runtime.hpp>
 #include <raylib.h>
 #include <memory>
 #include <utility>
@@ -27,13 +26,7 @@ int main() {
                      }
         );
 
-        setup_demo(surface, "raylib");
-
-        while (!surface.is_done()) {
-            surface.process_events();
-
-            surface.frame();
-        }
+        run_demo(surface, "raylib");
     }
 
     CloseWindow();

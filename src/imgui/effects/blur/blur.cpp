@@ -9,6 +9,5 @@ void ui::draw_blur(EffectRegistry& effects, ImDrawList& draw_list, Rect rect, in
         return;
     }
 
-    effects.effect(EffectSlot::Blur)
-        .submit(draw_list, BlurRegion{rect, rect, strength, rounding, std::clamp(opacity, 0.0F, 1.0F)});
+    effects.effect(EffectSlot::Blur).submit(draw_list, BlurRegion{rect, strength, rounding, std::clamp(opacity, 0.0F, 1.0F)});
 }

@@ -11,20 +11,19 @@
 
 using namespace ui;
 
-namespace {
-    struct GradientGlState {
-        OpenGlFullscreenEffect effect;
-        GradientUniforms sampler;
-        GLint shape = -1;
-        GLint rounding = -1;
-        GLint border = -1;
-        GLint height = -1;
-        GLint opacity = -1;
-    };
+struct GradientGlState {
+    OpenGlFullscreenEffect effect;
+    GradientUniforms sampler;
+    GLint shape = -1;
+    GLint rounding = -1;
+    GLint border = -1;
+    GLint height = -1;
+    GLint opacity = -1;
+};
 
-    std::unordered_map<ImGuiContext*, GradientGlState> states;
+static std::unordered_map<ImGuiContext*, GradientGlState> states;
 
-    constexpr const char* FRAGMENT_BODY = R"(
+static constexpr const char* FRAGMENT_BODY = R"(
 uniform vec4 shape;
 uniform float rounding;
 uniform float border_thickness;
@@ -54,51 +53,50 @@ void main() {
 }
 )";
 
-    bool initialize(void*) {
-        auto& state = states[ImGui::GetCurrentContext()];
-        const std::string shader = std::string{"#version 330 core\n"} + GRADIENT_SAMPLER_GLSL + FRAGMENT_BODY;
-        if (!state.effect.initialize(shader.c_str())) return false;
-        const GLuint program = state.effect.program();
-        state.sampler = find_gradient_uniforms(program);
-        state.shape = state.effect.uniform("shape");
-        state.rounding = state.effect.uniform("rounding");
-        state.border = state.effect.uniform("border_thickness");
-        state.height = state.effect.uniform("viewport_height");
-        state.opacity = state.effect.uniform("opacity");
-        return true;
-    }
+static bool initialize(void*) {
+    auto& state = states[ImGui::GetCurrentContext()];
+    const std::string shader = std::string{"#version 330 core\n"} + GRADIENT_SAMPLER_GLSL + FRAGMENT_BODY;
+    if (!state.effect.initialize(shader.c_str())) return false;
+    const GLuint program = state.effect.program();
+    state.sampler = find_gradient_uniforms(program);
+    state.shape = state.effect.uniform("shape");
+    state.rounding = state.effect.uniform("rounding");
+    state.border = state.effect.uniform("border_thickness");
+    state.height = state.effect.uniform("viewport_height");
+    state.opacity = state.effect.uniform("opacity");
+    return true;
+}
 
-    void render(void*, const ImDrawList*, const ImDrawCmd* command, const void* payload) {
-        const auto& region = *static_cast<const GradientRegion*>(payload);
-        auto it = states.find(ImGui::GetCurrentContext());
-        if (it == states.end() || !it->second.effect.begin(*command, region.rect)) return;
+static void render(void*, const ImDrawList*, const ImDrawCmd* command, const void* payload) {
+    const auto& region = *static_cast<const GradientRegion*>(payload);
+    auto it = states.find(ImGui::GetCurrentContext());
+    if (it == states.end() || !it->second.effect.begin(*command, region.rect)) return;
 
-        auto& state = it->second;
-        GLint viewport[4]{};
-        glGetIntegerv(GL_VIEWPORT, viewport);
-        const Rect bounds = state.effect.framebuffer_bounds();
-        const float height = static_cast<float>(viewport[3]);
-        const float scale = std::min(bounds.size().x / region.rect.size().x, bounds.size().y / region.rect.size().y);
-        const float radius = std::clamp(region.rounding * scale, 0.0F, std::min(bounds.size().x, bounds.size().y) * 0.5F);
-        glEnable(GL_BLEND);
-        glBlendEquation(GL_FUNC_ADD);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glUniform4f(state.shape, bounds.min.x, height - bounds.max.y, bounds.max.x, height - bounds.min.y);
-        glUniform1f(state.rounding, radius);
-        glUniform1f(state.border, region.border_thickness * scale);
-        glUniform1f(state.height, height);
-        glUniform1f(state.opacity, region.opacity);
-        upload_gradient(state.sampler, {}, region.gradient);
-        OpenGlFullscreenEffect::draw();
-    }
+    auto& state = it->second;
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    const Rect bounds = state.effect.framebuffer_bounds();
+    const float height = static_cast<float>(viewport[3]);
+    const float scale = std::min(bounds.size().x / region.rect.size().x, bounds.size().y / region.rect.size().y);
+    const float radius = std::clamp(region.rounding * scale, 0.0F, std::min(bounds.size().x, bounds.size().y) * 0.5F);
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glUniform4f(state.shape, bounds.min.x, height - bounds.max.y, bounds.max.x, height - bounds.min.y);
+    glUniform1f(state.rounding, radius);
+    glUniform1f(state.border, region.border_thickness * scale);
+    glUniform1f(state.height, height);
+    glUniform1f(state.opacity, region.opacity);
+    upload_gradient(state.sampler, {}, region.gradient);
+    OpenGlFullscreenEffect::draw();
+}
 
-    void shutdown(void*) {
-        auto it = states.find(ImGui::GetCurrentContext());
-        if (it == states.end()) return;
-        it->second.effect.shutdown();
-        states.erase(it);
-    }
-} // namespace
+static void shutdown(void*) {
+    auto it = states.find(ImGui::GetCurrentContext());
+    if (it == states.end()) return;
+    it->second.effect.shutdown();
+    states.erase(it);
+}
 
 void ui::register_opengl_gradient(EffectRegistry& effects) {
     effects.register_effect<GradientRegion>(EffectSlot::Gradient, {render, initialize, nullptr, shutdown, nullptr});

@@ -6,7 +6,23 @@
 #include <imgui.h>
 
 namespace ui {
+    class EffectRegistry;
+
     GLuint create_opengl_effect_program(const char* vertex_shader, const char* fragment_shader);
+
+    // registers the blur, box shadow and gradient effects available to opengl backends.
+    void register_opengl_effects(EffectRegistry& effects);
+
+    struct FramebufferTransform {
+        ImVec2 display_position;
+        ImVec2 scale;
+
+        ImVec2 apply(ImVec2 point) const {
+            return {(point.x - display_position.x) * scale.x, (point.y - display_position.y) * scale.y};
+        }
+    };
+
+    FramebufferTransform framebuffer_transform();
 
     class OpenGlFullscreenEffect {
     public:

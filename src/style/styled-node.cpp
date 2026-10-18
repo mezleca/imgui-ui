@@ -110,19 +110,19 @@ void StyledNode::draw_surface(Rect rect, const std::optional<Color>& background)
 }
 
 PaintSlot& StyledNode::before() {
-    if (m_before == nullptr) {
-        m_before = std::make_unique<PaintSlot>(this, &StyledNode::style_changed);
-    }
-
-    return *m_before;
+    return ensure_slot(m_before, this);
 }
 
 PaintSlot& StyledNode::after() {
-    if (m_after == nullptr) {
-        m_after = std::make_unique<PaintSlot>(this, &StyledNode::style_changed);
+    return ensure_slot(m_after, this);
+}
+
+PaintSlot& StyledNode::ensure_slot(std::unique_ptr<PaintSlot>& slot, StyledNode* owner) {
+    if (slot == nullptr) {
+        slot = std::make_unique<PaintSlot>(owner, &StyledNode::style_changed);
     }
 
-    return *m_after;
+    return *slot;
 }
 
 void StyledNode::remove_before() {
@@ -227,6 +227,15 @@ void StyledNode::disabled_changed() {
     m_state.set_item_state(input.hovered, input.active, input.focused);
 }
 
+void StyledNode::set_open_style(bool open) {
+    if (open) {
+        set_visual_style(StyleType::ACTIVE);
+        return;
+    }
+
+    set_interaction_style(input_state().hovered, input_state().active, input_state().focused);
+}
+
 void StyledNode::update_cursor() {
     if (!enabled()) {
         const Rect rect = layout().visual_rect();
@@ -242,21 +251,15 @@ void StyledNode::update_cursor() {
 }
 
 void StyledNode::draw_before() {
-    if (m_before != nullptr) {
-        const Rect rect = layout().visual_rect();
-        const Painter painter(
-            *ImGui::GetWindowDrawList(), &paint_state(), effect_registry(), m_before->m_opacity * m_before->m_style.alpha()
-        );
-        m_before->paint(painter, rect, content_rect(rect));
-    }
+    if (m_before != nullptr) draw_slot(*m_before, *ImGui::GetWindowDrawList());
 }
 
 void StyledNode::draw_after() {
-    if (m_after != nullptr) {
-        const Rect rect = layout().visual_rect();
-        const Painter painter(
-            *ImGui::GetForegroundDrawList(), &paint_state(), effect_registry(), m_after->m_opacity * m_after->m_style.alpha()
-        );
-        m_after->paint(painter, rect, content_rect(rect));
-    }
+    if (m_after != nullptr) draw_slot(*m_after, *ImGui::GetForegroundDrawList());
+}
+
+void StyledNode::draw_slot(PaintSlot& slot, ImDrawList& draw_list) {
+    const Rect rect = layout().visual_rect();
+    const Painter painter(draw_list, &paint_state(), effect_registry(), slot.m_opacity * slot.m_style.alpha());
+    slot.paint(painter, rect, content_rect(rect));
 }

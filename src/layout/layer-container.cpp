@@ -2,7 +2,6 @@
 #include <imgui-ui/imgui/window.hpp>
 #include <imgui-ui/imgui/context-scope.hpp>
 #include <imgui-ui/constants.hpp>
-#include <imgui-ui/imgui/painter.hpp>
 #include <imgui-ui/surface.hpp>
 
 #include <imgui_internal.h>
@@ -62,7 +61,7 @@ void LayerContainer::on_layout() {
         return;
     }
 
-    if (m_mode == LayerMode::Inline && parent() != nullptr) {
+    if (m_mode == LayerMode::Inline) {
         const Rect parent_content = layout().parent_content_rect();
         if (parent_content.valid()) {
             assign_size(layout().resolve_size(parent_content.size()));
@@ -143,13 +142,8 @@ bool LayerContainer::paint_popup() {
     const bool draw_content = ImGui::BeginPopup(id().c_str(), flags);
 
     if (!draw_content || !m_popup_requested) {
-        if (draw_content) {
-            ImGui::CloseCurrentPopup();
-            ImGui::EndPopup();
-        }
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar(4);
-        ImGui::PopID();
+        if (draw_content) ImGui::CloseCurrentPopup();
+        finish_popup(draw_content);
         m_popup_opened = false;
         m_popup_requested = false;
         return false;
@@ -167,7 +161,7 @@ void LayerContainer::prepare_window(ImVec2 position, ImVec2 size, ImGuiWindowFla
     // native window resizing bypasses container allocation. give imgui the same resolved limits before Begin
     // so user dragging and saved window sizes cannot escape the node's configured range.
     const ImVec2 content =
-        layout().parent_content_rect().valid() ? layout().parent_content_rect().size() : ImGui::GetMainViewport()->WorkSize;
+        layout().parent_content_rect().valid() ? layout().parent_content_rect().size() : viewport_work_area().size();
     const BoxInsets margin = layout_margin();
     const ImVec2 available = {std::max(0.0F, content.x - margin.horizontal()), std::max(0.0F, content.y - margin.vertical())};
 
@@ -203,12 +197,18 @@ void LayerContainer::on_draw_end() {
     }
 
     if (m_mode == LayerMode::Popup) {
-        ImGui::EndPopup();
-        ImGui::PopID();
-    } else {
-        ImGui::End();
+        finish_popup(true);
+        return;
     }
 
+    ImGui::End();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(4);
+}
+
+void LayerContainer::finish_popup(bool open) {
+    if (open) ImGui::EndPopup();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(4);
+    ImGui::PopID();
 }

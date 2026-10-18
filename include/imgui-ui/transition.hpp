@@ -6,6 +6,8 @@ namespace ui {
     using EasingFunction = float (*)(float);
 
     namespace easing {
+        inline constexpr float BACK_OVERSHOOT = 1.70158F;
+
         inline float linear(float progress) {
             return progress;
         }
@@ -48,18 +50,16 @@ namespace ui {
         }
 
         inline float in_back(float progress) {
-            constexpr float overshoot = 1.70158F;
-            return ((overshoot + 1.0F) * progress * progress * progress) - (overshoot * progress * progress);
+            return ((BACK_OVERSHOOT + 1.0F) * progress * progress * progress) - (BACK_OVERSHOOT * progress * progress);
         }
 
         inline float out_back(float progress) {
-            constexpr float overshoot = 1.70158F;
             const float shifted = progress - 1.0F;
-            return 1.0F + ((overshoot + 1.0F) * shifted * shifted * shifted) + (overshoot * shifted * shifted);
+            return 1.0F + ((BACK_OVERSHOOT + 1.0F) * shifted * shifted * shifted) + (BACK_OVERSHOOT * shifted * shifted);
         }
 
         inline float in_out_back(float progress) {
-            constexpr float overshoot = 1.70158F * 1.525F;
+            constexpr float overshoot = BACK_OVERSHOOT * 1.525F;
             const float scaled = progress * 2.0F;
             if (scaled < 1.0F) {
                 return scaled * scaled * (((overshoot + 1.0F) * scaled) - overshoot) / 2.0F;

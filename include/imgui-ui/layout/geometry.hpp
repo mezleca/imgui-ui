@@ -145,10 +145,6 @@ namespace ui {
             return {max.x - min.x, max.y - min.y};
         }
 
-        Rect inset(ImVec2 padding) const {
-            return {{min.x + padding.x, min.y + padding.y}, {max.x - padding.x, max.y - padding.y}};
-        }
-
         /// tests a point against the inclusive bounds.
         bool contains(ImVec2 point) const {
             return point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y;
@@ -168,7 +164,6 @@ namespace ui {
         constexpr BoxInsets(float horizontal, float vertical) : BoxInsets(horizontal, vertical, horizontal, vertical) {}
         constexpr BoxInsets(float left, float top, float right, float bottom)
             : left(left), top(top), right(right), bottom(bottom) {}
-        BoxInsets(ImVec2 axes) : BoxInsets(axes.x, axes.y) {} // NOLINT(misc-explicit-constructor)
 
         float horizontal() const {
             return left + right;

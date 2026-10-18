@@ -11,13 +11,6 @@ static InputState set_input_flag(InputState state, bool InputState::* flag, bool
     return state;
 }
 
-void InputRouter::set_input_target(Node*& current, Node* next, bool InputState::* flag) {
-    if (current == next) return;
-    if (current != nullptr) current->set_input_state(set_input_flag(current->input_state(), flag, false));
-    current = next;
-    if (current != nullptr) current->set_input_state(set_input_flag(current->input_state(), flag, true));
-}
-
 static int pointer_button_index(PointerButton button) {
     const int index = static_cast<int>(button) - 1;
     return index >= 0 && index < static_cast<int>(POINTER_BUTTON_COUNT) ? index : -1;
@@ -25,6 +18,13 @@ static int pointer_button_index(PointerButton button) {
 
 static bool is_input_target(const Node* node) {
     return node != nullptr && node->accepts_input();
+}
+
+void InputRouter::set_input_target(Node*& current, Node* next, bool InputState::* flag) {
+    if (current == next) return;
+    if (current != nullptr) current->set_input_state(set_input_flag(current->input_state(), flag, false));
+    current = next;
+    if (current != nullptr) current->set_input_state(set_input_flag(current->input_state(), flag, true));
 }
 
 InputRouter::~InputRouter() {

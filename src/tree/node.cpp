@@ -142,14 +142,14 @@ void Node::set_input_enabled(bool enabled) {
     }
 
     m_input_enabled = enabled;
-    if (!enabled && m_input_router != nullptr) m_input_router->clear_input_state(*this);
+    if (!enabled) clear_input_state();
 }
 
 void Node::set_enabled(bool enabled) {
     if (m_enabled == enabled) return;
 
     m_enabled = enabled;
-    if (!enabled && m_input_router != nullptr) m_input_router->clear_input_state(*this);
+    if (!enabled) clear_input_state();
     refresh_disabled_state();
 }
 
@@ -210,10 +210,8 @@ void Node::dispatch_event(UiEvent& event) {
 
 void Node::resolve_position(bool at_cursor) {
     const ImVec2 size = m_layout.size();
-    ImGuiContext* context = ImGui::GetCurrentContext();
 
-    if (context == nullptr || context->CurrentWindow == nullptr ||
-        (m_parent == nullptr && context->CurrentWindow->IsFallbackWindow)) {
+    if (!has_draw_context()) {
         const Rect rect = Rect::from_position_size(m_layout.active_placement().offset, size);
         m_layout.set_arranged_rects(rect, rect);
         return;
@@ -240,9 +238,7 @@ void Node::resolve_position(bool at_cursor) {
 }
 
 void Node::capture_parent_content() {
-    ImGuiContext* context = ImGui::GetCurrentContext();
-    if (context == nullptr || context->CurrentWindow == nullptr ||
-        (m_parent == nullptr && context->CurrentWindow->IsFallbackWindow)) {
+    if (!has_draw_context()) {
         m_layout.set_parent_content_rect({});
         return;
     }
@@ -261,7 +257,7 @@ void Node::capture_parent_content() {
 void Node::set_input_router(InputRouter* router) {
     if (m_input_router == router) return;
 
-    if (m_input_router != nullptr) m_input_router->clear_input_state(*this);
+    clear_input_state();
     bind_input_router(router);
 }
 
@@ -307,15 +303,23 @@ void Node::detach_input_router(InputRouter& router) {
     m_subtree_input_state = {};
 }
 
+void Node::clear_input_state() {
+    if (m_input_router != nullptr) m_input_router->clear_input_state(*this);
+}
+
+bool Node::has_draw_context() const {
+    const ImGuiContext* context = ImGui::GetCurrentContext();
+    return context != nullptr && context->CurrentWindow != nullptr &&
+           (m_parent != nullptr || !context->CurrentWindow->IsFallbackWindow);
+}
+
 void Node::set_visible(bool visible) {
     if (m_visible == visible) {
         return;
     }
 
     m_visible = visible;
-    if (!visible && m_input_router != nullptr) {
-        m_input_router->clear_input_state(*this);
-    }
+    if (!visible) clear_input_state();
 
     refresh_input_state();
     invalidate_measure();
@@ -572,7 +576,7 @@ void Node::draw_impl(bool at_cursor) {
     if (!draw_content || m_input_router == nullptr) return;
 
     UI_PROFILE_NODE(m_profiler, "Node::input", m_identity);
-    if (m_input_mode != InputMode::None) {
+    if (has_input_mode()) {
         m_input_router->m_hit_test.register_node(*this, m_input_mode == InputMode::Blocker, m_input_area, m_layout.visual_rect());
     }
 
@@ -586,7 +590,7 @@ void Node::submit_positioned_item(bool at_cursor) {
         return;
     }
 
-    ImGuiContext* context = ImGui::GetCurrentContext();
+    const ImGuiContext* context = ImGui::GetCurrentContext();
     if (context == nullptr || context->CurrentWindow == nullptr || context->CurrentWindow->IsFallbackWindow ||
         !context->CurrentWindow->DC.IsSetPos) {
         return;

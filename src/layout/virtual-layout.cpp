@@ -203,6 +203,7 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
 
     const size_t begin = std::max(first, buffer.first);
     const size_t end = std::min(first + count, buffer.second);
+    const float content_height = content_size(layout().size()).y;
 
     if (begin < end) {
         clipper.IncludeItemsByIndex(static_cast<int>(begin - first), static_cast<int>(end - first));
@@ -227,13 +228,13 @@ void VirtualLayout::draw_range(size_t first, size_t count, float height, float w
 
             const BoxInsets margin = child.layout_margin();
             const float y = offset + (static_cast<float>(row) * stride);
+            const float available_width = std::max(0.0F, width - margin.horizontal());
 
             arrange_child(
                 child,
                 child.layout().constrain_size(
-                    {std::max(0.0F, width - margin.horizontal()), std::max(0.0F, height - margin.vertical())},
-                    {std::max(0.0F, width - margin.horizontal()),
-                     std::max(0.0F, content_size(layout().size()).y - margin.vertical())}
+                    {available_width, std::max(0.0F, height - margin.vertical())},
+                    {available_width, std::max(0.0F, content_height - margin.vertical())}
                 ),
                 {.offset = {margin.left, y + margin.top}}
             );

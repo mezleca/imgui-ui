@@ -68,6 +68,10 @@ namespace ui {
             return m_scroll.enabled();
         }
 
+        bool scroll_active() const {
+            return scrollable() && computed_style().overflow() != Overflow::Clip;
+        }
+
     private:
         Scroll m_scroll;
         std::vector<LayoutItem> m_layout_items;

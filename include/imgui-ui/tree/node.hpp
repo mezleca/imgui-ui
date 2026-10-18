@@ -313,6 +313,8 @@ namespace ui {
         void set_surface(Surface* surface);
         void bind_input_router(InputRouter* router);
         void detach_input_router(InputRouter& router);
+        void clear_input_state();
+        bool has_draw_context() const;
         void refresh_input_state();
         void refresh_disabled_state();
         std::unique_ptr<Node> detach_child(size_t index);

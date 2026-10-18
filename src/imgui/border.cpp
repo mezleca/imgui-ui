@@ -201,12 +201,17 @@ static void stroke_dashed_side(ImDrawList& draw_list, const BorderPath& path, ui
     flush();
 }
 
-static void stroke_dashed_path(ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImU32 color, float thickness) {
+static void stroke_path(
+    ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImU32 color, float thickness,
+    void (*stroke_side)(ImDrawList&, const BorderPath&, uint8_t, ImU32, float)
+) {
     for (const uint8_t side : BORDER_SIDES) {
-        if ((border & side) != 0) {
-            stroke_dashed_side(draw_list, path, side, color, thickness);
-        }
+        if ((border & side) != 0) stroke_side(draw_list, path, side, color, thickness);
     }
+}
+
+static void stroke_dashed_path(ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImU32 color, float thickness) {
+    stroke_path(draw_list, path, border, color, thickness, &stroke_dashed_side);
 }
 
 static void stroke_dotted_side(ImDrawList& draw_list, const BorderPath& path, uint8_t side, ImU32 color, float thickness) {
@@ -266,11 +271,7 @@ static void stroke_dotted_side(ImDrawList& draw_list, const BorderPath& path, ui
 }
 
 static void stroke_dotted_path(ImDrawList& draw_list, const BorderPath& path, uint8_t border, ImU32 color, float thickness) {
-    for (const uint8_t side : BORDER_SIDES) {
-        if ((border & side) != 0) {
-            stroke_dotted_side(draw_list, path, side, color, thickness);
-        }
-    }
+    stroke_path(draw_list, path, border, color, thickness, &stroke_dotted_side);
 }
 
 static BorderPathSegment line(ImVec2 start, ImVec2 end, uint8_t sides) {

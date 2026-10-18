@@ -28,18 +28,7 @@ FileDialogWidget::FileDialogWidget(std::string label, LabelPlacement placement, 
       m_button(add<FileDialogButton>()) {
     set_size({grow(), fit()});
     m_button.set_text_alignment({0.0F, 0.5F}).set_text_overflow(TextOverflow::Ellipsis);
-    m_button.on_click([this] {
-        show_dialog(
-            m_operation, {
-                             .filters = m_filters,
-                             .default_path = m_default_path,
-                             .default_name = m_default_name,
-                             .title = m_title,
-                             .accept_label = m_accept_label,
-                             .cancel_label = m_cancel_label,
-                         }
-        );
-    });
+    m_button.on_click([this] { show_dialog(m_operation, m_options); });
     m_label_placement = placement;
     update_label_layout();
 }
@@ -83,11 +72,8 @@ FileDialogWidget& FileDialogWidget::set_operation(FileDialogOperation operation)
 
 FileDialogWidget& FileDialogWidget::set_options(const FileDialogOptions& options) {
     m_filters.assign(options.filters.begin(), options.filters.end());
-    m_default_path = options.default_path;
-    m_default_name = options.default_name;
-    m_title = options.title;
-    m_accept_label = options.accept_label;
-    m_cancel_label = options.cancel_label;
+    m_options = options;
+    m_options.filters = m_filters;
     return *this;
 }
 

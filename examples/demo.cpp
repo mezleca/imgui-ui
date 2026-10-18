@@ -186,7 +186,7 @@ protected:
         if (m_tone == DemoPanelTone::Tertiary) background = &theme.background_tertiary_color;
 
         configure_all_styles([&](Style& style) {
-            style.padding(m_padding)
+            style.padding(BoxInsets{m_padding.x, m_padding.y})
                 .background_color(*background)
                 .border(m_border)
                 .border_color(m_accent_border ? theme.accent_color : theme.border_color)
@@ -527,8 +527,14 @@ protected:
 
 class DemoTextListWidget final : public Container {
 public:
-    explicit DemoTextListWidget(std::vector<std::string> items);
-    DemoTextListWidget& set_items(std::vector<std::string> items);
+    explicit DemoTextListWidget(std::vector<std::string> items) : Container("demo-text-list") {
+        set_spacing(8.0F);
+        set_size({fit(), fit()});
+
+        for (std::string& item : items) {
+            add<TextWidget>(std::move(item));
+        }
+    }
 
 protected:
     void apply_theme_defaults(const Theme& theme) override {
@@ -631,7 +637,6 @@ private:
     bool m_text_list_horizontal = false;
     int m_dynamic_count = 0;
     int m_next_dynamic_id = 0;
-    float m_random_value = 0.0f;
     int m_integer_value = 25;
     double m_unbounded_value = 1.0;
     std::string m_name = "imgui-ui";
@@ -640,20 +645,6 @@ private:
     std::string m_border_style = "solid";
     int m_blur = 5;
 };
-
-DemoTextListWidget::DemoTextListWidget(std::vector<std::string> items) : Container("demo-text-list") {
-    set_spacing(8.0F);
-    set_size({fit(), fit()});
-    set_items(std::move(items));
-}
-
-DemoTextListWidget& DemoTextListWidget::set_items(std::vector<std::string> items) {
-    clear();
-    for (std::string& item : items) {
-        add<TextWidget>(std::move(item));
-    }
-    return *this;
-}
 
 DemoScreen::DemoScreen() : Container("demo", StackDirection::Vertical) {
     // set_size takes {width, height}. each axis can choose its own sizing rule:
@@ -740,19 +731,19 @@ void DemoScreen::setup_buttons(Container& widgets) {
 }
 
 void DemoScreen::setup_numbers(Container& widgets) {
-    // the input writes directly into m_random_value. its maximum clamps the slider to 10.
+    // the input writes directly into m_integer_value. its range clamps the slider to 0..100.
     auto& numbers = widgets.add<TreeContainer>("Number inputs");
     numbers.set_spacing(8.0F);
 
     // integral values use whole steps. an above label reserves a separate line over the slider.
-    numbers.add<NumberInputWidget>(m_integer_value, "0 to 100", LabelPlacement::Above).set_range(0, 100);
+    auto& bounded = numbers.add<NumberInputWidget<int>>(m_integer_value, "0 to 100", LabelPlacement::Above);
+    bounded.set_range(0, 100);
+    bounded.set_tooltip("drag the thumb or click a value between 0 and 100");
 
     // clearing the range switches to unbounded dragging. hide the thumb and choose the drag speed and display precision.
-    numbers.add<NumberInputWidget>(m_unbounded_value, "unbounded double")
-        .clear_range()
-        .set_speed(0.01F)
-        .set_format("%.2f")
-        .set_thumb_visible(false);
+    auto& unbounded = numbers.add<NumberInputWidget<double>>(m_unbounded_value, "unbounded double");
+    unbounded.clear_range().set_speed(0.01F).set_format("%.2f").set_thumb_visible(false);
+    unbounded.set_tooltip("drag horizontally to change the value at 0.01 steps");
 }
 
 static void setup_size_limits(Container& layouts) {
@@ -798,13 +789,17 @@ void DemoScreen::setup_inputs(Container& widgets) {
     profile.add<TextWidget>("profile");
     auto& name_input = profile.add<TextInputWidget>(m_name, "name");
     name_input.set_icon(ui.runtime().textures().find("demo-file-icon"));
-    profile.add<CheckboxWidget>(m_enabled, "enabled").set_size({grow(), fit()});
+    name_input.set_tooltip("profile name used by this demo screen");
+    auto& enabled = profile.add<CheckboxWidget>(m_enabled, "enabled");
+    enabled.set_size({grow(), fit()});
+    enabled.set_tooltip("toggles the sample profile");
 
     auto radio = std::make_unique<CheckboxWidget>(m_radio_selected, "radio");
     radio->set_type(CheckboxType::Radio);
     profile.add(std::move(radio)).set_size({grow(), fit()});
 
-    profile.add<ColorPickerWidget>(m_color, "color", LabelPlacement::Above, "color-picker");
+    auto& color = profile.add<ColorPickerWidget>(m_color, "color", LabelPlacement::Above, "color-picker");
+    color.set_tooltip("opens the color picker popup");
 }
 
 void DemoScreen::setup_images(Container& widgets) {
@@ -829,6 +824,7 @@ void DemoScreen::setup_images(Container& widgets) {
     select_image.set_options({.filters = image_filters}).on_select([this](const FileDialogResult& result) {
         select_test_image(result);
     });
+    select_image.set_tooltip("opens the native file dialog");
 
     auto& image_fit = images.add<DropdownWidget>(
         m_image_fit, std::vector<DropdownOption>{{"fill", "fill"}, {"contain", "contain"}, {"cover", "cover"}}, "image fit"
@@ -836,6 +832,7 @@ void DemoScreen::setup_images(Container& widgets) {
 
     image_fit.set_size({px(280.0F), fit()});
     image_fit.on_change([this] { apply_image_fit(); });
+    image_fit.set_tooltip("controls how new images fit inside their frames");
 }
 
 void DemoScreen::setup_text(Container& widgets) {
@@ -917,6 +914,12 @@ void DemoScreen::setup_appearance(Container& styles) {
 
     theme.set_size({px(360.0F), fit()});
     theme.on_change([this] { surface().set_theme(make_demo_theme(m_theme)); });
+    theme.set_tooltip([this] {
+        ImGui::TextUnformatted("color palette");
+        ImGui::TextDisabled("current: %s", m_theme.c_str());
+        ImGui::Separator();
+        ImGui::TextUnformatted("selecting an option updates the whole demo");
+    });
 
     auto& border_style = appearance.add<DropdownWidget>(
         m_border_style, std::vector<DropdownOption>{{"solid", "solid"}, {"dashed", "dashed"}, {"dotted", "dotted"}},
@@ -1252,7 +1255,7 @@ static void setup_modal(DemoScreen& demo, Surface& surface, Container& windows) 
     modal.set_spacing(10.0F);
 
     modal.add<TextWidget>("modal overlay");
-    auto& blur = modal.add<NumberInputWidget>(demo.blur(), "backdrop blur");
+    auto& blur = modal.add<NumberInputWidget<int>>(demo.blur(), "backdrop blur");
     blur.set_range(0, 32);
     blur.on_change([&demo, &modal_layer] {
         modal_layer.configure_all_styles([&demo](Style& style) { style.blur(demo.blur()); });
@@ -1287,8 +1290,8 @@ static void setup_modal(DemoScreen& demo, Surface& surface, Container& windows) 
 }
 
 void setup_demo(Surface& surface, std::string_view backend) {
-    Runtime& runtime = surface.runtime();
 #ifdef IMGUI_UI_ASSETS_DIR
+    Runtime& runtime = surface.runtime();
     // register resources before building controls. both backends use the same fonts, textures and example tree.
     const std::filesystem::path assets = std::filesystem::path{IMGUI_UI_ASSETS_DIR};
     runtime.fonts().add("Inter Regular", assets / "fonts/Inter.ttf");
@@ -1306,4 +1309,13 @@ void setup_demo(Surface& surface, std::string_view backend) {
     setup_context_menu(surface, windows);
     setup_pointer_blocker(surface, windows);
     setup_modal(demo, surface, windows);
+}
+
+void run_demo(Surface& surface, std::string_view backend) {
+    setup_demo(surface, backend);
+
+    while (!surface.is_done()) {
+        surface.process_events();
+        surface.frame();
+    }
 }

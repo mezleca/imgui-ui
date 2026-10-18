@@ -99,17 +99,17 @@ void ResizableContainer::mouse_move_event(UiEvent& event) {
     const ImVec2 insets = layout().box_sizing() == BoxSizing::ContentBox
                               ? ImVec2{layout().box_insets().horizontal(), layout().box_insets().vertical()}
                               : ImVec2{};
-    if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) {
-        updated.width.mode = LayoutSizeMode::Fixed;
-        const float width = std::clamp(m_previous_size.x + event.position.x - m_drag_start.x, MIN_CHILD_SIZE, max_size.x);
-        updated.width.value = std::max(0.0F, width - insets.x);
-    }
+    const auto resize_axis = [&](bool horizontal, LayoutAxis& axis, float previous) {
+        const float position = horizontal ? event.position.x : event.position.y;
+        const float start = horizontal ? m_drag_start.x : m_drag_start.y;
+        const float maximum = horizontal ? max_size.x : max_size.y;
+        const float size = std::clamp(previous + position - start, MIN_CHILD_SIZE, maximum);
+        axis.mode = LayoutSizeMode::Fixed;
+        axis.value = std::max(0.0F, size - (horizontal ? insets.x : insets.y));
+    };
 
-    if ((m_resizing & ResizeAxes::Y) != ResizeAxes::None) {
-        updated.height.mode = LayoutSizeMode::Fixed;
-        const float height = std::clamp(m_previous_size.y + event.position.y - m_drag_start.y, MIN_CHILD_SIZE, max_size.y);
-        updated.height.value = std::max(0.0F, height - insets.y);
-    }
+    if ((m_resizing & ResizeAxes::X) != ResizeAxes::None) resize_axis(true, updated.width, m_previous_size.x);
+    if ((m_resizing & ResizeAxes::Y) != ResizeAxes::None) resize_axis(false, updated.height, m_previous_size.y);
 
     set_size(updated);
     event.block_native_input();

@@ -38,9 +38,9 @@ void Painter::frame_surface(Rect rect, const ComputedStyle& style, const std::op
         background.Value.w = 0.0F;
     }
 
-    const bool gradient_border = m_effects != nullptr && border_color.gradient() != nullptr && style.uniform_border() &&
-                                 style.border_style() == BorderType::Solid;
-    if (style.uniform_border() && style.border_style() == BorderType::Solid) {
+    const bool uniform_solid = style.uniform_border() && style.border_style() == BorderType::Solid;
+    const bool gradient_border = m_effects != nullptr && border_color.gradient() != nullptr && uniform_solid;
+    if (uniform_solid) {
         ImColor frame_border = draw_border_color;
         if (gradient_border) frame_border.Value.w = 0.0F;
 

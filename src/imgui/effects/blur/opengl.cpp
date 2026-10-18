@@ -242,26 +242,12 @@ static void render_blur(void*, const ImDrawList*, const ImDrawCmd* command, cons
         return;
     }
 
-    const ImDrawData* draw_data = ImGui::GetDrawData();
-    const ImVec2 display_position = draw_data == nullptr ? ImVec2{} : draw_data->DisplayPos;
-    const ImVec2 scale = draw_data == nullptr ? ImVec2{1.0F, 1.0F} : draw_data->FramebufferScale;
-    const ImVec2 minimum = {
-        (region->sample.min.x - display_position.x) * scale.x,
-        (region->sample.min.y - display_position.y) * scale.y,
-    };
-    const ImVec2 maximum = {
-        (region->sample.max.x - display_position.x) * scale.x,
-        (region->sample.max.y - display_position.y) * scale.y,
-    };
+    const FramebufferTransform transform = framebuffer_transform();
+    const ImVec2 minimum = transform.apply(region->output.min);
+    const ImVec2 maximum = transform.apply(region->output.max);
 
-    const ImVec2 output_minimum = {
-        (region->output.min.x - display_position.x) * scale.x,
-        (region->output.min.y - display_position.y) * scale.y,
-    };
-    const ImVec2 output_maximum = {
-        (region->output.max.x - display_position.x) * scale.x,
-        (region->output.max.y - display_position.y) * scale.y,
-    };
+    const ImVec2 output_minimum = transform.apply(region->output.min);
+    const ImVec2 output_maximum = transform.apply(region->output.max);
     const float region_left = output_minimum.x;
     const float region_bottom = static_cast<float>(height) - output_maximum.y;
     const float region_width = output_maximum.x - output_minimum.x;
@@ -274,18 +260,12 @@ static void render_blur(void*, const ImDrawList*, const ImDrawCmd* command, cons
         return;
     }
 
-    const int clip_left =
-        std::clamp(static_cast<int>(std::floor((command->ClipRect.x - display_position.x) * scale.x)), 0, width);
-    const int clip_right =
-        std::clamp(static_cast<int>(std::ceil((command->ClipRect.z - display_position.x) * scale.x)), 0, width);
-    const int clip_bottom = std::clamp(
-        static_cast<int>(std::floor(static_cast<float>(height) - ((command->ClipRect.w - display_position.y) * scale.y))), 0,
-        height
-    );
-    const int clip_top = std::clamp(
-        static_cast<int>(std::ceil(static_cast<float>(height) - ((command->ClipRect.y - display_position.y) * scale.y))), 0,
-        height
-    );
+    const ImVec2 clip_min = transform.apply({command->ClipRect.x, command->ClipRect.y});
+    const ImVec2 clip_max = transform.apply({command->ClipRect.z, command->ClipRect.w});
+    const int clip_left = std::clamp(static_cast<int>(std::floor(clip_min.x)), 0, width);
+    const int clip_right = std::clamp(static_cast<int>(std::ceil(clip_max.x)), 0, width);
+    const int clip_bottom = std::clamp(static_cast<int>(std::floor(static_cast<float>(height) - clip_max.y)), 0, height);
+    const int clip_top = std::clamp(static_cast<int>(std::ceil(static_cast<float>(height) - clip_min.y)), 0, height);
     const int clipped_left = std::max(left, clip_left);
     const int clipped_right = std::min(right, clip_right);
     const int clipped_bottom = std::max(bottom, clip_bottom);
@@ -325,7 +305,8 @@ static void render_blur(void*, const ImDrawList*, const ImDrawCmd* command, cons
     glUniform2f(textures->texel, 1.0F / static_cast<float>(width), 1.0F / static_cast<float>(height));
     glUniform4f(textures->region, region_left, region_bottom, region_width, region_height);
     glUniform1f(
-        textures->rounding, std::min(region->rounding * std::min(scale.x, scale.y), std::min(region_width, region_height) * 0.5F)
+        textures->rounding,
+        std::min(region->rounding * std::min(transform.scale.x, transform.scale.y), std::min(region_width, region_height) * 0.5F)
     );
     glUniform1f(textures->opacity, region->opacity);
     glUniform1f(textures->amount, static_cast<float>(region->strength) / (static_cast<float>(region->strength) + 4.0F));

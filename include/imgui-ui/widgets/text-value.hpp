@@ -37,8 +37,6 @@ namespace ui {
 
         ImVec2 text_size() const;
 
-        float line_height() const;
-
         ImFont* font() const {
             return m_font;
         }

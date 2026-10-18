@@ -34,8 +34,6 @@ namespace ui {
 
         const StyleValue* find(std::string_view key) const;
 
-        bool is_transitioning() const;
-
         auto begin() {
             return m_vars.begin();
         }

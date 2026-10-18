@@ -115,16 +115,11 @@ TEST_CASE("colors retain directional gradients and solid fallbacks") {
 }
 
 static const BoxShadowRegion* collected_shadow_region = nullptr;
-static const BlurRegion* collected_blur_region = nullptr;
 static const ImDrawList* collected_effect_draw_list = nullptr;
 
 static void collect_shadow_callback(void*, const ImDrawList* draw_list, const ImDrawCmd*, const void* command) {
     collected_shadow_region = static_cast<const BoxShadowRegion*>(command);
     collected_effect_draw_list = draw_list;
-}
-
-static void collect_blur_callback(void*, const ImDrawList*, const ImDrawCmd*, const void* command) {
-    collected_blur_region = static_cast<const BlurRegion*>(command);
 }
 
 static void render_effect_commands(const ImDrawData& draw_data) {

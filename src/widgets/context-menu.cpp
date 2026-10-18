@@ -25,7 +25,7 @@ protected:
         configure_all_styles([&theme](Style& style) {
             style.color(theme.text_color)
                 .background_color(theme.transparent)
-                .padding(theme.metrics.item_inner_spacing)
+                .padding(BoxInsets{theme.metrics.item_inner_spacing.x, theme.metrics.item_inner_spacing.y})
                 .border(BorderEdge{0.0F, BorderType::None})
                 .border_radius(theme.controls.rounding)
                 .cursor(ImGuiMouseCursor_Hand);

@@ -2,9 +2,7 @@
 
 #include <imgui-ui/constants.hpp>
 #include <imgui-ui/imgui/context-scope.hpp>
-#include <imgui-ui/imgui/effects/blur/opengl.hpp>
-#include <imgui-ui/imgui/effects/gradient/opengl.hpp>
-#include <imgui-ui/imgui/effects/shadow/opengl.hpp>
+#include <imgui-ui/imgui/effects/opengl.hpp>
 #include <imgui-ui/surface.hpp>
 
 #include <external/glad.h>
@@ -201,9 +199,7 @@ bool RaylibBackend::initialize() {
 }
 
 void RaylibBackend::register_effects(EffectRegistry& effects) {
-    register_opengl_blur(effects);
-    register_opengl_box_shadow(effects);
-    register_opengl_gradient(effects);
+    register_opengl_effects(effects);
 }
 
 bool RaylibBackend::initialize_imgui() {

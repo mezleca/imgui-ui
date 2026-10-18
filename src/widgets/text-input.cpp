@@ -13,8 +13,8 @@ using namespace ui;
 
 class TextInputWidget::FieldNode final : public StyledNode {
 public:
-    FieldNode(std::string& value, bool& focus_requested)
-        : StyledNode("text", "TextInput"), m_value(&value), m_focus_requested(&focus_requested) {
+    FieldNode(WidgetValue<std::string>& value, bool& focus_requested)
+        : StyledNode("text", "TextInput"), m_value(value), m_focus_requested(&focus_requested) {
         set_size({grow(), fit()});
     }
 
@@ -45,19 +45,19 @@ private:
         const float padding_y = std::max(0.0F, (layout().size().y - layout().measured_size().y) * 0.5F);
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {ImGui::GetStyle().FramePadding.x, padding_y});
         ImGui::SetNextItemWidth(-FLT_MIN);
-        m_changed = ImGui::InputText("##value", m_value);
+        m_changed = m_value.edit([](std::string& value) { return ImGui::InputText("##value", &value); });
         ImGui::PopStyleVar();
         ImGui::PopID();
         return true;
     }
 
-    std::string* m_value;
+    WidgetValue<std::string>& m_value;
     bool* m_focus_requested;
     bool m_changed = false;
 };
 
-TextInputWidget::TextInputWidget(std::string& value, std::string label, LabelPlacement placement, std::string id)
-    : Widget(std::move(id), StackDirection::Horizontal, "TextInput"), m_value(&value) {
+TextInputWidget::TextInputWidget(WidgetValue<std::string> value, std::string label, LabelPlacement placement, std::string id)
+    : Widget(std::move(id), StackDirection::Horizontal, "TextInput"), m_value(std::move(value)) {
     set_size({grow(), fit()});
 
     set_content_alignment(Anchor::CenterLeft);
@@ -75,7 +75,7 @@ TextInputWidget::TextInputWidget(std::string& value, std::string label, LabelPla
     m_icon_node->set_input_enabled(false);
     m_icon_node->set_visible(false);
 
-    m_field_node = &m_input_node->add<FieldNode>(value, m_focus_requested);
+    m_field_node = &m_input_node->add<FieldNode>(m_value, m_focus_requested);
     set_label(std::move(label), placement);
 }
 
@@ -148,11 +148,10 @@ TextInputWidget& TextInputWidget::set_icon(Texture* icon) {
 }
 
 bool TextInputWidget::set_value(std::string value) {
-    if (*m_value == value) {
+    if (!m_value.set(std::move(value))) {
         return false;
     }
 
-    *m_value = std::move(value);
     notify_change();
     return true;
 }

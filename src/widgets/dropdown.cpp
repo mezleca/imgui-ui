@@ -76,23 +76,17 @@ public:
         set_size({grow(), fit()});
     }
 
-    void set_open(bool open) {
-        if (open) {
-            set_visual_style(StyleType::ACTIVE);
-            return;
-        }
-
-        set_interaction_style(input_state().hovered, input_state().active, input_state().focused);
+private:
+    std::string_view preview() const {
+        const DropdownOption* selected = m_owner.selected_option();
+        return selected == nullptr ? std::string_view(m_owner.m_placeholder) : std::string_view(selected->label);
     }
 
-private:
     void on_measure() override {
-        const DropdownOption* selected = m_owner.selected_option();
-        const std::string_view preview = selected == nullptr ? m_owner.m_placeholder : selected->label;
-        const ImVec2 text_size = ImGui::CalcTextSize(preview.data(), preview.data() + preview.size());
+        const std::string_view text = preview();
+        const ImVec2 text_size = ImGui::CalcTextSize(text.data(), text.data() + text.size());
         set_measured_content_size(
-            {text_size.x + m_owner.m_arrow_size.x + ImGui::GetStyle().ItemInnerSpacing.x,
-             std::max(text_size.y, m_owner.m_arrow_size.y)}
+            {text_size.x + ARROW_SIZE.x + ImGui::GetStyle().ItemInnerSpacing.x, std::max(text_size.y, ARROW_SIZE.y)}
         );
     }
 
@@ -110,17 +104,16 @@ private:
 
     void paint_content(const PaintContext& context) override {
         const ComputedStyle& current_style = context.style;
-        const DropdownOption* selected = m_owner.selected_option();
-        const std::string_view preview = selected == nullptr ? m_owner.m_placeholder : selected->label;
-        const ImVec2 text_size = ImGui::CalcTextSize(preview.data(), preview.data() + preview.size());
+        const std::string_view text = preview();
+        const ImVec2 text_size = ImGui::CalcTextSize(text.data(), text.data() + text.size());
         const Rect content = context.content_rect;
 
         context.painter.text(
-            {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)}, current_style.color().value, preview
+            {content.min.x, content.min.y + ((content.size().y - text_size.y) * 0.5F)}, current_style.color().value, text
         );
 
         context.painter.triangle(
-            {content.max.x - (m_owner.m_arrow_size.x * 0.5F), content.min.y + (content.size().y * 0.5F)}, m_owner.m_arrow_size,
+            {content.max.x - (ARROW_SIZE.x * 0.5F), content.min.y + (content.size().y * 0.5F)}, ARROW_SIZE,
             current_style.color().value, m_owner.is_open() ? TriangleDirection::Up : TriangleDirection::Down
         );
     }
@@ -143,7 +136,7 @@ DropdownWidget::Body::Body(DropdownWidget& owner) : LayerContainer("body", Layer
 }
 
 void DropdownWidget::Body::on_layout() {
-    Node::on_layout();
+    LayerContainer::on_layout();
     assign_size({m_owner.m_trigger->layout().size().x, layout().size().y});
 }
 
@@ -183,7 +176,7 @@ bool DropdownWidget::Body::paint() {
     }
 
     const Rect trigger_rect = m_owner.m_trigger->layout().visual_rect();
-    set_popup_position({trigger_rect.min.x, trigger_rect.max.y + m_owner.m_popup_gap});
+    set_popup_position({trigger_rect.min.x, trigger_rect.max.y + DropdownWidget::POPUP_GAP});
     if (LayerContainer::paint()) {
         const Rect body_rect = layout().visual_rect();
 
@@ -204,7 +197,9 @@ void DropdownWidget::Body::draw_children() {
         auto& option = static_cast<Option&>(*child);
         const InputState& input = option.input_state();
         if (!input.hovered && !input.active && !input.focused) {
-            option.set_visual_style(m_owner.m_options[index].value == m_owner.m_value ? StyleType::ACTIVE : StyleType::DEFAULT);
+            option.set_visual_style(
+                m_owner.m_options[index].value == m_owner.m_value.value() ? StyleType::ACTIVE : StyleType::DEFAULT
+            );
         }
         ++index;
     }
@@ -228,7 +223,7 @@ const DropdownOption* DropdownWidget::find_option(std::string_view option_value)
 }
 
 const DropdownOption* DropdownWidget::selected_option() const {
-    return find_option(m_value);
+    return find_option(m_value.value());
 }
 
 void DropdownWidget::open() {
@@ -239,9 +234,9 @@ void DropdownWidget::open() {
     m_visibility = Visibility::Open;
     m_body->open_popup();
 
-    m_trigger->set_open(true);
+    m_trigger->set_open_style(true);
     m_body->set_input_enabled(true);
-    m_body->fade_in({m_transition_duration, easing::linear});
+    m_body->fade_in({TRANSITION_DURATION, easing::linear});
 }
 
 void DropdownWidget::close() {
@@ -250,11 +245,11 @@ void DropdownWidget::close() {
     }
 
     m_visibility = Visibility::Closing;
-    m_trigger->set_open(false);
+    m_trigger->set_open_style(false);
 
     // keep the body registered while it fades out. closing rows cannot be selected.
     m_body->set_input_enabled(true);
-    m_body->fade_out({m_transition_duration, easing::linear});
+    m_body->fade_out({TRANSITION_DURATION, easing::linear});
 }
 
 void DropdownWidget::finish_close() {
@@ -264,9 +259,10 @@ void DropdownWidget::finish_close() {
 }
 
 DropdownWidget::DropdownWidget(
-    std::string& value, std::vector<DropdownOption> options, std::string label, LabelPlacement placement, std::string id
+    WidgetValue<std::string> value, std::vector<DropdownOption> options, std::string label, LabelPlacement placement,
+    std::string id
 )
-    : Widget(std::move(id), "Dropdown"), m_value(value), m_options(std::move(options)) {
+    : Widget(std::move(id), "Dropdown"), m_value(std::move(value)), m_options(std::move(options)) {
     set_size({fit(), fit()});
 
     m_label_node = &add<TextWidget>("");
@@ -286,9 +282,6 @@ void DropdownWidget::event(UiEvent& event) {
 void DropdownWidget::apply_theme_defaults(const Theme& theme) {
     Container::apply_theme_defaults(theme);
     set_font(surface().get_primary_font(), theme.controls.font_size);
-    m_arrow_size = {8.0F, 4.0F};
-    m_popup_gap = 4.0F;
-    m_transition_duration = 0.06F;
 
     configure_all_styles([&theme](Style& style) {
         style.color(theme.text_color)
@@ -332,12 +325,12 @@ void DropdownWidget::update_label_layout() {
 
 bool DropdownWidget::select_value(std::string_view value) {
     const DropdownOption* option = find_option(value);
-    if (option == nullptr || m_value == option->value) {
+    if (option == nullptr || m_value.value() == option->value) {
         return false;
     }
 
-    m_value = option->value;
     close();
+    m_value.set(option->value);
     invalidate_measure();
     notify_change();
     return true;

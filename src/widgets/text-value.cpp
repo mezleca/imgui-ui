@@ -56,11 +56,6 @@ ImVec2 GenericValue::text_size() const {
     return m_text_size;
 }
 
-float GenericValue::line_height() const {
-    if (m_dirty) recompute();
-    return m_line_height;
-}
-
 bool GenericValue::set(std::string text) {
     const auto* current_text = std::get_if<std::string>(&m_value);
     if (current_text != nullptr && *current_text == text) return false;

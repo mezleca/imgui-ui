@@ -41,12 +41,8 @@ namespace ui {
         LabelPlacement m_label_placement = LabelPlacement::Above;
         ImVec2 m_label_spacing = {8.0F, 10.0F};
         FileDialogOperation m_operation = FileDialogOperation::OpenFile;
+        FileDialogOptions m_options;
         std::vector<FileDialogFilter> m_filters;
-        std::filesystem::path m_default_path;
-        std::string m_default_name;
-        std::string m_title;
-        std::string m_accept_label;
-        std::string m_cancel_label;
         std::function<void(const FileDialogResult&)> m_on_select;
     };
 } // namespace ui

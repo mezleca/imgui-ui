@@ -1,6 +1,7 @@
 #pragma once
 
 #include "widget.hpp"
+#include "value.hpp"
 
 #include <cstdint>
 #include <string>
@@ -21,7 +22,7 @@ namespace ui {
     class DropdownWidget : public Widget {
     public:
         explicit DropdownWidget(
-            std::string& value, std::vector<DropdownOption> options = {}, std::string label = {},
+            WidgetValue<std::string> value = {}, std::vector<DropdownOption> options = {}, std::string label = {},
             LabelPlacement placement = LabelPlacement::Above, std::string id = {}
         );
 
@@ -68,7 +69,11 @@ namespace ui {
         void update_label_layout();
         void event(UiEvent& event) override;
 
-        std::string& m_value;
+        static constexpr ImVec2 ARROW_SIZE{8.0F, 4.0F};
+        static constexpr float POPUP_GAP = 4.0F;
+        static constexpr float TRANSITION_DURATION = 0.06F;
+
+        WidgetValue<std::string> m_value;
         std::vector<DropdownOption> m_options;
         std::string m_placeholder = "select an option";
         TextWidget* m_label_node = nullptr;
@@ -77,8 +82,5 @@ namespace ui {
         Visibility m_visibility = Visibility::Closed;
         LabelPlacement m_label_placement = LabelPlacement::Above;
         ImVec2 m_label_spacing = {8.0F, 10.0F};
-        ImVec2 m_arrow_size;
-        float m_popup_gap = 0.0F;
-        float m_transition_duration = 0.0F;
     };
 } // namespace ui

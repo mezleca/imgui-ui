@@ -31,20 +31,19 @@ void HitTestIndex::register_node(Node& node, bool blocker, Rect input_rect, Rect
     if (!input_rect.valid()) {
         input_rect = node.hit_rect(visual_rect);
     } else {
-        input_rect.min.x += visual_rect.min.x;
-        input_rect.min.y += visual_rect.min.y;
-        input_rect.max.x += visual_rect.min.x;
-        input_rect.max.y += visual_rect.min.y;
+        input_rect = Rect::from_position_size(
+            {input_rect.min.x + visual_rect.min.x, input_rect.min.y + visual_rect.min.y}, input_rect.size()
+        );
     }
 
     // read the current clip without marking imgui's fallback window as painted.
     if (ImGui::GetCurrentContext() != nullptr) {
         const ImDrawList* draw_list = ImGui::GetCurrentWindowRead()->DrawList;
         const Rect clip_rect = {draw_list->GetClipRectMin(), draw_list->GetClipRectMax()};
-        input_rect.min.x = std::max(input_rect.min.x, clip_rect.min.x);
-        input_rect.min.y = std::max(input_rect.min.y, clip_rect.min.y);
-        input_rect.max.x = std::min(input_rect.max.x, clip_rect.max.x);
-        input_rect.max.y = std::min(input_rect.max.y, clip_rect.max.y);
+        input_rect = {
+            {std::max(input_rect.min.x, clip_rect.min.x), std::max(input_rect.min.y, clip_rect.min.y)},
+            {std::min(input_rect.max.x, clip_rect.max.x), std::min(input_rect.max.y, clip_rect.max.y)},
+        };
     }
 
     if (!input_rect.valid()) {

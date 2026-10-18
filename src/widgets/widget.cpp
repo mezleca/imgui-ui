@@ -1,5 +1,8 @@
 #include <imgui-ui/widgets/widget.hpp>
 
+#include <imgui-ui/style/theme.hpp>
+#include <imgui-ui/surface.hpp>
+
 using namespace ui;
 
 Widget::Widget(std::string id, std::string_view type_name, InputMode input_mode)
@@ -64,8 +67,55 @@ Widget& Widget::on_change(std::function<void()> callback) {
     return *this;
 }
 
+Widget& Widget::set_tooltip(std::string text) {
+    m_tooltip_text = std::move(text);
+    m_tooltip_callback = {};
+
+    if (!has_input_mode()) {
+        set_input_mode(InputMode::Target);
+    }
+
+    return *this;
+}
+
+Widget& Widget::set_tooltip(std::function<void()> callback) {
+    m_tooltip_text.clear();
+    m_tooltip_callback = std::move(callback);
+
+    if (!has_input_mode()) {
+        set_input_mode(InputMode::Target);
+    }
+
+    return *this;
+}
+
 void Widget::notify_change() {
     if (m_on_change) m_on_change();
+}
+
+void Widget::draw_after() {
+    Container::draw_after();
+    if (!input_state().hovered) return;
+    if (!m_tooltip_callback && m_tooltip_text.empty()) return;
+
+    const Theme& theme = surface().theme();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, theme.metrics.window_padding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, theme.metrics.popup_rounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, theme.controls.border_thickness);
+    ImGui::PushStyleColor(ImGuiCol_PopupBg, theme.controls.background_color.rgba());
+    ImGui::PushStyleColor(ImGuiCol_Border, theme.controls.border_color.rgba());
+
+    if (m_tooltip_callback) {
+        if (ImGui::BeginTooltip()) {
+            m_tooltip_callback();
+            ImGui::EndTooltip();
+        }
+    } else {
+        ImGui::SetTooltip("%s", m_tooltip_text.c_str());
+    }
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
 }
 
 void Widget::dispatch_event(UiEvent& event) {

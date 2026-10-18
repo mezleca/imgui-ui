@@ -51,6 +51,9 @@ namespace ui {
             if (enabled()) m_state.set_item_state(hovered, active, focused);
         }
 
+        /// selects the active style while open and restores the hovered, active or focused style when closed.
+        void set_open_style(bool open);
+
         StyleAnimationSequence animate() {
             return m_state.animate();
         }
@@ -64,16 +67,16 @@ namespace ui {
             m_state.cancel_animations();
         }
 
-        void fade_in(TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear}) {
+        void fade_in(TransitionSpec transition = OPACITY_TRANSITION) {
             m_state.fade_in(transition);
         }
 
         /// animates opacity to zero. the node remains visible until set_visible(false) is called.
-        void fade_out(TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear}) {
+        void fade_out(TransitionSpec transition = OPACITY_TRANSITION) {
             m_state.fade_out(transition);
         }
 
-        void set_opacity(float opacity, TransitionSpec transition = {OPACITY_TRANSITION_DURATION, easing::linear}) {
+        void set_opacity(float opacity, TransitionSpec transition = OPACITY_TRANSITION) {
             m_state.set_opacity(opacity, transition);
         }
 
@@ -150,6 +153,9 @@ namespace ui {
         static void style_changed(void* owner, bool font_changed);
 
         static void invalidate_font_cache_subtree(Node& node);
+
+        static PaintSlot& ensure_slot(std::unique_ptr<PaintSlot>& slot, StyledNode* owner);
+        void draw_slot(PaintSlot& slot, ImDrawList& draw_list);
 
         void update_cursor();
 

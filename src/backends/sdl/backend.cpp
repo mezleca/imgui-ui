@@ -2,9 +2,7 @@
 
 #include <imgui-ui/constants.hpp>
 #include <imgui-ui/imgui/context-scope.hpp>
-#include <imgui-ui/imgui/effects/blur/opengl.hpp>
-#include <imgui-ui/imgui/effects/gradient/opengl.hpp>
-#include <imgui-ui/imgui/effects/shadow/opengl.hpp>
+#include <imgui-ui/imgui/effects/opengl.hpp>
 #include <imgui-ui/surface.hpp>
 
 #include <glad/gl.h>
@@ -154,7 +152,7 @@ SdlBackend::~SdlBackend() {
     }
 }
 
-void SdlBackend::apply_mouse_cursor(ImGuiMouseCursor cursor) {
+void SdlBackend::set_mouse_cursor(ImGuiMouseCursor cursor) {
     if (cursor == ImGuiMouseCursor_None) {
         m_mouse_cursor_type = cursor;
         SDL_HideCursor();
@@ -178,10 +176,6 @@ void SdlBackend::apply_mouse_cursor(ImGuiMouseCursor cursor) {
     m_mouse_cursor_type = cursor;
 }
 
-void SdlBackend::set_mouse_cursor(ImGuiMouseCursor cursor) {
-    apply_mouse_cursor(cursor);
-}
-
 bool SdlBackend::initialize() {
     if (m_window == nullptr || m_context == nullptr) {
         return false;
@@ -203,9 +197,7 @@ void SdlBackend::process_events(Surface& surface) {
 }
 
 void SdlBackend::register_effects(EffectRegistry& effects) {
-    register_opengl_blur(effects);
-    register_opengl_box_shadow(effects);
-    register_opengl_gradient(effects);
+    register_opengl_effects(effects);
 }
 
 bool SdlBackend::initialize_imgui() {

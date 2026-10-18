@@ -77,13 +77,13 @@ static bool has_area(nsgif_rect_t area) {
     return area.x0 < area.x1 && area.y0 < area.y1;
 }
 
-static nsgif_rect_t full_gif_area(ImVec2 size) {
-    return {
-        .x0 = 0,
-        .y0 = 0,
-        .x1 = static_cast<uint32_t>(size.x),
-        .y1 = static_cast<uint32_t>(size.y),
-    };
+template <typename Map, typename Release>
+static void release_context_entry(Map& entries, ImGuiContext* context, Release&& release) {
+    const auto found = entries.find(context);
+    if (found == entries.end()) return;
+
+    release(found->second);
+    entries.erase(found);
 }
 
 static void update_gif_texture(GLuint texture, const GifBitmap& bitmap, int bitmap_width, nsgif_rect_t area) {
@@ -144,16 +144,12 @@ public:
     }
 
     void release_context(ImGuiContext* context) override {
-        const auto found = m_textures.find(context);
-        if (found == m_textures.end()) {
-            return;
-        }
-
-        for (const auto& entry : found->second) {
-            const GLuint id = entry.second;
-            glDeleteTextures(1, &id);
-        }
-        m_textures.erase(found);
+        release_context_entry(m_textures, context, [](const auto& cache) {
+            for (const auto& entry : cache) {
+                const GLuint id = entry.second;
+                glDeleteTextures(1, &id);
+            }
+        });
     }
 
 private:
@@ -200,13 +196,7 @@ public:
     }
 
     void release_context(ImGuiContext* context) override {
-        const auto found = m_textures.find(context);
-        if (found == m_textures.end()) {
-            return;
-        }
-
-        glDeleteTextures(1, &found->second);
-        m_textures.erase(found);
+        release_context_entry(m_textures, context, [](GLuint texture) { glDeleteTextures(1, &texture); });
     }
 
 private:
@@ -262,7 +252,10 @@ public:
             if (texture.revision + 1 == m_revision && has_area(m_dirty)) {
                 update_gif_texture(texture.id, *m_bitmap, static_cast<int>(m_size.x), m_dirty);
             } else {
-                update_gif_texture(texture.id, *m_bitmap, static_cast<int>(m_size.x), full_gif_area(m_size));
+                update_gif_texture(
+                    texture.id, *m_bitmap, static_cast<int>(m_size.x),
+                    {.x0 = 0, .y0 = 0, .x1 = static_cast<uint32_t>(m_size.x), .y1 = static_cast<uint32_t>(m_size.y)}
+                );
             }
             texture.revision = m_revision;
         }
@@ -271,13 +264,7 @@ public:
     }
 
     void release_context(ImGuiContext* context) override {
-        const auto found = m_textures.find(context);
-        if (found == m_textures.end()) {
-            return;
-        }
-
-        glDeleteTextures(1, &found->second.id);
-        m_textures.erase(found);
+        release_context_entry(m_textures, context, [](const auto& texture) { glDeleteTextures(1, &texture.id); });
     }
 
 private:

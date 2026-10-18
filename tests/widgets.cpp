@@ -7,6 +7,7 @@
 #include <imgui-ui/layout/virtual-layout.hpp>
 #include <imgui-ui/resources/texture-registry.hpp>
 #include <imgui-ui/surface.hpp>
+#include <imgui-ui/widgets/box.hpp>
 #include <imgui-ui/widgets/button.hpp>
 #include <imgui-ui/widgets/checkbox.hpp>
 #include <imgui-ui/widgets/color-picker.hpp>
@@ -61,6 +62,30 @@ TEST_CASE("checkbox input is limited to its box", "[CheckboxWidget][input][regre
     REQUIRE(widget_rect.contains(label_position));
     REQUIRE_FALSE(frame_rect.contains(label_position));
     REQUIRE(surface.input_router().node_at(label_position) != &checkbox);
+}
+
+TEST_CASE("widget tooltips follow pointer hover", "[Widget][tooltip]") {
+    Runtime runtime;
+    ui::Surface surface = ui_test::make_surface(runtime);
+    auto& box = surface.root().add<BoxWidget>("box");
+    box.set_size({px(120.0F), px(80.0F)});
+
+    int tooltip_draws = 0;
+    box.set_tooltip([&tooltip_draws] { ++tooltip_draws; });
+
+    const auto surface_context = ui_test::prepare_surface(surface, {200.0F, 150.0F});
+    ui_test::draw_surface(surface);
+    REQUIRE(tooltip_draws == 0);
+
+    UiEvent move = ui_test::pointer_event(EventType::PointerMove, ui_test::center(box.layout().visual_rect()));
+    surface.dispatch(move);
+    ui_test::draw_surface(surface);
+    REQUIRE(tooltip_draws == 1);
+
+    move = ui_test::pointer_event(EventType::PointerMove, {190.0F, 140.0F});
+    surface.dispatch(move);
+    ui_test::draw_surface(surface);
+    REQUIRE(tooltip_draws == 1);
 }
 
 TEST_CASE("text input hover and focus are limited to its field", "[TextInputWidget][input][regression]") {
@@ -423,7 +448,7 @@ TEST_CASE("value widgets notify only when their value changes", "[Widget][change
     int changes = 0;
 
     CheckboxWidget checkbox(checked, "checked");
-    NumberInputWidget input(number);
+    NumberInputWidget<int> input(number);
     DropdownWidget dropdown(choice, {{"one", "one"}, {"two", "two"}});
     TextInputWidget text_input(text);
 
@@ -446,6 +471,19 @@ TEST_CASE("value widgets notify only when their value changes", "[Widget][change
     REQUIRE_FALSE(dropdown.select_value("two"));
     REQUIRE_FALSE(text_input.set_value("after"));
     REQUIRE(changes == 4);
+
+    int value_changes = 0;
+    WidgetValue<bool> owned_value(true);
+    owned_value.on_change([&value_changes](const bool& value) {
+        ++value_changes;
+        REQUIRE_FALSE(value);
+    });
+    CheckboxWidget owned_checkbox(std::move(owned_value), "owned");
+
+    REQUIRE(owned_checkbox.set_checked(false));
+    REQUIRE(value_changes == 1);
+    REQUIRE_FALSE(owned_checkbox.set_checked(false));
+    REQUIRE(value_changes == 1);
 }
 
 TEST_CASE("paint-only animation overrides do not invalidate measurement", "[VisualState][animation][regression]") {

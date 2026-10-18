@@ -32,8 +32,6 @@ namespace ui {
         bool process_event(Surface& surface, const SDL_Event& event);
 
     private:
-        void apply_mouse_cursor(ImGuiMouseCursor cursor);
-
         SDL_Window* m_window = nullptr;
         SDL_GLContext m_context = nullptr;
         SDL_Cursor* m_mouse_cursor = nullptr;

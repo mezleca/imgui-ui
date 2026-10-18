@@ -1,9 +1,24 @@
 #include <imgui-ui/imgui/effects/opengl.hpp>
-
+#include <imgui-ui/imgui/effects/blur/opengl.hpp>
+#include <imgui-ui/imgui/effects/gradient/opengl.hpp>
+#include <imgui-ui/imgui/effects/shadow/opengl.hpp>
 #include <algorithm>
 #include <cmath>
 
 using namespace ui;
+
+void ui::register_opengl_effects(EffectRegistry& effects) {
+    register_opengl_blur(effects);
+    register_opengl_box_shadow(effects);
+    register_opengl_gradient(effects);
+}
+
+FramebufferTransform ui::framebuffer_transform() {
+    const ImDrawData* draw_data = ImGui::GetDrawData();
+    if (draw_data == nullptr) return {{}, {1.0F, 1.0F}};
+
+    return {draw_data->DisplayPos, draw_data->FramebufferScale};
+}
 
 static constexpr const char* VERTEX_SHADER = R"(#version 330 core
 void main() {
@@ -85,17 +100,11 @@ bool OpenGlFullscreenEffect::begin(const ImDrawCmd& command, Rect bounds) {
         return false;
     }
 
-    const ImDrawData* draw_data = ImGui::GetDrawData();
-    const ImVec2 display_position = draw_data == nullptr ? ImVec2{} : draw_data->DisplayPos;
-    const ImVec2 scale = draw_data == nullptr ? ImVec2{1.0F, 1.0F} : draw_data->FramebufferScale;
-    const auto to_framebuffer = [&](ImVec2 point) {
-        return ImVec2{(point.x - display_position.x) * scale.x, (point.y - display_position.y) * scale.y};
-    };
-
-    const ImVec2 bounds_min = to_framebuffer(bounds.min);
-    const ImVec2 bounds_max = to_framebuffer(bounds.max);
-    const ImVec2 clip_min = to_framebuffer({command.ClipRect.x, command.ClipRect.y});
-    const ImVec2 clip_max = to_framebuffer({command.ClipRect.z, command.ClipRect.w});
+    const FramebufferTransform transform = framebuffer_transform();
+    const ImVec2 bounds_min = transform.apply(bounds.min);
+    const ImVec2 bounds_max = transform.apply(bounds.max);
+    const ImVec2 clip_min = transform.apply({command.ClipRect.x, command.ClipRect.y});
+    const ImVec2 clip_max = transform.apply({command.ClipRect.z, command.ClipRect.w});
     // intersect effect bounds with imgui's clip rectangle in framebuffer coordinates.
     const int left = std::clamp(static_cast<int>(std::floor(std::max(bounds_min.x, clip_min.x))), 0, width);
     const int right = std::clamp(static_cast<int>(std::ceil(std::min(bounds_max.x, clip_max.x))), 0, width);

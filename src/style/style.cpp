@@ -36,52 +36,43 @@ Style& Style::margin(BoxInsets value, TransitionSpec transition) {
     return set_animated_transition(&Style::m_margin, nonnegative_insets(value), transition);
 }
 
+Style&
+Style::set_inset(Value<BoxInsets> ComputedStyle::* member, float BoxInsets::* field, float value, TransitionSpec transition) {
+    BoxInsets insets = (this->*member).value;
+    insets.*field = value;
+    return set_animated_transition(member, nonnegative_insets(insets), transition);
+}
+
 Style& Style::padding_left(float value, TransitionSpec transition) {
-    BoxInsets insets = padding();
-    insets.left = value;
-    return padding(insets, transition);
+    return set_inset(&Style::m_padding, &BoxInsets::left, value, transition);
 }
 
 Style& Style::padding_top(float value, TransitionSpec transition) {
-    BoxInsets insets = padding();
-    insets.top = value;
-    return padding(insets, transition);
+    return set_inset(&Style::m_padding, &BoxInsets::top, value, transition);
 }
 
 Style& Style::padding_right(float value, TransitionSpec transition) {
-    BoxInsets insets = padding();
-    insets.right = value;
-    return padding(insets, transition);
+    return set_inset(&Style::m_padding, &BoxInsets::right, value, transition);
 }
 
 Style& Style::padding_bottom(float value, TransitionSpec transition) {
-    BoxInsets insets = padding();
-    insets.bottom = value;
-    return padding(insets, transition);
+    return set_inset(&Style::m_padding, &BoxInsets::bottom, value, transition);
 }
 
 Style& Style::margin_left(float value, TransitionSpec transition) {
-    BoxInsets insets = margin();
-    insets.left = value;
-    return margin(insets, transition);
+    return set_inset(&Style::m_margin, &BoxInsets::left, value, transition);
 }
 
 Style& Style::margin_top(float value, TransitionSpec transition) {
-    BoxInsets insets = margin();
-    insets.top = value;
-    return margin(insets, transition);
+    return set_inset(&Style::m_margin, &BoxInsets::top, value, transition);
 }
 
 Style& Style::margin_right(float value, TransitionSpec transition) {
-    BoxInsets insets = margin();
-    insets.right = value;
-    return margin(insets, transition);
+    return set_inset(&Style::m_margin, &BoxInsets::right, value, transition);
 }
 
 Style& Style::margin_bottom(float value, TransitionSpec transition) {
-    BoxInsets insets = margin();
-    insets.bottom = value;
-    return margin(insets, transition);
+    return set_inset(&Style::m_margin, &BoxInsets::bottom, value, transition);
 }
 
 Style& Style::line_height(float value, TransitionSpec transition) {
@@ -125,7 +116,7 @@ Style& Style::control(const Theme& theme, ImVec2 padding, TransitionSpec transit
     return color(theme.text_color)
         .background_color(theme.controls.background_color, transition)
         .border_color(theme.controls.border_color, transition)
-        .padding(padding)
+        .padding(BoxInsets{padding.x, padding.y})
         .border(BorderEdge{theme.controls.border_thickness, BorderType::Solid})
         .border_radius(theme.controls.rounding);
 }
@@ -148,18 +139,29 @@ Style& Style::border_radius(float value) {
 
 Style& Style::border_thickness(float value, TransitionSpec transition) {
     value = std::max(0.0F, value);
-    set_animated_transition(&Style::m_border_left_size, value, transition);
-    set_animated_transition(&Style::m_border_top_size, value, transition);
-    set_animated_transition(&Style::m_border_right_size, value, transition);
-    return set_animated_transition(&Style::m_border_bottom_size, value, transition);
+    FloatValue ComputedStyle::* const sizes[] = {
+        &Style::m_border_left_size,
+        &Style::m_border_top_size,
+        &Style::m_border_right_size,
+        &Style::m_border_bottom_size,
+    };
+    for (auto size : sizes) {
+        set_animated_transition(size, value, transition);
+    }
+    return *this;
 }
 
 Style& Style::border_style(BorderType value) {
     BorderTypes types = m_border_types;
-    if (types.left != BorderType::None) types.left = value;
-    if (types.top != BorderType::None) types.top = value;
-    if (types.right != BorderType::None) types.right = value;
-    if (types.bottom != BorderType::None) types.bottom = value;
+    BorderType BorderTypes::* const members[] = {
+        &BorderTypes::left,
+        &BorderTypes::top,
+        &BorderTypes::right,
+        &BorderTypes::bottom,
+    };
+    for (auto member : members) {
+        if (types.*member != BorderType::None) types.*member = value;
+    }
     return set_property(&Style::m_border_types, types);
 }
 
@@ -174,32 +176,30 @@ Style& Style::border(BorderEdges edges, TransitionSpec transition) {
     return border_bottom(edges.bottom.size, edges.bottom.type, transition);
 }
 
-Style& Style::border_left(float size, BorderType type, TransitionSpec transition) {
+Style& Style::set_border_edge(
+    FloatValue ComputedStyle::* size, BorderType BorderTypes::* type, float value, BorderType border_type,
+    TransitionSpec transition
+) {
     BorderTypes types = m_border_types;
-    types.left = type;
+    types.*type = border_type;
     set_property(&Style::m_border_types, types);
-    return set_animated_transition(&Style::m_border_left_size, std::max(0.0F, size), transition);
+    return set_animated_transition(size, std::max(0.0F, value), transition);
+}
+
+Style& Style::border_left(float size, BorderType type, TransitionSpec transition) {
+    return set_border_edge(&Style::m_border_left_size, &BorderTypes::left, size, type, transition);
 }
 
 Style& Style::border_top(float size, BorderType type, TransitionSpec transition) {
-    BorderTypes types = m_border_types;
-    types.top = type;
-    set_property(&Style::m_border_types, types);
-    return set_animated_transition(&Style::m_border_top_size, std::max(0.0F, size), transition);
+    return set_border_edge(&Style::m_border_top_size, &BorderTypes::top, size, type, transition);
 }
 
 Style& Style::border_right(float size, BorderType type, TransitionSpec transition) {
-    BorderTypes types = m_border_types;
-    types.right = type;
-    set_property(&Style::m_border_types, types);
-    return set_animated_transition(&Style::m_border_right_size, std::max(0.0F, size), transition);
+    return set_border_edge(&Style::m_border_right_size, &BorderTypes::right, size, type, transition);
 }
 
 Style& Style::border_bottom(float size, BorderType type, TransitionSpec transition) {
-    BorderTypes types = m_border_types;
-    types.bottom = type;
-    set_property(&Style::m_border_types, types);
-    return set_animated_transition(&Style::m_border_bottom_size, std::max(0.0F, size), transition);
+    return set_border_edge(&Style::m_border_bottom_size, &BorderTypes::bottom, size, type, transition);
 }
 
 Style& Style::box_shadow(BoxShadow value, TransitionSpec transition) {

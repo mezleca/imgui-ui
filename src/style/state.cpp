@@ -66,7 +66,8 @@ static void apply_style_property(Style& style, StyleAnimationProperty property, 
 }
 
 static AnimationValue read_style_animation_slot(void* context) {
-    return static_cast<StyleAnimationSlot*>(context)->current;
+    const auto& slot = *static_cast<StyleAnimationSlot*>(context);
+    return slot.override.value_or(slot.base);
 }
 
 static AnimationValue read_style_animation_slot_base(void* context) {
@@ -75,14 +76,12 @@ static AnimationValue read_style_animation_slot_base(void* context) {
 
 static void write_style_animation_slot(void* context, const AnimationValue& value) {
     auto& slot = *static_cast<StyleAnimationSlot*>(context);
-    slot.current = value;
     slot.override = value;
     if (slot.layout_dirty != nullptr) *slot.layout_dirty = true;
 }
 
 static void release_style_animation_slot(void* context) {
     auto& slot = *static_cast<StyleAnimationSlot*>(context);
-    slot.current = slot.base;
     slot.override.reset();
     if (slot.layout_dirty != nullptr) *slot.layout_dirty = true;
 }
@@ -165,7 +164,6 @@ void VisualState::set_item_state(bool hovered, bool active, bool focused) {
 
 StyleAnimationSequence VisualState::animate() {
     m_style_animator.cancel();
-    m_has_presentation_style = has_animation_overrides();
     return StyleAnimationSequence{*this, m_style_animator.animate()};
 }
 
@@ -181,8 +179,6 @@ void VisualState::cancel_animations() {
         slot.override.reset();
     }
 
-    m_has_presentation_style = false;
-
     // canceled inset tracks may have changed measured bounds and must trigger one layout pass.
     if (layout_changed && m_change_callback != nullptr) m_change_callback(m_change_owner, false);
 }
@@ -191,17 +187,12 @@ void VisualState::update_animations(float dt) {
     m_animator.update(dt);
 
     const bool style_animating = m_style_animator.transitioning();
-    if (!style_animating && !m_has_presentation_style && !has_animation_overrides()) return;
+    if (!style_animating && !has_animation_overrides()) return;
 
-    // reconstruct the previous presentation so new tracks read overridden values and release tracks read the active base.
-    m_presentation_style = active_style();
-    m_presentation_style.set_change_callback(nullptr, nullptr);
+    // capture the active base before advancing tracks. reads prefer a live override over this base.
     for (std::size_t index = 0; index < m_animation_slots.size(); ++index) {
         StyleAnimationSlot& slot = m_animation_slots[index];
-        const auto property = static_cast<StyleAnimationProperty>(index);
-        slot.base = read_style_property(active_style(), property);
-        if (slot.override.has_value()) apply_style_property(m_presentation_style, property, *slot.override);
-        slot.current = read_style_property(m_presentation_style, property);
+        slot.base = read_style_property(active_style(), static_cast<StyleAnimationProperty>(index));
     }
 
     m_layout_dirty = false;
@@ -219,7 +210,6 @@ void VisualState::update_animations(float dt) {
         }
     }
 
-    m_has_presentation_style = has_animation_overrides();
     if (m_layout_dirty && m_change_callback != nullptr) m_change_callback(m_change_owner, false);
 }
 
