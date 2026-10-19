@@ -20,8 +20,8 @@ namespace ui {
         FileDialogResult show_dialog(FileDialogOperation operation, const FileDialogOptions& options = {});
         FileDialogWidget& set_label(std::string label, LabelPlacement placement = LabelPlacement::Above);
         FileDialogWidget& set_operation(FileDialogOperation operation);
-        /// copies options and filters. clicking opens OpenFile unless another operation is configured.
-        FileDialogWidget& set_options(const FileDialogOptions& options);
+        /// owns options and filters. clicking opens OpenFile unless another operation is configured.
+        FileDialogWidget& set_options(FileDialogOptions options);
         /// receives every accepted result, including all paths from a multiple selection.
         FileDialogWidget& on_select(std::function<void(const FileDialogResult&)> callback);
 
@@ -42,7 +42,6 @@ namespace ui {
         ImVec2 m_label_spacing = {8.0F, 10.0F};
         FileDialogOperation m_operation = FileDialogOperation::OpenFile;
         FileDialogOptions m_options;
-        std::vector<FileDialogFilter> m_filters;
         std::function<void(const FileDialogResult&)> m_on_select;
     };
 } // namespace ui

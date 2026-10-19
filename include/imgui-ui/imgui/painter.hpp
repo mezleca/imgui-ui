@@ -8,7 +8,7 @@
 
 namespace ui {
     class EffectRegistry;
-    class GenericValue;
+    class TextValue;
     class PaintState;
     enum class TriangleDirection : uint8_t {
         Up,
@@ -44,8 +44,11 @@ namespace ui {
         void image(ImTextureID texture, Rect rect, ImVec2 uv_min, ImVec2 uv_max, const Color& tint, float rounding = 0.0F) const;
 
         void text(ImVec2 position, const Color& source, std::string_view text) const;
-        void text(ImVec2 position, const Color& source, const GenericValue& text, const ImVec4* clip_rect = nullptr) const;
-        void text_ellipsis(ImVec2 position, const Color& source, const GenericValue& text, ImVec4 clip_rect) const;
+        void text(ImVec2 position, const Color& source, const TextValue& text, const ImVec4* clip_rect = nullptr) const;
+        void text_ellipsis(ImVec2 position, const Color& source, const TextValue& text, ImVec4 clip_rect) const;
+
+        /// narrows a clip to the draw list's visible area so ellipsis follows ancestor overflow.
+        ImVec4 visible_clip(ImVec4 clip) const;
 
         void frame(Rect rect, const ComputedStyle& style, const std::optional<Color>& background = {}) const;
 

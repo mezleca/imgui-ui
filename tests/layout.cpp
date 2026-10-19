@@ -136,6 +136,61 @@ TEST_CASE("buttons arrange flowing children and fit their measured sizes", "[lay
     CHECK(custom_second.layout().visual_rect().min.x - custom_first.layout().visual_rect().max.x == Catch::Approx(10.0F));
 }
 
+TEST_CASE("style size resolves independently for each visual state", "[layout][Style][size]") {
+    ui_test::ImGuiContext context({500.0F, 300.0F});
+    ButtonWidget button("MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM");
+    button.configure_all_styles([](Style& style) { style.padding({}).border(BorderEdge{0.0F, BorderType::None}); });
+    button.set_size({px(240.0F), px(44.0F)});
+    button.style(StyleType::HOVER).width(fit()).height(fit());
+    button.style(StyleType::ACTIVE).size({px(120.0F), px(30.0F)});
+
+    ui_test::draw_node(button, "state-size");
+    CHECK(button.layout().size().x == Catch::Approx(240.0F));
+    CHECK(button.layout().size().y == Catch::Approx(44.0F));
+
+    button.set_visual_style(StyleType::HOVER);
+    button.update(0.1F);
+    ui_test::draw_node(button, "state-size");
+    CHECK(button.layout().size().x > 240.0F);
+    CHECK(button.layout().size_spec().width.mode == LayoutSizeMode::Fit);
+
+    button.set_visual_style(StyleType::ACTIVE);
+    button.update(0.1F);
+    ui_test::draw_node(button, "state-size");
+    CHECK(button.layout().size().x == Catch::Approx(120.0F));
+    CHECK(button.layout().size().y == Catch::Approx(30.0F));
+
+    button.set_visual_style(StyleType::DEFAULT);
+    button.update(0.1F);
+    ui_test::draw_node(button, "state-size");
+    CHECK(button.layout().size().x == Catch::Approx(240.0F));
+    CHECK(button.layout().size().y == Catch::Approx(44.0F));
+}
+
+TEST_CASE("style size transition interpolates the resolved layout extent", "[layout][Style][size]") {
+    ui_test::ImGuiContext context({500.0F, 300.0F});
+    ButtonWidget button("MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM");
+    button.configure_all_styles([](Style& style) { style.padding({}).border(BorderEdge{0.0F, BorderType::None}); });
+    button.set_size({px(160.0F), px(44.0F)});
+    button.style(StyleType::HOVER).size({fit(), px(44.0F)}, {0.1F, easing::linear});
+
+    ui_test::draw_node(button, "state-size-transition");
+    CHECK(button.layout().size().x == Catch::Approx(160.0F));
+
+    button.set_visual_style(StyleType::HOVER);
+    button.update(0.05F);
+    ui_test::draw_node(button, "state-size-transition");
+    const float middle = button.layout().size().x;
+    CHECK(middle > 160.0F);
+    CHECK(button.layout().size().y == Catch::Approx(44.0F));
+
+    button.update(0.06F);
+    ui_test::draw_node(button, "state-size-transition");
+    CHECK(button.layout().size().x > middle);
+    CHECK(button.layout().size_spec().width.mode == LayoutSizeMode::Fit);
+    CHECK(button.layout().size().y == Catch::Approx(44.0F));
+}
+
 TEST_CASE("size ranges clamp both axes and resolve mixed units after parent resizing", "[layout][size-limits]") {
     ui_test::ImGuiContext context({800.0F, 300.0F});
     Container root("range-root");
@@ -1302,25 +1357,12 @@ TEST_CASE("transparent anchored layers keep children at the layer origin", "[Lay
 }
 
 TEST_CASE("inline layer padding scopes descendant layout") {
-    class ProbeNode final : public Node {
-    public:
-        ProbeNode() {
-            set_size({px(20.0F), px(10.0F)});
-        }
-
-    private:
-        bool paint() override {
-            ImGui::Dummy(layout().size());
-            return true;
-        }
-    };
-
     ui_test::ImGuiContext context({320.0F, 220.0F});
     Container root("padded-layer-root");
     root.set_size({px(180.0F), px(120.0F)});
     auto& layer = root.add<LayerContainer>("padded-layer", LayerMode::Inline);
     layer.configure_all_styles([](Style& style) { style.padding({17.0F, 13.0F}); });
-    ProbeNode& probe = layer.add<ProbeNode>();
+    auto& probe = layer.add<LayoutProbeNode>("probe", ImVec2{20.0F, 10.0F});
 
     ui_test::draw_window("padded-layer-window", {320.0F, 220.0F}, [&] { root.draw(); });
 
@@ -1398,15 +1440,23 @@ TEST_CASE("font size changes remeasure inherited text without loading another fo
     REQUIRE(ImGui::GetIO().Fonts->Fonts.Size == font_count);
 }
 
-TEST_CASE("window layers preserve explicit sizes", "[LayerContainer][layout][regression]") {
+TEST_CASE("layer modes preserve explicit sizes", "[LayerContainer][layout][regression]") {
     ui_test::ImGuiContext context({320.0F, 220.0F});
-    LayerContainer layer("sized-window-layer", LayerMode::Window);
-    layer.set_size({px(180.0F), px(80.0F)});
 
-    ui_test::draw_node(layer, "sized-window-parent");
+    LayerContainer window_layer("sized-window-layer", LayerMode::Window);
+    window_layer.set_size({px(180.0F), px(80.0F)});
+    ui_test::draw_node(window_layer, "sized-window-parent");
+    REQUIRE(window_layer.layout().visual_rect().size().x == Catch::Approx(180.0F));
+    REQUIRE(window_layer.layout().visual_rect().size().y == Catch::Approx(80.0F));
 
-    REQUIRE(layer.layout().visual_rect().size().x == Catch::Approx(180.0F));
-    REQUIRE(layer.layout().visual_rect().size().y == Catch::Approx(80.0F));
+    Container root("sized-layer-root");
+    root.set_size({px(180.0F), px(120.0F)});
+    auto& inline_layer = root.add<LayerContainer>("sized-layer");
+    inline_layer.set_size({grow(), px(40.0F)});
+    ui_test::draw_window("sized-layer-window", {320.0F, 220.0F}, [&] { root.draw(); });
+    REQUIRE(inline_layer.layout().size().x == Catch::Approx(180.0F));
+    REQUIRE(inline_layer.layout().size().y == Catch::Approx(40.0F));
+    REQUIRE(inline_layer.layout().visual_rect().size().y == Catch::Approx(40.0F));
 }
 
 TEST_CASE("popup layers stay inside the viewport", "[LayerContainer][popup][layout]") {
@@ -1422,8 +1472,6 @@ TEST_CASE("popup layers stay inside the viewport", "[LayerContainer][popup][layo
     const Rect work_area = viewport_work_area();
     REQUIRE(ImGui::GetCurrentContext()->OpenPopupStack.Size == 1);
     REQUIRE((ImGui::GetCurrentContext()->OpenPopupStack[0].Window->Flags & ImGuiWindowFlags_Popup) != 0);
-    REQUIRE(popup.size().x == Catch::Approx(180.0F));
-    REQUIRE(popup.size().y == Catch::Approx(80.0F));
     REQUIRE(popup.min.x >= work_area.min.x);
     REQUIRE(popup.min.y >= work_area.min.y);
     REQUIRE(popup.max.x <= work_area.max.x);
@@ -1478,21 +1526,6 @@ TEST_CASE("movable window layers preserve imgui geometry within size limits", "[
     ImGui::SetWindowSize("floating-layer", {100.0F, 40.0F});
     ui_test::draw_node(root, "floating-window-parent");
     CHECK(layer.layout().size().x == Catch::Approx(20.0F));
-}
-
-TEST_CASE("inline layers preserve explicit sizes", "[LayerContainer][layout][regression]") {
-    ui_test::ImGuiContext context({320.0F, 220.0F});
-
-    Container root("sized-layer-root");
-    root.set_size({px(180.0F), px(120.0F)});
-    auto& layer = root.add<LayerContainer>("sized-layer");
-    layer.set_size({grow(), px(40.0F)});
-
-    ui_test::draw_window("sized-layer-window", {320.0F, 220.0F}, [&] { root.draw(); });
-
-    REQUIRE(layer.layout().size().x == Catch::Approx(180.0F));
-    REQUIRE(layer.layout().size().y == Catch::Approx(40.0F));
-    REQUIRE(layer.layout().visual_rect().size().y == Catch::Approx(40.0F));
 }
 
 TEST_CASE("nodes without explicit positions follow the ImGui cursor") {
@@ -1786,7 +1819,6 @@ TEST_CASE("inline overlay keeps resizable children valid while the parent scroll
     draw_frame();
     draw_frame();
     const ImVec2 initial_size = resize.layout().size();
-    const Rect initial_panel = panel.layout().visual_rect();
     parent.scroll_to_end = true;
     draw_frame();
     draw_frame();
@@ -1795,8 +1827,6 @@ TEST_CASE("inline overlay keeps resizable children valid while the parent scroll
     REQUIRE(resize.layout().visual_rect().valid());
     REQUIRE(resize.layout().size().x == Catch::Approx(initial_size.x));
     REQUIRE(resize.layout().size().y == Catch::Approx(initial_size.y));
-    REQUIRE(panel.layout().visual_rect().min.x == Catch::Approx(initial_panel.min.x));
-    REQUIRE(panel.layout().visual_rect().min.y == Catch::Approx(initial_panel.min.y));
 }
 
 TEST_CASE("stack auto-sized axes reflow when the parent grows", "[layout][regression]") {

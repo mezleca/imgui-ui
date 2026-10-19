@@ -50,7 +50,7 @@ static NfdSession& nfd_session() {
     return session;
 }
 
-static std::vector<nfdu8filteritem_t> make_filters(std::span<const FileDialogFilter> filters) {
+static std::vector<nfdu8filteritem_t> make_filters(const std::vector<FileDialogFilter>& filters) {
     std::vector<nfdu8filteritem_t> result;
     result.reserve(filters.size());
     for (const FileDialogFilter& filter : filters) {

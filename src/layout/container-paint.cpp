@@ -122,7 +122,14 @@ bool Container::paint() {
     }
 
     ImGui::PopStyleVar();
-    paint_content(paint_context);
+    // own content follows the node's overflow even when bordered descendants stay clipped to the frame.
+    if (current_style.overflow() == Overflow::Visible && !scrollable) {
+        ImGui::PushClipRect({parent_clip.x, parent_clip.y}, {parent_clip.z, parent_clip.w}, false);
+        paint_content(paint_context);
+        ImGui::PopClipRect();
+    } else {
+        paint_content(paint_context);
+    }
     return true;
 }
 

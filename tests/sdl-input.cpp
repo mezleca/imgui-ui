@@ -79,6 +79,22 @@ static bool process_sdl_event(ui::Surface& surface, const SDL_Event& event) {
     return static_cast<ui::SdlBackend&>(surface.backend()).process_event(surface, event);
 }
 
+static bool send_sdl_pointer(ui::Surface& surface, SDL_EventType type, ImVec2 position) {
+    SDL_Event event{};
+    event.type = type;
+    if (type == SDL_EVENT_MOUSE_MOTION) {
+        event.motion.windowID = surface.backend().window_id();
+        event.motion.x = position.x;
+        event.motion.y = position.y;
+    } else {
+        event.button.windowID = surface.backend().window_id();
+        event.button.x = position.x;
+        event.button.y = position.y;
+        event.button.button = SDL_BUTTON_LEFT;
+    }
+    return process_sdl_event(surface, event);
+}
+
 static std::unique_ptr<ui::SdlBackend> make_sdl_backend(SdlVideoSession& session) {
     return std::make_unique<ui::SdlBackend>(session.window(), session.context());
 }
@@ -433,21 +449,6 @@ TEST_CASE("scrolled inline layers keep virtual list input separate", "[LayerCont
         .in_flow = false,
     });
 
-    const auto send = [&surface](SDL_EventType type, ImVec2 position) {
-        SDL_Event event{};
-        event.type = type;
-        if (type == SDL_EVENT_MOUSE_MOTION) {
-            event.motion.windowID = surface.backend().window_id();
-            event.motion.x = position.x;
-            event.motion.y = position.y;
-        } else {
-            event.button.windowID = surface.backend().window_id();
-            event.button.x = position.x;
-            event.button.y = position.y;
-            event.button.button = SDL_BUTTON_LEFT;
-        }
-        return process_sdl_event(surface, event);
-    };
     const auto scroll = [&surface](ImVec2 position) {
         SDL_Event event{};
         event.type = SDL_EVENT_MOUSE_WHEEL;
@@ -459,7 +460,7 @@ TEST_CASE("scrolled inline layers keep virtual list input separate", "[LayerCont
     };
 
     draw_frame(surface);
-    REQUIRE_FALSE(send(SDL_EVENT_MOUSE_MOTION, {100.0F, 240.0F}));
+    REQUIRE_FALSE(send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, {100.0F, 240.0F}));
     draw_frame(surface);
     for (int frame = 0; frame < 6; ++frame) {
         scroll({100.0F, 240.0F});
@@ -478,20 +479,20 @@ TEST_CASE("scrolled inline layers keep virtual list input separate", "[LayerCont
 
     const ImVec2 thumb = {(list.scrollbar.Min.x + list.scrollbar.Max.x) * 0.5F, list.scrollbar.Min.y + 4.0F};
 
-    send(SDL_EVENT_MOUSE_MOTION, thumb);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, thumb);
     draw_frame(surface);
-    REQUIRE_FALSE(send(SDL_EVENT_MOUSE_BUTTON_DOWN, thumb));
+    REQUIRE_FALSE(send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_DOWN, thumb));
     draw_frame(surface);
     REQUIRE(GImGui->ActiveId == ImGui::GetWindowScrollbarID(list.window, ImGuiAxis_Y));
-    send(SDL_EVENT_MOUSE_MOTION, {thumb.x, thumb.y + 40.0F});
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, {thumb.x, thumb.y + 40.0F});
     draw_frame(surface);
-    send(SDL_EVENT_MOUSE_BUTTON_UP, {thumb.x, thumb.y + 40.0F});
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_UP, {thumb.x, thumb.y + 40.0F});
     draw_frame(surface);
 
     const float dragged_scroll = list.window->Scroll.y;
 
     const ImVec2 list_position = {list.layout().visual_rect().min.x + 20.0F, list.layout().visual_rect().min.y + 20.0F};
-    REQUIRE_FALSE(send(SDL_EVENT_MOUSE_MOTION, list_position));
+    REQUIRE_FALSE(send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, list_position));
     draw_frame(surface);
 
     scroll(list_position);
@@ -596,8 +597,8 @@ TEST_CASE("container borders stay below window-layer panels", "[render][regressi
 }
 
 TEST_CASE("container overflow controls child surfaces", "[render][regression]") {
-    const auto sample_overflow = [](ui::Overflow overflow) {
-        SdlVideoSession sdl({160.0F, 120.0F});
+    SdlVideoSession sdl({160.0F, 120.0F});
+    const auto sample_overflow = [&sdl](ui::Overflow overflow) {
         ui::Runtime runtime;
         ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
         auto& parent = surface.root().add<ui::Container>("parent");
@@ -632,6 +633,73 @@ TEST_CASE("container overflow controls child surfaces", "[render][regression]") 
     for (const ui::Overflow overflow : {ui::Overflow::Hidden, ui::Overflow::Clip}) {
         const auto clipped = sample_overflow(overflow);
         CHECK(clipped[2] < 80);
+    }
+}
+
+TEST_CASE("node text follows the container overflow style", "[render][regression]") {
+    SdlVideoSession sdl({200.0F, 140.0F});
+    const auto count_text_outside = [&sdl](ui::Overflow overflow, bool button_node) {
+        ui::Runtime runtime;
+        ui::Surface surface(runtime, {.backend = make_sdl_backend(sdl)});
+        const ImVec2 bounds_min = {20.0F, 20.0F};
+        const ImVec2 bounds_size = {80.0F, 32.0F};
+
+        ui::StyledNode* node = nullptr;
+        if (button_node) {
+            auto& button = surface.root().add<ui::ButtonWidget>(
+                "MMMMMMMMMMMMMMMMMMMMMMMMMMMM", ui::LayoutSize{ui::px(bounds_size.x), ui::px(bounds_size.y)}
+            );
+            button.set_text_alignment({0.0F, 0.5F});
+            node = &button;
+        } else {
+            auto& text = surface.root().add<ui::TextWidget>("MMMMMMMMMMMMMMMMMMMMMMMMMMMM");
+            text.set_size({ui::px(bounds_size.x), ui::px(bounds_size.y)});
+            node = &text;
+        }
+
+        node->set_layout({
+            .size = {ui::px(bounds_size.x), ui::px(bounds_size.y)},
+            .placement = {.offset = {bounds_min.x, bounds_min.y}},
+            .in_flow = false,
+        });
+        node->configure_all_styles([overflow](ui::Style& style) {
+            style.background_color(ui::rgb(0.0F, 0.0F, 0.0F)).padding({}).overflow(overflow);
+        });
+
+        for (int frame = 0; frame < 2; ++frame) {
+            draw_frame(surface);
+        }
+
+        GLint viewport[4]{};
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        const int x = static_cast<int>(bounds_min.x + bounds_size.x) + 4;
+        const int y = static_cast<int>(bounds_min.y) + 8;
+        const int width = static_cast<int>(bounds_min.x + bounds_size.x) + 60 - x;
+        const int height = static_cast<int>(bounds_size.y) - 16;
+        std::vector<unsigned char> pixels(static_cast<std::size_t>(width * height * 4));
+        glReadPixels(x, viewport[3] - (y + height), width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+        int bright = 0;
+        for (std::size_t index = 0; index < pixels.size(); index += 4) {
+            if (pixels[index] > 180 && pixels[index + 1] > 180 && pixels[index + 2] > 180) {
+                ++bright;
+            }
+        }
+        return bright;
+    };
+
+    for (const bool button_node : {true, false}) {
+        CAPTURE(button_node);
+
+        // evaluate outside CHECK so an unavailable OpenGL context skips the test instead of failing the assertion.
+        const int visible = count_text_outside(ui::Overflow::Visible, button_node);
+        CHECK(visible > 0);
+
+        const int hidden = count_text_outside(ui::Overflow::Hidden, button_node);
+        CHECK(hidden == 0);
+
+        const int clipped = count_text_outside(ui::Overflow::Clip, button_node);
+        CHECK(clipped == 0);
     }
 }
 
@@ -962,30 +1030,13 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
         modal_layer.configure_all_styles([&value](ui::Style& style) { style.blur(value); });
     });
     surface.input_router().set_focus(&modal_layer);
-    const SDL_WindowID window_id = surface.backend().window_id();
-    const auto send_pointer = [&](SDL_EventType type, ImVec2 position) {
-        SDL_Event event{};
-        event.type = type;
-        if (type == SDL_EVENT_MOUSE_MOTION) {
-            event.motion.windowID = window_id;
-            event.motion.x = position.x;
-            event.motion.y = position.y;
-        } else {
-            event.button.windowID = window_id;
-            event.button.x = position.x;
-            event.button.y = position.y;
-            event.button.button = SDL_BUTTON_LEFT;
-        }
-        process_sdl_event(surface, event);
-    };
-
     ui_test::draw_surface(surface);
     const ui::Rect rect = input.layout().visual_rect();
     const ImVec2 press = {rect.min.x + (rect.size().x * 0.70F), ui_test::center(rect).y};
 
-    send_pointer(SDL_EVENT_MOUSE_MOTION, press);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, press);
     ui_test::draw_surface(surface);
-    send_pointer(SDL_EVENT_MOUSE_BUTTON_DOWN, press);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_DOWN, press);
     ui_test::draw_surface(surface);
     const ImGuiID slider_id = GImGui->ActiveId;
     REQUIRE(slider_id != 0);
@@ -993,7 +1044,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
 
     for (float ratio : {0.75F, 0.80F, 0.85F, 0.90F, 0.95F}) {
         const ImVec2 position = {rect.min.x + (rect.size().x * ratio), press.y};
-        send_pointer(SDL_EVENT_MOUSE_MOTION, position);
+        send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, position);
         ui_test::draw_surface(surface);
         REQUIRE(GImGui->ActiveId == slider_id);
         REQUIRE(value > previous_value);
@@ -1003,7 +1054,7 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
     // blur reaching zero removes the visual effect while the active slider keeps the same imgui parent.
     for (float ratio : {0.20F, 0.05F}) {
         const ImVec2 position = {rect.min.x + (rect.size().x * ratio), press.y};
-        send_pointer(SDL_EVENT_MOUSE_MOTION, position);
+        send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, position);
         ui_test::draw_surface(surface);
         REQUIRE(GImGui->ActiveId == slider_id);
         REQUIRE(value <= previous_value);
@@ -1012,20 +1063,20 @@ TEST_CASE("blocked modal number sliders keep receiving sdl drag motion", "[input
 
     REQUIRE(value == 0);
     const ImVec2 restore = {rect.min.x + (rect.size().x * 0.80F), press.y};
-    send_pointer(SDL_EVENT_MOUSE_MOTION, restore);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, restore);
     ui_test::draw_surface(surface);
     REQUIRE(GImGui->ActiveId == slider_id);
     REQUIRE(value > 0);
 
     const int value_before_leaving_modal = value;
-    send_pointer(SDL_EVENT_MOUSE_MOTION, {850.0F, press.y});
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, {850.0F, press.y});
     ui_test::draw_surface(surface);
     const int outside_value = value;
     REQUIRE(outside_value != value_before_leaving_modal);
-    send_pointer(SDL_EVENT_MOUSE_BUTTON_UP, {850.0F, press.y});
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_UP, {850.0F, press.y});
     ui_test::draw_surface(surface);
     REQUIRE(GImGui->ActiveId == 0);
-    send_pointer(SDL_EVENT_MOUSE_MOTION, {rect.min.x + (rect.size().x * 0.80F), press.y});
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, {rect.min.x + (rect.size().x * 0.80F), press.y});
     ui_test::draw_surface(surface);
     REQUIRE(value == outside_value);
 }
@@ -1164,41 +1215,24 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
         .in_flow = false,
     });
 
-    const SDL_WindowID window_id = surface.backend().window_id();
-    const auto send_pointer = [window_id, &surface](SDL_EventType type, ImVec2 position) {
-        SDL_Event event{};
-        event.type = type;
-        if (type == SDL_EVENT_MOUSE_MOTION) {
-            event.motion.windowID = window_id;
-            event.motion.x = position.x;
-            event.motion.y = position.y;
-        } else {
-            event.button.windowID = window_id;
-            event.button.x = position.x;
-            event.button.y = position.y;
-            event.button.button = SDL_BUTTON_LEFT;
-        }
-        return process_sdl_event(surface, event);
-    };
-
     ui_test::draw_surface(surface);
     const ui::Rect trigger_rect = dropdown.trigger().layout().visual_rect();
     const ImVec2 trigger_position = ui_test::center(trigger_rect);
-    send_pointer(SDL_EVENT_MOUSE_MOTION, trigger_position);
-    send_pointer(SDL_EVENT_MOUSE_BUTTON_DOWN, trigger_position);
-    send_pointer(SDL_EVENT_MOUSE_BUTTON_UP, trigger_position);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, trigger_position);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_DOWN, trigger_position);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_UP, trigger_position);
     ui_test::draw_surface(surface);
     REQUIRE(dropdown.is_open());
     REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
 
     const ImVec2 outside_position = ui_test::center(outside.layout().visual_rect());
-    send_pointer(SDL_EVENT_MOUSE_BUTTON_DOWN, outside_position);
-    send_pointer(SDL_EVENT_MOUSE_BUTTON_UP, outside_position);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_DOWN, outside_position);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_UP, outside_position);
     ui_test::draw_surface(surface);
     REQUIRE_FALSE(dropdown.is_open());
 
-    send_pointer(SDL_EVENT_MOUSE_BUTTON_DOWN, trigger_position);
-    send_pointer(SDL_EVENT_MOUSE_BUTTON_UP, trigger_position);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_DOWN, trigger_position);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_UP, trigger_position);
     ui_test::draw_surface(surface);
     REQUIRE(dropdown.is_open());
 
@@ -1216,7 +1250,7 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
             body_rect.min.y + (item_height * (static_cast<float>(index) + 0.5F)),
         };
 
-        send_pointer(SDL_EVENT_MOUSE_MOTION, option_position);
+        send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, option_position);
         require_option(option_position);
         REQUIRE(ImGui::GetMouseCursor() == ImGuiMouseCursor_Hand);
 
@@ -1226,11 +1260,11 @@ TEST_CASE("dropdown selection and cursor use the sdl input path", "[dropdown][in
     }
 
     const ImVec2 option_position = {body_center_x, body_rect.min.y + (item_height * 1.5F)};
-    send_pointer(SDL_EVENT_MOUSE_MOTION, option_position);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_MOTION, option_position);
 
     const float visible_opacity = dropdown.body().opacity();
-    send_pointer(SDL_EVENT_MOUSE_BUTTON_DOWN, option_position);
-    send_pointer(SDL_EVENT_MOUSE_BUTTON_UP, option_position);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_DOWN, option_position);
+    send_sdl_pointer(surface, SDL_EVENT_MOUSE_BUTTON_UP, option_position);
     REQUIRE(value == "two");
     REQUIRE_FALSE(dropdown.is_open());
 

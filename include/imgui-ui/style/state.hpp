@@ -61,6 +61,9 @@ namespace ui {
         void set_style(StyleType type);
         void snap_to_style(StyleType type);
         void set_item_state(bool hovered, bool active, bool focused = false);
+
+        /// applies a size request to every configured style and the active transition snapshot.
+        void set_size(LayoutSize size);
         StyleType style_type() const {
             return m_target_style;
         }

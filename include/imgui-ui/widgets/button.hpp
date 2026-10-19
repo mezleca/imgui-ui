@@ -35,7 +35,7 @@ namespace ui {
     private:
         void paint_content(const PaintContext& context) override;
 
-        GenericValue m_text;
+        TextValue m_text;
         std::function<void()> m_on_click;
         ImVec2 m_text_alignment{0.5F, 0.5F};
         TextOverflow m_text_overflow = TextOverflow::Clip;

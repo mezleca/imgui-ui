@@ -29,12 +29,7 @@ namespace ui {
         Widget& on_event(InputCallback callback);
 
         /// pointer callbacks register this widget as a target when its input mode is none. they do not block other targets.
-        Widget& on_mouse_press(InputCallback callback);
-        Widget& on_mouse_release(InputCallback callback);
-        Widget& on_mouse_move(InputCallback callback);
-        Widget& on_wheel(InputCallback callback);
-        Widget& on_key_press(InputCallback callback);
-        Widget& on_key_release(InputCallback callback);
+        Widget& on_event(EventType type, InputCallback callback);
 
         Widget& on_change(std::function<void()> callback);
 
@@ -44,9 +39,7 @@ namespace ui {
         virtual void click_event(UiEvent&) {}
 
     private:
-        using EventCallbacks = std::array<InputCallback, static_cast<std::size_t>(EventType::Click)>;
-
-        Widget& set_event_callback(EventType type, InputCallback callback);
+        using EventCallbacks = std::array<InputCallback, static_cast<std::size_t>(EventType::Cancel) + 1>;
 
         InputCallback m_on_event;
         std::function<void()> m_on_change;

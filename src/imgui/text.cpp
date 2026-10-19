@@ -10,7 +10,7 @@ void Painter::text(ImVec2 position, const Color& source, std::string_view text) 
     m_draw_list.AddText(position, color(source), text.data(), text.data() + text.size());
 }
 
-void Painter::text(ImVec2 position, const Color& source, const GenericValue& text, const ImVec4* clip_rect) const {
+void Painter::text(ImVec2 position, const Color& source, const TextValue& text, const ImVec4* clip_rect) const {
     const ImColor draw_color = color(source);
     ImFont* font = text.font() != nullptr ? text.font() : ImGui::GetFont();
     const float font_size = ImGui::GetFontSize();
@@ -53,7 +53,14 @@ void Painter::text(ImVec2 position, const Color& source, const GenericValue& tex
     }
 }
 
-void Painter::text_ellipsis(ImVec2 position, const Color& source, const GenericValue& text, ImVec4 clip_rect) const {
+ImVec4 Painter::visible_clip(ImVec4 clip) const {
+    const ImVec2 max = m_draw_list.GetClipRectMax();
+    clip.z = std::min(clip.z, max.x);
+    clip.w = std::min(clip.w, max.y);
+    return clip;
+}
+
+void Painter::text_ellipsis(ImVec2 position, const Color& source, const TextValue& text, ImVec4 clip_rect) const {
     if (position.x >= clip_rect.z) {
         return;
     }
@@ -65,6 +72,8 @@ void Painter::text_ellipsis(ImVec2 position, const Color& source, const GenericV
     const float available_width = clip_rect.z - position.x;
     const float wrap_width = text.wrap_width() > 0.0F ? std::min(text.wrap_width(), available_width) : 0.0F;
     constexpr char ellipsis[] = "...";
+    // imgui floors child window extents, so a fitting line can end up one pixel wider than its content rect.
+    constexpr float FIT_TOLERANCE = 1.0F;
     const float ellipsis_width = font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, ellipsis).x;
     const float truncated_width = std::max(0.0F, available_width - ellipsis_width);
 
@@ -84,7 +93,7 @@ void Painter::text_ellipsis(ImVec2 position, const Color& source, const GenericV
         }
 
         const bool hidden_lines = y + line_height + font_size > clip_rect.w && line_end < value_end;
-        if (!hidden_lines && font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, line, line_end).x <= available_width) {
+        if (!hidden_lines && font->CalcTextSizeA(font_size, FLT_MAX, 0.0F, line, line_end).x <= available_width + FIT_TOLERANCE) {
             draw(position.x, y, line, line_end);
         } else {
             const char* visible_end = line;

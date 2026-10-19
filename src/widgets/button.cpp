@@ -72,8 +72,10 @@ void ButtonWidget::paint_content(const PaintContext& context) {
         content.min.y + ((content.size().y - text_size.y) * m_text_alignment.y),
     };
     if (m_text_overflow == TextOverflow::Ellipsis) {
+        // ancestor overflow narrows the visible width without changing this node's content rect.
         context.painter.text_ellipsis(
-            position, context.style.color().value, m_text, {content.min.x, content.min.y, content.max.x, content.max.y}
+            position, context.style.color().value, m_text,
+            context.painter.visible_clip({content.min.x, content.min.y, content.max.x, content.max.y})
         );
     } else {
         context.painter.text(position, context.style.color().value, m_text);

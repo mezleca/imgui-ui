@@ -70,10 +70,8 @@ FileDialogWidget& FileDialogWidget::set_operation(FileDialogOperation operation)
     return *this;
 }
 
-FileDialogWidget& FileDialogWidget::set_options(const FileDialogOptions& options) {
-    m_filters.assign(options.filters.begin(), options.filters.end());
-    m_options = options;
-    m_options.filters = m_filters;
+FileDialogWidget& FileDialogWidget::set_options(FileDialogOptions options) {
+    m_options = std::move(options);
     return *this;
 }
 

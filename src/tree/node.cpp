@@ -55,9 +55,13 @@ Node& Node::add(std::unique_ptr<Node> child) {
 
 Node& Node::set_size(LayoutSize size) {
     if (m_layout.size_spec() == size) return *this;
-    m_layout.set_size(size);
-    invalidate_measure();
+    request_size(size);
     return *this;
+}
+
+void Node::request_size(LayoutSize size) {
+    apply_size_spec(size);
+    invalidate_measure();
 }
 
 Node& Node::set_size(LayoutBounds minimum, LayoutBounds maximum) {
@@ -69,6 +73,7 @@ Node& Node::set_layout(LayoutConfig config) {
 
     // size and flow changes remeasure ancestors. placement alone keeps the existing measurements.
     const bool measure_changed = m_layout.size_spec() != config.size || m_layout.in_flow() != config.in_flow;
+    if (m_layout.size_spec() != config.size) request_size(config.size);
     m_layout.set_config(config);
     if (measure_changed) invalidate_measure();
 
@@ -336,6 +341,10 @@ void Node::set_profiler(Profiler* profiler) {
 
 bool Node::has_parent_size() const {
     return m_layout.m_has_parent_size;
+}
+
+void Node::apply_size_spec(LayoutSize size) {
+    m_layout.set_size(size);
 }
 
 void Node::assign_size(ImVec2 size) {

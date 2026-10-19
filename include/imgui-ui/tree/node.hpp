@@ -179,8 +179,8 @@ namespace ui {
         virtual BoxInsets layout_margin() const;
 
         /// sets {width, height} using independent px(), percent(), fit() or grow() rules. preserves placement and in_flow.
-        /// invalidates measurements so the next layout pass resolves the new request. layout().size() is the outer allocation,
-        /// while layout().size_spec() retains these rules. padding and borders follow the node's box-sizing style.
+        /// styled nodes write the request to every style state. invalidates measurements so the next layout pass resolves it.
+        /// layout().size() is the outer allocation, while layout().size_spec() retains these rules.
         Node& set_size(LayoutSize size);
 
         /// grows between {minimum width, minimum height} and {maximum width, maximum height}, using px() or percent().
@@ -189,7 +189,8 @@ namespace ui {
 
         /// replaces the entire config, including fields omitted by the caller. an omitted size becomes grow/grow,
         /// and omitted in_flow becomes true, even if an earlier set_size or set_anchor requested something else.
-        /// size or flow changes invalidate measurements. placement-only changes retain the measured size.
+        /// styled nodes write config.size to every style state. size or flow changes invalidate measurements.
+        /// placement-only changes retain the measured size.
         Node& set_layout(LayoutConfig config);
 
         /// equivalent to set_anchor(anchor, anchor). preserves the requested size and existing placement offset.
@@ -252,6 +253,10 @@ namespace ui {
 
         bool has_parent_size() const;
 
+        /// routes a size request to the storage that owns it. plain nodes keep it in the layout, styled nodes in styles.
+        virtual void request_size(LayoutSize size);
+
+        void apply_size_spec(LayoutSize size);
         void assign_size(ImVec2 size);
 
         void set_measured_size(ImVec2 size);

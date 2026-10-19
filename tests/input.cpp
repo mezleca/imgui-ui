@@ -321,14 +321,14 @@ TEST_CASE("ancestor capture preserves child release and click unless dragging pr
     int background_releases = 0;
     bool dragging = false;
 
-    owner.on_mouse_press([&](UiEvent&) { REQUIRE(router.capture_pointer(owner)); });
-    owner.on_mouse_release([&](UiEvent& event) {
+    owner.on_event(EventType::PointerDown, [&](UiEvent&) { REQUIRE(router.capture_pointer(owner)); });
+    owner.on_event(EventType::PointerUp, [&](UiEvent& event) {
         ++releases;
         router.release_pointer();
         if (dragging) event.prevent_default();
     });
     card.on_event([&](UiEvent& event) { events.push_back(event.type); });
-    background.on_mouse_release([&](UiEvent&) { ++background_releases; });
+    background.on_event(EventType::PointerUp, [&](UiEvent&) { ++background_releases; });
 
     SECTION("click without dragging") {
         dragging = false;
@@ -743,13 +743,6 @@ TEST_CASE("specific input callbacks receive the same event after the general cal
         REQUIRE(event.target != nullptr);
         events.push_back("specific");
     };
-    widget.on_key_press(callback);
-    widget.on_key_release(callback);
-    widget.on_mouse_press(callback);
-    widget.on_mouse_release(callback);
-    widget.on_mouse_move(callback);
-    widget.on_wheel(callback);
-
     for (EventType type : {
              EventType::KeyDown,
              EventType::KeyUp,
@@ -757,7 +750,14 @@ TEST_CASE("specific input callbacks receive the same event after the general cal
              EventType::PointerUp,
              EventType::PointerMove,
              EventType::Scroll,
+             EventType::Click,
+             EventType::ContextClick,
+             EventType::TextInput,
+             EventType::FocusGained,
+             EventType::FocusLost,
+             EventType::Cancel,
          }) {
+        widget.on_event(type, callback);
         events.clear();
         UiEvent event = event_of(type);
         REQUIRE_FALSE(InputRouter::dispatch_to(widget, event));

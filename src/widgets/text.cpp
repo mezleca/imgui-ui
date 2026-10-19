@@ -2,6 +2,7 @@
 #include <imgui-ui/imgui/painter.hpp>
 
 #include <imgui.h>
+#include <algorithm>
 
 using namespace ui;
 
@@ -53,11 +54,13 @@ bool TextWidget::paint() {
 
     ImGui::Dummy(layout().size());
     const ImVec4 clip_rect = {content.min.x, content.min.y, content.max.x, content.max.y};
+    const bool clipped = current_style.overflow() != Overflow::Visible;
 
     if (m_overflow == TextOverflow::Ellipsis) {
-        paint.text_ellipsis(content.min, current_style.color().value, m_text, clip_rect);
+        // ancestor overflow narrows the visible width without changing this node's content rect.
+        paint.text_ellipsis(content.min, current_style.color().value, m_text, paint.visible_clip(clip_rect));
     } else {
-        paint.text(content.min, current_style.color().value, m_text, &clip_rect);
+        paint.text(content.min, current_style.color().value, m_text, clipped ? &clip_rect : nullptr);
     }
 
     return true;

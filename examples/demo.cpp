@@ -720,6 +720,36 @@ void DemoScreen::setup_buttons(Container& widgets) {
     auto& disabled = buttons.add<ButtonWidget>("disabled button", LayoutSize{px(220.0F), fit()});
     disabled.set_enabled(false);
 
+    // set_size writes the compact size to every style state. hover keeps the compact height and measures the
+    // label with fit() on the width, so only the horizontal extent grows while hovered.
+    const LayoutSize compact{px(240.0F), px(44.0F)};
+    const LayoutSize hover_size{fit(), compact.height};
+    constexpr TransitionSpec hover_transition{0.1F, easing::out_quad};
+    const Theme& theme = surface().theme();
+    const auto configure_hover = [&theme, hover_transition](ButtonWidget& button, LayoutSize size) {
+        button.style(StyleType::HOVER)
+            .size(size, hover_transition)
+            .background_color(theme.controls.hover_color, hover_transition)
+            .border_color(theme.accent_hover_color, hover_transition);
+    };
+
+    auto& clipped_label =
+        buttons.add<ButtonWidget>("this label is wider than the button and stays clipped by overflow: hidden", compact);
+    clipped_label.style().overflow(Overflow::Hidden);
+    configure_hover(clipped_label, hover_size);
+
+    auto& ellipsized_label =
+        buttons.add<ButtonWidget>("this label uses overflow: hidden with an ellipsis until hover grows the button", compact);
+    ellipsized_label.style().overflow(Overflow::Hidden);
+    ellipsized_label.set_text_overflow(TextOverflow::Ellipsis);
+    configure_hover(ellipsized_label, hover_size);
+
+    // visible overflow keeps the compact frame in every state and paints the label beyond it.
+    auto& escaped_label =
+        buttons.add<ButtonWidget>("this label starts wider than the button and escapes with overflow: visible", compact);
+    escaped_label.style().overflow(Overflow::Visible);
+    configure_hover(escaped_label, compact);
+
     // on_click changes the label's sibling and starts a rotation relative to the button's current angle.
     auto& status = buttons.add<TextWidget>("no clicks yet");
     auto& button = buttons.add<ButtonWidget>("click me", LayoutSize{px(140.0F), px(44.0F)});
@@ -819,11 +849,9 @@ void DemoScreen::setup_images(Container& widgets) {
     add_image.on_click([this] { add_test_image(surface().runtime().textures().find("demo-test-image")); });
 
     auto& select_image = images.add<FileDialogWidget>("add image from file", LabelPlacement::Above, "select-image");
-    const std::array<FileDialogFilter, 1> image_filters{{{"image files", "png,jpg,jpeg,gif,svg"}}};
-    // set_options copies the filters. clicks open the dialog and update its value before on_select receives every path.
-    select_image.set_options({.filters = image_filters}).on_select([this](const FileDialogResult& result) {
-        select_test_image(result);
-    });
+    // clicks update the widget value before on_select receives every selected path.
+    select_image.set_options({.filters = {{"image files", "png,jpg,jpeg,gif,svg"}}});
+    select_image.on_select([this](const FileDialogResult& result) { select_test_image(result); });
     select_image.set_tooltip("opens the native file dialog");
 
     auto& image_fit = images.add<DropdownWidget>(

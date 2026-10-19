@@ -87,6 +87,19 @@ Style& Style::overflow(Overflow value) {
     return set_property(&Style::m_overflow, value);
 }
 
+Style& Style::size(LayoutSize value, TransitionSpec transition) {
+    m_size_transition = transition;
+    return set_property(&Style::m_size, value);
+}
+
+Style& Style::width(LayoutAxis value, TransitionSpec transition) {
+    return size({value, m_size.height}, transition);
+}
+
+Style& Style::height(LayoutAxis value, TransitionSpec transition) {
+    return size({m_size.width, value}, transition);
+}
+
 Style& Style::rotation(float value, TransitionSpec transition) {
     return set_animated_transition(&Style::m_rotation, std::isfinite(value) ? value : 0.0F, transition, false);
 }
@@ -265,12 +278,15 @@ bool Style::lerp(Style& style, const Style& target, float dt) {
     const ImFont* previous_font = style.m_font;
     const float previous_font_size = style.m_font_size;
     const BoxSizing previous_box_sizing = style.m_box_sizing;
-    bool measure_changed = false;
+    const LayoutSize previous_size = style.m_size;
 
     style.m_font = target.m_font;
     style.m_font_size = target.m_font_size;
     style.m_box_sizing = target.m_box_sizing;
     style.m_overflow = target.m_overflow;
+    style.m_size = target.m_size;
+    style.m_size_transition = target.m_size_transition;
+    bool measure_changed = previous_size != style.m_size;
     style.m_alpha = target.m_alpha;
     style.m_cursor = target.m_cursor;
     style.m_scrollbar_size = target.m_scrollbar_size;

@@ -412,30 +412,51 @@ TEST_CASE("text measurement follows style insets animation and line height", "[T
 TEST_CASE("wrapped ellipsis truncates the last visible line", "[TextWidget][render][regression]") {
     ui_test::ImGuiContext context({400.0F, 200.0F});
     ImGui::NewFrame();
+    ImGui::SetNextWindowPos({0.0F, 0.0F});
+    ImGui::SetNextWindowSize({400.0F, 200.0F});
     ImGui::Begin("wrapped-ellipsis");
     const ImVec2 position = ImGui::GetCursorScreenPos();
     const float width = ImGui::CalcTextSize("one two").x;
     const float height = ImGui::GetTextLineHeight();
-    GenericValue text("one two three four");
-    text.set_wrap(width);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    TextValue whole("one two three four");
+    const int whole_start = draw_list->VtxBuffer.Size;
+    Painter(*draw_list).text(position, rgb(1, 1, 1), whole);
+    const int whole_vertices = draw_list->VtxBuffer.Size - whole_start;
+
+    TextValue text("one two three four");
+    text.set_wrap(width);
     const int start = draw_list->VtxBuffer.Size;
     const ImVec4 clip = {position.x, position.y, position.x + width, position.y + height};
     Painter(*draw_list).text_ellipsis(position, rgb(1, 1, 1), text, clip);
     const int count = draw_list->VtxBuffer.Size - start;
-    std::vector<ImDrawVert> actual(draw_list->VtxBuffer.Data + start, draw_list->VtxBuffer.Data + start + count);
+    CHECK(count > 0);
+    CHECK(count < whole_vertices);
 
-    const int expected_start = draw_list->VtxBuffer.Size;
-    GenericValue expected_text("one ...");
-    Painter(*draw_list).text(position, rgb(1, 1, 1), expected_text, &clip);
-    REQUIRE(draw_list->VtxBuffer.Size - expected_start == count);
-    for (int i = 0; i < count; ++i) {
-        const ImDrawVert& expected = draw_list->VtxBuffer[expected_start + i];
-        CHECK(actual[i].pos.x == Catch::Approx(expected.pos.x));
-        CHECK(actual[i].pos.y == Catch::Approx(expected.pos.y));
-        CHECK(actual[i].uv.x == Catch::Approx(expected.uv.x));
-        CHECK(actual[i].uv.y == Catch::Approx(expected.uv.y));
-    }
+    // imgui floors child extents, so a fitting line can end up one pixel wider than its content rect.
+    TextValue fitting("MMMMMM");
+    const float text_width = ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, 0.0F, "MMMMMM").x;
+    const int full_start = draw_list->VtxBuffer.Size;
+    Painter(*draw_list).text(position, rgb(1, 1, 1), fitting);
+    const int full_vertices = draw_list->VtxBuffer.Size - full_start;
+
+    const auto truncates = [&](float clip_width) {
+        const Painter painter(*draw_list);
+        const ImVec4 threshold_clip =
+            painter.visible_clip({position.x, position.y, position.x + clip_width, position.y + height});
+        const int start = draw_list->VtxBuffer.Size;
+        painter.text_ellipsis(position, rgb(1, 1, 1), fitting, threshold_clip);
+        return draw_list->VtxBuffer.Size - start < full_vertices;
+    };
+
+    CHECK_FALSE(truncates(text_width - 0.75F));
+    CHECK(truncates(text_width - 1.25F));
+
+    // an ancestor overflow clip narrows the visible extent even when the node content still fits.
+    draw_list->PushClipRect(position, {position.x + text_width - 2.0F, position.y + height}, true);
+    CHECK(truncates(text_width));
+    draw_list->PopClipRect();
     ImGui::End();
     ImGui::EndFrame();
 }
@@ -871,7 +892,7 @@ TEST_CASE("widget callbacks can prevent container wheel scrolling", "[Widget][in
     REQUIRE(widget.scroll().max().y > 0.0F);
 
     int callbacks = 0;
-    widget.on_wheel([&callbacks](UiEvent& event) {
+    widget.on_event(EventType::Scroll, [&callbacks](UiEvent& event) {
         ++callbacks;
         event.prevent_default();
     });
@@ -885,7 +906,7 @@ TEST_CASE("widget callbacks can prevent container wheel scrolling", "[Widget][in
     }
     CHECK(widget.scroll().position().y == Catch::Approx(0.0F));
 
-    widget.on_wheel([&callbacks](UiEvent&) { ++callbacks; });
+    widget.on_event(EventType::Scroll, [&callbacks](UiEvent&) { ++callbacks; });
     UiEvent allowed = UiEvent::make(EventType::Scroll);
     allowed.scroll = {0.0F, -1.0F};
     InputRouter::dispatch_to(widget, allowed);

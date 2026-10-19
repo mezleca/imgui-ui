@@ -20,7 +20,10 @@ Widget& Widget::on_event(InputCallback callback) {
     return *this;
 }
 
-Widget& Widget::set_event_callback(EventType type, InputCallback callback) {
+Widget& Widget::on_event(EventType type, InputCallback callback) {
+    const auto index = static_cast<std::size_t>(type);
+    if (type > EventType::Cancel) return *this;
+
     if (!m_event_callbacks) {
         if (!callback) return *this;
 
@@ -31,32 +34,8 @@ Widget& Widget::set_event_callback(EventType type, InputCallback callback) {
         set_input_mode(InputMode::Target);
     }
 
-    (*m_event_callbacks)[static_cast<std::size_t>(type)] = std::move(callback);
+    (*m_event_callbacks)[index] = std::move(callback);
     return *this;
-}
-
-Widget& Widget::on_mouse_press(InputCallback callback) {
-    return set_event_callback(EventType::PointerDown, std::move(callback));
-}
-
-Widget& Widget::on_mouse_release(InputCallback callback) {
-    return set_event_callback(EventType::PointerUp, std::move(callback));
-}
-
-Widget& Widget::on_mouse_move(InputCallback callback) {
-    return set_event_callback(EventType::PointerMove, std::move(callback));
-}
-
-Widget& Widget::on_wheel(InputCallback callback) {
-    return set_event_callback(EventType::Scroll, std::move(callback));
-}
-
-Widget& Widget::on_key_press(InputCallback callback) {
-    return set_event_callback(EventType::KeyDown, std::move(callback));
-}
-
-Widget& Widget::on_key_release(InputCallback callback) {
-    return set_event_callback(EventType::KeyUp, std::move(callback));
 }
 
 Widget& Widget::on_change(std::function<void()> callback) {

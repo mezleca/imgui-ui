@@ -2,6 +2,8 @@
 
 #include "box-sizing.hpp"
 #include "variables.hpp"
+#include "../layout/geometry.hpp"
+#include "../transition.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -48,7 +50,7 @@ namespace ui {
     };
 
     enum class Overflow : uint8_t {
-        /// lets descendant effects escape. borderless containers also let normal surfaces escape.
+        /// lets the node's own content and descendant effects escape. borderless containers also let surfaces escape.
         Visible,
 
         /// clips descendants and effects to the container while retaining enabled scrolling.
@@ -74,6 +76,14 @@ namespace ui {
 
         float font_size() const {
             return m_font_size;
+        }
+
+        const LayoutSize& size() const {
+            return m_size;
+        }
+
+        const TransitionSpec& size_transition() const {
+            return m_size_transition;
         }
 
         const BoxInsets& padding() const {
@@ -216,6 +226,8 @@ namespace ui {
         float m_font_size = 0.0F;
         Value<BoxInsets> m_margin;
         Value<BoxInsets> m_padding;
+        LayoutSize m_size;
+        TransitionSpec m_size_transition;
         FloatValue m_line_height{1.0F};
         FloatValue m_rotation{0.0F};
         Vec2Value m_scale{ImVec2{1.0F, 1.0F}};

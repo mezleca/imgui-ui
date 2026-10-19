@@ -31,7 +31,7 @@ namespace ui {
         bool paint() override;
         void on_measure() override;
 
-        GenericValue m_text;
+        TextValue m_text;
         TextOverflow m_overflow = TextOverflow::Clip;
     };
 

@@ -162,6 +162,17 @@ void VisualState::set_item_state(bool hovered, bool active, bool focused) {
     set_style(hovered ? StyleType::HOVER : StyleType::DEFAULT);
 }
 
+void VisualState::set_size(LayoutSize size) {
+    configure_all_styles([size](Style& style) { style.size(size); });
+    if (m_transition_style.has_value()) m_transition_style->size(size);
+
+    if (!has_animation_overrides()) return;
+
+    // presentation style has no change callback, so notify after writing it.
+    m_presentation_style.size(size);
+    if (m_change_callback != nullptr) m_change_callback(m_change_owner, false);
+}
+
 StyleAnimationSequence VisualState::animate() {
     m_style_animator.cancel();
     return StyleAnimationSequence{*this, m_style_animator.animate()};

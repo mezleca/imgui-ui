@@ -16,6 +16,8 @@ using namespace ui;
 
 void StyledNode::style_changed(void* owner, bool font_changed) {
     auto* node = static_cast<StyledNode*>(owner);
+    node->apply_style_size();
+
     // font changes invalidate inherited metrics throughout the subtree. other style changes remeasure this node.
     if (font_changed) {
         invalidate_font_cache_subtree(*node);
@@ -26,6 +28,54 @@ void StyledNode::style_changed(void* owner, bool font_changed) {
 
 StyledNode::StyledNode(std::string id, std::string_view type_name) : Node(std::move(id)), m_type_name(type_name) {
     m_state.set_change_callback(this, &StyledNode::style_changed);
+}
+
+void StyledNode::request_size(LayoutSize size) {
+    m_has_size_target = false;
+    m_state.set_size(size);
+}
+
+void StyledNode::apply_style_size() {
+    const ComputedStyle& style = computed_style();
+    if (m_has_size_target && m_size_target == style.size()) return;
+
+    m_size_target = style.size();
+    m_has_size_target = true;
+    m_size_goal = Vec2Value{resolve_outer_size(m_size_target), style.size_transition()};
+
+    if (m_size_goal.duration <= 0.0F) {
+        apply_size_spec(m_size_target);
+        return;
+    }
+
+    // restart from the current outer extent so retargeting a running transition stays continuous.
+    m_animated_size.set(layout().size());
+    m_animated_size.tick(m_size_goal, 0.0F);
+}
+
+ImVec2 StyledNode::resolve_outer_size(LayoutSize spec) const {
+    const ImVec2 measured = layout().measured_size();
+    const ImVec2 available = layout().available_size();
+    const BoxInsets insets = layout().box_insets();
+    const BoxSizing sizing = layout().box_sizing();
+    return {
+        spec.width.resolve(measured.x, available.x, insets.horizontal(), sizing),
+        spec.height.resolve(measured.y, available.y, insets.vertical(), sizing),
+    };
+}
+
+void StyledNode::advance_size_transition(float dt) {
+    if (!m_animated_size.is_transitioning()) return;
+
+    m_animated_size.tick(m_size_goal, dt);
+    if (!m_animated_size.is_transitioning()) {
+        apply_size_spec(m_size_target);
+        invalidate_measure();
+        return;
+    }
+
+    apply_size_spec({px(m_animated_size.value.x), px(m_animated_size.value.y)});
+    invalidate_measure();
 }
 
 void StyledNode::surface_changed() {
@@ -211,6 +261,7 @@ void StyledNode::draw() {
 
 void StyledNode::advance_frame_state(float dt) {
     m_state.update(dt);
+    advance_size_transition(dt);
 }
 
 void StyledNode::input_state_changed() {

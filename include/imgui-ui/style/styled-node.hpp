@@ -150,6 +150,9 @@ namespace ui {
             return computed_style().box_sizing();
         }
 
+        /// applies the size request to every style state, preserving the previous set_size behavior.
+        void request_size(LayoutSize size) override;
+
         /// adds padding and borders to the content measurement, keeping at least one configured text line in height.
         void set_measured_content_size(ImVec2 size);
 
@@ -166,6 +169,10 @@ namespace ui {
 
         void update_cursor();
 
+        void apply_style_size();
+        ImVec2 resolve_outer_size(LayoutSize spec) const;
+        void advance_size_transition(float dt);
+
         VisualState m_state;
         std::string_view m_type_name;
         std::unique_ptr<PaintSlot> m_before;
@@ -174,5 +181,9 @@ namespace ui {
         mutable bool m_font_cache_valid = false;
         std::function<void()> m_tooltip_callback;
         std::string m_tooltip_text;
+        LayoutSize m_size_target;
+        Vec2Value m_animated_size;
+        Vec2Value m_size_goal;
+        bool m_has_size_target = false;
     };
 } // namespace ui

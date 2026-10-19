@@ -56,6 +56,7 @@ namespace ui {
         using ComputedStyle::scrollbar_minimum_grab_size;
         using ComputedStyle::scrollbar_rounding;
         using ComputedStyle::scrollbar_size;
+        using ComputedStyle::size;
         using ComputedStyle::variables;
 
         Style() = default;
@@ -80,6 +81,11 @@ namespace ui {
         Style& line_height(float value, TransitionSpec transition = {});
         Style& box_sizing(BoxSizing value);
         Style& overflow(Overflow value);
+
+        /// sets the layout request for this style state. a transition animates the resolved outer extent.
+        Style& size(LayoutSize value, TransitionSpec transition = {});
+        Style& width(LayoutAxis value, TransitionSpec transition = {});
+        Style& height(LayoutAxis value, TransitionSpec transition = {});
 
         Style& rotation(float value, TransitionSpec transition = {});
         Style& scale(ImVec2 value, TransitionSpec transition = {});

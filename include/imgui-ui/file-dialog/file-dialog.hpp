@@ -1,7 +1,6 @@
 #pragma once
 
 #include <filesystem>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -12,7 +11,7 @@ namespace ui {
     };
 
     struct FileDialogOptions {
-        std::span<const FileDialogFilter> filters;
+        std::vector<FileDialogFilter> filters;
         std::filesystem::path default_path;
         std::string default_name;
         std::string title;
